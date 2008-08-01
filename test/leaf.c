@@ -5,6 +5,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
+#define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
+#define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
+
 typedef uint64_t block_t;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -20,10 +24,10 @@ unsigned blocksize = 4096;
 /*
  * Leaf index format
  *
- * A leaf has a small header, immediately followed by a table of extents.  A
- * two level index grows down from the top of the leaf towards the top of the
- * extent table.  The index maps each unique logical address in the leaf to one
- * or more extents beginning at that address.
+ * A leaf has a small header followed by a table of extents.  A two level
+ * index grows down from the top of the leaf towards the top of the extent
+ * table.  The index maps each unique logical address in the leaf to one or
+ * more extents beginning at that address.
  *
  * The top level index is a table of groups of entries all having the same
  * high 24 bits of logical address which is only stored once, along with the
@@ -72,23 +76,43 @@ unsigned blocksize = 4096;
  *  2) check - started
  *  3) lookup - done
  *  4) insert - done
- *  5) split - started
+ *  5) split - done
  *  6) merge
  *  7) delete
- *  8) fuzz
+ *  8) create - done
+ *  9) destroy - done
+ *  10) freespace
+ *  11) needspace
+ *  12) fuzztest
  */
+
+struct leaf *leaf_create(void)
+{
+	struct leaf *leaf = malloc(blocksize);
+	*leaf = (struct leaf){ .magic = 0x1eaf, .groups = 0, .free = sizeof(struct leaf), .used = blocksize };
+	return leaf;
+}
+
+void leaf_destroy(struct leaf *leaf)
+{
+	if (leaf->magic == 0x1eaf) {
+		free(leaf);
+		return;
+	}
+	printf("bad leaf %p\n", leaf);
+}
 
 void leaf_dump(struct leaf *leaf)
 {
-	struct group *groups = (void *)leaf + blocksize, *end1 = --groups - leaf->groups;
-	struct entry *entries = (void *)(end1 + 1), *entry = entries;
+	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
+	struct entry *entries = (void *)(grbase + 1), *entry = entries;
 	struct extent *extents = leaf->table;
 
 	printf("%i entry groups:\n", leaf->groups);
-	for (struct group *group = groups; group > end1; group--) {
-		printf("  %i: [%i]", group - end1, extents - leaf->table);
-		struct entry *end2 = entry - group->count;
-		while (entry > end2) {
+	for (struct group *group = groups; group > grbase; group--) {
+		printf("  %i: [%i]", groups - group, extents - leaf->table);
+		struct entry *enbase = entry - group->count;
+		while (entry > enbase) {
 			--entry;
 			unsigned offset = entry == entries - 1 ? 0 : (entry + 1)->limit;
 			int count = entry->limit - offset;
@@ -107,85 +131,94 @@ void leaf_dump(struct leaf *leaf)
 
 unsigned leaf_lookup(struct leaf *leaf, block_t target, unsigned *count)
 {
-	struct group *groups = (void *)leaf + blocksize, *end1 = --groups - leaf->groups;
-	struct entry *entries = (void *)(end1 + 1);
+	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
+	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
 	unsigned loglo = target & 0xffffff, loghi = target >> 24;
 
-	for (struct group *group = groups; group > end1; group--) {
-		struct entry *end2 = entries - group->count;
+	for (struct group *group = groups; group > grbase; group--) {
+		struct entry *enbase = entries - group->count;
 		if (loghi == group->loghi) {
 			struct entry *entry = entries;
-			while (entry > end2)
+			while (entry > enbase)
 				if ((--entry)->loglo == loglo) {
-					unsigned offset = entry - end2 == group->count - 1 ? 0 : (entry + 1)->limit;
+					unsigned offset = entry - enbase == group->count - 1 ? 0 : (entry + 1)->limit;
 					*count = entry->limit - offset;
 					return extents - leaf->table + offset;
 				}
 		}
 		entries -= group->count;
-		extents += end2->limit;
+		extents += enbase->limit;
 	}
 	*count = 0;
 	return 0;
 }
 
-void leaf_check(struct leaf *leaf) // doesn't do any checking yet
+int leaf_check(struct leaf *leaf) // doesn't do any checking yet
 {
-	struct group *groups = (void *)leaf + blocksize, *end1 = --groups - leaf->groups;
-	struct entry *entries = (void *)(end1 + 1), *entry = entries;
+	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
+	struct entry *entries = (void *)(grbase + 1), *entry = entries;
 	struct extent *extents = leaf->table;
 	unsigned excount = 0, encount = 0;
+	char *why;
 
-	for (struct group *group = groups; group > end1; group--) {
+	for (struct group *group = groups; group > grbase; group--) {
 		excount += (entry -= group->count)->limit;
 		encount += group->count;
 	}
 	//printf("encount = %i, excount = %i, \n", encount, excount);
-	leaf->free = (void *)(extents + excount) - (void *)leaf;
-	leaf->used = (void *)(entries - encount) - (void *)leaf;
-	//printf("free %i, used %i\n", leaf->free, leaf->used);
+	why = "free count wrong";
+	if (leaf->free != (void *)(extents + excount) - (void *)leaf)
+		goto eek;
+	why = "used count wrong";
+	if (leaf->used != (void *)(entries - encount) - (void *)leaf)
+		goto eek;
+	return 0;
+eek:
+	printf("free %i, used %i\n", leaf->free, leaf->used);
+	printf("%s!\n", why);
+	return -1;
 }
 
 int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 {
 	//printf("insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
-	struct group *groups = (void *)leaf + blocksize, *end1 = --groups - leaf->groups;
-	struct entry *entries = (void *)(end1 + 1);
+	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
+	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
 	unsigned loglo = target & 0xffffff, loghi = target >> 24;
 	void *used = leaf->used + (void *)leaf;
 	// need room for one extent + maybe one group + maybe one entry
 	/* find group position */
 	struct group *group;
-	for (group = groups; group > end1; group--) {
+	for (group = groups; group > grbase; group--) {
 		if (loghi <= group->loghi)
 			break;
 		extents += (entries - group->count)->limit;
 		entries -= group->count;
 	}
 	/* insert new group if no match  */
-	if (group == end1 || loghi < group->loghi) {
-		printf("new group at %i\n", group - end1);
+	if (group == grbase || loghi < group->loghi) {
+		printf("new group at %i\n", group - grbase);
 		memmove(used - sizeof(*group), used, (void *)(group + 1) - used);
 		*group = (struct group){ .loghi = loghi, .count = 0 };
 		used -= sizeof(*group);
-		end1--;
+		grbase--;
 		entries--;
 		leaf->groups++;
 	}
 	/* find entry position */
-	struct entry *end2 = --entries - group->count, *entry;
-	for (entry = entries; entry > end2; entry--)
+	struct entry *enbase = --entries - group->count, *entry;
+	for (entry = entries; entry > enbase; entry--)
 		if (loglo <= entry->loglo)
 			break;
 	/* insert new entry if no match  */
-	if (entry == end2 || loglo < entry->loglo) {
-		printf("insert 0x%Lx at %i in group %i\n", target, entries - entry, group - end1);
+	if (entry == enbase || loglo < entry->loglo) {
+		printf("insert 0x%Lx at %i in group %i\n", target, entries - entry, group - grbase);
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
 		*entry = (struct entry){ .loglo = loglo, .limit = !group->count ? 0 : (entry + 1)->limit };
 		used -= sizeof(*entry);
-		end2--;
+		enbase--;
 		group->count++;
 	}
 	/* insert the extent */
@@ -193,7 +226,7 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	memmove(where + 1, where, (void *)leaf + leaf->free - (void *)where);
 	*where = extent;
 	/* bump entry and successor limits */
-	while (entry > end2)
+	while (entry > enbase)
 		(entry--)->limit++;
 	/* clean up */
 	leaf->used = (void *)used - (void *)leaf;
@@ -201,19 +234,70 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	return 0;
 }
 
-struct leaf *new_leaf(void)
+void leaf_split(struct leaf *leaf, struct leaf *dest)
 {
-	struct leaf *leaf = malloc(blocksize);
-	*leaf = (struct leaf){ .magic = 0x1eaf, .groups = 0, .free = sizeof(struct leaf), .used = blocksize };
-	return leaf;
+	struct group *groups = (void *)leaf + blocksize, *grbase = groups - leaf->groups;
+	struct entry *entries = (void *)grbase;
+	printf("split %p into %p\n", leaf, dest);
+	unsigned encount = 0, recount = 0, grsplit = 0, exsplit = 0;
+
+	/* find middle in terms of entries (maybe unbalanced in extents) */
+	for (struct group *group = groups - 1; group >= grbase; group--)
+		encount += group->count;
+	unsigned ensplit = encount / 2;
+	for (struct group *group = groups - 1; group >= grbase; group--, grsplit++) {
+		if (recount + group->count > ensplit)
+			break;
+		exsplit += (entries - group->count)->limit;
+		entries -= group->count;
+		recount += group->count;
+	}
+
+	/* may have to split a group */
+	unsigned subsplit = ensplit - recount;
+	if (subsplit)
+		exsplit += (entries - subsplit)->limit;
+	entries = (void *)grbase; /* put it back where it was */
+	printf("split %i entries at group %i, entry %x\n", encount, grsplit, subsplit);
+	printf("split extents at %i\n", exsplit);
+
+	/* copy groups */
+	dest->groups = leaf->groups - grsplit;
+	struct group *destgroups = (void *)dest + blocksize;
+	veccopy(destgroups - dest->groups, grbase, dest->groups);
+	(destgroups - 1)->count -= subsplit;
+	leaf->groups = grsplit + !!subsplit;
+	grbase = groups - leaf->groups;
+	if (subsplit)
+		(groups - leaf->groups)->count = subsplit;
+
+	/* copy entries */
+	struct entry *destentries = (void *)(destgroups - dest->groups);
+	unsigned encopy = encount - ensplit;
+	struct entry *enbase = entries - encount;
+	veccopy(destentries - encopy, enbase, encopy);
+	if (subsplit)
+		for (int i = 1; i <= (destgroups - 1)->count; i++)
+			(destentries - i)->limit -= (enbase + encopy)->limit;
+	vecmove(groups - leaf->groups - ensplit, entries - ensplit, ensplit);
+
+	/* copy extents */
+	unsigned exsize = (void *)leaf + leaf->free - (void *)(leaf->table + exsplit);
+	veccopy(dest->table, leaf->table + exsplit, exsize);
+
+	leaf->free = (void *)(leaf->table + exsplit) - (void *)leaf;
+	dest->free = (void *)leaf->table + exsize - (void *)leaf;
+	leaf->used = (void *)(grbase - ensplit) - (void *)leaf;
+	dest->used = (void *)(groups - dest->groups - encount + ensplit) - (void *)leaf;
 }
+
 
 int main(int argc, char *argv[])
 {
-	struct leaf *leaf = new_leaf();
+	struct leaf *leaf = leaf_create();
 	printf("--- leaf test ---\n");
 	unsigned hi = 1 << 24, hi2 = 2 * hi;
-	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, 0x99 }, next = 0;
+	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
 	leaf_dump(leaf);
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
@@ -221,8 +305,8 @@ int main(int argc, char *argv[])
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x444 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x555 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x666 });
-	leaf_insert(leaf, targets[next], (struct extent){ .block = 0x777 });
-	leaf_insert(leaf, targets[next], (struct extent){ .block = 0x888 });
+	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x777 });
+	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x888 });
 	leaf_insert(leaf, targets[next], (struct extent){ .block = 0x999 });
 	leaf_dump(leaf);
 	for (int i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) {
@@ -231,5 +315,12 @@ int main(int argc, char *argv[])
 		unsigned found = leaf_lookup(leaf, target, &count);
 		printf("lookup 0x%x, found [%i/%i]\n", target, found, count );
 	}
+
+	struct leaf *dest = leaf_create();
+	leaf_split(leaf, dest);
+	leaf_dump(leaf);
+	leaf_dump(dest);
+	leaf_check(leaf);
+	leaf_check(dest);
 	return 0;
 }
