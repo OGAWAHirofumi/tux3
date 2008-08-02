@@ -5,14 +5,16 @@
 #include <string.h>
 #include <stdlib.h>
 
+#define error(string, args...) do { printf(string, ##args); printf("!\n"); exit(99); } while (0)
+#define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"", #expr); } while (0)
 #define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
-typedef uint64_t block_t;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef uint64_t block_t;
 
 struct extent { block_t block:48, count:6, version:10; };
 struct group { u32 count:8, loghi:24; };
@@ -89,17 +91,14 @@ unsigned blocksize = 4096;
 struct leaf *leaf_create(void)
 {
 	struct leaf *leaf = malloc(blocksize);
-	*leaf = (struct leaf){ .magic = 0x1eaf, .groups = 0, .free = sizeof(struct leaf), .used = blocksize };
+	*leaf = (struct leaf){ .magic = 0x1eaf, .free = sizeof(struct leaf), .used = blocksize };
 	return leaf;
 }
 
 void leaf_destroy(struct leaf *leaf)
 {
-	if (leaf->magic == 0x1eaf) {
-		free(leaf);
-		return;
-	}
-	printf("bad leaf %p\n", leaf);
+	assert(leaf->magic == 0x1eaf);
+	free(leaf);
 }
 
 unsigned leaf_free(struct leaf *leaf)
@@ -211,7 +210,7 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	}
 
 	/* insert new group if no match  */
-	if (group == grbase || loghi < group->loghi) {
+	if (group == grbase || loghi < group->loghi || group->count == 255) {
 		printf("new group at %i\n", group - grbase);
 		memmove(used - sizeof(*group), used, (void *)(group + 1) - used);
 		*group = (struct group){ .loghi = loghi, .count = 0 };
@@ -368,6 +367,8 @@ int main(int argc, char *argv[])
 	printf("--- leaf test ---\n");
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
+	for (int i = 0; i < 260;i++)
+		leaf_insert(leaf, i << 13, (struct extent){ .block = i });
 	leaf_dump(leaf);
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
