@@ -35,11 +35,12 @@ unsigned blocksize = 4096;
  * high 24 bits of logical address which is only stored once, along with the
  * 8 bit count of entries in the group.  Since there can be more than 256
  * entries at the same logical address, there could be more than one group
- * with the same logical address (not handled yet, which limits the number of
- * different versions in the leaf to 256).  The group count is used both to
- * know the number of entries in the group and to find the beginning of the
- * entry table for a given group, by adding up the sizes of the proceeding
- * groups.
+ * with the same logical address.  The group count is used both to know the
+ * number of entries in the group and to find the beginning of the entry table
+ * for a given group, by adding up the sizes of the proceeding groups.
+ *
+ * The 8 bit entry limit limits the number of different versions at the same
+ * logical address to 255.  For now.
  *
  * The second level entry tables are stored end to end in reverse immediately
  * below the groups table, also stored in reverse.  Each entry has the low 24
@@ -158,6 +159,7 @@ unsigned leaf_lookup(struct leaf *leaf, block_t target, unsigned *count)
 					return extents - leaf->table + offset;
 				}
 		}
+		/* can fail out early here */
 		entries -= group->count;
 		extents += enbase->limit;
 	}
@@ -174,7 +176,8 @@ int leaf_check(struct leaf *leaf)
 	char *why;
 
 	for (struct group *group = groups; group > grbase; group--) {
-		excount += (entry -= group->count)->limit;
+		entry -= group->count;
+		excount += entry->limit;
 		encount += group->count;
 	}
 	//printf("encount = %i, excount = %i, \n", encount, excount);
@@ -200,14 +203,17 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	unsigned loglo = target & 0xffffff, loghi = target >> 24;
 	void *used = leaf->used + (void *)leaf;
 	const int grouplim = 255;
-	// need room for one extent + maybe one group + maybe one entry
+
+	/* need room for one extent + maybe one group + maybe one entry */
+	if (leaf_free(leaf) < sizeof(struct group) + sizeof(struct entry) +  sizeof(struct extent))
+		return 1;
 
 	/* find group position */
 	struct group *group;
 	for (group = groups; group > grbase; group--) {
-		if (loghi < group->loghi)
-			break;
-		if (loghi == group->loghi) {
+		if (loghi <= group->loghi) {
+			if (loghi < group->loghi)
+				break;
 			//printf("is target in this group?\n");
 			if (loglo <= (entries - group->count)->loglo)
 				break;
@@ -218,8 +224,8 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 			if (loghi != (group - 1)->loghi)
 				break;
 		}
-		extents += (entries - group->count)->limit;
 		entries -= group->count;
+		extents += entries->limit;
 	}
 
 	/* insert new group if no match  */
@@ -242,8 +248,8 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 				(entries - i)->limit -= (entries - at)->limit;
 			if (loglo > (entries - group->count - 1)->loglo) {
 				//printf("insert into successor group\n");
-				extents += (entries - group->count)->limit;
 				entries -= group->count;
+				extents += entries->limit;
 				group--;
 			}
 		}
@@ -306,8 +312,8 @@ void leaf_split(struct leaf *leaf, struct leaf *dest, int fudge)
 	for (struct group *group = groups - 1; group >= grbase; group--, grsplit++) {
 		if (recount + group->count > split)
 			break;
-		exsplit += (entries - group->count)->limit;
 		entries -= group->count;
+		exsplit += entries->limit;
 		recount += group->count;
 	}
 
