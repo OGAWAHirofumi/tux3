@@ -120,6 +120,7 @@ void leaf_dump(struct leaf *leaf)
 	printf("%i entry groups:\n", leaf->groups);
 	for (struct group *group = groups; group > grbase; group--) {
 		printf("  %i:", groups - group);
+		printf("/%i", group->count);
 		//printf(" [%i]", extents - leaf->table);
 		struct entry *enbase = entry - group->count;
 		while (entry > enbase) {
@@ -198,19 +199,32 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	struct extent *extents = leaf->table;
 	unsigned loglo = target & 0xffffff, loghi = target >> 24;
 	void *used = leaf->used + (void *)leaf;
+	const int grouplim = 255;
 	// need room for one extent + maybe one group + maybe one entry
 
 	/* find group position */
 	struct group *group;
 	for (group = groups; group > grbase; group--) {
-		if (loghi <= group->loghi)
+		if (loghi < group->loghi)
 			break;
+		if (loghi == group->loghi) {
+			//printf("is target in this group?\n");
+			if (loglo <= (entries - group->count)->loglo)
+				break;
+			//printf("is there another group?\n");
+			if (group - 1 == grbase)
+				break;
+			//printf("that has the same loghi?\n");
+			if (loghi != (group - 1)->loghi)
+				break;
+		}
 		extents += (entries - group->count)->limit;
 		entries -= group->count;
 	}
 
 	/* insert new group if no match  */
-	if (group == grbase || loghi < group->loghi || group->count == 255) {
+	if (group == grbase || loghi < group->loghi || (entries - group->count)->limit == grouplim) {
+		int split = group != grbase && group->count == grouplim;
 		printf("new group at %i\n", group - grbase);
 		memmove(used - sizeof(*group), used, (void *)(group + 1) - used);
 		*group = (struct group){ .loghi = loghi, .count = 0 };
@@ -218,6 +232,21 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 		grbase--;
 		entries--;
 		leaf->groups++;
+		if (split) {
+			unsigned at = (grouplim + 1) / 2;
+			printf(">>> split group with count %i at %i\n", grouplim, at);
+			(group - 1)->count = grouplim - at;
+			group->count = at;
+			/* decrease entry limits for successor group */
+			for (int i = at + 1; i <= grouplim; i++)
+				(entries - i)->limit -= (entries - at)->limit;
+			if (loglo > (entries - group->count - 1)->loglo) {
+				//printf("insert into successor group\n");
+				extents += (entries - group->count)->limit;
+				entries -= group->count;
+				group--;
+			}
+		}
 	}
 
 	/* find entry position */
@@ -228,7 +257,7 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 
 	/* insert new entry if no match  */
 	if (entry == enbase || loglo < entry->loglo) {
-		printf("insert 0x%Lx at %i in group %i\n", target, entries - entry, group - grbase);
+		printf("insert 0x%Lx at %i in group %i\n", target, entries - entry, groups - group);
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
 		*entry = (struct entry){ .loglo = loglo, .limit = !group->count ? 0 : (entry + 1)->limit };
 		used -= sizeof(*entry);
@@ -249,7 +278,6 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	leaf->free += sizeof(*where);
 	return 0;
 }
-
 
 /*
  * Fast path insert
@@ -292,7 +320,7 @@ void leaf_split(struct leaf *leaf, struct leaf *dest, int fudge)
 	printf("split extents at %i\n", exsplit);
 	/* copy extents */
 	unsigned size = base + leaf->free - (void *)(leaf->table + exsplit);
-	veccopy(dest->table, leaf->table + exsplit, size);
+	memcpy(dest->table, leaf->table + exsplit, size);
 
 	/* copy groups */
 	struct group *destgroups = (void *)dest + blocksize;
@@ -367,8 +395,8 @@ int main(int argc, char *argv[])
 	printf("--- leaf test ---\n");
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
-	for (int i = 0; i < 260;i++)
-		leaf_insert(leaf, i << 13, (struct extent){ .block = i });
+	for (int i = 0; i < 260; i++)
+		leaf_insert(leaf, i << 12, (struct extent){ .block = i });
 	leaf_dump(leaf);
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
