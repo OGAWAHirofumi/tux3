@@ -230,7 +230,7 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 
 	/* insert new group if no match  */
 	if (group == grbase || loghi < group->loghi || (entries - group->count)->limit == grouplim) {
-		int split = group != grbase && group->count == grouplim;
+		int split = group != grbase && loghi == group->loghi;
 		printf("new group at %i\n", group - grbase);
 		memmove(used - sizeof(*group), used, (void *)(group + 1) - used);
 		*group = (struct group){ .loghi = loghi, .count = 0 };
@@ -239,12 +239,12 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 		entries--;
 		leaf->groups++;
 		if (split) {
-			unsigned at = (grouplim + 1) / 2;
-			printf(">>> split group with count %i at %i\n", grouplim, at);
-			(group - 1)->count = grouplim - at;
+			unsigned at = ((group - 1)->count+ 1) / 2;
+			printf(">>> split group with count %i at %i\n", (group - 1)->count, at);
+			(group - 1)->count -= at;
 			group->count = at;
 			/* decrease entry limits for successor group */
-			for (int i = at + 1; i <= grouplim; i++)
+			for (int i = at + 1; i < at + 1 + (group - 1)->count; i++)
 				(entries - i)->limit -= (entries - at)->limit;
 			if (loglo > (entries - group->count - 1)->loglo) {
 				//printf("insert into successor group\n");
