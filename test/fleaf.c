@@ -202,7 +202,7 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 	struct extent *extents = leaf->table;
 	unsigned loglo = target & 0xffffff, loghi = target >> 24;
 	void *used = leaf->used + (void *)leaf;
-	const int grouplim = 255;
+	const int grouplim = 7;
 
 	/* need room for one extent + maybe one group + maybe one entry */
 	if (leaf_free(leaf) < sizeof(struct group) + sizeof(struct entry) +  sizeof(struct extent))
@@ -239,15 +239,14 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 		entries--;
 		leaf->groups++;
 		if (split) {
-			unsigned at = ((group - 1)->count+ 1) / 2;
-			printf(">>> split group with count %i at %i\n", (group - 1)->count, at);
-			(group - 1)->count -= at;
-			group->count = at;
+			unsigned count = (group - 1)->count;
+			(group - 1)->count -= group->count = (count + 1) / 2;
+			printf("split group with count %i at %i\n", count, group->count);
 			/* decrease entry limits for successor group */
-			for (int i = at + 1; i < at + 1 + (group - 1)->count; i++)
-				(entries - i)->limit -= (entries - at)->limit;
+			for (int i = group->count + 1; i <= count; i++)
+				(entries - i)->limit -= (entries - group->count)->limit;
 			if (loglo > (entries - group->count - 1)->loglo) {
-				//printf("insert into successor group\n");
+				printf("insert into successor group\n");
 				entries -= group->count;
 				extents += entries->limit;
 				group--;
@@ -401,9 +400,10 @@ int main(int argc, char *argv[])
 	printf("--- leaf test ---\n");
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
-	for (int i = 0; i < 260; i++)
+	for (int i = 0; i < 32; i++)
 		leaf_insert(leaf, i << 12, (struct extent){ .block = i });
 	leaf_dump(leaf);
+return 0;
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x333 });
