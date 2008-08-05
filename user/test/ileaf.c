@@ -101,17 +101,17 @@ void ileaf_split(struct ileaf *leaf, struct ileaf *dest, int fudge)
 	u16 *dict = (void *)leaf + blocksize, *destdict = (void *)dest + blocksize;
 
 	/* find inum nearest block middle */
-	unsigned at = 1, hi = leaf->count + 1;
+	unsigned at = 1, hi = leaf->count;
 	while (at < hi) {
 		int mid = (at + hi) / 2;
-		if (*(dict - mid) < (1 ? 5 : blocksize / 2))
+		if (*(dict - mid) < (blocksize / 2) + fudge)
 			at = mid + 1;
 		else
 			hi = mid;
 	}
 	unsigned split = *(dict - at), free = *(dict - leaf->count);
 	printf("split out %i..%i\n", split, free);
-	assert(free > split);
+	assert(free >= split);
 	memcpy(dest->table, leaf->table + split, free - split);
 	dest->count = leaf->count - at;
 	veccopy(destdict - dest->count, dict - leaf->count, dest->count);
@@ -141,7 +141,7 @@ void *inode_expand(struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 	u16 *dict = (void *)leaf + blocksize;
 	unsigned at = inum - leaf->inum;
 
-	/* extend dict if necessary */
+	/* extend dict as necessary */
 	while (leaf->count <= at) {
 		*(dict - leaf->count - 1) = leaf->count ? *(dict - leaf->count) : 0;
 		leaf->count++;
