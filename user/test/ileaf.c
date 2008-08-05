@@ -4,6 +4,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
+#include "hexdump.c"
 
 #define error(string, args...) do { printf(string, ##args); printf("!\n"); exit(99); } while (0)
 #define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"", #expr); } while (0)
@@ -11,31 +12,12 @@
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
-void hexdump(void *data, unsigned size)
-{
-	while (size) {
-		unsigned char *p;
-		int w = 16, n = size < w? size: w, pad = w - n;
-		printf("%p:  ", data);
-		for (p = data; p < (unsigned char *)data + n;)
-			printf("%02hx ", *p++);
-		printf("%*.s  \"", pad*3, "");
-		for (p = data; p < (unsigned char *)data + n;) {
-			int c = *p++;
-			printf("%c", c < ' ' || c > 127 ? '.' : c);
-		}
-		printf("\"\n");
-		data += w;
-		size -= n;
-	}
-}
-
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 typedef uint64_t inum_t;
 
-struct ileaf { u16 magic, count; u64 ibase; unsigned char table[]; };
+struct ileaf { u16 magic, count; inum_t inum; char table[]; };
 
 unsigned blocksize = 4096;
 
@@ -44,8 +26,8 @@ unsigned blocksize = 4096;
  *
  * A leaf has a small header followed by a table of extents.  A vector of
  * offsets within the block grows down from the top of the leaf towards the
- * top of the extent table, indexed by the difference between inum and ibase,
- * the base inum of the table block.
+ * top of the extent table, indexed by the difference between inum and
+ * leaf->inum, the base inum of the table block.
  */
 
 struct ileaf *ileaf_create(void)
@@ -64,7 +46,7 @@ void ileaf_destroy(struct ileaf *leaf)
 unsigned ileaf_used(struct ileaf *leaf)
 {
 	u16 *dict = (void *)leaf + blocksize, *base = dict - leaf->count;
-	return (void *)dict - (void *)base + *base;
+	return (void *)dict - (void *)base + base == dict ? 0 : *base ;
 }
 
 unsigned ileaf_free(struct ileaf *leaf)
@@ -74,7 +56,7 @@ unsigned ileaf_free(struct ileaf *leaf)
 
 void ileaf_dump(struct ileaf *leaf)
 {
-	u16 *dict = (void *)leaf + blocksize, offset = 0, inum = leaf->ibase;
+	u16 *dict = (void *)leaf + blocksize, offset = 0, inum = leaf->inum;
 	printf("%i inodes, free = %i:\n", leaf->count, ileaf_free(leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
@@ -92,8 +74,8 @@ void ileaf_dump(struct ileaf *leaf)
 
 unsigned ileaf_lookup(struct ileaf *leaf, inum_t inum, unsigned *size)
 {
-	assert(inum > leaf->ibase);
-	unsigned at = inum - leaf->ibase;
+	assert(inum > leaf->inum);
+	unsigned at = inum - leaf->inum;
 	if (at < leaf->count) {
 		*size = 0;
 		return 0;
@@ -113,13 +95,6 @@ eek:
 	printf("%s!\n", why);
 	return -1;
 }
-
-int ileaf_init(struct ileaf *ileaf, inum_t inum)
-{
-	printf("allocate inode 0x%Lx\n", inum);
-	return 0;
-}
-
 
 void ileaf_split(struct ileaf *leaf, struct ileaf *dest, int fudge)
 {
@@ -141,9 +116,10 @@ void ileaf_split(struct ileaf *leaf, struct ileaf *dest, int fudge)
 	dest->count = leaf->count - at;
 	veccopy(destdict - dest->count, dict - leaf->count, dest->count);
 	leaf->count = at;
+	memset(leaf->table + split, 0, (char *)(dict - leaf->count) - (leaf->table + split));
 	for (int i = 1; i <= dest->count; i++)
 		*(destdict - i) -= *(dict - at);
-	dest->ibase = leaf->ibase + at;
+	dest->inum = leaf->inum + at;
 }
 
 void ileaf_merge(struct ileaf *leaf, struct ileaf *from)
@@ -161,16 +137,15 @@ void *inode_expand(struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	//unsigned size = 0, offset = ileaf_lookup(leaf, inum, &size);
 
-	assert(inum > leaf->ibase);
+	assert(inum > leaf->inum);
 	u16 *dict = (void *)leaf + blocksize;
-	unsigned at = inum - leaf->ibase;
+	unsigned at = inum - leaf->inum;
 
 	/* extend dict if necessary */
-	for (; leaf->count <= at; ) {
-		*(dict - leaf->count - 1) = *(dict - leaf->count);
+	while (leaf->count <= at) {
+		*(dict - leaf->count - 1) = leaf->count ? *(dict - leaf->count) : 0;
 		leaf->count++;
 	}
-	ileaf_dump(leaf);
 
 	u16 free = *(dict - leaf->count);
 	unsigned offset = at ? *(dict - at) : 0, size = *(dict - at - 1) - offset;
