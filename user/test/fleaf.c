@@ -13,24 +13,16 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hexdump.c"
-
-#define error(string, args...) do { printf(string, ##args); printf("!\n"); exit(99); } while (0)
-#define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"", #expr); } while (0)
-#define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
-#define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
-#define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
-
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef uint64_t block_t;
+#include "tux3.h"
 
 struct extent { block_t block:48, count:6, version:10; };
 struct group { u32 count:8, loghi:24; };
 struct entry { u32 limit:8, loglo:24; };
-struct leaf { u16 magic, free, used, groups; struct extent table[]; };
+struct fleaf { u16 magic, free, used, groups; struct extent table[]; };
 
 unsigned blocksize = 4096;
+
+typedef u64 tuxkey_t;
 
 /*
  * Leaf index format
@@ -98,30 +90,35 @@ unsigned blocksize = 4096;
  *  12) fuzztest - started
  */
 
-struct leaf *leaf_create(void)
+struct fleaf *leaf_init(struct fleaf *leaf)
 {
-	struct leaf *leaf = malloc(blocksize);
-	*leaf = (struct leaf){ .magic = 0x1eaf, .free = sizeof(struct leaf), .used = blocksize };
+	*leaf = (struct fleaf){ .magic = 0x1eaf, .free = sizeof(struct fleaf), .used = blocksize };
+}
+
+struct fleaf *leaf_create(void)
+{
+	struct fleaf *leaf = malloc(blocksize);
+	leaf_init(leaf);
 	return leaf;
 }
 
-void leaf_destroy(struct leaf *leaf)
+void leaf_destroy(struct fleaf *leaf)
 {
 	assert(leaf->magic == 0x1eaf);
 	free(leaf);
 }
 
-unsigned leaf_free(struct leaf *leaf)
+unsigned leaf_free(struct fleaf *leaf)
 {
 	return leaf->used - leaf->free;
 }
 
-unsigned leaf_used(struct leaf *leaf)
+unsigned leaf_used(struct fleaf *leaf)
 {
-	return blocksize - leaf_free(leaf) - sizeof(struct leaf);
+	return blocksize - leaf_free(leaf) - sizeof(struct fleaf);
 }
 
-void leaf_dump(struct leaf *leaf)
+void leaf_dump(struct fleaf *leaf)
 {
 	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -151,7 +148,7 @@ void leaf_dump(struct leaf *leaf)
 	}
 }
 
-unsigned leaf_lookup(struct leaf *leaf, block_t target, unsigned *count)
+unsigned leaf_lookup(struct fleaf *leaf, block_t target, unsigned *count)
 {
 	struct group *groups = (void *)leaf + blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -176,7 +173,7 @@ unsigned leaf_lookup(struct leaf *leaf, block_t target, unsigned *count)
 	return 0;
 }
 
-int leaf_check(struct leaf *leaf)
+int leaf_check(struct fleaf *leaf)
 {
 	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -203,9 +200,10 @@ eek:
 	return -1;
 }
 
-int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
+int leaf_insert(struct fleaf *leaf, block_t target, struct extent extent)
 {
-	//printf("insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
+target = target & 0xffffffffffffLL;
+	printf(">>> insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
 	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
@@ -281,7 +279,11 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 
 	/* insert the extent */
 	struct extent *where = extents + entry->limit;
-	memmove(where + 1, where, (void *)leaf + leaf->free - (void *)where);
+	printf("limit = %i, free = %i\n", entry->limit, leaf_free(leaf));
+	int tail = (void *)leaf + leaf->free - (void *)where;
+	assert(tail >= 0);
+	memmove(where + 1, where, tail);
+	leaf->free += sizeof(*where);
 	*where = extent;
 
 	/* bump entry and successor limits */
@@ -289,7 +291,6 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
 		(entry--)->limit++;
 
 	leaf->used = (void *)used - (void *)leaf;
-	leaf->free += sizeof(*where);
 	return 0;
 }
 
@@ -305,7 +306,7 @@ int leaf_insert(struct leaf *leaf, block_t target, struct extent extent)
  *  - decrease used by 4
  */
 
-void leaf_split(struct leaf *leaf, struct leaf *dest, int fudge)
+tuxkey_t leaf_split(struct fleaf *leaf, struct fleaf *dest, int fudge)
 {
 	void *const base = (void *)leaf;
 	struct group *groups = base + blocksize, *grbase = groups - leaf->groups;
@@ -362,9 +363,10 @@ void leaf_split(struct leaf *leaf, struct leaf *dest, int fudge)
 	leaf->used = (void *)(grbase - split) - base;
 	dest->used = (void *)(groups - dest->groups - encount + split) - base;
 	memset(base + leaf->free, 0, leaf->used - leaf->free);
+	return ((destgroups - 1)->loghi << 24) | (destentries - 1)->loglo;
 }
 
-void leaf_merge(struct leaf *leaf, struct leaf *from)
+void leaf_merge(struct fleaf *leaf, struct fleaf *from)
 {
 	struct group *groups = (void *)leaf + blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -372,7 +374,7 @@ void leaf_merge(struct leaf *leaf, struct leaf *from)
 	//assert(leaf_used(from) <= leaf_free(leaf));
 
 	/* append extents */
-	unsigned size = from->free - sizeof(struct leaf);
+	unsigned size = from->free - sizeof(struct fleaf);
 	memcpy((void *)leaf + leaf->free, from->table, size);
 	leaf->free += size;
 
@@ -405,13 +407,14 @@ void leaf_merge(struct leaf *leaf, struct leaf *from)
 
 int main(int argc, char *argv[])
 {
-	struct leaf *leaf = leaf_create();
+	struct fleaf *leaf = leaf_create();
 	printf("--- leaf test ---\n");
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
-	for (int i = 0; i < 32; i++)
-		leaf_insert(leaf, i << 12, (struct extent){ .block = i });
+	for (int i = 0; i < 28; i++) {
+		leaf_insert(leaf, i << 12 + i, (struct extent){ .block = i });
 	leaf_dump(leaf);
+}
 return 0;
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
@@ -430,8 +433,9 @@ return 0;
 		printf("lookup 0x%x, found [%i/%i]\n", target, found, count );
 	}
 
-	struct leaf *dest = leaf_create();
-	leaf_split(leaf, dest, 0);
+	struct fleaf *dest = leaf_create();
+	tuxkey_t key = leaf_split(leaf, dest, 0);
+	printf(">>> split key 0x%x\n", key);
 	leaf_dump(leaf);
 	leaf_dump(dest);
 	leaf_check(leaf);

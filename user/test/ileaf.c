@@ -13,17 +13,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hexdump.c"
-
-#define error(string, args...) do { printf(string, ##args); printf("!\n"); exit(99); } while (0)
-#define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"", #expr); } while (0)
-#define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
-#define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
-#define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
-
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef uint64_t inum_t;
+#include "tux3.h"
 
 struct ileaf { u16 magic, count; inum_t inum; char table[]; };
 
