@@ -1,4 +1,12 @@
-/* (c) 2008 Daniel Phillips <phillips@phunq.net>, licensed under GPL v2 */
+/*
+ * Inode table btree leaf operations
+ *
+ * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
+ * Licensed under the GPL version 3
+ *
+ * By contributing changes to this file you grant the original copyright holder
+ * the right to distribute those changes under any license.
+ */
 
 #include <stdio.h>
 #include <inttypes.h>
