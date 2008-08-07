@@ -541,7 +541,9 @@ int main(int argc, char *argv[])
 	flush_buffers();
 	char buf[100] = { };
 
-	int err = tuxread(&sb, 6, buf, 11);
+	if (!tuxread(&sb, 6, buf, 11))
+		return 1;
+		
 	hexdump(buf, 11);
 	return 0;
 }

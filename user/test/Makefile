@@ -1,9 +1,9 @@
 CC=gcc
-CFLAGS += -std=gnu99
+CFLAGS += -std=gnu99 -Wall
 VG=valgrind
 VGFLAGS=--error-exitcode=200
 
-all: fleaf ileaf
+all: fleaf ileaf btree
 tests: fleaftest ileaftest
 
 fleaf: fleaf.c tux3.h hexdump.c
