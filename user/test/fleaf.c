@@ -413,11 +413,13 @@ int main(int argc, char *argv[])
 	printf("--- leaf test ---\n");
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
-	for (int i = 0; i < 28; i++) {
-//		leaf_insert(leaf, i << 12 + i, (struct extent){ .block = i });
-		leaf_insert(leaf, (i << 12) + i, (struct extent){ .block = i });
+	for (int i = 0; i < 28; i++)
+{
+		leaf_insert(leaf, i << 12 + i, (struct extent){ .block = i });
+//		leaf_insert(leaf, (i << 12) + i, (struct extent){ .block = i });
 	leaf_dump(leaf);
 }
+return 0;
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x333 });
