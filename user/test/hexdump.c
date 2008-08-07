@@ -1,3 +1,5 @@
+#ifndef HEXDUMP
+#define HEXDUMP
 void hexdump(void *data, unsigned size)
 {
 	while (size) {
@@ -16,3 +18,4 @@ void hexdump(void *data, unsigned size)
 		size -= n;
 	}
 }
+#endif

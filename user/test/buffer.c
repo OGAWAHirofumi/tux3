@@ -176,7 +176,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, sector_t block)
 {
-	return diskwrite(buffer->dev->fd, buffer->data, buffer_size(buffer), block << buffer->dev->blockbits);
+	return diskwrite(buffer->dev->fd, buffer->data, bufsize(buffer), block << buffer->dev->bits);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -282,7 +282,7 @@ alloc_buffer:
 	if (!buffer)
 		return NULL;
 	*buffer = (struct buffer){ .state = BUFFER_STATE_EMPTY };
-	if ((err = posix_memalign((void **)&(buffer->data), SECTOR_SIZE, buffer_size(buffer)))) {
+	if ((err = posix_memalign((void **)&(buffer->data), SECTOR_SIZE, bufsize(buffer)))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
 		return NULL;
@@ -343,7 +343,7 @@ struct buffer *bread(struct dev *dev, sector_t block)
 		return buffer;
 	buftrace(warn("read buffer %Lx", buffer->block););
 printf(">>> dev fd = %i\n", buffer->dev->fd);
-	if ((err = diskread(buffer->dev->fd, buffer->data, buffer_size(buffer), buffer->block << dev->blockbits))) {
+	if ((err = diskread(buffer->dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);
 		return NULL;

@@ -1,5 +1,6 @@
 #ifndef TUX3_H
 #define TUX3_H
+
 #include <inttypes.h>
 #include "trace.h"
 
@@ -26,6 +27,7 @@ struct bleaf
 	struct etree_map { le_u32 offset; le_u32 block; } map[];
 };
 
+#define SB struct sb *sb
 #define SB_MAGIC { 't', 'e', 's', 't', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
@@ -47,8 +49,8 @@ struct superblock
 	block_t blocks; /* if zero then snapdata is combined in metadata space */
 	block_t freeblocks;
 	block_t last_alloc;
-	u64 bitmap_blocks;
-	u32 blocksize_bits;
+	u64 bitblocks;
+	u32 blockbits;
 };
 
 struct sb
@@ -58,5 +60,7 @@ struct sb
 	struct dev *dev;
 	u32 alloc_per_node;
 	struct buffer *rootbuf;
+	unsigned blocksize;
 };
+
 #endif

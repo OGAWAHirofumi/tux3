@@ -17,8 +17,6 @@
 
 struct ileaf { u16 magic, count; inum_t inum; char table[]; };
 
-unsigned blocksize = 4096;
-
 /*
  * inode leaf format
  *
@@ -28,34 +26,34 @@ unsigned blocksize = 4096;
  * leaf->inum, the base inum of the table block.
  */
 
-struct ileaf *ileaf_create(void)
+struct ileaf *ileaf_create(SB)
 {
-	struct ileaf *ileaf = malloc(blocksize);
+	struct ileaf *ileaf = malloc(sb->blocksize);
 	*ileaf = (struct ileaf){ .magic = 0x90de };
 	return ileaf;
 }
 
-void ileaf_destroy(struct ileaf *leaf)
+void ileaf_destroy(SB, struct ileaf *leaf)
 {
 	assert(leaf->magic == 0x90de);
 	free(leaf);
 }
 
-unsigned ileaf_used(struct ileaf *leaf)
+unsigned ileaf_used(SB, struct ileaf *leaf)
 {
-	u16 *dict = (void *)leaf + blocksize, *base = dict - leaf->count;
+	u16 *dict = (void *)leaf + sb->blocksize, *base = dict - leaf->count;
 	return (void *)dict - (void *)base + base == dict ? 0 : *base ;
 }
 
-unsigned ileaf_free(struct ileaf *leaf)
+unsigned ileaf_free(SB, struct ileaf *leaf)
 {
-	return blocksize - ileaf_used(leaf) - sizeof(struct ileaf);
+	return sb->blocksize - ileaf_used(sb, leaf) - sizeof(struct ileaf);
 }
 
-void ileaf_dump(struct ileaf *leaf)
+void ileaf_dump(SB, struct ileaf *leaf)
 {
-	u16 *dict = (void *)leaf + blocksize, offset = 0, inum = leaf->inum;
-	printf("%i inodes, %i free:\n", leaf->count, ileaf_free(leaf));
+	u16 *dict = (void *)leaf + sb->blocksize, offset = 0, inum = leaf->inum;
+	printf("%i inodes, %i free:\n", leaf->count, ileaf_free(sb, leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
 		int limit = dict[i], size = limit - offset;
@@ -71,17 +69,17 @@ void ileaf_dump(struct ileaf *leaf)
 	}
 }
 
-void *ileaf_lookup(struct ileaf *leaf, inum_t inum, unsigned *size)
+void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *size)
 {
 	assert(inum > leaf->inum);
 	unsigned at = inum - leaf->inum;
 	printf("inode at %i\n", at);
 	assert(at < leaf->count);
-	u16 *dict = (void *)leaf + blocksize, offset = (at ? *(dict - at) : 0);
+	u16 *dict = (void *)leaf + sb->blocksize, offset = (at ? *(dict - at) : 0);
 	return (*size = *(dict - at - 1) - offset) ? leaf->table + offset : NULL;
 }
 
-int ileaf_check(struct ileaf *leaf)
+int ileaf_check(SB, struct ileaf *leaf)
 {
 	char *why;
 	why = "not an inode table leaf";
@@ -93,28 +91,28 @@ eek:
 	return -1;
 }
 
-void ileaf_trim(struct ileaf *leaf) {
-	u16 *dict = (void *)leaf + blocksize;
+void ileaf_trim(SB, struct ileaf *leaf) {
+	u16 *dict = (void *)leaf + sb->blocksize;
 	while (leaf->count > 1 && *(dict - leaf->count) == *(dict - leaf->count + 1))
 		leaf->count--;
 	if (leaf->count == 1 && !*(dict - 1))
 		leaf->count = 0;
 }
 
-void ileaf_split(struct ileaf *leaf, struct ileaf *dest, int fudge)
+void ileaf_split(SB, struct ileaf *leaf, struct ileaf *dest, int fudge)
 {
-	u16 *dict = (void *)leaf + blocksize, *destdict = (void *)dest + blocksize;
+	u16 *dict = (void *)leaf + sb->blocksize, *destdict = (void *)dest + sb->blocksize;
 
 	/* binsearch inum nearest middle */
 	unsigned at = 1, hi = leaf->count;
 	while (at < hi) {
 		int mid = (at + hi) / 2;
-		if (*(dict - mid) < (blocksize / 2) + fudge)
+		if (*(dict - mid) < (sb->blocksize / 2) + fudge)
 			at = mid + 1;
 		else
 			hi = mid;
 	}
-	printf("split at %i\n", (blocksize / 2) + fudge);
+	printf("split at %i\n", (sb->blocksize / 2) + fudge);
 
 	/* should trim leading empty inodes on copy */
 	unsigned split = *(dict - at), free = *(dict - leaf->count);
@@ -128,14 +126,14 @@ void ileaf_split(struct ileaf *leaf, struct ileaf *dest, int fudge)
 	dest->inum = leaf->inum + at;
 	leaf->count = at;
 	memset(leaf->table + split, 0, (char *)(dict - leaf->count) - (leaf->table + split));
-	ileaf_trim(leaf);
+	ileaf_trim(sb, leaf);
 }
 
-void ileaf_merge(struct ileaf *leaf, struct ileaf *from)
+void ileaf_merge(SB, struct ileaf *leaf, struct ileaf *from)
 {
 	if (!from->count)
 		return;
-	u16 *dict = (void *)leaf + blocksize, *fromdict = (void *)from + blocksize;
+	u16 *dict = (void *)leaf + sb->blocksize, *fromdict = (void *)from + sb->blocksize;
 	unsigned at = leaf->count, free = at ? *(dict - at) : 0;
 	unsigned size = from->count ? *(fromdict - from->count) : 0;
 	printf("copy in %i bytes %i %i\n", size, at + 1, at + from->count);
@@ -145,10 +143,10 @@ void ileaf_merge(struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *inode_expand(struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+void *inode_expand(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	assert(inum > leaf->inum);
-	u16 *dict = (void *)leaf + blocksize;
+	u16 *dict = (void *)leaf + sb->blocksize;
 	unsigned at = inum - leaf->inum;
 
 	/* extend with empty inodes */
@@ -168,29 +166,34 @@ void *inode_expand(struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 	return inode;
 }
 
-int main(int argc, char *argv[])
+void ileaf_test(SB)
 {
 	printf("--- test inode table leaf methods ---\n");
-	struct ileaf *leaf = ileaf_create();
-	struct ileaf *dest = ileaf_create();
-	ileaf_dump(leaf);
-	inode_expand(leaf, 3, 2, 'a');
-	inode_expand(leaf, 4, 4, 'b');
-	inode_expand(leaf, 6, 6, 'c');
-	ileaf_dump(leaf);
-	ileaf_split(leaf, dest, -(blocksize / 2));
-	ileaf_dump(leaf);
-	ileaf_dump(dest);
-	ileaf_merge(leaf, dest);
-	ileaf_dump(leaf);
-	inode_expand(leaf, 3, 3, 'x');
-	ileaf_dump(leaf);
-	inode_expand(leaf, 8, 3, 'y');
-	ileaf_dump(leaf);
+	struct ileaf *leaf = ileaf_create(sb);
+	struct ileaf *dest = ileaf_create(sb);
+	ileaf_dump(sb, leaf);
+	inode_expand(sb, leaf, 3, 2, 'a');
+	inode_expand(sb, leaf, 4, 4, 'b');
+	inode_expand(sb, leaf, 6, 6, 'c');
+	ileaf_dump(sb, leaf);
+	ileaf_split(sb, leaf, dest, -(sb->blocksize / 2));
+	ileaf_dump(sb, leaf);
+	ileaf_dump(sb, dest);
+	ileaf_merge(sb, leaf, dest);
+	ileaf_dump(sb, leaf);
+	inode_expand(sb, leaf, 3, 3, 'x');
+	ileaf_dump(sb, leaf);
+	inode_expand(sb, leaf, 8, 3, 'y');
+	ileaf_dump(sb, leaf);
 	unsigned size = 0;
-	char *inode = ileaf_lookup(leaf, 3, &size);
+	char *inode = ileaf_lookup(sb, leaf, 3, &size);
 	hexdump(inode, size);
-	ileaf_destroy(leaf);
-	ileaf_destroy(dest);
+	ileaf_destroy(sb, leaf);
+	ileaf_destroy(sb, dest);
+}
+
+int main(int argc, char *argv[])
+{
+	ileaf_test(&(struct sb){ .blocksize = 4096 });
 	return 0;
 }

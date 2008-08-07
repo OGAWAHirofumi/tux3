@@ -23,6 +23,9 @@
 #define main notmain
 #include "fleaf.c"
 #undef main
+#define main notmain2
+#include "ileaf.c"
+#undef main
 
 #define trace trace_on
 
@@ -53,16 +56,16 @@ struct bnode
  * (Not done yet.)
  */
 
-static block_t balloc(struct sb *sb)
+static block_t balloc(SB)
 {
         return ++sb->image.last_alloc;
 }
 
-static void free_block(struct sb *sb, sector_t block)
+static void free_block(SB, sector_t block)
 {
 }
 
-static struct buffer *new_block(struct sb *sb)
+static struct buffer *new_block(SB)
 {
         return getblk(sb->dev, balloc(sb));
 }
@@ -77,32 +80,32 @@ static inline leaf_t *buf2leaf(struct buffer *buffer)
 	return (leaf_t *)buffer->data;
 }
 
-static struct buffer *new_leaf(struct sb *sb)
+static struct buffer *new_leaf(SB)
 {
-	trace(printf("new leaf\n"););
+	trace(printf("new leaf blocksize = %i\n", sb->blocksize););
 	struct buffer *buffer = new_block(sb); 
 	if (!buffer)
 		return NULL;
-	memset(buffer->data, 0, buffer_size(buffer));
-	leaf_init(buf2leaf(buffer));
+	memset(buffer->data, 0, bufsize(buffer));
+	leaf_init(sb, buf2leaf(buffer));
 	set_buffer_dirty(buffer);
 	return buffer;
 }
 
-static struct buffer *new_node(struct sb *sb)
+static struct buffer *new_node(SB)
 {
 	trace(printf("new node\n"););
 	struct buffer *buffer = new_block(sb); 
 	if (!buffer)
 		return buffer;
-	memset(buffer->data, 0, buffer_size(buffer));
+	memset(buffer->data, 0, bufsize(buffer));
 	struct bnode *node = buf2node(buffer);
 	node->count = 0;
 	set_buffer_dirty(buffer);
 	return buffer;
 }
 
-static struct buffer *blockread(struct sb *sb, block_t block)
+static struct buffer *blockread(SB, block_t block)
 {
 	return bread(sb->dev, block);
 }
@@ -135,7 +138,7 @@ printf("release buffer for %Li\n", path[i].buffer->block);
 }
 }
 
-static int probe(struct sb *sb, u64 block, struct treepath *path)
+static int probe(SB, u64 block, struct treepath *path)
 {
 	unsigned i, levels = sb->image.levels;
 	struct buffer *buffer = blockread(sb, sb->image.root);
@@ -162,12 +165,12 @@ eek:
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
-static void show_leaf_range(struct fleaf *leaf, block_t start, block_t finish)
+static void show_leaf_range(SB, struct fleaf *leaf, block_t start, block_t finish)
 {
-	leaf_dump(leaf);
+	leaf_dump(sb, leaf);
 }
 
-static void show_subtree_range(struct sb *sb, struct bnode *node, block_t start, block_t finish, int levels, int indent)
+static void show_subtree_range(SB, struct bnode *node, block_t start, block_t finish, int levels, int indent)
 {
 	int i;
 
@@ -176,13 +179,13 @@ static void show_subtree_range(struct sb *sb, struct bnode *node, block_t start,
 		if (levels)
 			show_subtree_range(sb, buf2node(buffer), start, finish, levels - 1, indent + 3);
 		else {
-			show_leaf_range(buf2leaf(buffer), start, finish);
+			show_leaf_range(sb, buf2leaf(buffer), start, finish);
 		}
 		brelse(buffer);
 	}
 }
 
-void show_tree_range(struct sb *sb, block_t start, block_t finish)
+void show_tree_range(SB, block_t start, block_t finish)
 {
 	struct buffer *buffer = blockread(sb, sb->image.root);
 	if (!buffer)
@@ -191,7 +194,7 @@ void show_tree_range(struct sb *sb, block_t start, block_t finish)
 	brelse(buffer);
 }
 
-void show_tree(struct sb *sb)
+void show_tree(SB)
 {
 	show_tree_range(sb, 0, -1);
 }
@@ -233,7 +236,7 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count += node2->count;
 }
 
-static void brelse_free(struct sb *sb, struct buffer *buffer)
+static void brelse_free(SB, struct buffer *buffer)
 {
 	brelse(buffer);
 	if (buffer->count) {
@@ -254,12 +257,12 @@ typedef u32 tag_t;
 
 struct delete_info { tag_t victim, newtag; block_t blocks; block_t resume; int create; };
 
-int delete_snapshots_from_leaf(struct sb *sb, leaf_t *leaf, struct delete_info *info, int *freed)
+int delete_snapshots_from_leaf(SB, leaf_t *leaf, struct delete_info *info, int *freed)
 {
 	return 0;
 }
 
-int delete_tree_partial(struct sb *sb, struct delete_info *info, millisecond_t deadline, int maxblocks)
+int delete_tree_partial(SB, struct delete_info *info, millisecond_t deadline, int maxblocks)
 {
 	int levels = sb->image.levels, level = levels - 1, suspend = 0, freed = 0;
 	struct treepath path[levels + 1], prev[levels + 1];
@@ -279,11 +282,11 @@ int delete_tree_partial(struct sb *sb, struct delete_info *info, millisecond_t d
 			leaf_t *this = buf2leaf(leafbuf);
 			leaf_t *that = buf2leaf(leafprev);
 			trace_off(warn("check leaf %p against %p", leafbuf, leafprev););
-			trace_off(warn("need = %i, free = %i", leaf_used(this), leaf_free(that)););
+			trace_off(warn("need = %i, free = %i", leaf_used(sb, this), leaf_free(sb, that)););
 			/* try to merge leaf with prev */
-			if (leaf_used(this) <= leaf_free(that)) {
+			if (leaf_used(sb, this) <= leaf_free(sb, that)) {
 				trace_off(warn(">>> can merge leaf %p into leaf %p", leafbuf, leafprev););
-				leaf_merge(that, this);
+				leaf_merge(sb, that, this);
 				remove_index(path, level);
 				set_buffer_dirty(leafprev);
 				brelse_free(sb, leafbuf);
@@ -383,18 +386,18 @@ static void insert_child(struct bnode *node, struct index_entry *p, block_t chil
 	node->count++;
 }
 
-static int add_extent_to_tree(struct sb *sb, u64 target, struct extent extent, struct treepath path[], unsigned levels)
+static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treepath path[], unsigned levels)
 {
 	struct buffer *leafbuf = path[levels].buffer;
 	set_buffer_dirty(leafbuf);
-	if (!leaf_insert(buf2leaf(leafbuf), target, extent))
+	if (!leaf_insert(sb, buf2leaf(leafbuf), target, extent))
 		return 0;
 
 	trace(warn("split leaf");)
 	struct buffer *childbuf = new_leaf(sb);
 	if (!childbuf) 
 		return -ENOMEM; /* this is the right thing to do? */
-	u64 childkey = leaf_split(buf2leaf(leafbuf), buf2leaf(childbuf), 0);
+	u64 childkey = leaf_split(sb, buf2leaf(leafbuf), buf2leaf(childbuf), 0);
 	block_t childblock = childbuf->block;
 	if (target < childkey) {
 		struct buffer *swapbuf = leafbuf;
@@ -402,7 +405,7 @@ static int add_extent_to_tree(struct sb *sb, u64 target, struct extent extent, s
 		childbuf = swapbuf;
 	}
 	brelse_dirty(childbuf);
-	if (leaf_insert(buf2leaf(leafbuf), target, extent))
+	if (leaf_insert(sb, buf2leaf(leafbuf), target, extent))
 		error("no space in new leaf");
 
 	while (levels--) {
@@ -458,7 +461,7 @@ static int add_extent_to_tree(struct sb *sb, u64 target, struct extent extent, s
 	return 0;
 }
 
-static int tuxwrite(struct sb *sb, block_t target, char *data, unsigned len)
+static int tuxwrite(SB, block_t target, char *data, unsigned len)
 {
 	int err, levels = sb->image.levels;
 	struct treepath path[levels + 1];
@@ -467,8 +470,8 @@ static int tuxwrite(struct sb *sb, block_t target, char *data, unsigned len)
 	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
 	
 	unsigned extents = 0;
-	struct extent *found = leaf_lookup(buf2leaf(leafbuf), target, &extents);
-	leaf_dump(buf2leaf(leafbuf));
+	struct extent *found = leaf_lookup(sb, buf2leaf(leafbuf), target, &extents);
+	leaf_dump(sb, buf2leaf(leafbuf));
 	brelse_path(path, levels);
 	if (extents) {
 		trace(warn("found block %Lx", (long long)found->block);)
@@ -492,7 +495,7 @@ eek:
 	goto out;
 }
 
-static int tuxread(struct sb *sb, block_t target, char *data, unsigned len)
+static int tuxread(SB, block_t target, char *data, unsigned len)
 {
 	int err, levels = sb->image.levels;
 	struct treepath path[levels + 1];
@@ -501,8 +504,8 @@ static int tuxread(struct sb *sb, block_t target, char *data, unsigned len)
 	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
 	
 	unsigned extents = 0;
-	struct extent *found = leaf_lookup(buf2leaf(leafbuf), target, &extents);
-	leaf_dump(buf2leaf(leafbuf));
+	struct extent *found = leaf_lookup(sb, buf2leaf(leafbuf), target, &extents);
+	leaf_dump(sb, buf2leaf(leafbuf));
 	brelse_path(path, levels);
 	if (extents) {
 		trace(warn("found block %Lx", (long long)found->block);)
@@ -516,8 +519,10 @@ static int tuxread(struct sb *sb, block_t target, char *data, unsigned len)
 	return 0;
 }
 
-void init_tux3(struct sb *sb)
+void init_tux3(SB)
 {
+	sb->blocksize = 1 << sb->dev->bits;
+	sb->image.blockbits = sb->dev->bits;
 	struct buffer *rootbuf = new_node(sb);
 	struct buffer *leafbuf = new_leaf(sb);
 	sb->image.root = rootbuf->block;
@@ -533,9 +538,9 @@ void init_tux3(struct sb *sb)
 
 int main(int argc, char *argv[])
 {
-	struct dev dev = { .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU), 12 };
+	struct dev dev = { .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU), .bits = 12 };
 	struct sb sb = { .image = { .magic = SB_MAGIC }, .dev = &dev, .alloc_per_node = 20 };
-	init_buffers(1 << dev.blockbits, 1 << 20);
+	init_buffers(1 << dev.bits, 1 << 20);
 	init_tux3(&sb);
 	tuxwrite(&sb, 6, "hello world", 11);
 	flush_buffers();

@@ -12,7 +12,7 @@
 typedef unsigned long long sector_t;
 typedef unsigned long long offset_t;
 
-struct dev { unsigned fd, blockbits; };
+struct dev { unsigned fd, bits; };
 
 struct buffer
 {
@@ -54,9 +54,9 @@ void show_buffers(void);
 void init_buffers(unsigned bufsize, unsigned mem_pool_size);
 void add_buffer_journaled(struct buffer *buffer);
 
-static inline unsigned buffer_size(struct buffer *buffer)
+static inline unsigned bufsize(struct buffer *buffer)
 {
-	return 1 << buffer->dev->blockbits;
+	return 1 << buffer->dev->bits;
 }
 
 static inline int buffer_dirty(struct buffer *buffer)
