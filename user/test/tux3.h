@@ -35,7 +35,7 @@ struct bleaf
  */
 
 
-struct disksuper
+struct superblock
 {
 	typeof((char[])SB_MAGIC) magic;
 	u64 create_time;
@@ -53,9 +53,10 @@ struct disksuper
 
 struct sb
 {
-	struct disksuper image;
-	char bogopad[4096 - sizeof(struct disksuper)];
+	struct superblock image;
+	char bogopad[4096 - sizeof(struct superblock)];
 	struct dev *dev;
 	u32 alloc_per_node;
+	struct buffer *rootbuf;
 };
 #endif

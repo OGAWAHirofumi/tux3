@@ -46,7 +46,7 @@ static unsigned max_evict = 1000; /* free 10 percent of the buffers */
 void show_buffer(struct buffer *buffer)
 {
 	warn("%s%Lx/%i ", // !!! fixme, need a warntext that doesn't print eol
-		buffer_dirty(buffer)? "+": buffer_uptodate(buffer)? "": buffer->state == BUFFER_STATE_INVAL? "?": "x",
+		buffer_dirty(buffer)? "+": buffer_uptodate(buffer)? "": buffer->state == BUFFER_STATE_EMPTY? "?": "x",
 		buffer->block, buffer->count);
 }
 
@@ -156,7 +156,7 @@ void set_buffer_uptodate(struct buffer *buffer)
 void set_buffer_empty(struct buffer *buffer)
 {
 	set_buffer_uptodate(buffer); // to remove from dirty list
-	buffer->state = BUFFER_STATE_INVAL;
+	buffer->state = BUFFER_STATE_EMPTY;
 }
 
 void brelse(struct buffer *buffer)
@@ -221,8 +221,8 @@ removed:
 
 static void add_buffer_free(struct buffer *buffer)
 {
-	assert(buffer->state == BUFFER_STATE_CLEAN || buffer->state == BUFFER_STATE_INVAL);
-	buffer->state = BUFFER_STATE_INVAL;
+	assert(buffer->state == BUFFER_STATE_CLEAN || buffer->state == BUFFER_STATE_EMPTY);
+	buffer->state = BUFFER_STATE_EMPTY;
 	list_add_tail(&buffer->list, &free_buffers);
 }
 
@@ -281,7 +281,7 @@ alloc_buffer:
 	buffer = (struct buffer *)malloc(sizeof(struct buffer));
 	if (!buffer)
 		return NULL;
-	*buffer = (struct buffer){ .state = BUFFER_STATE_INVAL };
+	*buffer = (struct buffer){ .state = BUFFER_STATE_EMPTY };
 	if ((err = posix_memalign((void **)&(buffer->data), SECTOR_SIZE, buffer_size(buffer)))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
@@ -290,7 +290,7 @@ alloc_buffer:
 
 have_buffer:
 	assert(!buffer->count);
-	assert(buffer->state == BUFFER_STATE_INVAL);
+	assert(buffer->state == BUFFER_STATE_EMPTY);
 	buffer->dev = dev;
 	buffer->block = block;
 	buffer->count++;
@@ -339,7 +339,7 @@ struct buffer *bread(struct dev *dev, sector_t block)
 
 	if (!(buffer = getblk(dev, block)))
 		return NULL;
-	if (buffer->state != BUFFER_STATE_INVAL)
+	if (buffer->state != BUFFER_STATE_EMPTY)
 		return buffer;
 	buftrace(warn("read buffer %Lx", buffer->block););
 printf(">>> dev fd = %i\n", buffer->dev->fd);
@@ -411,7 +411,7 @@ int preallocate_buffers(unsigned bufsize) {
 	memset(data_pool, 0xdd, max_buffers*bufsize);
 
 	for(i = 0; i < max_buffers; i++) {
-		buffers[i] = (struct buffer){ .data = (data_pool + i*bufsize), .state = BUFFER_STATE_INVAL };
+		buffers[i] = (struct buffer){ .data = (data_pool + i*bufsize), .state = BUFFER_STATE_EMPTY };
 		add_buffer_free(&buffers[i]);
 	}
 

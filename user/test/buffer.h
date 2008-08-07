@@ -1,7 +1,7 @@
-#ifndef __DDSNAP_BUFFER_H
-#define __DDSNAP_BUFFER_H
+#ifndef BUFFER_H
+#define BUFFER_H
 
-#define BUFFER_STATE_INVAL 1
+#define BUFFER_STATE_EMPTY 1
 #define BUFFER_STATE_CLEAN 2
 #define BUFFER_STATE_DIRTY 3
 #define BUFFER_STATE_JOURNALED 4
@@ -81,4 +81,4 @@ static inline void *malloc_aligned(size_t size, unsigned binalign)
 }
 
 int count_buffer(void);
-#endif // __DDSNAP_BUFFER_H
+#endif

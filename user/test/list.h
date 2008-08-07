@@ -1,6 +1,6 @@
 /* List ops from include/linux/list.h */
-#ifndef __DDSNAP_LIST_H
-#define __DDSNAP_LIST_H
+#ifndef LIST_H
+#define LIST_H
 
 struct list_head { struct list_head *next, *prev; };
 
@@ -65,4 +65,4 @@ static inline int list_empty(const struct list_head *head)
         for (pos = (head)->next, n = pos->next; pos != (head); \
                 pos = n, n = pos->next)
 
-#endif // __DDSNAP_LIST_H
+#endif
