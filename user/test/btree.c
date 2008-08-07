@@ -259,7 +259,7 @@ int delete_snapshots_from_leaf(struct sb *sb, leaf_t *leaf, struct delete_info *
 	return 0;
 }
 
-static int delete_tree_partial(struct sb *sb, struct delete_info *info, millisecond_t deadline, int maxblocks)
+int delete_tree_partial(struct sb *sb, struct delete_info *info, millisecond_t deadline, int maxblocks)
 {
 	int levels = sb->image.levels, level = levels - 1, suspend = 0, freed = 0;
 	struct treepath path[levels + 1], prev[levels + 1];
@@ -471,7 +471,7 @@ static int tuxwrite(struct sb *sb, block_t target, char *data, unsigned len)
 	leaf_dump(buf2leaf(leafbuf));
 	brelse_path(path, levels);
 	if (extents) {
-		trace(warn("found block %Lx", found->block);)
+		trace(warn("found block %Lx", (long long)found->block);)
 		if (!(blockbuf = blockread(sb, found->block)))
 			return -EBADF;
 	} else {
@@ -505,7 +505,7 @@ static int tuxread(struct sb *sb, block_t target, char *data, unsigned len)
 	leaf_dump(buf2leaf(leafbuf));
 	brelse_path(path, levels);
 	if (extents) {
-		trace(warn("found block %Lx", found->block);)
+		trace(warn("found block %Lx", (long long)found->block);)
 		if (!(blockbuf = blockread(sb, found->block)))
 			return -EBADF;
 		memcpy(data, blockbuf->data, len);
