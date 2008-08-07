@@ -148,7 +148,7 @@ void leaf_dump(struct fleaf *leaf)
 	}
 }
 
-unsigned leaf_lookup(struct fleaf *leaf, block_t target, unsigned *count)
+void *leaf_lookup(struct fleaf *leaf, block_t target, unsigned *count)
 {
 	struct group *groups = (void *)leaf + blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -162,7 +162,7 @@ unsigned leaf_lookup(struct fleaf *leaf, block_t target, unsigned *count)
 				if ((--entry)->loglo == loglo) {
 					unsigned offset = entry - enbase == group->count - 1 ? 0 : (entry + 1)->limit;
 					*count = entry->limit - offset;
-					return extents - leaf->table + offset;
+					return extents + offset;
 				}
 		}
 		/* can fail out early here */
@@ -170,7 +170,7 @@ unsigned leaf_lookup(struct fleaf *leaf, block_t target, unsigned *count)
 		extents += enbase->limit;
 	}
 	*count = 0;
-	return 0;
+	return NULL;
 }
 
 int leaf_check(struct fleaf *leaf)
@@ -203,7 +203,7 @@ eek:
 int leaf_insert(struct fleaf *leaf, block_t target, struct extent extent)
 {
 target = target & 0xffffffffffffLL;
-	printf(">>> insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
+	printf("insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
 	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
@@ -412,10 +412,10 @@ int main(int argc, char *argv[])
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
 	for (int i = 0; i < 28; i++) {
-		leaf_insert(leaf, i << 12 + i, (struct extent){ .block = i });
+//		leaf_insert(leaf, i << 12 + i, (struct extent){ .block = i });
+		leaf_insert(leaf, (i << 12) + i, (struct extent){ .block = i });
 	leaf_dump(leaf);
 }
-return 0;
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x222 });
 	leaf_insert(leaf, targets[next++], (struct extent){ .block = 0x333 });
@@ -429,13 +429,17 @@ return 0;
 	for (int i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) {
 		unsigned target = targets[i];
 		unsigned count;
-		unsigned found = leaf_lookup(leaf, target, &count);
-		printf("lookup 0x%x, found [%i/%i]\n", target, found, count );
+		void *found = leaf_lookup(leaf, target, &count);
+		if (count) {
+			printf("lookup 0x%x, found [%i] ", target, count );
+			hexdump(found, count);
+		} else
+			printf("0x%x not found\n", target);
 	}
 
 	struct fleaf *dest = leaf_create();
 	tuxkey_t key = leaf_split(leaf, dest, 0);
-	printf(">>> split key 0x%x\n", key);
+	printf("split key 0x%x\n", key);
 	leaf_dump(leaf);
 	leaf_dump(dest);
 	leaf_check(leaf);
