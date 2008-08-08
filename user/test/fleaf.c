@@ -20,8 +20,6 @@ struct group { u32 count:8, loghi:24; };
 struct entry { u32 limit:8, loglo:24; };
 struct fleaf { u16 magic, free, used, groups; struct extent table[]; };
 
-typedef u64 tuxkey_t;
-
 /*
  * Leaf index format
  *
@@ -88,11 +86,11 @@ typedef u64 tuxkey_t;
  *  12) fuzztest - started
  */
 
-int leaf_init(SB, struct fleaf *leaf)
+int leaf_init(SB, void *leaf)
 {
 	if (!leaf)
 		return -1;
-	*leaf = (struct fleaf){ .magic = 0x1eaf, .free = sizeof(struct fleaf), .used = sb->blocksize };
+	*(struct fleaf *)leaf = (struct fleaf){ .magic = 0x1eaf, .free = sizeof(struct fleaf), .used = sb->blocksize };
 	return 0;
 }
 
@@ -103,9 +101,14 @@ struct fleaf *leaf_create(SB)
 	return leaf;
 }
 
+int leaf_sniff(SB, void *leaf)
+{
+	return ((struct fleaf *)leaf)->magic == 0x1eaf;
+}
+
 void leaf_destroy(SB, struct fleaf *leaf)
 {
-	assert(leaf->magic == 0x1eaf);
+	assert(leaf_sniff(sb, leaf));
 	free(leaf);
 }
 
@@ -200,10 +203,11 @@ eek:
 	return -1;
 }
 
-int leaf_insert(SB, struct fleaf *leaf, block_t target, struct extent extent)
+void *leaf_expand(SB, void *base, block_t target, unsigned size)
 {
 target = target & 0xffffffffffffLL;
-	printf("insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
+	assert(leaf_sniff(sb, base));
+	struct fleaf *leaf = base;
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
@@ -212,8 +216,8 @@ target = target & 0xffffffffffffLL;
 	const int grouplim = 7;
 
 	/* need room for one extent + maybe one group + maybe one entry */
-	if (sb, leaf_free(sb, leaf) < sizeof(struct group) + sizeof(struct entry) +  sizeof(struct extent))
-		return 1;
+	if (sb, leaf_free(sb, leaf) < sizeof(struct group) + sizeof(struct entry) +  size)
+		return NULL;
 
 	/* find group position */
 	struct group *group;
@@ -284,14 +288,20 @@ target = target & 0xffffffffffffLL;
 	assert(tail >= 0);
 	memmove(where + 1, where, tail);
 	leaf->free += sizeof(*where);
-	*where = extent;
 
 	/* bump entry and successor limits */
 	while (entry > enbase)
 		(entry--)->limit++;
 
 	leaf->used = (void *)used - (void *)leaf;
-	return 0;
+	return where;
+}
+
+int leaf_insert(SB, struct fleaf *leaf, block_t target, struct extent extent)
+{
+	printf("insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
+	struct extent *store = leaf_expand(sb, leaf, target, sizeof(extent));
+	*store = extent;
 }
 
 /*
@@ -306,9 +316,10 @@ target = target & 0xffffffffffffLL;
  *  - decrease used by 4
  */
 
-tuxkey_t leaf_split(SB, struct fleaf *leaf, struct fleaf *dest, int fudge)
+tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
 {
-	void *const base = (void *)leaf;
+	assert(leaf_sniff(sb, base));
+	struct fleaf *leaf = base, *dest = base2;
 	struct group *groups = base + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	printf("split %p into %p\n", leaf, dest);
@@ -412,13 +423,9 @@ void fleaftest(SB)
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
-	for (int i = 0; i < 28; i++)
-{
-		leaf_insert(sb, leaf, i << 12 + i, (struct extent){ .block = i });
-//		leaf_insert(sb, leaf, (i << 12) + i, (struct extent){ .block = i });
+	for (int i = 0; i < 32; i++)
+		leaf_insert(sb, leaf, (i << 12) + i, (struct extent){ .block = i });
 	leaf_dump(sb, leaf);
-}
-return;
 	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x111 });
 	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x222 });
 	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x333 });

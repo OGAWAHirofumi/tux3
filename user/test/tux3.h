@@ -18,6 +18,7 @@ typedef uint64_t le_u64;
 
 typedef uint64_t inum_t;
 typedef u64 block_t;
+typedef u64 tuxkey_t;
 
 struct bleaf
 {

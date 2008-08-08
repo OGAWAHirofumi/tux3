@@ -41,12 +41,32 @@ static millisecond_t gettime(void)
 	return 0;
 }
 
+struct btree_ops {
+	int (*leaf_sniff)(SB, void *leaf);
+	int (*leaf_init)(SB, void *leaf);
+	tuxkey_t (*leaf_split)(SB, void *base, void *base2, int fudge);
+	void *(*leaf_expand)(SB, void *base, inum_t inum, unsigned more);
+};
+
+struct btree_ops ftree_ops = {
+	.leaf_sniff = /*(typeof(fieldtype(btree_ops, leaf_sniff)))*/leaf_sniff,
+	.leaf_init = leaf_init,
+	.leaf_split = leaf_split,
+	.leaf_expand = leaf_expand,
+};
+
+struct btree_ops itree_ops = {
+	.leaf_sniff = ileaf_sniff,
+	.leaf_init = ileaf_init,
+	.leaf_split = ileaf_split,
+	.leaf_expand = ileaf_expand,
+};
+
 struct bnode
 {
 	u32 count, unused;
 	struct index_entry { u64 key; block_t block; } entries[];
 }; 
-
 /*
  * Note that the first key of an index block is never accessed.  This is
  * because for a btree, there is always one more key than nodes in each
@@ -70,14 +90,14 @@ static struct buffer *new_block(SB)
         return getblk(sb->dev, balloc(sb));
 }
 
-static struct buffer *new_leaf(SB)
+static struct buffer *new_leaf(SB, struct btree_ops *ops)
 {
 	trace(printf("new leaf blocksize = %i\n", sb->blocksize););
 	struct buffer *buffer = new_block(sb); 
 	if (!buffer)
 		return NULL;
 	memset(buffer->data, 0, bufsize(buffer));
-	leaf_init(sb, buffer->data);
+	(ops->leaf_init)(sb, buffer->data);
 	set_buffer_dirty(buffer);
 	return buffer;
 }
@@ -123,12 +143,11 @@ static void brelse_path(struct treepath *path, unsigned levels)
 	for (i = 0; i <= levels; i++)
 {
 printf("release buffer for %Li\n", path[i].buffer->block);
-
 		brelse(path[i].buffer);
 }
 }
 
-static int probe(SB, u64 block, struct treepath *path)
+static int probe(SB, tuxkey_t target, struct treepath *path, struct btree_ops *ops)
 {
 	unsigned i, levels = sb->image.levels;
 	struct buffer *buffer = blockread(sb, sb->image.root);
@@ -139,16 +158,15 @@ static int probe(SB, u64 block, struct treepath *path)
 	for (i = 0; i < levels; i++) {
 		struct index_entry *next = node->entries, *top = next + node->count;
 		while (++next < top) /* binary search goes here */
-			if (next->key > block)
+			if (next->key > target)
 				break;
-		path[i].buffer = buffer;
-		path[i].next = next;
+		path[i] = (struct treepath){ buffer, next };
 		if (!(buffer = blockread(sb, (next - 1)->block)))
 			goto eek;
 		node = (struct bnode *)buffer->data;
 	}
-	assert(((leaf_t *)buffer->data)->magic == 0x1eaf);
-	*(struct leafpath *)(path + levels) = (struct leafpath){ buffer };
+	assert((ops->leaf_sniff)(sb, buffer->data));
+	path[levels] = (struct treepath){ buffer };
 	return 0;
 eek:
 	brelse_path(path, i);
@@ -259,7 +277,7 @@ int delete_tree_partial(SB, struct delete_info *info, millisecond_t deadline, in
 	struct buffer *leafbuf, *leafprev = NULL;
 	memset(path, 0, sizeof(path));
 
-	probe(sb, info->resume, path);
+	probe(sb, info->resume, path, &ftree_ops);
 	leafbuf = path[levels].buffer;
 
 	/* leaf walk */
@@ -376,18 +394,19 @@ static void insert_child(struct bnode *node, struct index_entry *p, block_t chil
 	node->count++;
 }
 
-static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treepath path[], unsigned levels)
+static void *tree_expand(SB, u64 target, unsigned size, struct treepath path[], unsigned levels, struct btree_ops *ops)
 {
 	struct buffer *leafbuf = path[levels].buffer;
 	set_buffer_dirty(leafbuf);
-	if (!leaf_insert(sb, leafbuf->data, target, extent))
-		return 0;
+	void *entity = (ops->leaf_expand)(sb, leafbuf->data, target, size);
+	if (entity)
+		return entity;
 
 	trace(warn("split leaf");)
-	struct buffer *childbuf = new_leaf(sb);
+	struct buffer *childbuf = new_leaf(sb, ops);
 	if (!childbuf) 
-		return -ENOMEM; /* this is the right thing to do??? */
-	u64 childkey = leaf_split(sb, leafbuf->data, childbuf->data, 0);
+		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
+	u64 childkey = (ops->leaf_split)(sb, leafbuf->data, childbuf->data, 0);
 	block_t childblock = childbuf->block;
 	if (target < childkey) {
 		struct buffer *swapbuf = leafbuf;
@@ -395,8 +414,8 @@ static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treep
 		childbuf = swapbuf;
 	}
 	brelse_dirty(childbuf);
-	if (leaf_insert(sb, leafbuf->data, target, extent))
-		error("no space in new leaf");
+	entity = (ops->leaf_expand)(sb, leafbuf->data, target, size);
+	assert(entity);
 
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
@@ -407,7 +426,7 @@ static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treep
 		if (parent->count < sb->alloc_per_node) {
 			insert_child(parent, next, childblock, childkey);
 			set_buffer_dirty(parentbuf);
-			return 0;
+			return entity;
 		}
 
 		/* split a full index node */
@@ -415,7 +434,7 @@ static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treep
 		u64 newkey = parent->entries[half].key;
 		struct buffer *newbuf = new_node(sb); 
 		if (!newbuf) 
-			return -ENOMEM;
+			return NULL; // !!! err_ptr(ENOMEM)
 		struct bnode *newnode = newbuf->data;
 		newnode->count = parent->count - half;
 		memcpy(&newnode->entries[0], &parent->entries[half], newnode->count * sizeof(struct index_entry));
@@ -437,7 +456,7 @@ static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treep
 	trace(printf("add tree level\n");)
 	struct buffer *newbuf = new_node(sb);
 	if (!newbuf)
-		return -ENOMEM;
+		return NULL; // !!! err_ptr(ENOMEM)
 	struct bnode *newroot = newbuf->data;
 
 	newroot->count = 2;
@@ -448,14 +467,14 @@ static int add_extent_to_tree(SB, u64 target, struct extent extent, struct treep
 	sb->image.levels++;
 	//set_sb_dirty(sb);
 	brelse_dirty(newbuf);
-	return 0;
+	return entity;
 }
 
 static int tuxwrite(SB, block_t target, char *data, unsigned len)
 {
 	int err, levels = sb->image.levels;
 	struct treepath path[levels + 1];
-	if ((err = probe(sb, target, path)))
+	if ((err = probe(sb, target, path, &ftree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
 	
@@ -463,6 +482,7 @@ static int tuxwrite(SB, block_t target, char *data, unsigned len)
 	struct extent *found = leaf_lookup(sb, leafbuf->data, target, &extents);
 	leaf_dump(sb, leafbuf->data);
 	brelse_path(path, levels);
+
 	if (extents) {
 		trace(warn("found block %Lx", (long long)found->block);)
 		if (!(blockbuf = blockread(sb, found->block)))
@@ -471,8 +491,8 @@ static int tuxwrite(SB, block_t target, char *data, unsigned len)
 		blockbuf = new_block(sb);
 		trace(warn("new block %Lx", blockbuf->block);)
 		struct extent extent = { .block = blockbuf->block };
-		if ((err = add_extent_to_tree(sb, target, extent, path, levels)) < 0)
-			goto eek;
+		struct extent *store = tree_expand(sb, target, sizeof(extent), path, levels, &itree_ops);
+		*store = extent;
 	}
 	memcpy(blockbuf->data, data, len);
 	set_buffer_dirty(blockbuf);
@@ -485,19 +505,20 @@ eek:
 	goto out;
 }
 
-static int tuxread(SB, block_t target, char *data, unsigned len)
+static int tuxread(SB, block_t seek, char *data, unsigned len)
 {
 	int err, levels = sb->image.levels;
 	struct treepath path[levels + 1];
-	if ((err = probe(sb, target, path)))
+	if ((err = probe(sb, seek, path, &ftree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
 	
-	unsigned extents = 0;
-	struct extent *found = leaf_lookup(sb, leafbuf->data, target, &extents);
+	unsigned count = 0;
+	struct extent *found = leaf_lookup(sb, leafbuf->data, seek, &count);
 	leaf_dump(sb, leafbuf->data);
 	brelse_path(path, levels);
-	if (extents) {
+
+	if (count) {
 		trace(warn("found block %Lx", (long long)found->block);)
 		if (!(blockbuf = blockread(sb, found->block)))
 			return -EBADF;
@@ -509,12 +530,47 @@ static int tuxread(SB, block_t target, char *data, unsigned len)
 	return 0;
 }
 
+enum { MTIME_SIZE };
+
+struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
+
+int tuxopen(SB, inum_t inum, char *attr, unsigned len, int create)
+{
+	int err, levels = sb->image.levels;
+	struct treepath path[levels + 1];
+	if ((err = probe(sb, inum, path, &itree_ops)))
+		return err;
+	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
+	
+	unsigned size = 0;
+	struct size_mtime_attr *found = ileaf_lookup(sb, leafbuf->data, inum, &size);
+	ileaf_dump(sb, leafbuf->data);
+	brelse_path(path, levels);
+
+	if (size) {
+		trace(warn("found inode %Lx", inum);)
+		hexdump(found, size);
+	} else {
+		trace(warn("no inode %Lx", inum);)
+		if (!create)
+			return -ENOENT;
+		trace(warn("new inode %Lx", inum);)
+		struct size_mtime_attr attr = { .kind = MTIME_SIZE };
+		typeof(attr) *store = tree_expand(sb, inum, sizeof(attr), path, levels, &itree_ops);
+		*store = attr;
+	}
+	return 0;
+eek:
+	warn("unable to add inode to inode table: %s", strerror(-err));
+	return err;
+}
+
 void init_tux3(SB)
 {
 	sb->blocksize = 1 << sb->dev->bits;
 	sb->image.blockbits = sb->dev->bits;
 	struct buffer *rootbuf = new_node(sb);
-	struct buffer *leafbuf = new_leaf(sb);
+	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
 	sb->image.root = rootbuf->block;
 	((struct bnode *)rootbuf->data)->count = 1;
 	((struct bnode *)rootbuf->data)->entries[0].block = leafbuf->block;
@@ -532,9 +588,12 @@ int main(int argc, char *argv[])
 	struct sb sb = { .image = { .magic = SB_MAGIC }, .dev = &dev, .alloc_per_node = 20 };
 	init_buffers(1 << dev.bits, 1 << 20);
 	init_tux3(&sb);
+	char buf[100] = { };
+
+	tuxopen(&sb, 0x123, buf, sizeof(buf), 1); return 0;
+
 	tuxwrite(&sb, 6, "hello world", 11);
 	flush_buffers();
-	char buf[100] = { };
 
 	if (tuxread(&sb, 6, buf, 11))
 		return 1;

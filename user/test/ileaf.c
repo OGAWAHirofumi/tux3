@@ -26,16 +26,28 @@ struct ileaf { u16 magic, count; inum_t inum; char table[]; };
  * leaf->inum, the base inum of the table block.
  */
 
+int ileaf_init(SB, void *leaf)
+{
+	printf("initialize inode leaf %p\n", leaf);
+	*(struct ileaf *)leaf = (struct ileaf){ 0x90de };
+	return 0;
+}
+
 struct ileaf *ileaf_create(SB)
 {
 	struct ileaf *ileaf = malloc(sb->blocksize);
-	*ileaf = (struct ileaf){ .magic = 0x90de };
+	ileaf_init(sb, ileaf);
 	return ileaf;
+}
+
+int ileaf_sniff(SB, void *leaf)
+{
+	return ((struct ileaf *)leaf)->magic == 0x90de;
 }
 
 void ileaf_destroy(SB, struct ileaf *leaf)
 {
-	assert(leaf->magic == 0x90de);
+	assert(ileaf_sniff(sb, leaf));
 	free(leaf);
 }
 
@@ -72,9 +84,9 @@ void ileaf_dump(SB, struct ileaf *leaf)
 void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *size)
 {
 	assert(inum > leaf->inum);
-	unsigned at = inum - leaf->inum;
-	printf("inode at %i\n", at);
-	assert(at < leaf->count);
+	inum_t at = inum - leaf->inum;
+	assert(at < 999); // !!! calculate this properly: max inode possible with max dict
+	printf("lookup inode %Lx, %Lx + %Lx\n", inum, leaf->inum, at);
 	u16 *dict = (void *)leaf + sb->blocksize, offset = (at ? *(dict - at) : 0);
 	return (*size = *(dict - at - 1) - offset) ? leaf->table + offset : NULL;
 }
@@ -99,8 +111,10 @@ void ileaf_trim(SB, struct ileaf *leaf) {
 		leaf->count = 0;
 }
 
-void ileaf_split(SB, struct ileaf *leaf, struct ileaf *dest, int fudge)
+tuxkey_t ileaf_split(SB, void *base, void *base2, int fudge)
 {
+	assert(ileaf_sniff(sb, base));
+	struct ileaf *leaf = base, *dest = base2;
 	u16 *dict = (void *)leaf + sb->blocksize, *destdict = (void *)dest + sb->blocksize;
 
 	/* binsearch inum nearest middle */
@@ -127,6 +141,7 @@ void ileaf_split(SB, struct ileaf *leaf, struct ileaf *dest, int fudge)
 	leaf->count = at;
 	memset(leaf->table + split, 0, (char *)(dict - leaf->count) - (leaf->table + split));
 	ileaf_trim(sb, leaf);
+	return dest->inum;
 }
 
 void ileaf_merge(SB, struct ileaf *leaf, struct ileaf *from)
@@ -143,8 +158,10 @@ void ileaf_merge(SB, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *inode_expand(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+void *ileaf_expand(SB, void *base, inum_t inum, unsigned more)
 {
+	assert(ileaf_sniff(sb, base));
+	struct ileaf *leaf = base;
 	assert(inum > leaf->inum);
 	u16 *dict = (void *)leaf + sb->blocksize;
 	unsigned at = inum - leaf->inum;
@@ -162,8 +179,13 @@ void *inode_expand(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
 	memmove(inode + size + more, inode + size, free - offset);
-	memset(inode + size, fill, more);
-	return inode;
+	return inode + size;
+}
+
+void *inode_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+{
+	char *where = ileaf_expand(sb, leaf, inum, more);
+	memset(where, fill, more);
 }
 
 void ileaf_test(SB)
@@ -172,18 +194,18 @@ void ileaf_test(SB)
 	struct ileaf *leaf = ileaf_create(sb);
 	struct ileaf *dest = ileaf_create(sb);
 	ileaf_dump(sb, leaf);
-	inode_expand(sb, leaf, 3, 2, 'a');
-	inode_expand(sb, leaf, 4, 4, 'b');
-	inode_expand(sb, leaf, 6, 6, 'c');
+	inode_append(sb, leaf, 3, 2, 'a');
+	inode_append(sb, leaf, 4, 4, 'b');
+	inode_append(sb, leaf, 6, 6, 'c');
 	ileaf_dump(sb, leaf);
 	ileaf_split(sb, leaf, dest, -(sb->blocksize / 2));
 	ileaf_dump(sb, leaf);
 	ileaf_dump(sb, dest);
 	ileaf_merge(sb, leaf, dest);
 	ileaf_dump(sb, leaf);
-	inode_expand(sb, leaf, 3, 3, 'x');
+	inode_append(sb, leaf, 3, 3, 'x');
 	ileaf_dump(sb, leaf);
-	inode_expand(sb, leaf, 8, 3, 'y');
+	inode_append(sb, leaf, 8, 3, 'y');
 	ileaf_dump(sb, leaf);
 	unsigned size = 0;
 	char *inode = ileaf_lookup(sb, leaf, 3, &size);
