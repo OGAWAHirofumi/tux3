@@ -21,7 +21,7 @@
 #include "tux3.h"
 
 #define main notmain
-#include "fleaf.c"
+#include "dleaf.c"
 #undef main
 #define main notmain2
 #include "ileaf.c"
@@ -29,7 +29,8 @@
 
 #define trace trace_on
 
-typedef struct fleaf leaf_t;
+typedef struct dleaf leaf_t; // these need to be generic
+
 typedef u32 millisecond_t;
 
 static millisecond_t gettime(void)
@@ -173,7 +174,7 @@ eek:
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
-static void show_leaf_range(SB, struct fleaf *leaf, block_t start, block_t finish)
+static void show_leaf_range(SB, leaf_t *leaf, block_t start, block_t finish)
 {
 	leaf_dump(sb, leaf);
 }
@@ -491,7 +492,11 @@ static int tuxwrite(SB, block_t target, char *data, unsigned len)
 		blockbuf = new_block(sb);
 		trace(warn("new block %Lx", blockbuf->block);)
 		struct extent extent = { .block = blockbuf->block };
-		struct extent *store = tree_expand(sb, target, sizeof(extent), path, levels, &itree_ops);
+		struct extent *store = tree_expand(sb, target, sizeof(extent), path, levels, &ftree_ops);
+		if (!store) {
+			err = -EINVAL;
+			goto eek;
+		}
 		*store = extent;
 	}
 	memcpy(blockbuf->data, data, len);
@@ -540,7 +545,7 @@ int tuxopen(SB, inum_t inum, char *attr, unsigned len, int create)
 	struct treepath path[levels + 1];
 	if ((err = probe(sb, inum, path, &itree_ops)))
 		return err;
-	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
+	struct buffer *leafbuf = path[levels].buffer;
 	
 	unsigned size = 0;
 	struct size_mtime_attr *found = ileaf_lookup(sb, leafbuf->data, inum, &size);
@@ -548,21 +553,20 @@ int tuxopen(SB, inum_t inum, char *attr, unsigned len, int create)
 	brelse_path(path, levels);
 
 	if (size) {
-		trace(warn("found inode %Lx", inum);)
+		trace(warn("found inode 0x%Lx", inum);)
 		hexdump(found, size);
 	} else {
-		trace(warn("no inode %Lx", inum);)
+		trace(warn("no inode 0x%Lx", inum);)
 		if (!create)
 			return -ENOENT;
-		trace(warn("new inode %Lx", inum);)
+		trace(warn("new inode 0x%Lx", inum);)
 		struct size_mtime_attr attr = { .kind = MTIME_SIZE };
 		typeof(attr) *store = tree_expand(sb, inum, sizeof(attr), path, levels, &itree_ops);
+		if (!store)
+			return -EINVAL;
 		*store = attr;
 	}
 	return 0;
-eek:
-	warn("unable to add inode to inode table: %s", strerror(-err));
-	return err;
 }
 
 void init_tux3(SB)
@@ -571,7 +575,6 @@ void init_tux3(SB)
 	sb->image.blockbits = sb->dev->bits;
 	struct buffer *rootbuf = new_node(sb);
 	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
-	sb->image.root = rootbuf->block;
 	((struct bnode *)rootbuf->data)->count = 1;
 	((struct bnode *)rootbuf->data)->entries[0].block = leafbuf->block;
 	sb->image.root = rootbuf->block;

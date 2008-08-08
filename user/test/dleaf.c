@@ -18,7 +18,7 @@
 struct extent { block_t block:48, count:6, version:10; };
 struct group { u32 count:8, loghi:24; };
 struct entry { u32 limit:8, loglo:24; };
-struct fleaf { u16 magic, free, used, groups; struct extent table[]; };
+struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
 
 /*
  * Leaf index format
@@ -90,39 +90,39 @@ int leaf_init(SB, void *leaf)
 {
 	if (!leaf)
 		return -1;
-	*(struct fleaf *)leaf = (struct fleaf){ .magic = 0x1eaf, .free = sizeof(struct fleaf), .used = sb->blocksize };
+	*(struct dleaf *)leaf = (struct dleaf){ .magic = 0x1eaf, .free = sizeof(struct dleaf), .used = sb->blocksize };
 	return 0;
 }
 
-struct fleaf *leaf_create(SB)
+struct dleaf *leaf_create(SB)
 {
-	struct fleaf *leaf = malloc(sb->blocksize);
+	struct dleaf *leaf = malloc(sb->blocksize);
 	leaf_init(sb, leaf);
 	return leaf;
 }
 
 int leaf_sniff(SB, void *leaf)
 {
-	return ((struct fleaf *)leaf)->magic == 0x1eaf;
+	return ((struct dleaf *)leaf)->magic == 0x1eaf;
 }
 
-void leaf_destroy(SB, struct fleaf *leaf)
+void leaf_destroy(SB, struct dleaf *leaf)
 {
 	assert(leaf_sniff(sb, leaf));
 	free(leaf);
 }
 
-unsigned leaf_free(SB, struct fleaf *leaf)
+unsigned leaf_free(SB, struct dleaf *leaf)
 {
 	return leaf->used - leaf->free;
 }
 
-unsigned leaf_used(SB, struct fleaf *leaf)
+unsigned leaf_used(SB, struct dleaf *leaf)
 {
-	return sb->blocksize - leaf_free(sb, leaf) - sizeof(struct fleaf);
+	return sb->blocksize - leaf_free(sb, leaf) - sizeof(struct dleaf);
 }
 
-void leaf_dump(SB, struct fleaf *leaf)
+void leaf_dump(SB, struct dleaf *leaf)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -151,7 +151,7 @@ void leaf_dump(SB, struct fleaf *leaf)
 	}
 }
 
-void *leaf_lookup(SB, struct fleaf *leaf, block_t target, unsigned *count)
+void *leaf_lookup(SB, struct dleaf *leaf, block_t target, unsigned *count)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -176,7 +176,7 @@ void *leaf_lookup(SB, struct fleaf *leaf, block_t target, unsigned *count)
 	return NULL;
 }
 
-int leaf_check(SB, struct fleaf *leaf)
+int leaf_check(SB, struct dleaf *leaf)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -207,7 +207,7 @@ void *leaf_expand(SB, void *base, block_t target, unsigned size)
 {
 target = target & 0xffffffffffffLL;
 	assert(leaf_sniff(sb, base));
-	struct fleaf *leaf = base;
+	struct dleaf *leaf = base;
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
@@ -216,7 +216,7 @@ target = target & 0xffffffffffffLL;
 	const int grouplim = 7;
 
 	/* need room for one extent + maybe one group + maybe one entry */
-	if (sb, leaf_free(sb, leaf) < sizeof(struct group) + sizeof(struct entry) +  size)
+	if (leaf_free(sb, leaf) < sizeof(struct group) + sizeof(struct entry) +  size)
 		return NULL;
 
 	/* find group position */
@@ -298,7 +298,7 @@ target = target & 0xffffffffffffLL;
 	return where;
 }
 
-int leaf_insert(SB, struct fleaf *leaf, block_t target, struct extent extent)
+void leaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
 {
 	printf("insert 0x%Lx -> 0x%Lx\n", target, (block_t)extent.block);
 	struct extent *store = leaf_expand(sb, leaf, target, sizeof(extent));
@@ -320,7 +320,7 @@ int leaf_insert(SB, struct fleaf *leaf, block_t target, struct extent extent)
 tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
 {
 	assert(leaf_sniff(sb, base));
-	struct fleaf *leaf = base, *dest = base2;
+	struct dleaf *leaf = base, *dest = base2;
 	struct group *groups = base + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	printf("split %p into %p\n", leaf, dest);
@@ -378,7 +378,7 @@ tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
 	return ((destgroups - 1)->loghi << 24) | (destentries - 1)->loglo;
 }
 
-void leaf_merge(SB, struct fleaf *leaf, struct fleaf *from)
+void leaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -386,7 +386,7 @@ void leaf_merge(SB, struct fleaf *leaf, struct fleaf *from)
 	//assert(leaf_used(from) <= leaf_free(leaf));
 
 	/* append extents */
-	unsigned size = from->free - sizeof(struct fleaf);
+	unsigned size = from->free - sizeof(struct dleaf);
 	memcpy((void *)leaf + leaf->free, from->table, size);
 	leaf->free += size;
 
@@ -417,10 +417,10 @@ void leaf_merge(SB, struct fleaf *leaf, struct fleaf *from)
 			(enbase - i)->limit += enbase->limit;
 }
 
-void fleaftest(SB)
+void dleaf_test(SB)
 {
 	printf("--- leaf test ---\n");
-	struct fleaf *leaf = leaf_create(sb);
+	struct dleaf *leaf = leaf_create(sb);
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
@@ -448,7 +448,7 @@ void fleaftest(SB)
 			printf("0x%x not found\n", target);
 	}
 
-	struct fleaf *dest = leaf_create(sb);
+	struct dleaf *dest = leaf_create(sb);
 	tuxkey_t key = leaf_split(sb, leaf, dest, 0);
 	printf("split key 0x%Lx\n", key);
 	leaf_dump(sb, leaf);
@@ -464,6 +464,6 @@ void fleaftest(SB)
 
 int main(int argc, char *argv[])
 {
-	fleaftest(&(struct sb){ .blocksize = 4096 });
+	dleaf_test(&(struct sb){ .blocksize = 4096 });
 	return 0;
 }

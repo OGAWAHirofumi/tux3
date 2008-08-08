@@ -175,14 +175,14 @@ void *ileaf_expand(SB, void *base, inum_t inum, unsigned more)
 	u16 free = *(dict - leaf->count);
 	unsigned offset = at ? *(dict - at) : 0, size = *(dict - at - 1) - offset;
 	void *inode = leaf->table + offset;
-	printf("expand inum %u at %i/%i by %i\n", at, offset, size, more);
+	printf("expand inum 0x%x at 0x%x/%i by %i\n", at, offset, size, more);
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
 	memmove(inode + size + more, inode + size, free - offset);
 	return inode + size;
 }
 
-void *inode_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+void inode_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	char *where = ileaf_expand(sb, leaf, inum, more);
 	memset(where, fill, more);
