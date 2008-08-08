@@ -275,7 +275,8 @@ target = target & 0xffffffffffffLL;
 	if (entry == enbase || loglo < entry->loglo) {
 		printf("insert 0x%Lx at %u in group %u\n", target, entries - entry, groups - group);
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
-		*entry = (struct entry){ .loglo = loglo, .limit = !group->count ? 0 : (entry + 1)->limit };
+		unsigned limit = !group->count || entry == entries ? 0 : (entry + 1)->limit;
+		*entry = (struct entry){ .loglo = loglo, .limit = limit };
 		used -= sizeof(*entry);
 		enbase--;
 		group->count++;
