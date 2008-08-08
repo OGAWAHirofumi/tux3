@@ -23,8 +23,8 @@ struct buffer
 	unsigned state;
 	unsigned size;
 	sector_t block;
-	unsigned char *data;
 	struct dev *dev;
+	void *data;
 };
 
 struct list_head dirty_buffers;
