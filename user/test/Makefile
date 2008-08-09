@@ -3,7 +3,7 @@ CFLAGS += -std=gnu99 -Wall
 VG=valgrind
 VGFLAGS=--error-exitcode=200
 
-all: dleaf ileaf btree
+all: dleaf ileaf btree dir
 tests: dleaftest ileaftest
 
 dleaf: dleaf.c tux3.h hexdump.c
@@ -20,6 +20,11 @@ btree: btree.c diskio.c buffer.c dleaf.c buffer.h tux3.h
 	$(CC) $(CFLAGS) btree.c buffer.c diskio.c -o btree
 btreetest: btree
 	$(VG) $(VGFLAGS) ./btree foodev
+
+dir: dir.c diskio.c buffer.c dleaf.c buffer.h tux3.h
+	$(CC) $(CFLAGS) dir.c buffer.c diskio.c -o dir
+dirtest: dir
+	$(VG) $(VGFLAGS) ./dir
 
 clean:
 	rm -f dleaf ileaf btree *.o a.out foodev
