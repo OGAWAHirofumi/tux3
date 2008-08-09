@@ -20,9 +20,9 @@ struct ileaf { u16 magic, count; inum_t inum; char table[]; };
 /*
  * inode leaf format
  *
- * A leaf has a small header followed by a table of extents.  A vector of
+ * A leaf has a small header followed by a table of attributes.  A vector of
  * offsets within the block grows down from the top of the leaf towards the
- * top of the extent table, indexed by the difference between inum and
+ * top of the attribute table, indexed by the difference between inum and
  * leaf->inum, the base inum of the table block.
  */
 
@@ -81,14 +81,23 @@ void ileaf_dump(SB, struct ileaf *leaf)
 	}
 }
 
-void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *size)
+void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *result)
 {
 	assert(inum > leaf->inum);
 	inum_t at = inum - leaf->inum;
 	assert(at < 999); // !!! calculate this properly: max inode possible with max dict
 	printf("lookup inode %Lx, %Lx + %Lx\n", inum, leaf->inum, at);
-	u16 *dict = (void *)leaf + sb->blocksize, offset = (at ? *(dict - at) : 0);
-	return (*size = *(dict - at - 1) - offset) ? leaf->table + offset : NULL;
+	unsigned size = 0;
+	void *inode = NULL;
+	if (at < leaf->count) {
+		u16 *dict = (void *)leaf + sb->blocksize;
+		unsigned offset = at ? *(dict - at) : 0;
+		size = *(dict - at - 1) - offset;
+		if (size)
+			inode = leaf->table + offset;
+	}
+	*result = size;
+	return inode;
 }
 
 int ileaf_check(SB, struct ileaf *leaf)
@@ -179,13 +188,16 @@ void *ileaf_expand(SB, void *base, inum_t inum, unsigned more)
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
 	memmove(inode + size + more, inode + size, free - offset);
-	return inode + size;
+	return inode;
 }
 
 void inode_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
-	char *where = ileaf_expand(sb, leaf, inum, more);
-	memset(where, fill, more);
+	unsigned size = 0;
+	char *inode = ileaf_lookup(sb, leaf, inum, &size);
+	printf("inode size = %i\n", size);
+	inode = ileaf_expand(sb, leaf, inum, more);
+	memset(inode + size, fill, more);
 }
 
 void ileaf_test(SB)

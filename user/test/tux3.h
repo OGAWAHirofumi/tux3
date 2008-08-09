@@ -37,12 +37,15 @@ struct bleaf
  * 2008-08-06: Beginning of time
  */
 
+struct btree { u64 block; u16 levels, pad[3]; };
 
 struct superblock
 {
 	typeof((char[])SB_MAGIC) magic;
 	u64 create_time;
-	block_t root;
+	struct btree iroot;
+	struct btree froot;
+	struct btree aroot;
 	u64 flags;
 	u32 levels;
 	u32 sequence; /* commit block sequence number */
