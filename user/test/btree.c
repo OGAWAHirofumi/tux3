@@ -477,11 +477,19 @@ static void *tree_expand(SB, struct btree *root, u64 target, unsigned size, stru
 
 /* High level operations */
 
-static int tuxwrite(SB, block_t target, char *data, unsigned len)
+struct inode {
+	struct sb *sb;
+	struct btree root;
+	millisecond_t mtime;
+	u64 size;
+};
+
+static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
 {
-	int err, levels = sb->image.iroot.levels;
+	struct sb *sb = inode->sb;
+	int err, levels = inode->root.levels;
 	struct treepath path[levels + 1];
-	if ((err = probe(sb, &sb->image.iroot, target, path, &dtree_ops)))
+	if ((err = probe(sb, &inode->root, target, path, &dtree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
 	
@@ -513,11 +521,12 @@ out:
 	return err;
 }
 
-static int tuxread(SB, block_t seek, char *data, unsigned len)
+static int tuxread(struct inode *inode, block_t seek, char *data, unsigned len)
 {
-	int err, levels = sb->image.iroot.levels;
+	struct sb *sb = inode->sb;
+	int err, levels = inode->root.levels;
 	struct treepath path[levels + 1];
-	if ((err = probe(sb, &sb->image.iroot, seek, path, &dtree_ops)))
+	if ((err = probe(sb, &inode->root, seek, path, &dtree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
 	
@@ -543,19 +552,13 @@ enum { MTIME_SIZE_ATTR, DATA_BTREE_ATTR };
 struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
 struct data_btree_attr { u64 kind:4; struct btree btree; };
 
-struct inode {
-	millisecond_t mtime;
-	u64 size;
-	block_t root;
-};
-
 void init_root(struct bnode *root, block_t leaf)
 {
 	root->count = 1;
 	root->entries[0].block = leaf;
 }
 
-struct inode *tuxopen(SB, inum_t inum, char *attr, unsigned len, int create)
+struct inode *tuxopen(SB, inum_t inum, int create)
 {
 	int err, levels = sb->image.iroot.levels;
 	struct treepath path[levels + 1];
@@ -595,6 +598,9 @@ struct inode *tuxopen(SB, inum_t inum, char *attr, unsigned len, int create)
 		attr2.btree.levels = 1;
 		printf("root at %Li\n", rootbuf->block);
 		printf("leaf at %Li\n", leafbuf->block);
+
+		inode = malloc(sizeof(*inode));
+		*inode = (struct inode){ .sb = sb, .root = { .block = rootbuf->block, .levels = 1 } };
 		brelse_dirty(rootbuf);
 		brelse_dirty(leafbuf);
 
@@ -629,14 +635,14 @@ int main(int argc, char *argv[])
 	init_tux3(&sb);
 	char buf[100] = { };
 
-	tuxopen(&sb, 0x123, buf, sizeof(buf), 1); return 0;
-
-	tuxwrite(&sb, 6, "hello world", 11);
-	flush_buffers();
-
-	if (tuxread(&sb, 6, buf, 11))
+	struct inode *inode = tuxopen(&sb, 0x123, 1);
+	tuxwrite(inode, 6, "hello", 5);
+	tuxwrite(inode, 5, "world", 5);
+	if (tuxread(inode, 6, buf, 11))
 		return 1;
-		
+	hexdump(buf, 11);
+	if (tuxread(inode, 5, buf, 11))
+		return 1;
 	hexdump(buf, 11);
 	return 0;
 }
