@@ -503,12 +503,14 @@ int filemap_readblock(struct buffer *buffer)
 	leaf_dump(sb, leafbuf->data);
 
 	brelse_path(path, levels);
-	if (!count) {
-		memset(buffer->data, 0, sb->blocksize);
-		return 0;
+	if (count) {
+		block_t physical = found->block;
+		trace(warn("found physical block %Lx", (long long)physical);)
+		return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 	}
-	trace(warn("found block %Lx", (long long)found->block);)
-	return diskread(dev->fd, buffer->data, sb->blocksize, found->block << dev->bits);
+	/* found a hole */
+	memset(buffer->data, 0, sb->blocksize);
+	return 0;
 }
 
 int filemap_writeblock(struct buffer *buffer)
@@ -531,21 +533,21 @@ int filemap_writeblock(struct buffer *buffer)
 	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->block, &count);
 	leaf_dump(sb, leafbuf->data);
 
-	block_t block;
+	block_t physical;
 	if (count) {
-		block = found->block;
-		trace(warn("found block %Lx", (long long)block);)
+		physical = found->block;
+		trace(warn("found physical block %Lx", (long long)physical);)
 	} else {
-		block = balloc(sb); // !!! need an error return
-		trace(warn("new block %Lx", block);)
+		physical = balloc(sb); // !!! need an error return
+		trace(warn("new physical block %Lx", physical);)
 		struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->block, sizeof(struct extent), path, levels, &dtree_ops);
 		if (!store) {
 			warn("unable to add extent to tree: %s", strerror(-err));
-			free_block(sb, block);
+			free_block(sb, physical);
 			err = -EIO;
 			goto out;
 		}
-		*store = (struct extent){ .block = block };
+		*store = (struct extent){ .block = physical };
 	}
 out:
 	brelse_path(path, levels);
@@ -557,7 +559,7 @@ printf("---------------------\n");
 show_buffers(inode->filemap);
 printf("---------------------\n");
 
-	return diskwrite(dev->fd, buffer->data, sb->blocksize, buffer->block << dev->bits);
+	return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 }
 
 struct map_ops filemap_ops = {
