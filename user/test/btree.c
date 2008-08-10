@@ -637,7 +637,7 @@ int devmap_readbuf(struct buffer *buffer)
 
 int devmap_writebuf(struct buffer *buffer)
 {
-	warn("block %Lu", buffer->block);
+	warn("block %Lu, sb = %p", buffer->block, buffer->map->sb);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 9 && dev->fd);
 	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);

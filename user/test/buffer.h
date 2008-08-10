@@ -25,22 +25,22 @@ struct map_ops
 struct map {
 	struct sb *sb;
 	struct dev *dev;
+	struct map_ops ops;
 	struct buffer *hash[BUFFER_BUCKETS];
 	struct list_head dirty;
 	unsigned dirty_count;
-	struct map_ops ops;
 };
 
 struct buffer
 {
-	struct buffer *hashlist;
-	struct list_head dirty_list;
-	struct list_head list; /* used for LRU list and the free list */
+	struct map *map;
+	struct buffer *hashlink;
+	struct list_head dirtylink;
+	struct list_head lrulink; /* used for LRU list and the free list */
 	unsigned count; // should be atomic_t
 	unsigned state;
 	unsigned size;
 	sector_t block;
-	struct map *map;
 	void *data;
 };
 
