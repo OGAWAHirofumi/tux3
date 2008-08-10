@@ -474,20 +474,90 @@ static void *tree_expand(SB, struct btree *root, u64 target, unsigned size, stru
 
 /* High level operations */
 
+struct inode {
+	struct sb *sb;
+	struct map *filemap;
+	struct btree root;
+	millisecond_t mtime;
+	u64 size;
+};
+
 int filemap_readblock(struct buffer *buffer)
 {
 	warn("block %Lu", buffer->block);
-	struct dev *dev = buffer->map->dev;
+	struct map *filemap = buffer->map;
+	struct inode *inode = filemap->inode;
+	struct sb *sb = inode->sb;
+	struct map *devmap = sb->devmap;
+	struct dev *dev = devmap->dev;
 	assert(dev->bits >= 9 && dev->fd);
-	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+
+	int err, levels = inode->root.levels;
+	struct treepath path[levels + 1];
+	if ((err = probe(sb, &inode->root, buffer->block, path, &dtree_ops)))
+		return err;
+	struct buffer *leafbuf = path[levels].buffer;
+	
+	unsigned count = 0;
+	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->block, &count);
+	leaf_dump(sb, leafbuf->data);
+
+	brelse_path(path, levels);
+	if (!count) {
+		memset(buffer->data, 0, sb->blocksize);
+		return 0;
+	}
+	trace(warn("found block %Lx", (long long)found->block);)
+	return diskread(dev->fd, buffer->data, sb->blocksize, found->block << dev->bits);
 }
 
 int filemap_writeblock(struct buffer *buffer)
 {
 	warn("block %Lu", buffer->block);
-	struct dev *dev = buffer->map->dev;
+	struct map *filemap = buffer->map;
+	struct inode *inode = filemap->inode;
+	struct sb *sb = inode->sb;
+	struct map *devmap = sb->devmap;
+	struct dev *dev = devmap->dev;
 	assert(dev->bits >= 9 && dev->fd);
-	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+
+	int err, levels = inode->root.levels;
+	struct treepath path[levels + 1];
+	if ((err = probe(sb, &inode->root, buffer->block, path, &dtree_ops)))
+		return err;
+	struct buffer *leafbuf = path[levels].buffer;
+	
+	unsigned count = 0;
+	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->block, &count);
+	leaf_dump(sb, leafbuf->data);
+
+	block_t block;
+	if (count) {
+		block = found->block;
+		trace(warn("found block %Lx", (long long)block);)
+	} else {
+		block = balloc(sb); // !!! need an error return
+		trace(warn("new block %Lx", block);)
+		struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->block, sizeof(struct extent), path, levels, &dtree_ops);
+		if (!store) {
+			warn("unable to add extent to tree: %s", strerror(-err));
+			free_block(sb, block);
+			err = -EIO;
+			goto out;
+		}
+		*store = (struct extent){ .block = block };
+	}
+out:
+	brelse_path(path, levels);
+//flush_buffers(inode->filemap);
+//evict_buffers(inode->filemap);
+printf("---------------------\n");
+show_buffers(sb->devmap);
+printf("---------------------\n");
+show_buffers(inode->filemap);
+printf("---------------------\n");
+
+	return diskwrite(dev->fd, buffer->data, sb->blocksize, buffer->block << dev->bits);
 }
 
 struct map_ops filemap_ops = {
@@ -495,80 +565,24 @@ struct map_ops filemap_ops = {
 	.writebuf = filemap_writeblock,
 };
 
-struct inode {
-	struct map *filemap;
-	struct btree root;
-	millisecond_t mtime;
-	u64 size;
-};
+static int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
+{
+	struct buffer *blockbuf = bread(inode->filemap, target);
+	if (!blockbuf)
+		return -EIO;
+	memcpy(data, blockbuf->data, len);
+	brelse(blockbuf);
+	return 0;
+}
 
 static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
 {
-	struct sb *sb = inode->filemap->sb;
-	int err, levels = inode->root.levels;
-	struct treepath path[levels + 1];
-	if ((err = probe(sb, &inode->root, target, path, &dtree_ops)))
-		return err;
-	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
-	
-	unsigned extents = 0;
-	struct extent *found = leaf_lookup(sb, leafbuf->data, target, &extents);
-	leaf_dump(sb, leafbuf->data);
-
-	if (extents) {
-		trace(warn("found block %Lx", (long long)found->block);)
-		if (!(blockbuf = bread(inode->filemap, found->block)))
-			return -EBADF;
-	} else {
-		blockbuf = getblk(inode->filemap, balloc(sb));
-		trace(warn("new block %Lx", blockbuf->block);)
-		struct extent *store = tree_expand(sb, &sb->image.iroot, target, sizeof(struct extent), path, levels, &dtree_ops);
-		if (!store) {
-			warn("unable to add extent to tree: %s", strerror(-err));
-			free_block(sb, blockbuf->block);
-			err = -EINVAL;
-			goto out;
-		}
-		*store = (struct extent){ .block = blockbuf->block };
-	}
+	struct buffer *blockbuf = getblk(inode->filemap, target);
+	if (!blockbuf)
+		return -EIO;
 	memcpy(blockbuf->data, data, len);
 	set_buffer_dirty(blockbuf);
-out:
-	brelse_path(path, levels);
 	brelse(blockbuf);
-flush_buffers(inode->filemap);
-evict_buffers(inode->filemap);
-printf("---------------------\n");
-show_buffers(sb->devmap);
-printf("---------------------\n");
-show_buffers(inode->filemap);
-printf("---------------------\n");
-	return err;
-}
-
-static int tuxread(struct inode *inode, block_t seek, char *data, unsigned len)
-{
-	struct sb *sb = inode->filemap->sb;
-	int err, levels = inode->root.levels;
-	struct treepath path[levels + 1];
-	if ((err = probe(sb, &inode->root, seek, path, &dtree_ops)))
-		return err;
-	struct buffer *leafbuf = path[levels].buffer, *blockbuf;
-	
-	unsigned count = 0;
-	struct extent *found = leaf_lookup(sb, leafbuf->data, seek, &count);
-	leaf_dump(sb, leafbuf->data);
-	brelse_path(path, levels);
-
-	if (count) {
-		trace(warn("found block %Lx", (long long)found->block);)
-		if (!(blockbuf = bread(inode->filemap, found->block)))
-			return -EBADF;
-		memcpy(data, blockbuf->data, len);
-		brelse(blockbuf);
-	} else {
-		memset(data, 0, len);
-	}
 	return 0;
 }
 
@@ -625,10 +639,10 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 		printf("leaf at %Li\n", leafbuf->block);
 
 		struct map *filemap = new_map(sb->devmap->dev, &filemap_ops);
-		filemap->sb = sb;
 
 		inode = malloc(sizeof(*inode));
-		*inode = (struct inode){ .filemap = filemap, .root = { .block = rootbuf->block, .levels = 1 } };
+		*inode = (struct inode){ .sb = sb, .filemap = filemap, .root = { .block = rootbuf->block, .levels = 1 } };
+		filemap->inode = inode;
 		brelse_dirty(rootbuf);
 		brelse_dirty(leafbuf);
 

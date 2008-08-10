@@ -24,7 +24,7 @@ struct map_ops
 
 struct map {
 	struct list_head dirty;
-	struct sb *sb;
+	struct inode *inode;
 	struct dev *dev;
 	struct map_ops *ops;
 	struct buffer *hash[BUFFER_BUCKETS];
