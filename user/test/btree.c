@@ -93,7 +93,7 @@ static struct buffer *new_block(SB)
 
 static struct buffer *new_leaf(SB, struct btree_ops *ops)
 {
-	trace(printf("new leaf blocksize = %i\n", sb->blocksize););
+	trace(printf("new leaf\n"););
 	struct buffer *buffer = new_block(sb); 
 	if (!buffer)
 		return NULL;
@@ -478,18 +478,19 @@ struct inode {
 	struct sb *sb;
 	struct map *filemap;
 	struct btree root;
+	inum_t inum;
 	millisecond_t mtime;
 	u64 size;
 };
 
 int filemap_readblock(struct buffer *buffer)
 {
-	warn("block %Lu", buffer->block);
 	struct map *filemap = buffer->map;
 	struct inode *inode = filemap->inode;
 	struct sb *sb = inode->sb;
 	struct map *devmap = sb->devmap;
 	struct dev *dev = devmap->dev;
+	warn("<%Lx:%Lx>", inode->inum, buffer->block);
 	assert(dev->bits >= 9 && dev->fd);
 
 	int err, levels = inode->root.levels;
@@ -515,12 +516,12 @@ int filemap_readblock(struct buffer *buffer)
 
 int filemap_writeblock(struct buffer *buffer)
 {
-	warn("block %Lu", buffer->block);
 	struct map *filemap = buffer->map;
 	struct inode *inode = filemap->inode;
 	struct sb *sb = inode->sb;
 	struct map *devmap = sb->devmap;
 	struct dev *dev = devmap->dev;
+	warn("<%Lx:%Lx>", inode->inum, buffer->block);
 	assert(dev->bits >= 9 && dev->fd);
 
 	int err, levels = inode->root.levels;
@@ -563,8 +564,8 @@ printf("---------------------\n");
 }
 
 struct map_ops filemap_ops = {
-	.readbuf = filemap_readblock,
-	.writebuf = filemap_writeblock,
+	.readblock = filemap_readblock,
+	.writeblock = filemap_writeblock,
 };
 
 static int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
@@ -643,7 +644,9 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 		struct map *filemap = new_map(sb->devmap->dev, &filemap_ops);
 
 		inode = malloc(sizeof(*inode));
-		*inode = (struct inode){ .sb = sb, .filemap = filemap, .root = { .block = rootbuf->block, .levels = 1 } };
+		*inode = (struct inode){
+			.inum = inum, .sb = sb, .filemap = filemap,
+			.root = { .block = rootbuf->block, .levels = 1 } };
 		filemap->inode = inode;
 		brelse_dirty(rootbuf);
 		brelse_dirty(leafbuf);
@@ -655,6 +658,27 @@ eek:
 	brelse_path(path, levels);
 	return inode;
 }
+
+int devmap_readblock(struct buffer *buffer)
+{
+	warn("block %Lu", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+int devmap_writeblock(struct buffer *buffer)
+{
+	struct dev *dev = buffer->map->dev;
+	warn("block %Lu", buffer->block);
+	assert(dev->bits >= 9 && dev->fd);
+	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+struct map_ops devmap_ops = {
+	.readblock = devmap_readblock,
+	.writeblock = devmap_writeblock,
+};
 
 void init_tux3(SB)
 {
@@ -671,32 +695,10 @@ void init_tux3(SB)
 	brelse_dirty(leafbuf);
 }
 
-int devmap_readbuf(struct buffer *buffer)
-{
-	warn("block %Lu", buffer->block);
-	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 9 && dev->fd);
-	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
-}
-
-int devmap_writebuf(struct buffer *buffer)
-{
-	struct dev *dev = buffer->map->dev;
-	warn("block %Lu", buffer->block);
-	assert(dev->bits >= 9 && dev->fd);
-	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
-}
-
-struct map_ops devmap_ops = {
-	.readbuf = devmap_readbuf,
-	.writebuf = devmap_writebuf,
-};
-
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU),.bits = 12 };
+	struct dev *dev = &(struct dev){ .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU), .bits = 12 };
 	struct map *map = new_map(dev, &devmap_ops);
-	init_buffers(dev, 1 << 20);
 	struct sb *sb = &(struct sb){ .image = { .magic = SB_MAGIC }, .devmap = map, .alloc_per_node = 20 };
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);

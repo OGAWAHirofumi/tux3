@@ -64,13 +64,13 @@ void show_buffers_(struct map *map, int all)
 
 void show_active_buffers(struct map *map)
 {
-	warn("map %p:", map);
+	warn("(map %p)", map);
 	show_buffers_(map, 0);
 }
 
 void show_buffers(struct map *map)
 {
-	warn("map %p:", map);
+	warn("(map %p)", map);
 	show_buffers_(map, 1);
 }
 
@@ -169,7 +169,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, sector_t block)
 {
-	return (buffer->map->ops->writebuf)(buffer);
+	return (buffer->map->ops->writeblock)(buffer);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -334,7 +334,7 @@ struct buffer *bread(struct map *map, sector_t block)
 	if (buffer->state != BUFFER_STATE_EMPTY)
 		return buffer;
 	buftrace(warn("read buffer %Lx", buffer->block););
-	if ((err = (buffer->map->ops->readbuf)(buffer))) {
+	if ((err = (buffer->map->ops->readblock)(buffer))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);
 		return NULL;
