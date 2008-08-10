@@ -31,8 +31,6 @@
 
 typedef struct dleaf leaf_t; // these need to be generic
 
-typedef u32 millisecond_t;
-
 static millisecond_t gettime(void)
 {
 	struct timeval now;
@@ -473,15 +471,6 @@ static void *tree_expand(SB, struct btree *root, u64 target, unsigned size, stru
 }
 
 /* High level operations */
-
-struct inode {
-	struct sb *sb;
-	struct map *filemap;
-	struct btree root;
-	inum_t inum;
-	millisecond_t mtime;
-	u64 size;
-};
 
 int filemap_blockio(struct buffer *buffer, int write)
 {

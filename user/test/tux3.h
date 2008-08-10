@@ -17,6 +17,7 @@ typedef uint64_t le_u64;
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
+typedef u32 millisecond_t;
 typedef uint64_t inum_t;
 typedef u64 block_t;
 typedef u64 tuxkey_t;
@@ -66,6 +67,15 @@ struct sb
 	u32 alloc_per_node;
 	struct buffer *rootbuf;
 	unsigned blocksize;
+};
+
+struct inode {
+	struct sb *sb;
+	struct map *map;
+	struct btree root;
+	inum_t inum;
+	u64 i_size, i_ctime, i_mtime, i_atime;
+	u32 i_mode;
 };
 
 #endif

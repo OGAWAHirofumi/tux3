@@ -60,8 +60,9 @@
 
 typedef u16 le16;
 
+#define CURRENT_TIME_SEC 123
 #define EXT2_DIR_PAD 3
-#define EXT2_DIR_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
+#define EXT2_MIN_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
 #define EXT2_MAX_REC_LEN ((1<<16)-1)
 #define EXT2_NAME_LEN 255
 
@@ -101,38 +102,6 @@ static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
 	return (ext2_dirent *)((char *)p + ext2_rec_len_from_disk(p->rec_len));
 }
 
-static unsigned blocksize = 4096;
-
-void ext2_dump_entries(struct buffer *buffer)
-{
-	printf("entries: ");
-	ext2_dirent *de = (ext2_dirent *)buffer->data;
-	ext2_dirent *lim = buffer->data + blocksize;
-	while (de < lim) {
-		printf("%.*s (%x:%i) ", de->name_len, de->name, de->inode, de->type);
-		de = ext2_next_entry(de);
-	}
-	printf("\n");
-}
-
-ext2_dirent *ext2_find_entry(struct buffer *buffer, char *name, int len)
-{
-	unsigned reclen = EXT2_DIR_REC_LEN(len);
-	ext2_dirent *de = buffer->data;
-	ext2_dirent *lim = buffer->data + blocksize - reclen;
-	while (de <= lim) {
-		if (de->rec_len == 0)
-			goto eek;
-		if (ext2_match(len, name, de))
-			return de;
-		de = ext2_next_entry(de);
-	}
-eek:
-	warn("zero-length directory entry");
-	brelse(buffer);
-	return NULL;
-}
-
 enum {
 	EXT2_FT_UNKNOWN,
 	EXT2_FT_REG,
@@ -141,101 +110,137 @@ enum {
 	EXT2_FT_BLK,
 	EXT2_FT_FIFO,
 	EXT2_FT_SOCK,
-	EXT2_FT_SYM,
+	EXT2_FT_LNK,
 	EXT2_FT_MAX
 };
 
 #define STAT_SHIFT 12
 
 static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
-	[S_IFREG >> STAT_SHIFT]	= EXT2_FT_REG,
-	[S_IFDIR >> STAT_SHIFT]	= EXT2_FT_DIR,
-	[S_IFCHR >> STAT_SHIFT]	= EXT2_FT_CHR,
-	[S_IFBLK >> STAT_SHIFT]	= EXT2_FT_BLK,
-	[S_IFIFO >> STAT_SHIFT]	= EXT2_FT_FIFO,
-	[S_IFSOCK >> STAT_SHIFT]	= EXT2_FT_SOCK,
-	[S_IFLNK >> STAT_SHIFT]	= EXT2_FT_SYM,
+	[S_IFREG >> STAT_SHIFT] = EXT2_FT_REG,
+	[S_IFDIR >> STAT_SHIFT] = EXT2_FT_DIR,
+	[S_IFCHR >> STAT_SHIFT] = EXT2_FT_CHR,
+	[S_IFBLK >> STAT_SHIFT] = EXT2_FT_BLK,
+	[S_IFIFO >> STAT_SHIFT] = EXT2_FT_FIFO,
+	[S_IFSOCK >> STAT_SHIFT] = EXT2_FT_SOCK,
+	[S_IFLNK >> STAT_SHIFT] = EXT2_FT_LNK,
 };
 
-struct inode { unsigned i_mode; };
-
-static inline void ext2_set_de_type(ext2_dirent *de, unsigned mode)
+void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 {
-	de->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
+	printf("entries: ");
+	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
+	ext2_dirent *limit = buffer->data + blocksize;
+	while (dirent < limit) {
+		if (dirent->inode)
+			printf("%.*s (%x:%i) ",
+				dirent->name_len,
+				dirent->name,
+				dirent->inode,
+				dirent->type);
+		dirent = ext2_next_entry(dirent);
+	}
+	printf("\n");
+	brelse(buffer);
 }
 
-int ext2_create_entry(struct buffer *buffer, char *name, int len, unsigned inum, unsigned mode)
+int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, unsigned mode)
 {
-	unsigned reclen = EXT2_DIR_REC_LEN(len);
-	unsigned short rec_len, name_len;
-	int err;
-	void *dir_end = buffer->data + blocksize;
-
-	ext2_dirent *de = buffer->data;
-	ext2_dirent *lim = buffer->data + blocksize - reclen;
-	while (de <= lim) {
-		if ((char *)de == dir_end) {
-			/* We hit i_size */
-			name_len = 0;
-			rec_len = blocksize;
-			de->rec_len = ext2_rec_len_to_disk(blocksize);
-			de->inode = 0;
-			goto got_it;
+	ext2_dirent *dirent;
+	struct buffer *buffer;
+	unsigned reclen = EXT2_MIN_REC_LEN(len), rec_len, name_len;
+	unsigned blocksize = 1 << inode->map->dev->bits;
+	unsigned blocks = inode->i_size >> inode->map->dev->bits, block;
+	for (block = 0; block < blocks; block++) {
+		buffer = getblk(inode->map, block);
+		dirent = buffer->data;
+		ext2_dirent *limit = buffer->data + blocksize - reclen;
+		while (dirent <= limit) {
+			if (dirent->rec_len == 0) {
+				warn("zero-length directory entry");
+				brelse(buffer);
+				return -EIO;
+			}
+			name_len = EXT2_MIN_REC_LEN(dirent->name_len);
+			rec_len = ext2_rec_len_from_disk(dirent->rec_len);
+			if (!dirent->inode && rec_len >= reclen)
+				goto create;
+			if (rec_len >= name_len + reclen)
+				goto create;
+			dirent = (ext2_dirent *)((char *)dirent + rec_len);
 		}
-		if (de->rec_len == 0) {
-			warn("zero-length directory entry");
-			err = -EIO;
-			goto out_put;
-		}
-		name_len = EXT2_DIR_REC_LEN(de->name_len);
-		rec_len = ext2_rec_len_from_disk(de->rec_len);
-		if (!de->inode && rec_len >= reclen)
-			goto got_it;
-		if (rec_len >= name_len + reclen)
-			goto got_it;
-		de = (ext2_dirent *) ((char *)de + rec_len);
+		brelse(buffer);
 	}
-	return -EINVAL;
-got_it:
-	if (de->inode) {
-		ext2_dirent *de1 = (ext2_dirent *)((char *)de + name_len);
-		de1->rec_len = ext2_rec_len_to_disk(rec_len - name_len);
-		de->rec_len = ext2_rec_len_to_disk(name_len);
-		de = de1;
+	buffer = getblk(inode->map, blocks);
+	dirent = buffer->data;
+	name_len = 0;
+	rec_len = blocksize;
+	*dirent = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
+	inode->i_size += blocksize;
+	set_buffer_dirty(buffer);
+create:
+	if (dirent->inode) {
+		ext2_dirent *newent = (ext2_dirent *)((char *)dirent + name_len);
+		newent->rec_len = ext2_rec_len_to_disk(rec_len - name_len);
+		dirent->rec_len = ext2_rec_len_to_disk(name_len);
+		dirent = newent;
 	}
-	de->name_len = len;
-	memcpy(de->name, name, len);
-	de->inode = cpu_to_le32(inum);
-	ext2_set_de_type(de, mode);
-	//dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
-	mark_inode_dirty(dir);
-out_put:
-//	brelse(buffer);
-	return err;
+	dirent->name_len = len;
+	memcpy(dirent->name, name, len);
+	dirent->inode = cpu_to_le32(inum);
+	dirent->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
+	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
+	mark_inode_dirty(inode);
+	brelse(buffer);
+	return 0;
 }
 
-int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dir)
+ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct buffer **result)
 {
-	ext2_dirent *pde = NULL;
-	ext2_dirent *de = buffer->data;
+	unsigned reclen = EXT2_MIN_REC_LEN(len);
+	unsigned blocksize = 1 << inode->map->dev->bits;
+	unsigned blocks = inode->i_size >> inode->map->dev->bits, block;
+	for (block = 0; block < blocks; block++) {
+		struct buffer *buffer = getblk(inode->map, block);
+		ext2_dirent *dirent = buffer->data;
+		ext2_dirent *limit = (void *)dirent + blocksize - reclen;
+		while (dirent <= limit) {
+			if (dirent->rec_len == 0) {
+				brelse(buffer);
+				warn("zero length dirent at <%Lx:%x>", inode->inum, block);
+				return NULL;
+			}
+			if (ext2_match(len, name, dirent)) {
+				*result = buffer;
+				return dirent;
+			}
+			dirent = ext2_next_entry(dirent);
+		}
+		brelse(buffer);
+	}
+	return NULL;
+}
+
+int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
+{
+	ext2_dirent *prev = NULL, *this = buffer->data;
 	int err;
 
-	while ((char *)de < (char *)dir) {
-		if (de->rec_len == 0) {
+	while ((char *)this < (char *)dirent) {
+		if (this->rec_len == 0) {
 			warn("zero-length directory entry");
 			err = -EIO;
 			goto out;
 		}
-		pde = de;
-		de = ext2_next_entry(de);
+		prev = this;
+		this = ext2_next_entry(this);
 	}
-	if (pde)
-		pde->rec_len = ext2_rec_len_to_disk((void *)dir + ext2_rec_len_from_disk(dir->rec_len) - (void *)pde);
-	dir->inode = 0;
-//	inode->i_ctime = inode->i_mtime = CURRENT_TIME_SEC;
-//	mark_inode_dirty(inode);
+	if (prev)
+		prev->rec_len = ext2_rec_len_to_disk((void *)dirent +
+		ext2_rec_len_from_disk(dirent->rec_len) - (void *)prev);
+	dirent->inode = 0;
 out:
-//	brelse(buffer);
+	brelse(buffer);
 	return err;
 }
 
@@ -244,15 +249,22 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 12 };
 	struct map *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
-	struct buffer *buffer = getblk(map, 0);
-	blocksize = 1 << dev->bits;
-	*(ext2_dirent *)buffer->data = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
-	ext2_create_entry(buffer, "hello", 5, 0x666, S_IFREG);
-	ext2_create_entry(buffer, "world", 5, 0x777, S_IFDIR);
-	ext2_dirent *entry = ext2_find_entry(buffer, "world", 5);
-	ext2_dump_entries(buffer);
-	// hexdump(entry, 16);
-	ext2_delete_entry(buffer, entry);
-	ext2_dump_entries(buffer);
-	return 0;
+	struct buffer *buffer;
+	struct inode inode;
+	inode = (struct inode){ .map = map, .i_mode = S_IFDIR };
+	ext2_create_entry(&inode, "hello", 5, 0x666, S_IFREG);
+	ext2_create_entry(&inode, "world", 5, 0x777, S_IFLNK);
+	ext2_dirent *entry = ext2_find_entry(&inode, "hello", 5, &buffer);
+	if (buffer)
+		hexdump(entry, 16);
+	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
+
+	if (!ext2_delete_entry(buffer, entry)) {
+		show_buffers(map);
+		inode.i_ctime = inode.i_mtime = CURRENT_TIME_SEC;
+		mark_inode_dirty(&inode);
+	}
+
+	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
+	show_buffers(map);
 }
