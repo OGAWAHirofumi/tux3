@@ -142,10 +142,7 @@ static void brelse_path(struct treepath *path, unsigned levels)
 {
 	unsigned i;
 	for (i = 0; i <= levels; i++)
-{
-printf("release buffer for %Li\n", path[i].buffer->block);
 		brelse(path[i].buffer);
-}
 }
 
 static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path, struct btree_ops *ops)
@@ -477,8 +474,29 @@ static void *tree_expand(SB, struct btree *root, u64 target, unsigned size, stru
 
 /* High level operations */
 
+int filemap_readblock(struct buffer *buffer)
+{
+	warn("block %Lu", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+int filemap_writeblock(struct buffer *buffer)
+{
+	warn("block %Lu", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+struct map_ops filemap_ops = {
+	.readbuf = filemap_readblock,
+	.writebuf = filemap_writeblock,
+};
+
 struct inode {
-	struct sb *sb;
+	struct map *filemap;
 	struct btree root;
 	millisecond_t mtime;
 	u64 size;
@@ -486,7 +504,7 @@ struct inode {
 
 static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
 {
-	struct sb *sb = inode->sb;
+	struct sb *sb = inode->filemap->sb;
 	int err, levels = inode->root.levels;
 	struct treepath path[levels + 1];
 	if ((err = probe(sb, &inode->root, target, path, &dtree_ops)))
@@ -499,10 +517,10 @@ static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned le
 
 	if (extents) {
 		trace(warn("found block %Lx", (long long)found->block);)
-		if (!(blockbuf = blockread(sb, found->block)))
+		if (!(blockbuf = bread(inode->filemap, found->block)))
 			return -EBADF;
 	} else {
-		blockbuf = new_block(sb);
+		blockbuf = getblk(inode->filemap, balloc(sb));
 		trace(warn("new block %Lx", blockbuf->block);)
 		struct extent *store = tree_expand(sb, &sb->image.iroot, target, sizeof(struct extent), path, levels, &dtree_ops);
 		if (!store) {
@@ -518,12 +536,19 @@ static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned le
 out:
 	brelse_path(path, levels);
 	brelse(blockbuf);
+flush_buffers(inode->filemap);
+evict_buffers(inode->filemap);
+printf("---------------------\n");
+show_buffers(sb->devmap);
+printf("---------------------\n");
+show_buffers(inode->filemap);
+printf("---------------------\n");
 	return err;
 }
 
 static int tuxread(struct inode *inode, block_t seek, char *data, unsigned len)
 {
-	struct sb *sb = inode->sb;
+	struct sb *sb = inode->filemap->sb;
 	int err, levels = inode->root.levels;
 	struct treepath path[levels + 1];
 	if ((err = probe(sb, &inode->root, seek, path, &dtree_ops)))
@@ -537,7 +562,7 @@ static int tuxread(struct inode *inode, block_t seek, char *data, unsigned len)
 
 	if (count) {
 		trace(warn("found block %Lx", (long long)found->block);)
-		if (!(blockbuf = blockread(sb, found->block)))
+		if (!(blockbuf = bread(inode->filemap, found->block)))
 			return -EBADF;
 		memcpy(data, blockbuf->data, len);
 		brelse(blockbuf);
@@ -599,8 +624,11 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 		printf("root at %Li\n", rootbuf->block);
 		printf("leaf at %Li\n", leafbuf->block);
 
+		struct map *filemap = new_map(sb->devmap->dev, &filemap_ops);
+		filemap->sb = sb;
+
 		inode = malloc(sizeof(*inode));
-		*inode = (struct inode){ .sb = sb, .root = { .block = rootbuf->block, .levels = 1 } };
+		*inode = (struct inode){ .filemap = filemap, .root = { .block = rootbuf->block, .levels = 1 } };
 		brelse_dirty(rootbuf);
 		brelse_dirty(leafbuf);
 
@@ -637,8 +665,8 @@ int devmap_readbuf(struct buffer *buffer)
 
 int devmap_writebuf(struct buffer *buffer)
 {
-	warn("block %Lu, sb = %p", buffer->block, buffer->map->sb);
 	struct dev *dev = buffer->map->dev;
+	warn("block %Lu", buffer->block);
 	assert(dev->bits >= 9 && dev->fd);
 	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
 }
@@ -651,22 +679,23 @@ struct map_ops devmap_ops = {
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU),.bits = 12 };
-	struct map *map = &(struct map){ .dev = dev, .ops = devmap_ops };
-	init_buffers(map, 1 << 20);
+	struct map *map = new_map(dev, &devmap_ops);
+	init_buffers(dev, 1 << 20);
 	struct sb *sb = &(struct sb){ .image = { .magic = SB_MAGIC }, .devmap = map, .alloc_per_node = 20 };
-	init_buffers(map, 1 << 20);
+	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 	char buf[100] = { };
 
 	struct inode *inode = tuxopen(sb, 0x123, 1);
 	tuxwrite(inode, 6, "hello", 5);
 	tuxwrite(inode, 5, "world", 5);
+	flush_buffers(sb->devmap);
+	flush_buffers(inode->filemap);
 	if (tuxread(inode, 6, buf, 11))
 		return 1;
 	hexdump(buf, 11);
 	if (tuxread(inode, 5, buf, 11))
 		return 1;
 	hexdump(buf, 11);
-	flush_buffers(sb->devmap);
 	return 0;
 }

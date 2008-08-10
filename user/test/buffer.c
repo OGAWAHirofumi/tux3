@@ -38,7 +38,7 @@ static unsigned max_evict = 1000; /* free 10 percent of the buffers */
 
 void show_buffer(struct buffer *buffer)
 {
-	warn("%s%Lx/%i ", // !!! fixme, need a warntext that doesn't print eol
+	printf("%s%Lx/%i ",
 		buffer_dirty(buffer)? "+": buffer_uptodate(buffer)? "": buffer->state == BUFFER_STATE_EMPTY? "?": "x",
 		buffer->block, buffer->count);
 }
@@ -54,23 +54,23 @@ void show_buffers_(struct map *map, int all)
 		if (!buffer)
 			continue;
 
-		warn("[%i] ", i);
+		printf("[%i] ", i);
 		for (; buffer; buffer = buffer->hashlink)
 			if (all || buffer->count)
 				show_buffer(buffer);
-		warn("");
+		printf("\n");
 	}
 }
 
 void show_active_buffers(struct map *map)
 {
-	warn("Active buffers:");
+	warn("map %p:", map);
 	show_buffers_(map, 0);
 }
 
 void show_buffers(struct map *map)
 {
-	warn("Buffers:");
+	warn("map %p:", map);
 	show_buffers_(map, 1);
 }
 
@@ -169,7 +169,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, sector_t block)
 {
-	return (buffer->map->ops.writebuf)(buffer);
+	return (buffer->map->ops->writebuf)(buffer);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -334,7 +334,7 @@ struct buffer *bread(struct map *map, sector_t block)
 	if (buffer->state != BUFFER_STATE_EMPTY)
 		return buffer;
 	buftrace(warn("read buffer %Lx", buffer->block););
-	if ((err = (buffer->map->ops.readbuf)(buffer))) {
+	if ((err = (buffer->map->ops->readbuf)(buffer))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);
 		return NULL;
@@ -416,38 +416,34 @@ buffers_allocation_failure:
 	return error;
 }
 
-/* mem_pool_size defines "roughly" the amount of memory allocated for
- * buffers. I use the term "roughly" since it doesn't take into
- * consideration the size of the buffer struct and the overhead for
- * posix_memalign(). From empirical tests, the additional memory
- * is negligible.
- */
-
-void init_buffers(struct map *map, unsigned poolsize)
+void init_buffers(struct dev *dev, unsigned poolsize)
 {
-	unsigned bufsize = 1 << map->dev->bits;
-	memset(map->hash, 0, sizeof(map->hash));
-	INIT_LIST_HEAD(&map->dirty);
-	map->dirty_count = 0;
 	INIT_LIST_HEAD(&lru_buffers);
-	buffer_count = 0;
 	INIT_LIST_HEAD(&free_buffers);
-	journaled_count = 0;
 	INIT_LIST_HEAD(&journaled_buffers);
 
-	/* calculate number of max buffers to a fixed size, independent of chunk size */
+	unsigned bufsize = 1 << dev->bits;
 	max_buffers = poolsize / bufsize;
 	max_evict = max_buffers / 10;
 	preallocate_buffers(bufsize);
 }
 
+struct map *new_map(struct dev *dev, struct map_ops *ops)
+{
+	struct map *map = malloc(sizeof(*map));
+	*map = (struct map){ .dev = dev, .ops = ops };
+	INIT_LIST_HEAD(&map->dirty);
+	return map;
+}
+
 int buffer_main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	struct map *map = &(struct map){ .dev = dev };
-	init_buffers(map, 1 << 20);
+	struct map *map = new_map(dev, NULL);
+	init_buffers(dev, 1 << 20);
 	show_dirty_buffers(map);
 	set_buffer_dirty(getblk(map, 1));
+	show_dirty_buffers(map);
 	printf("get %p\n", getblk(map, 0));
 	printf("get %p\n", getblk(map, 1));
 	printf("get %p\n", getblk(map, 2));

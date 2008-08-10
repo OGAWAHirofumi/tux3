@@ -2,8 +2,9 @@ CC=gcc
 CFLAGS += -std=gnu99 -Wall
 VG=valgrind
 VGFLAGS=--error-exitcode=200
+binaries = dleaf ileaf btree dir
 
-all: dleaf ileaf btree dir
+all: $(binaries)
 tests: dleaftest ileaftest
 
 dleaf: dleaf.c tux3.h hexdump.c
@@ -27,4 +28,4 @@ dirtest: dir
 	$(VG) $(VGFLAGS) ./dir
 
 clean:
-	rm -f dleaf ileaf btree *.o a.out foodev
+	rm -f $(binaries) *.o a.out foodev

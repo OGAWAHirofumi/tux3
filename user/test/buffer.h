@@ -23,11 +23,11 @@ struct map_ops
 };
 
 struct map {
+	struct list_head dirty;
 	struct sb *sb;
 	struct dev *dev;
-	struct map_ops ops;
+	struct map_ops *ops;
 	struct buffer *hash[BUFFER_BUCKETS];
-	struct list_head dirty;
 	unsigned dirty_count;
 };
 
@@ -49,6 +49,7 @@ extern unsigned dirty_buffer_count;
 struct list_head journaled_buffers;
 extern unsigned journaled_count;
 
+void show_buffers(struct map *map);
 void set_buffer_dirty(struct buffer *buffer);
 void set_buffer_uptodate(struct buffer *buffer);
 void set_buffer_empty(struct buffer *buffer);
@@ -61,8 +62,9 @@ unsigned buffer_hash(sector_t block);
 struct buffer *getblk(struct map *map, sector_t block);
 struct buffer *bread(struct map *map, sector_t block);
 void add_buffer_journaled(struct buffer *buffer);
-void init_buffers(struct map *map, unsigned poolsize);
 int flush_buffers(struct map *map);
+void evict_buffers(struct map *map);
+void init_buffers(struct dev *dev, unsigned poolsize);
 
 static inline unsigned bufsize(struct buffer *buffer)
 {
@@ -84,11 +86,5 @@ static inline int buffer_journaled(struct buffer *buffer)
 	return buffer->state == BUFFER_STATE_JOURNALED;
 }
 
-static inline void *malloc_aligned(size_t size, unsigned binalign)
-{
-	unsigned long p = (unsigned long)malloc(size + binalign - 1);
-	return (void *)(p + (-p & (binalign - 1)));
-}
-
-int count_buffer(void);
+struct map *new_map(struct dev *dev, struct map_ops *ops); // belongs here???
 #endif

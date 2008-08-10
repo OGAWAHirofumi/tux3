@@ -242,8 +242,8 @@ out:
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	struct map *map = &(struct map){ .dev = dev };
-	init_buffers(map, 1 << 20);
+	struct map *map = new_map(dev, NULL);
+	init_buffers(dev, 1 << 20);
 	struct buffer *buffer = getblk(map, 0);
 	blocksize = 1 << dev->bits;
 	*(ext2_dirent *)buffer->data = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
