@@ -38,9 +38,11 @@ static unsigned max_evict = 1000; /* free 10 percent of the buffers */
 
 void show_buffer(struct buffer *buffer)
 {
-	printf("%s%Lx/%i ",
-		buffer_dirty(buffer)? "+": buffer_uptodate(buffer)? "": buffer->state == BUFFER_STATE_EMPTY? "?": "x",
-		buffer->block, buffer->count);
+	printf("%Lx/%i%s ", buffer->block, buffer->count,
+		buffer_dirty(buffer) ? "*" :
+		buffer_uptodate(buffer) ? "" :
+		buffer->state == BUFFER_STATE_EMPTY ? "-" :
+		"???");
 }
 
 void show_buffers_(struct map *map, int all)
@@ -428,10 +430,31 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 	preallocate_buffers(bufsize);
 }
 
+int devmap_readblock(struct buffer *buffer)
+{
+	warn("block %Lx", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+int devmap_writeblock(struct buffer *buffer)
+{
+	warn("block %Lx", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+struct map_ops devmap_ops = {
+	.readblock = devmap_readblock,
+	.writeblock = devmap_writeblock,
+};
+
 struct map *new_map(struct dev *dev, struct map_ops *ops)
 {
 	struct map *map = malloc(sizeof(*map));
-	*map = (struct map){ .dev = dev, .ops = ops };
+	*map = (struct map){ .dev = dev, .ops = ops ? ops : &devmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
 	return map;
 }
