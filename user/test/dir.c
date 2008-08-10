@@ -241,10 +241,11 @@ out:
 
 int main(int argc, char *argv[])
 {
-	struct dev dev = { .bits = 12 };
-	init_buffers(1 << dev.bits, 1 << 20);
-	struct buffer *buffer = getblk(&dev, 0);
-	blocksize = 1 << dev.bits;
+	struct dev *dev = &(struct dev){ .bits = 12 };
+	struct map *map = &(struct map){ .dev = dev };
+	init_buffers(map, 1 << 20);
+	struct buffer *buffer = getblk(map, 0);
+	blocksize = 1 << dev->bits;
 	*(ext2_dirent *)buffer->data = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
 	ext2_create_entry(buffer, "hello", 5, 0x666, S_IFREG);
 	ext2_create_entry(buffer, "world", 5, 0x777, S_IFDIR);

@@ -62,7 +62,7 @@ struct sb
 {
 	struct superblock image;
 	char bogopad[4096 - sizeof(struct superblock)];
-	struct dev *dev;
+	struct map *devmap;
 	u32 alloc_per_node;
 	struct buffer *rootbuf;
 	unsigned blocksize;

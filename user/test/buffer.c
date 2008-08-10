@@ -9,10 +9,8 @@
 #define buftrace trace_off
 
 /*
- * Kernel-like buffer api
- */
-
-/*
+ * Emulate kernel buffers in userspace
+ *
  * Even though we are in user space, for reasons of durability and speed
  * we need to access the block directly, handle our own block caching and
  * keep track block by block of which parts of the on-disk data structures
@@ -29,17 +27,12 @@
  * add async IO.
  */
 
-struct list_head lru_buffers;
 struct list_head free_buffers;
-
-static struct buffer *buffer_table[BUFFER_BUCKETS];
-LIST_HEAD(dirty_buffers);
-unsigned dirty_buffer_count;
-LIST_HEAD(lru_buffers);
+struct list_head lru_buffers;
 unsigned buffer_count;
-LIST_HEAD(free_buffers);
+struct list_head journaled_buffers;
 unsigned journaled_count;
-LIST_HEAD(journaled_buffers); /* bufferes that have been written to journal but not yet to snapstore */
+
 static unsigned max_buffers = 10000;
 static unsigned max_evict = 1000; /* free 10 percent of the buffers */
 
@@ -50,13 +43,13 @@ void show_buffer(struct buffer *buffer)
 		buffer->block, buffer->count);
 }
 
-void show_buffers_(int all)
+void show_buffers_(struct map *map, int all)
 {
 	unsigned i;
 
 	for (i = 0; i < BUFFER_BUCKETS; i++)
 	{
-		struct buffer *buffer = buffer_table[i];
+		struct buffer *buffer = map->hash[i];
 
 		if (!buffer)
 			continue;
@@ -69,24 +62,24 @@ void show_buffers_(int all)
 	}
 }
 
-void show_active_buffers(void)
+void show_active_buffers(struct map *map)
 {
 	warn("Active buffers:");
-	show_buffers_(0);
+	show_buffers_(map, 0);
 }
 
-void show_buffers(void)
+void show_buffers(struct map *map)
 {
 	warn("Buffers:");
-	show_buffers_(1);
+	show_buffers_(map, 1);
 }
 
-void show_dirty_buffers(void)
+void show_dirty_buffers(struct map *map)
 {
 	struct list_head *list;
 
-	warn("%i dirty buffers: ", dirty_buffer_count);
-	list_for_each(list, &dirty_buffers) {
+	warn("%i dirty buffers: ", map->dirty_count);
+	list_for_each(list, &map->dirty) {
 		struct buffer *buffer = list_entry(list, struct buffer, dirty_list);
 		show_buffer(buffer);
 	}
@@ -115,7 +108,7 @@ void add_buffer_journaled(struct buffer *buffer)
 {
 	if (buffer_dirty(buffer)) {
 		list_del(&buffer->dirty_list);
-		dirty_buffer_count--;
+		buffer->map->dirty_count--;
 	}
 	buffer->state = BUFFER_STATE_JOURNALED;
 	list_add_tail(&buffer->dirty_list, &journaled_buffers);
@@ -137,16 +130,16 @@ void set_buffer_dirty(struct buffer *buffer)
 		remove_buffer_journaled(buffer);
 	assert(!buffer->dirty_list.next);
 	assert(!buffer->dirty_list.prev);
-	list_add_tail(&buffer->dirty_list, &dirty_buffers);
+	list_add_tail(&buffer->dirty_list, &buffer->map->dirty);
 	buffer->state = BUFFER_STATE_DIRTY;
-	dirty_buffer_count++;
+	buffer->map->dirty_count++;
 }
 
 void set_buffer_uptodate(struct buffer *buffer)
 {
 	if (buffer_dirty(buffer)) {
 		list_del(&buffer->dirty_list);
-		dirty_buffer_count--;
+		buffer->map->dirty_count--;
 	}
 	if (buffer_journaled(buffer))
 		remove_buffer_journaled(buffer);
@@ -176,7 +169,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, sector_t block)
 {
-	return diskwrite(buffer->dev->fd, buffer->data, bufsize(buffer), block << buffer->dev->bits);
+	return (buffer->map->ops.writebuf)(buffer);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -207,7 +200,7 @@ static void remove_buffer_lru(struct buffer *buffer)
 
 static struct buffer *remove_buffer_hash(struct buffer *buffer)
 {
-	struct buffer **pbuffer = buffer_table + buffer_hash(buffer->block);
+	struct buffer **pbuffer = buffer->map->hash + buffer_hash(buffer->block);
 
 	for (; *pbuffer; pbuffer = &((*pbuffer)->hashlist))
 		if (*pbuffer == buffer)
@@ -239,7 +232,7 @@ static struct buffer *remove_buffer_free(void)
 #define SECTOR_BITS 9
 #define SECTOR_SIZE (1 << SECTOR_BITS)
 
-struct buffer *new_buffer(struct dev *dev, sector_t block)
+struct buffer *new_buffer(struct map *map, sector_t block)
 {
 	buftrace(printf("Allocate buffer, block = %Lx\n", block);)
 	struct buffer *buffer = NULL;
@@ -275,7 +268,7 @@ struct buffer *new_buffer(struct dev *dev, sector_t block)
 alloc_buffer:
 	buftrace(warn("expand buffer pool");)
 	if (buffer_count == max_buffers) {
-		warn("Maximum buffer count exceeded (%i)", dirty_buffer_count);
+		warn("Maximum buffer count exceeded (%i)", buffer_count);
 		return NULL;
 	}
 	buffer = (struct buffer *)malloc(sizeof(struct buffer));
@@ -291,17 +284,17 @@ alloc_buffer:
 have_buffer:
 	assert(!buffer->count);
 	assert(buffer->state == BUFFER_STATE_EMPTY);
-	buffer->dev = dev;
+	buffer->map = map;
 	buffer->block = block;
 	buffer->count++;
 	add_buffer_lru(buffer);
 	return buffer;
 }
 
-int count_buffer(void)
+int count_buffers(void)
 {
-        struct list_head *list, *safe;
         int count = 0;
+        struct list_head *list, *safe;
         list_for_each_safe(list, safe, &lru_buffers) {
                 struct buffer *buffer = list_entry(list, struct buffer, list);	
 		if (!buffer->count)
@@ -312,9 +305,9 @@ int count_buffer(void)
 	return count;
 }
 
-struct buffer *getblk(struct dev *dev, sector_t block)
+struct buffer *getblk(struct map *map, sector_t block)
 {
-	struct buffer **bucket = buffer_table + buffer_hash(block), *buffer;
+	struct buffer **bucket = map->hash + buffer_hash(block), *buffer;
 
 	for (buffer = *bucket; buffer; buffer = buffer->hashlist)
 		if (buffer->block == block) {
@@ -324,26 +317,24 @@ struct buffer *getblk(struct dev *dev, sector_t block)
 			list_add_tail(&buffer->list, &lru_buffers);
 			return buffer;
 		}
-	if (!(buffer = new_buffer(dev, block)))
+	if (!(buffer = new_buffer(map, block)))
 		return NULL;
-	buffer->dev = dev;
 	buffer->hashlist = *bucket;
 	*bucket = buffer;
 	return buffer;
 }
 
-struct buffer *bread(struct dev *dev, sector_t block)
+struct buffer *bread(struct map *map, sector_t block)
 {
 	int err = 0;
 	struct buffer *buffer;
 
-	if (!(buffer = getblk(dev, block)))
+	if (!(buffer = getblk(map, block)))
 		return NULL;
 	if (buffer->state != BUFFER_STATE_EMPTY)
 		return buffer;
 	buftrace(warn("read buffer %Lx", buffer->block););
-printf(">>> dev fd = %i\n", buffer->dev->fd);
-	if ((err = diskread(buffer->dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits))) {
+	if ((err = (buffer->map->ops.readbuf)(buffer))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);
 		return NULL;
@@ -362,36 +353,36 @@ void evict_buffer(struct buffer *buffer)
 }
 
 /* !!! only used for testing */
-void evict_buffers(void)
+void evict_buffers(struct map *map)
 {
 	unsigned i;
 	for (i = 0; i < BUFFER_BUCKETS; i++)
 	{
 		struct buffer *buffer;
-		for (buffer = buffer_table[i]; buffer;) {
+		for (buffer = map->hash[i]; buffer;) {
 			struct buffer *next = buffer->hashlist;
 			if (!buffer->count)
 				evict_buffer(buffer);
 			buffer = next;
 		}
-		buffer_table[i] = NULL; /* all buffers have been freed in this bucket */
+		map->hash[i] = NULL; /* all buffers have been freed in this bucket */
 	}
 }
 
 /* !!! only used for testing */
-int flush_buffers(void) // !!! should use lru list
+int flush_buffers(struct map *map) // !!! should use lru list
 {
 	int err = 0;
 
-	while (!list_empty(&dirty_buffers)) {
-		struct list_head *entry = dirty_buffers.next;
+	while (!list_empty(&map->dirty)) {
+		struct list_head *entry = map->dirty.next;
 		struct buffer *buffer = list_entry(entry, struct buffer, dirty_list);
 		if (buffer_dirty(buffer))
-			if ((err = write_buffer(buffer)) != 0)
+			if ((err = write_buffer(buffer)))
 				break;
 	}
-	if (err != 0)
-		error("Flush buffers failed with %s", strerror(-err));
+	if (err)
+		error("%s", strerror(-err));
 	return(err);
 }
 
@@ -418,7 +409,6 @@ int preallocate_buffers(unsigned bufsize) {
 	return 0; /* sucess on pre-allocation of buffers */
 
 data_allocation_failure:
-	/* go back to on demand allocation */
 	warn("Error: %s unable to allocate space for buffer data", strerror(error));
 	free(buffers);
 buffers_allocation_failure:
@@ -433,12 +423,12 @@ buffers_allocation_failure:
  * is negligible.
  */
 
-void init_buffers(unsigned bufsize, unsigned mem_pool_size)
+void init_buffers(struct map *map, unsigned poolsize)
 {
-	assert(bufsize);
-	memset(buffer_table, 0, sizeof(buffer_table));
-	INIT_LIST_HEAD(&dirty_buffers);
-	dirty_buffer_count = 0;
+	unsigned bufsize = 1 << map->dev->bits;
+	memset(map->hash, 0, sizeof(map->hash));
+	INIT_LIST_HEAD(&map->dirty);
+	map->dirty_count = 0;
 	INIT_LIST_HEAD(&lru_buffers);
 	buffer_count = 0;
 	INIT_LIST_HEAD(&free_buffers);
@@ -446,8 +436,21 @@ void init_buffers(unsigned bufsize, unsigned mem_pool_size)
 	INIT_LIST_HEAD(&journaled_buffers);
 
 	/* calculate number of max buffers to a fixed size, independent of chunk size */
-	max_buffers = mem_pool_size / bufsize;
+	max_buffers = poolsize / bufsize;
 	max_evict = max_buffers / 10;
-
 	preallocate_buffers(bufsize);
+}
+
+int buffer_main(int argc, char *argv[])
+{
+	struct dev *dev = &(struct dev){ .bits = 12 };
+	struct map *map = &(struct map){ .dev = dev };
+	init_buffers(map, 1 << 20);
+	show_dirty_buffers(map);
+	set_buffer_dirty(getblk(map, 1));
+	printf("get %p\n", getblk(map, 0));
+	printf("get %p\n", getblk(map, 1));
+	printf("get %p\n", getblk(map, 2));
+	printf("get %p\n", getblk(map, 1));
+	return 0;
 }

@@ -88,7 +88,7 @@ static void free_block(SB, sector_t block)
 
 static struct buffer *new_block(SB)
 {
-        return getblk(sb->dev, balloc(sb));
+        return getblk(sb->devmap, balloc(sb));
 }
 
 static struct buffer *new_leaf(SB, struct btree_ops *ops)
@@ -118,7 +118,7 @@ static struct buffer *new_node(SB)
 
 static struct buffer *blockread(SB, block_t block)
 {
-	return bread(sb->dev, block);
+	return bread(sb->devmap, block);
 }
 
 struct treepath { struct buffer *buffer; struct index_entry *next; };
@@ -614,8 +614,8 @@ eek:
 
 void init_tux3(SB)
 {
-	sb->blocksize = 1 << sb->dev->bits;
-	sb->image.blockbits = sb->dev->bits;
+	sb->image.blockbits = sb->devmap->dev->bits;
+	sb->blocksize = 1 << sb->image.blockbits;
 	struct buffer *rootbuf = new_node(sb);
 	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
 	init_root(rootbuf->data, leafbuf->block);
@@ -627,15 +627,38 @@ void init_tux3(SB)
 	brelse_dirty(leafbuf);
 }
 
+int devmap_readbuf(struct buffer *buffer)
+{
+	warn("block %Lu", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+int devmap_writebuf(struct buffer *buffer)
+{
+	warn("block %Lu", buffer->block);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 9 && dev->fd);
+	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+}
+
+struct map_ops devmap_ops = {
+	.readbuf = devmap_readbuf,
+	.writebuf = devmap_writebuf,
+};
+
 int main(int argc, char *argv[])
 {
-	struct dev dev = { .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU), .bits = 12 };
-	struct sb sb = { .image = { .magic = SB_MAGIC }, .dev = &dev, .alloc_per_node = 20 };
-	init_buffers(1 << dev.bits, 1 << 20);
-	init_tux3(&sb);
+	struct dev *dev = &(struct dev){ .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU),.bits = 12 };
+	struct map *map = &(struct map){ .dev = dev, .ops = devmap_ops };
+	init_buffers(map, 1 << 20);
+	struct sb *sb = &(struct sb){ .image = { .magic = SB_MAGIC }, .devmap = map, .alloc_per_node = 20 };
+	init_buffers(map, 1 << 20);
+	init_tux3(sb);
 	char buf[100] = { };
 
-	struct inode *inode = tuxopen(&sb, 0x123, 1);
+	struct inode *inode = tuxopen(sb, 0x123, 1);
 	tuxwrite(inode, 6, "hello", 5);
 	tuxwrite(inode, 5, "world", 5);
 	if (tuxread(inode, 6, buf, 11))
@@ -644,5 +667,6 @@ int main(int argc, char *argv[])
 	if (tuxread(inode, 5, buf, 11))
 		return 1;
 	hexdump(buf, 11);
+	flush_buffers(sb->devmap);
 	return 0;
 }
