@@ -483,7 +483,7 @@ struct inode {
 	u64 size;
 };
 
-int filemap_readblock(struct buffer *buffer)
+int filemap_blockio(struct buffer *buffer, int write)
 {
 	struct map *filemap = buffer->map;
 	struct inode *inode = filemap->inode;
@@ -502,56 +502,21 @@ int filemap_readblock(struct buffer *buffer)
 	unsigned count = 0;
 	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->block, &count);
 	leaf_dump(sb, leafbuf->data);
-
-	brelse_path(path, levels);
-	if (count) {
-		block_t physical = found->block;
-		trace(warn("found physical block %Lx", (long long)physical);)
-		return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
-	}
-	/* found a hole */
-	memset(buffer->data, 0, sb->blocksize);
-	return 0;
-}
-
-int filemap_writeblock(struct buffer *buffer)
-{
-	struct map *filemap = buffer->map;
-	struct inode *inode = filemap->inode;
-	struct sb *sb = inode->sb;
-	struct map *devmap = sb->devmap;
-	struct dev *dev = devmap->dev;
-	warn("<%Lx:%Lx>", inode->inum, buffer->block);
-	assert(dev->bits >= 9 && dev->fd);
-
-	int err, levels = inode->root.levels;
-	struct treepath path[levels + 1];
-	if ((err = probe(sb, &inode->root, buffer->block, path, &dtree_ops)))
-		return err;
-	struct buffer *leafbuf = path[levels].buffer;
-	
-	unsigned count = 0;
-	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->block, &count);
-	leaf_dump(sb, leafbuf->data);
-
 	block_t physical;
-	if (count) {
-		physical = found->block;
-		trace(warn("found physical block %Lx", (long long)physical);)
-	} else {
-		physical = balloc(sb); // !!! need an error return
-		trace(warn("new physical block %Lx", physical);)
-		struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->block, sizeof(struct extent), path, levels, &dtree_ops);
-		if (!store) {
-			warn("unable to add extent to tree: %s", strerror(-err));
-			free_block(sb, physical);
-			err = -EIO;
-			goto out;
+
+	if (write) {
+		if (count) {
+			physical = found->block;
+			trace(warn("found physical block %Lx", (long long)physical);)
+		} else {
+			physical = balloc(sb); // !!! need an error return
+			trace(warn("new physical block %Lx", physical);)
+			struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->block, sizeof(struct extent), path, levels, &dtree_ops);
+			if (!store)
+				goto eek;
+			*store = (struct extent){ .block = physical };
 		}
-		*store = (struct extent){ .block = physical };
-	}
-out:
-	brelse_path(path, levels);
+		brelse_path(path, levels);
 //flush_buffers(inode->filemap);
 //evict_buffers(inode->filemap);
 printf("---------------------\n");
@@ -559,14 +524,28 @@ show_buffers(sb->devmap);
 printf("---------------------\n");
 show_buffers(inode->filemap);
 printf("---------------------\n");
-
-	return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
+		goto io;
+	}
+	/* read */
+	brelse_path(path, levels);
+	if (!count) {
+		/* found a hole */
+		memset(buffer->data, 0, sb->blocksize);
+		return 0;
+	}
+	physical = found->block;
+	trace(warn("found physical block %Lx", (long long)physical);)
+io:
+	return (write ? diskwrite : diskread)
+		(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
+eek:
+	warn("unable to add extent to tree: %s", strerror(-err));
+	free_block(sb, physical);
+	brelse_path(path, levels);
+	return -EIO;
 }
 
-struct map_ops filemap_ops = {
-	.readblock = filemap_readblock,
-	.writeblock = filemap_writeblock,
-};
+struct map_ops filemap_ops = { .blockio = filemap_blockio };
 
 static int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
 {

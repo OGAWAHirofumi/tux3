@@ -56,9 +56,9 @@ int diskread(int fd, void *data, size_t count, off_t offset)
 	return ioabs(fd, data, count, 0, offset);
 }
 
-int diskwrite(int fd, void const *data, size_t count, off_t offset)
+int diskwrite(int fd, void *data, size_t count, off_t offset)
 {
-	return ioabs(fd, (void *)data, count, 1, offset);
+	return ioabs(fd, data, count, 1, offset);
 }
 
 int streamread(int fd, void *data, size_t count)
@@ -66,9 +66,9 @@ int streamread(int fd, void *data, size_t count)
 	return iorel(fd, data, count, 0);
 }
 
-int streamwrite(int fd, void const *data, size_t count)
+int streamwrite(int fd, void *data, size_t count)
 {
-	return iorel(fd, (void *)data, count, 1);
+	return iorel(fd, data, count, 1);
 }
 
 uint64_t fdsize64(int fd)

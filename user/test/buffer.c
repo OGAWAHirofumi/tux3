@@ -171,7 +171,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, sector_t block)
 {
-	return (buffer->map->ops->writeblock)(buffer);
+	return (buffer->map->ops->blockio)(buffer, 1);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -336,7 +336,7 @@ struct buffer *bread(struct map *map, sector_t block)
 	if (buffer->state != BUFFER_STATE_EMPTY)
 		return buffer;
 	buftrace(warn("read buffer %Lx", buffer->block););
-	if ((err = (buffer->map->ops->readblock)(buffer))) {
+	if ((err = (buffer->map->ops->blockio)(buffer, 0))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);
 		return NULL;
@@ -430,26 +430,16 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 	preallocate_buffers(bufsize);
 }
 
-int devmap_readblock(struct buffer *buffer)
+int devmap_blockio(struct buffer *buffer, int write)
 {
 	warn("block %Lx", buffer->block);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 9 && dev->fd);
-	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+	return (write ? diskwrite : diskread)
+		(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
 }
 
-int devmap_writeblock(struct buffer *buffer)
-{
-	warn("block %Lx", buffer->block);
-	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 9 && dev->fd);
-	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
-}
-
-struct map_ops devmap_ops = {
-	.readblock = devmap_readblock,
-	.writeblock = devmap_writeblock,
-};
+struct map_ops devmap_ops = { .blockio = devmap_blockio };
 
 struct map *new_map(struct dev *dev, struct map_ops *ops)
 {
