@@ -224,13 +224,11 @@ ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct bu
 int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 {
 	ext2_dirent *prev = NULL, *this = buffer->data;
-	int err;
-
 	while ((char *)this < (char *)dirent) {
 		if (this->rec_len == 0) {
 			warn("zero-length directory entry");
-			err = -EIO;
-			goto out;
+			brelse(buffer);
+			return -EIO;
 		}
 		prev = this;
 		this = ext2_next_entry(this);
@@ -239,9 +237,8 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 		prev->rec_len = ext2_rec_len_to_disk((void *)dirent +
 		ext2_rec_len_from_disk(dirent->rec_len) - (void *)prev);
 	dirent->inode = 0;
-out:
 	brelse(buffer);
-	return err;
+	return 0;
 }
 
 int main(int argc, char *argv[])

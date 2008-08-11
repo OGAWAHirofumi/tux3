@@ -506,12 +506,12 @@ int filemap_blockio(struct buffer *buffer, int write)
 			*store = (struct extent){ .block = physical };
 		}
 		brelse_path(path, levels);
-//flush_buffers(inode->filemap);
-//evict_buffers(inode->filemap);
+//flush_buffers(inode->map);
+//evict_buffers(inode->map);
 printf("---------------------\n");
 show_buffers(sb->devmap);
 printf("---------------------\n");
-show_buffers(inode->filemap);
+show_buffers(inode->map);
 printf("---------------------\n");
 		goto io;
 	}
@@ -538,7 +538,7 @@ struct map_ops filemap_ops = { .blockio = filemap_blockio };
 
 static int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
 {
-	struct buffer *blockbuf = bread(inode->filemap, target);
+	struct buffer *blockbuf = bread(inode->map, target);
 	if (!blockbuf)
 		return -EIO;
 	memcpy(data, blockbuf->data, len);
@@ -548,7 +548,7 @@ static int tuxread(struct inode *inode, block_t target, char *data, unsigned len
 
 static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
 {
-	struct buffer *blockbuf = getblk(inode->filemap, target);
+	struct buffer *blockbuf = getblk(inode->map, target);
 	if (!blockbuf)
 		return -EIO;
 	memcpy(blockbuf->data, data, len);
@@ -613,7 +613,7 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 
 		inode = malloc(sizeof(*inode));
 		*inode = (struct inode){
-			.inum = inum, .sb = sb, .filemap = filemap,
+			.inum = inum, .sb = sb, .map = filemap,
 			.root = { .block = rootbuf->block, .levels = 1 } };
 		filemap->inode = inode;
 		brelse_dirty(rootbuf);
@@ -655,7 +655,7 @@ int main(int argc, char *argv[])
 	tuxwrite(inode, 6, "hello", 5);
 	tuxwrite(inode, 5, "world", 5);
 	flush_buffers(sb->devmap);
-	flush_buffers(inode->filemap);
+	flush_buffers(inode->map);
 	if (tuxread(inode, 6, buf, 11))
 		return 1;
 	hexdump(buf, 11);
