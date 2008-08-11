@@ -83,7 +83,7 @@ void ileaf_dump(SB, struct ileaf *leaf)
 
 void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *result)
 {
-	assert(inum > leaf->inum);
+	assert(inum >= leaf->inum);
 	inum_t at = inum - leaf->inum;
 	assert(at < 999); // !!! calculate this properly: max inode possible with max dict
 	printf("lookup inode %Lx, %Lx + %Lx\n", inum, leaf->inum, at);
@@ -171,7 +171,7 @@ void *ileaf_expand(SB, void *base, inum_t inum, unsigned more)
 {
 	assert(ileaf_sniff(sb, base));
 	struct ileaf *leaf = base;
-	assert(inum > leaf->inum);
+	assert(inum >= leaf->inum);
 	u16 *dict = (void *)leaf + sb->blocksize;
 	unsigned at = inum - leaf->inum;
 

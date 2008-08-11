@@ -140,10 +140,9 @@ static inline struct bnode *path_node(struct treepath path[], int level)
 	return (struct bnode *)path[level].buffer;
 }
 
-static void brelse_path(struct treepath *path, unsigned levels)
+static void brelse_path(struct treepath *path, int levels)
 {
-	unsigned i;
-	for (i = 0; i <= levels; i++)
+	for (int i = 0; i < levels; i++)
 		brelse(path[i].buffer);
 }
 
@@ -152,7 +151,7 @@ static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path,
 	unsigned i, levels = root->levels;
 	struct buffer *buffer = blockread(sb, root->block);
 	if (!buffer)
-		goto eek;
+		return -EIO;
 	struct bnode *node = buffer->data;
 
 	for (i = 0; i < levels; i++) {
@@ -169,7 +168,7 @@ static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path,
 	path[levels] = (struct treepath){ buffer };
 	return 0;
 eek:
-	brelse_path(path, i);
+	brelse_path(path, i - 1);
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
@@ -510,13 +509,6 @@ int filemap_blockio(struct buffer *buffer, int write)
 			*store = (struct extent){ .block = physical };
 		}
 		brelse_path(path, levels);
-//flush_buffers(inode->map);
-//evict_buffers(inode->map);
-printf("---------------------\n");
-show_buffers(sb->devmap);
-printf("---------------------\n");
-show_buffers(inode->map);
-printf("---------------------\n");
 		goto io;
 	}
 	/* read */
@@ -566,22 +558,15 @@ enum { MTIME_SIZE_ATTR, DATA_BTREE_ATTR };
 struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
 struct data_btree_attr { u64 kind:4; struct btree btree; };
 
-void init_root(struct bnode *root, block_t leaf)
+void init_btree(struct bnode *root, block_t leaf)
 {
-	root->count = 1;
 	root->entries[0].block = leaf;
+	root->count = 1;
 }
 
-struct inode *new_inode(SB, inum_t inum, unsigned type, mode_t mode)
-{
-	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
-	struct inode *inode = malloc(sizeof(*inode));
-	*inode = (struct inode){ .sb = sb, .inum = inum, .map = map };
-	map->inode = inode;
-	return inode;
-}
+struct create { mode_t mode; unsigned uid, gid; };
 
-struct inode *tuxopen(SB, inum_t inum, int create)
+struct inode *tuxopen(SB, inum_t inum, struct create *create)
 {
 	int err, levels = sb->image.iroot.levels;
 	struct treepath path[levels + 1];
@@ -592,7 +577,7 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 	struct inode *inode = NULL;
 	unsigned size = 0;
 	void *ibase = ileaf_lookup(sb, leafbuf->data, inum, &size);
-	ileaf_dump(sb, leafbuf->data);
+	//ileaf_dump(sb, leafbuf->data);
 
 	if (size) {
 		trace(warn("found inode 0x%Lx", inum);)
@@ -614,19 +599,21 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 			goto eek;
 		}
 
+		struct map *map = new_map(sb->devmap->dev, &filemap_ops);
+		inode = malloc(sizeof(*inode));
+		*inode = (struct inode){ .sb = sb, .inum = inum, .map = map, .i_mode = create->mode };
+		map->inode = inode;
+
 		struct buffer *rootbuf = new_node(sb);
 		struct buffer *leafbuf = new_leaf(sb, &dtree_ops);
-		init_root(rootbuf->data, leafbuf->block);
+		init_btree(rootbuf->data, leafbuf->block);
 		attr2.btree.block = rootbuf->block;
 		attr2.btree.levels = 1;
-		printf("root at %Li\n", rootbuf->block);
-		printf("leaf at %Li\n", leafbuf->block);
-
-		inode = new_inode(sb, inum, EXT2_REG, S_IRWXU);
+		printf("droot at %Li\n", rootbuf->block);
+		printf("dleaf at %Li\n", leafbuf->block);
 		inode->root = (struct btree){ .block = rootbuf->block, .levels = 1 };
 		brelse_dirty(rootbuf);
 		brelse_dirty(leafbuf);
-
 		*(typeof(attr1) *)ibase = attr1;
 		*(typeof(attr2) *)(ibase + sizeof(attr2)) = attr2;
 	}
@@ -641,7 +628,7 @@ void init_tux3(SB)
 	sb->blocksize = 1 << sb->image.blockbits;
 	struct buffer *rootbuf = new_node(sb);
 	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
-	init_root(rootbuf->data, leafbuf->block);
+	init_btree(rootbuf->data, leafbuf->block);
 	sb->image.iroot.block = rootbuf->block;
 	sb->image.iroot.levels = 1;
 	printf("iroot at %Lx\n", rootbuf->block);
@@ -658,30 +645,32 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
-#if 1
-	struct inode *root = new_inode(sb, 0, EXT2_DIR, S_IRWXU);
-	ext2_create_entry(root, "hello", 5, 0x666, S_IRWXU);
-	ext2_create_entry(root, "world", 5, 0x777, S_IRWXU);
+	struct inode *root = tuxopen(sb, 0, &(struct create){ .mode = S_IFDIR | S_IRWXU });
+	struct inode *file1 = tuxopen(sb, 5, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	struct inode *file2 = tuxopen(sb, 6, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	ext2_create_entry(root, "foo", 3, file1->inum, file1->i_mode);
+	ext2_create_entry(root, "bar", 3, file2->inum, file2->i_mode);
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(root, "hello", 5, &buffer);
-	if (buffer)
+	if (buffer) {
 		hexdump(entry, 16);
-	brelse(buffer);
+		brelse(buffer);
+	}
 	ext2_dump_entries(getblk(root->map, 0), 1 << map->dev->bits);
+	flush_buffers(root->map);
+	show_buffers(sb->devmap);
 	show_buffers(root->map);
-#else
+
 	char buf[100] = { };
-	struct inode *inode = tuxopen(sb, 0x123, 1);
-	tuxwrite(inode, 6, "hello", 5);
-	tuxwrite(inode, 5, "world", 5);
+	tuxwrite(file1, 6, "hello", 5);
+	tuxwrite(file1, 5, "world", 5);
 	flush_buffers(sb->devmap);
-	flush_buffers(inode->map);
-	if (tuxread(inode, 6, buf, 11))
+	flush_buffers(file1->map);
+	if (tuxread(file1, 6, buf, 11))
 		return 1;
 	hexdump(buf, 11);
-	if (tuxread(inode, 5, buf, 11))
+	if (tuxread(file1, 5, buf, 11))
 		return 1;
 	hexdump(buf, 11);
-#endif
 	return 0;
 }

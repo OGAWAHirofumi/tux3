@@ -383,9 +383,7 @@ int flush_buffers(struct map *map) // !!! should use lru list
 			if ((err = write_buffer(buffer)))
 				break;
 	}
-	if (err)
-		error("%s", strerror(-err));
-	return(err);
+	return err;
 }
 
 int preallocate_buffers(unsigned bufsize) {
