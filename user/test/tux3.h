@@ -21,6 +21,7 @@ typedef u32 millisecond_t;
 typedef uint64_t inum_t;
 typedef u64 block_t;
 typedef u64 tuxkey_t;
+typedef u32 mode_t;
 
 struct bleaf
 {
@@ -75,7 +76,7 @@ struct inode {
 	struct btree root;
 	inum_t inum;
 	u64 i_size, i_ctime, i_mtime, i_atime;
-	u32 i_mode;
+	mode_t i_mode;
 };
 
 #endif

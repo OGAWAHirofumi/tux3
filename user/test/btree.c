@@ -27,6 +27,10 @@
 #include "ileaf.c"
 #undef main
 
+#define main notmain3
+#include "dir.c"
+#undef main
+
 #define trace trace_on
 
 typedef struct dleaf leaf_t; // these need to be generic
@@ -536,7 +540,7 @@ eek:
 
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
 
-static int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
+int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
 {
 	struct buffer *blockbuf = bread(inode->map, target);
 	if (!blockbuf)
@@ -546,7 +550,7 @@ static int tuxread(struct inode *inode, block_t target, char *data, unsigned len
 	return 0;
 }
 
-static int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
+int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
 {
 	struct buffer *blockbuf = getblk(inode->map, target);
 	if (!blockbuf)
@@ -566,6 +570,15 @@ void init_root(struct bnode *root, block_t leaf)
 {
 	root->count = 1;
 	root->entries[0].block = leaf;
+}
+
+struct inode *new_inode(SB, inum_t inum, unsigned type, mode_t mode)
+{
+	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
+	struct inode *inode = malloc(sizeof(*inode));
+	*inode = (struct inode){ .sb = sb, .inum = inum, .map = map };
+	map->inode = inode;
+	return inode;
 }
 
 struct inode *tuxopen(SB, inum_t inum, int create)
@@ -609,13 +622,8 @@ struct inode *tuxopen(SB, inum_t inum, int create)
 		printf("root at %Li\n", rootbuf->block);
 		printf("leaf at %Li\n", leafbuf->block);
 
-		struct map *filemap = new_map(sb->devmap->dev, &filemap_ops);
-
-		inode = malloc(sizeof(*inode));
-		*inode = (struct inode){
-			.inum = inum, .sb = sb, .map = filemap,
-			.root = { .block = rootbuf->block, .levels = 1 } };
-		filemap->inode = inode;
+		inode = new_inode(sb, inum, EXT2_REG, S_IRWXU);
+		inode->root = (struct btree){ .block = rootbuf->block, .levels = 1 };
 		brelse_dirty(rootbuf);
 		brelse_dirty(leafbuf);
 
@@ -636,8 +644,8 @@ void init_tux3(SB)
 	init_root(rootbuf->data, leafbuf->block);
 	sb->image.iroot.block = rootbuf->block;
 	sb->image.iroot.levels = 1;
-	printf("root at %Lx\n", rootbuf->block);
-	printf("leaf at %Lx\n", leafbuf->block);
+	printf("iroot at %Lx\n", rootbuf->block);
+	printf("ileaf at %Lx\n", leafbuf->block);
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
 }
@@ -649,8 +657,20 @@ int main(int argc, char *argv[])
 	struct sb *sb = &(struct sb){ .image = { .magic = SB_MAGIC }, .devmap = map, .alloc_per_node = 20 };
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
-	char buf[100] = { };
 
+#if 1
+	struct inode *root = new_inode(sb, 0, EXT2_DIR, S_IRWXU);
+	ext2_create_entry(root, "hello", 5, 0x666, S_IRWXU);
+	ext2_create_entry(root, "world", 5, 0x777, S_IRWXU);
+	struct buffer *buffer;
+	ext2_dirent *entry = ext2_find_entry(root, "hello", 5, &buffer);
+	if (buffer)
+		hexdump(entry, 16);
+	brelse(buffer);
+	ext2_dump_entries(getblk(root->map, 0), 1 << map->dev->bits);
+	show_buffers(root->map);
+#else
+	char buf[100] = { };
 	struct inode *inode = tuxopen(sb, 0x123, 1);
 	tuxwrite(inode, 6, "hello", 5);
 	tuxwrite(inode, 5, "world", 5);
@@ -662,5 +682,6 @@ int main(int argc, char *argv[])
 	if (tuxread(inode, 5, buf, 11))
 		return 1;
 	hexdump(buf, 11);
+#endif
 	return 0;
 }

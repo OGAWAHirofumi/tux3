@@ -103,32 +103,32 @@ static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
 }
 
 enum {
-	EXT2_FT_UNKNOWN,
-	EXT2_FT_REG,
-	EXT2_FT_DIR,
-	EXT2_FT_CHR,
-	EXT2_FT_BLK,
-	EXT2_FT_FIFO,
-	EXT2_FT_SOCK,
-	EXT2_FT_LNK,
-	EXT2_FT_MAX
+	EXT2_UNKNOWN,
+	EXT2_REG,
+	EXT2_DIR,
+	EXT2_CHR,
+	EXT2_BLK,
+	EXT2_FIFO,
+	EXT2_SOCK,
+	EXT2_LNK,
+	EXT2_MAX
 };
 
 #define STAT_SHIFT 12
 
 static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
-	[S_IFREG >> STAT_SHIFT] = EXT2_FT_REG,
-	[S_IFDIR >> STAT_SHIFT] = EXT2_FT_DIR,
-	[S_IFCHR >> STAT_SHIFT] = EXT2_FT_CHR,
-	[S_IFBLK >> STAT_SHIFT] = EXT2_FT_BLK,
-	[S_IFIFO >> STAT_SHIFT] = EXT2_FT_FIFO,
-	[S_IFSOCK >> STAT_SHIFT] = EXT2_FT_SOCK,
-	[S_IFLNK >> STAT_SHIFT] = EXT2_FT_LNK,
+	[S_IFREG >> STAT_SHIFT] = EXT2_REG,
+	[S_IFDIR >> STAT_SHIFT] = EXT2_DIR,
+	[S_IFCHR >> STAT_SHIFT] = EXT2_CHR,
+	[S_IFBLK >> STAT_SHIFT] = EXT2_BLK,
+	[S_IFIFO >> STAT_SHIFT] = EXT2_FIFO,
+	[S_IFSOCK >> STAT_SHIFT] = EXT2_SOCK,
+	[S_IFLNK >> STAT_SHIFT] = EXT2_LNK,
 };
 
 void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 {
-	printf("entries: ");
+	printf("dirents <%Lx:%Lx>: ", buffer->map->inode->inum, buffer->block);
 	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
 	while (dirent < limit) {
@@ -264,4 +264,5 @@ int main(int argc, char *argv[])
 
 	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
 	show_buffers(map);
+	return 0;
 }
