@@ -191,7 +191,22 @@ void *ileaf_expand(SB, void *base, inum_t inum, unsigned more)
 	return inode;
 }
 
-void inode_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+inum_t find_empty_inode(SB, struct ileaf *leaf, inum_t start)
+{
+	assert(start >= leaf->inum);
+	start -= leaf->inum;
+	u16 *dict = (void *)leaf + sb->blocksize;
+	unsigned i, offset = start && start < leaf->count ? *(dict - start) : 0;
+	for (i = start; i < leaf->count; i++) {
+		unsigned limit = *(dict - i - 1);
+		if (offset == limit)
+			break;
+		offset = limit;
+	}
+	return i + leaf->inum;
+}
+
+void test_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	unsigned size = 0;
 	char *inode = ileaf_lookup(sb, leaf, inum, &size);
@@ -200,34 +215,32 @@ void inode_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 	memset(inode + size, fill, more);
 }
 
-void ileaf_test(SB)
+int main(int argc, char *argv[])
 {
+	SB = &(struct sb){ .blocksize = 4096 };
 	printf("--- test inode table leaf methods ---\n");
 	struct ileaf *leaf = ileaf_create(sb);
 	struct ileaf *dest = ileaf_create(sb);
 	ileaf_dump(sb, leaf);
-	inode_append(sb, leaf, 3, 2, 'a');
-	inode_append(sb, leaf, 4, 4, 'b');
-	inode_append(sb, leaf, 6, 6, 'c');
+	test_append(sb, leaf, 3, 2, 'a');
+	test_append(sb, leaf, 4, 4, 'b');
+	test_append(sb, leaf, 6, 6, 'c');
 	ileaf_dump(sb, leaf);
 	ileaf_split(sb, leaf, dest, -(sb->blocksize / 2));
 	ileaf_dump(sb, leaf);
 	ileaf_dump(sb, dest);
 	ileaf_merge(sb, leaf, dest);
 	ileaf_dump(sb, leaf);
-	inode_append(sb, leaf, 3, 3, 'x');
+	test_append(sb, leaf, 3, 3, 'x');
 	ileaf_dump(sb, leaf);
-	inode_append(sb, leaf, 8, 3, 'y');
+	test_append(sb, leaf, 8, 3, 'y');
 	ileaf_dump(sb, leaf);
 	unsigned size = 0;
 	char *inode = ileaf_lookup(sb, leaf, 3, &size);
 	hexdump(inode, size);
+	for (int i = 0; i <= 10; i++)
+		printf("goal %i, free: %Lu\n", i, find_empty_inode(sb, leaf, i));
 	ileaf_destroy(sb, leaf);
 	ileaf_destroy(sb, dest);
-}
-
-int main(int argc, char *argv[])
-{
-	ileaf_test(&(struct sb){ .blocksize = 4096 });
 	return 0;
 }
