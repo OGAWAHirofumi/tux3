@@ -66,10 +66,7 @@ typedef u16 le16;
 #define EXT2_MAX_REC_LEN ((1<<16)-1)
 #define EXT2_NAME_LEN 255
 
-typedef struct {
-	u32 inode; u16 rec_len; u8 name_len, type;
-	char name[EXT2_NAME_LEN];
-} ext2_dirent;
+typedef struct { u32 inode; u16 rec_len; u8 name_len, type; char name[]; } ext2_dirent;
 
 static inline unsigned ext2_rec_len_from_disk(le16 dlen)
 {
