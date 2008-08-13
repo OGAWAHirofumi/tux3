@@ -39,7 +39,7 @@ struct buffer
 	unsigned count; // should be atomic_t
 	unsigned state;
 	unsigned size;
-	sector_t block;
+	sector_t index;
 	void *data;
 };
 

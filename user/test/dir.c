@@ -125,7 +125,7 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 
 void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 {
-	printf("dirents <%Lx:%Lx>: ", buffer->map->inode->inum, buffer->block);
+	printf("dirents <%Lx:%Lx>: ", buffer->map->inode->inum, buffer->index);
 	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
 	while (dirent < limit) {

@@ -38,7 +38,7 @@ static unsigned max_evict = 1000; /* free 10 percent of the buffers */
 
 void show_buffer(struct buffer *buffer)
 {
-	printf("%Lx/%i%s ", buffer->block, buffer->count,
+	printf("%Lx/%i%s ", buffer->index, buffer->count,
 		buffer_dirty(buffer) ? "*" :
 		buffer_uptodate(buffer) ? "" :
 		buffer->state == BUFFER_STATE_EMPTY ? "-" :
@@ -125,7 +125,7 @@ static void remove_buffer_journaled(struct buffer *buffer)
 
 void set_buffer_dirty(struct buffer *buffer)
 {
-	buftrace(warn("set_buffer_dirty %Lx state=%u", buffer->block, buffer->state););
+	buftrace(warn("set_buffer_dirty %Lx state=%u", buffer->index, buffer->state););
 	if (buffer_dirty(buffer))
 		return;
 	if (buffer_journaled(buffer))
@@ -156,15 +156,15 @@ void set_buffer_empty(struct buffer *buffer)
 
 void brelse(struct buffer *buffer)
 {
-	buftrace(warn("Release buffer %Lx, count = %i", buffer->block, buffer->count););
+	buftrace(warn("Release buffer %Lx, count = %i", buffer->index, buffer->count););
 	assert(buffer->count);
 	if (!--buffer->count)
-		trace_off(warn("Free buffer %Lx", buffer->block));
+		trace_off(warn("Free buffer %Lx", buffer->index));
 }
 
 void brelse_dirty(struct buffer *buffer)
 {
-	buftrace(warn("Release dirty buffer %Lx", buffer->block););
+	buftrace(warn("Release dirty buffer %Lx", buffer->index););
 	set_buffer_dirty(buffer);
 	brelse(buffer);
 }
@@ -176,8 +176,8 @@ int write_buffer_to(struct buffer *buffer, sector_t block)
 
 int write_buffer(struct buffer *buffer)
 {
-	buftrace(warn("write buffer %Lx", buffer->block););
-	int err = write_buffer_to(buffer, buffer->block);
+	buftrace(warn("write buffer %Lx", buffer->index););
+	int err = write_buffer_to(buffer, buffer->index);
 	if (!err)
 		set_buffer_uptodate(buffer);
 	return err;
@@ -202,7 +202,7 @@ static void remove_buffer_lru(struct buffer *buffer)
 
 static struct buffer *remove_buffer_hash(struct buffer *buffer)
 {
-	struct buffer **pbuffer = buffer->map->hash + buffer_hash(buffer->block);
+	struct buffer **pbuffer = buffer->map->hash + buffer_hash(buffer->index);
 
 	for (; *pbuffer; pbuffer = &((*pbuffer)->hashlink))
 		if (*pbuffer == buffer)
@@ -287,7 +287,7 @@ have_buffer:
 	assert(!buffer->count);
 	assert(buffer->state == BUFFER_STATE_EMPTY);
 	buffer->map = map;
-	buffer->block = block;
+	buffer->index = block;
 	buffer->count++;
 	add_buffer_lru(buffer);
 	return buffer;
@@ -301,7 +301,7 @@ int count_buffers(void)
                 struct buffer *buffer = list_entry(list, struct buffer, lrulink);	
 		if (!buffer->count)
 			continue;
-		trace_off(warn("buffer %Lx has non-zero count %d", (long long)buffer->block, buffer->count););
+		trace_off(warn("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count););
 		count++;
 	}
 	return count;
@@ -312,7 +312,7 @@ struct buffer *getblk(struct map *map, sector_t block)
 	struct buffer **bucket = map->hash + buffer_hash(block), *buffer;
 
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
-		if (buffer->block == block) {
+		if (buffer->index == block) {
 			buftrace(warn("Found buffer for %Lx", block););
 			buffer->count++;
 			list_del(&buffer->lrulink);
@@ -335,7 +335,7 @@ struct buffer *bread(struct map *map, sector_t block)
 		return NULL;
 	if (buffer->state != BUFFER_STATE_EMPTY)
 		return buffer;
-	buftrace(warn("read buffer %Lx", buffer->block););
+	buftrace(warn("read buffer %Lx", buffer->index););
 	if ((err = (buffer->map->ops->blockio)(buffer, 0))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);
@@ -350,7 +350,7 @@ void evict_buffer(struct buffer *buffer)
 	remove_buffer_lru(buffer);
         if (!remove_buffer_hash(buffer))
 		warn("buffer not found in hashlist");
-	buftrace(warn("Evicted buffer for %Lx", buffer->block););
+	buftrace(warn("Evicted buffer for %Lx", buffer->index););
 	add_buffer_free(buffer);
 }
 
@@ -430,11 +430,11 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 
 int devmap_blockio(struct buffer *buffer, int write)
 {
-	warn("block %Lx", buffer->block);
+	warn("block %Lx", buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 9 && dev->fd);
 	return (write ? diskwrite : diskread)
-		(dev->fd, buffer->data, bufsize(buffer), buffer->block << dev->bits);
+		(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
 struct map_ops devmap_ops = { .blockio = devmap_blockio };

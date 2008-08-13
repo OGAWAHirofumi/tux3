@@ -40,7 +40,7 @@ struct bleaf
  * 2008-08-06: Beginning of time
  */
 
-struct btree { u64 block; u16 levels, pad[3]; };
+struct btree { u64 index; u16 levels, pad[3]; };
 
 struct superblock
 {
