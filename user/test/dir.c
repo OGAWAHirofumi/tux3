@@ -62,7 +62,7 @@ typedef u16 le16;
 
 #define CURRENT_TIME_SEC 123
 #define EXT2_DIR_PAD 3
-#define EXT2_MIN_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
+#define EXT2_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
 #define EXT2_MAX_REC_LEN ((1<<16)-1)
 #define EXT2_NAME_LEN 255
 
@@ -94,7 +94,7 @@ static inline int ext2_match(int len, const char *const name, ext2_dirent *de)
 	return !memcmp(name, de->name, len);
 }
 
-static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
+static inline ext2_dirent *next_entry(ext2_dirent *p)
 {
 	return (ext2_dirent *)((char *)p + ext2_rec_len_from_disk(p->rec_len));
 }
@@ -108,7 +108,7 @@ enum {
 	EXT2_FIFO,
 	EXT2_SOCK,
 	EXT2_LNK,
-	EXT2_MAX
+	EXT2_TYPES
 };
 
 #define STAT_SHIFT 12
@@ -135,7 +135,7 @@ void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 				dirent->name,
 				dirent->inode,
 				dirent->type);
-		dirent = ext2_next_entry(dirent);
+		dirent = next_entry(dirent);
 	}
 	printf("\n");
 	brelse(buffer);
@@ -145,7 +145,7 @@ int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, u
 {
 	ext2_dirent *dirent;
 	struct buffer *buffer;
-	unsigned reclen = EXT2_MIN_REC_LEN(len), rec_len, name_len;
+	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len;
 	unsigned blocksize = 1 << inode->map->dev->bits;
 	unsigned blocks = inode->i_size >> inode->map->dev->bits, block;
 	for (block = 0; block < blocks; block++) {
@@ -158,7 +158,7 @@ int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, u
 				brelse(buffer);
 				return -EIO;
 			}
-			name_len = EXT2_MIN_REC_LEN(dirent->name_len);
+			name_len = EXT2_REC_LEN(dirent->name_len);
 			rec_len = ext2_rec_len_from_disk(dirent->rec_len);
 			if (!dirent->inode && rec_len >= reclen)
 				goto create;
@@ -194,7 +194,7 @@ create:
 
 ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct buffer **result)
 {
-	unsigned reclen = EXT2_MIN_REC_LEN(len);
+	unsigned reclen = EXT2_REC_LEN(len);
 	unsigned blocksize = 1 << inode->map->dev->bits;
 	unsigned blocks = inode->i_size >> inode->map->dev->bits, block;
 	for (block = 0; block < blocks; block++) {
@@ -211,11 +211,81 @@ ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct bu
 				*result = buffer;
 				return dirent;
 			}
-			dirent = ext2_next_entry(dirent);
+			dirent = next_entry(dirent);
 		}
 		brelse(buffer);
 	}
 	return NULL;
+}
+
+enum {DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
+
+static unsigned char filetype[EXT2_TYPES] = {
+	[EXT2_UNKNOWN] = DT_UNKNOWN,
+	[EXT2_REG] = DT_REG,
+	[EXT2_DIR] = DT_DIR,
+	[EXT2_CHR] = DT_CHR,
+	[EXT2_BLK] = DT_BLK,
+	[EXT2_FIFO] = DT_FIFO,
+	[EXT2_SOCK] = DT_SOCK,
+	[EXT2_LNK] = DT_LNK,
+};
+
+typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
+
+static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
+{
+	loff_t pos = filp->f_pos;
+	struct inode *inode = filp->f_inode;
+	int revalidate = filp->f_version != inode->i_version;
+	unsigned blockbits = inode->map->dev->bits;
+	unsigned blocksize = 1 << blockbits;
+	unsigned blockmask = blocksize - 1;
+	unsigned blocks = inode->i_size >> blockbits;
+	unsigned offset = pos & blockmask;
+
+	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
+		struct buffer *buffer = getblk(inode->map, block);
+		void *base = buffer->data;
+		if (!buffer)
+			return -EIO;
+		if (revalidate) {
+			if (offset) {
+				ext2_dirent *entry = base + offset;
+				ext2_dirent *p = base + (offset & blockmask);
+				while (p < entry && p->rec_len)
+					p = next_entry(p);
+				offset = (void *)p - base;
+				filp->f_pos = (block << blockbits) + offset;
+			}
+			filp->f_version = inode->i_version;
+			revalidate = 0;
+		}
+		unsigned size = inode->i_size - (block << blockbits);
+		ext2_dirent *limit = base + (size > blocksize ? blocksize : size) - EXT2_REC_LEN(1);
+		for (ext2_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
+			if (entry->rec_len == 0) {
+				brelse(buffer);
+				warn("zero length entry at <%Lx:%x>", inode->inum, block);
+				return -EIO;
+			}
+			if (entry->inode) {
+				unsigned type = (entry->type < EXT2_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
+				int full = filldir(
+					dirents, entry->name, entry->name_len,
+					(block << blockbits) | ((void *)entry - base),
+					le32_to_cpu(entry->inode), type);
+				if (full) {
+					brelse(buffer);
+					return 0;
+				}
+			}
+			filp->f_pos += ext2_rec_len_from_disk(entry->rec_len);
+		}
+		brelse(buffer);
+		offset = 0;
+	}
+	return 0;
 }
 
 int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
@@ -228,7 +298,7 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 			return -EIO;
 		}
 		prev = this;
-		this = ext2_next_entry(this);
+		this = next_entry(this);
 	}
 	if (prev)
 		prev->rec_len = ext2_rec_len_to_disk((void *)dirent +
@@ -238,28 +308,42 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 	return 0;
 }
 
+int filldir(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
+{
+	printf("\"%.*s\"\n", namelen, name);
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .bits = 12 };
+	struct dev *dev = &(struct dev){ .bits = 8 };
 	struct map *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
 	struct buffer *buffer;
-	struct inode inode;
-	inode = (struct inode){ .map = map, .i_mode = S_IFDIR };
-	ext2_create_entry(&inode, "hello", 5, 0x666, S_IFREG);
-	ext2_create_entry(&inode, "world", 5, 0x777, S_IFLNK);
-	ext2_dirent *entry = ext2_find_entry(&inode, "hello", 5, &buffer);
+	map->inode = &(struct inode){ .map = map, .i_mode = S_IFDIR };
+	ext2_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
+	ext2_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
+	ext2_dirent *entry = ext2_find_entry(map->inode, "hello", 5, &buffer);
 	if (buffer)
 		hexdump(entry, 16);
 	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
 
 	if (!ext2_delete_entry(buffer, entry)) {
 		show_buffers(map);
-		inode.i_ctime = inode.i_mtime = CURRENT_TIME_SEC;
-		mark_inode_dirty(&inode);
+		map->inode->i_ctime = map->inode->i_mtime = CURRENT_TIME_SEC;
+		mark_inode_dirty(map->inode);
 	}
 
 	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
 	show_buffers(map);
+	struct file *file = &(struct file){ .f_inode = map->inode };
+	for (int i = 0; i < 10; i++) {
+		char name[100];
+		sprintf(name, "file%i", i);
+		ext2_create_entry(map->inode, name, strlen(name), 0x666, S_IFREG);
+	}
+	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
+	char dents[10000];
+	ext2_readdir(file, dents, filldir);
 	return 0;
 }

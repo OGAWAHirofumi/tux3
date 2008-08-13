@@ -77,6 +77,13 @@ struct inode {
 	inum_t inum;
 	u64 i_size, i_ctime, i_mtime, i_atime;
 	mode_t i_mode;
+	unsigned i_version;
+};
+
+struct file {
+	struct inode *f_inode;
+	unsigned f_version;
+	loff_t f_pos;
 };
 
 #endif
