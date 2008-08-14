@@ -20,17 +20,6 @@
 #include "buffer.h"
 #include "tux3.h"
 
-#define main notmain
-#include "dleaf.c"
-#undef main
-#define main notmain2
-#include "ileaf.c"
-#undef main
-
-#define main notmain3
-#include "dir.c"
-#undef main
-
 #define trace trace_on
 
 typedef struct dleaf leaf_t; // these need to be generic
@@ -43,27 +32,6 @@ static millisecond_t gettime(void)
 	error("gettimeofday failed, %s (%i)", strerror(errno), errno);
 	return 0;
 }
-
-struct btree_ops {
-	int (*leaf_sniff)(SB, void *leaf);
-	int (*leaf_init)(SB, void *leaf);
-	tuxkey_t (*leaf_split)(SB, void *base, void *base2, int fudge);
-	void *(*leaf_expand)(SB, void *base, inum_t inum, unsigned more);
-};
-
-struct btree_ops dtree_ops = {
-	.leaf_sniff = /*(typeof(fieldtype(btree_ops, leaf_sniff)))*/leaf_sniff,
-	.leaf_init = leaf_init,
-	.leaf_split = leaf_split,
-	.leaf_expand = leaf_expand,
-};
-
-struct btree_ops itree_ops = {
-	.leaf_sniff = ileaf_sniff,
-	.leaf_init = ileaf_init,
-	.leaf_split = ileaf_split,
-	.leaf_expand = ileaf_expand,
-};
 
 struct bnode
 {
@@ -172,38 +140,38 @@ eek:
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
-static void show_leaf_range(SB, leaf_t *leaf, block_t start, block_t finish)
+static void show_leaf_range(struct btree_ops *ops, struct buffer *buffer, block_t start, block_t finish)
 {
-	leaf_dump(sb, leaf);
+	(ops->leaf_dump)(buffer->map->inode->sb, buffer->data);
 }
 
-static void show_subtree_range(SB, struct bnode *node, block_t start, block_t finish, int levels, int indent)
+static void show_subtree_range(SB, struct btree_ops *ops, struct bnode *node, block_t start, block_t finish, int levels, int indent)
 {
 	int i;
 
 	for (i = 0; i < node->count; i++) {
 		struct buffer *buffer = blockread(sb, node->entries[i].block);
 		if (levels)
-			show_subtree_range(sb, buffer->data, start, finish, levels - 1, indent + 3);
+			show_subtree_range(sb, ops, buffer->data, start, finish, levels - 1, indent + 3);
 		else {
-			show_leaf_range(sb, buffer->data, start, finish);
+			show_leaf_range(ops, buffer, start, finish);
 		}
 		brelse(buffer);
 	}
 }
 
-void show_tree_range(SB, struct btree *root, block_t start, block_t finish)
+void show_tree_range(SB, struct btree_ops *ops, struct btree *root, block_t start, block_t finish)
 {
 	struct buffer *buffer = blockread(sb, root->index);
 	if (!buffer)
 		return;
-	show_subtree_range(sb, buffer->data, start, finish, root->levels - 1, 0);
+	show_subtree_range(sb, ops, buffer->data, start, finish, root->levels - 1, 0);
 	brelse(buffer);
 }
 
-void show_tree(SB)
+void show_tree(SB, struct btree_ops *ops)
 {
-	show_tree_range(sb, &sb->image.iroot, 0, -1);
+	show_tree_range(sb, ops, &sb->image.iroot, 0, -1);
 }
 
 /* Deletion */
@@ -271,14 +239,14 @@ int delete_from_leaf(SB, leaf_t *leaf, struct delete_info *info, int *freed)
 	return 0; // write me!!!
 }
 
-int delete_tree_partial(SB, struct btree *root, struct delete_info *info, millisecond_t deadline, int maxblocks)
+int delete_tree_partial(SB, struct btree_ops *ops, struct btree *root, struct delete_info *info, millisecond_t deadline, int maxblocks)
 {
 	int levels = root->levels, level = levels - 1, suspend = 0, freed = 0;
 	struct treepath path[levels + 1], prev[levels + 1];
 	struct buffer *leafbuf, *leafprev = NULL;
 	memset(path, 0, sizeof(path));
 
-	probe(sb, root, info->resume, path, &dtree_ops);
+	probe(sb, root, info->resume, path, ops);
 	leafbuf = path[levels].buffer;
 
 	/* leaf walk */
@@ -291,11 +259,11 @@ int delete_tree_partial(SB, struct btree *root, struct delete_info *info, millis
 			leaf_t *this = leafbuf->data;
 			leaf_t *that = leafprev->data;
 			trace_off(warn("check leaf %p against %p", leafbuf, leafprev););
-			trace_off(warn("need = %i, free = %i", leaf_used(sb, this), leaf_free(sb, that)););
+			trace_off(warn("need = %i, free = %i", (ops->leaf_used)(sb, this), leaf_free(sb, that)););
 			/* try to merge leaf with prev */
-			if (leaf_used(sb, this) <= leaf_free(sb, that)) {
+			if ((ops->leaf_used)(sb, this) <= (ops->leaf_free)(sb, that)) {
 				trace_off(warn(">>> can merge leaf %p into leaf %p", leafbuf, leafprev););
-				leaf_merge(sb, that, this);
+				(ops->leaf_merge)(sb, that, this);
 				remove_index(path, level);
 				set_buffer_dirty(leafprev);
 				brelse_free(sb, leafbuf);
@@ -397,7 +365,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count++;
 }
 
-static void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct treepath path[], unsigned levels, struct btree_ops *ops)
+void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct treepath path[], unsigned levels, struct btree_ops *ops)
 {
 	struct buffer *leafbuf = path[levels].buffer;
 	set_buffer_dirty(leafbuf);
@@ -473,65 +441,6 @@ static void *tree_expand(SB, struct btree *root, u64 target, unsigned size, stru
 	return space;
 }
 
-/* High level operations */
-
-int filemap_blockio(struct buffer *buffer, int write)
-{
-	struct map *filemap = buffer->map;
-	struct inode *inode = filemap->inode;
-	struct sb *sb = inode->sb;
-	struct map *devmap = sb->devmap;
-	struct dev *dev = devmap->dev;
-	warn("<%Lx:%Lx>", inode->inum, buffer->index);
-	assert(dev->bits >= 9 && dev->fd);
-
-	int err, levels = inode->root.levels;
-	struct treepath path[levels + 1];
-	if ((err = probe(sb, &inode->root, buffer->index, path, &dtree_ops)))
-		return err;
-	struct buffer *leafbuf = path[levels].buffer;
-	
-	unsigned count = 0;
-	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->index, &count);
-	leaf_dump(sb, leafbuf->data);
-	block_t physical;
-
-	if (write) {
-		if (count) {
-			physical = found->block;
-			trace(warn("found physical block %Lx", (long long)physical);)
-		} else {
-			physical = balloc(sb); // !!! need an error return
-			trace(warn("new physical block %Lx", physical);)
-			struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->index, sizeof(struct extent), path, levels, &dtree_ops);
-			if (!store)
-				goto eek;
-			*store = (struct extent){ .block = physical };
-		}
-		brelse_path(path, levels);
-		goto io;
-	}
-	/* read */
-	brelse_path(path, levels);
-	if (!count) {
-		/* found a hole */
-		memset(buffer->data, 0, sb->blocksize);
-		return 0;
-	}
-	physical = found->block;
-	trace(warn("found physical block %Lx", (long long)physical);)
-io:
-	return (write ? diskwrite : diskread)
-		(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
-eek:
-	warn("unable to add extent to tree: %s", strerror(-err));
-	free_block(sb, physical);
-	brelse_path(path, levels);
-	return -EIO;
-}
-
-struct map_ops filemap_ops = { .blockio = filemap_blockio };
-
 int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
 {
 	struct buffer *blockbuf = bread(inode->map, target);
@@ -564,130 +473,7 @@ void init_btree(struct bnode *root, block_t leaf)
 	root->count = 1;
 }
 
-struct create { mode_t mode; unsigned uid, gid; };
-
-struct inode *open_inode(SB, inum_t inum, struct create *create)
-{
-	int err, levels = sb->image.iroot.levels;
-	struct treepath path[levels + 1];
-	if ((err = probe(sb, &sb->image.iroot, inum, path, &itree_ops)))
-		return NULL;
-	struct buffer *leafbuf = path[levels].buffer;
-	
-	struct inode *inode = NULL;
-	unsigned size = 0;
-	void *ibase = ileaf_lookup(sb, leafbuf->data, inum, &size);
-	//ileaf_dump(sb, leafbuf->data);
-
-	if (size) {
-		trace(warn("found inode 0x%Lx", inum);)
-		hexdump(ibase, size);
-		/* may have to expand */
-	} else {
-		trace(warn("no inode 0x%Lx", inum);)
-		if (!create) {
-			err = -ENOENT;
-			goto eek;
-		}
-		trace(warn("new inode 0x%Lx", inum);)
-		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
-		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR };
-		size = sizeof(attr1) + sizeof(attr2);
-		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, levels, &itree_ops);
-		if (!ibase) {
-			err = -EINVAL;
-			goto eek;
-		}
-
-		struct map *map = new_map(sb->devmap->dev, &filemap_ops);
-		inode = malloc(sizeof(*inode));
-		*inode = (struct inode){ .sb = sb, .inum = inum, .map = map, .i_mode = create->mode };
-		map->inode = inode;
-
-		struct buffer *rootbuf = new_node(sb);
-		struct buffer *leafbuf = new_leaf(sb, &dtree_ops);
-		init_btree(rootbuf->data, leafbuf->index);
-		attr2.btree.index = rootbuf->index;
-		attr2.btree.levels = 1;
-		//printf("droot at %Li\n", rootbuf->index);
-		//printf("dleaf at %Li\n", leafbuf->index);
-		inode->root = (struct btree){ .index = rootbuf->index, .levels = 1 };
-		brelse_dirty(rootbuf);
-		brelse_dirty(leafbuf);
-		*(typeof(attr1) *)ibase = attr1;
-		*(typeof(attr2) *)(ibase + sizeof(attr2)) = attr2;
-	}
-eek:
-	brelse_path(path, levels);
-	return inode;
-}
-
-void init_tux3(SB)
-{
-	sb->image.blockbits = sb->devmap->dev->bits;
-	sb->blocksize = 1 << sb->image.blockbits;
-	struct buffer *rootbuf = new_node(sb);
-	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
-	init_btree(rootbuf->data, leafbuf->index);
-	sb->image.iroot.index = rootbuf->index;
-	sb->image.iroot.levels = 1;
-	printf("iroot at %Lx\n", rootbuf->index);
-	printf("ileaf at %Lx\n", leafbuf->index);
-	brelse_dirty(rootbuf);
-	brelse_dirty(leafbuf);
-}
-
-struct inode *tuxopen(struct inode *dir, char *name, int len, inum_t inum, struct create *create)
-{
-	struct buffer *buffer;
-	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
-	if (!create) {
-		if (!entry)
-			return NULL;
-		inum = entry->inode;
-		brelse(buffer);
-		goto open;
-	}
-	// !!! choose an inum !!! //
-	if (entry) {
-		brelse(buffer);
-		return NULL;
-	}
-	if (ext2_create_entry(dir, name, len, inum, create->mode))
-		return NULL;
-open:
-	return open_inode(dir->sb, inum, create);
-}
-
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU), .bits = 12 };
-	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .image = { .magic = SB_MAGIC }, .devmap = map, .alloc_per_node = 20 };
-	init_buffers(dev, 1 << 20);
-	init_tux3(sb);
-
-	struct inode *root = open_inode(sb, 0, &(struct create){ .mode = S_IFDIR | S_IRWXU });
-
-	struct inode *inode = tuxopen(root, "foo", 3, 5, &(struct create){ .mode = S_IFREG | S_IRWXU });
-	if (!inode)
-		return 1;
-	ext2_dump_entries(getblk(root->map, 0), 1 << map->dev->bits);
-
-	flush_buffers(root->map);
-	show_buffers(root->map);
-	show_buffers(sb->devmap);
-
-	char buf[100] = { };
-	tuxwrite(inode, 6, "hello", 5);
-	tuxwrite(inode, 5, "world", 5);
-	flush_buffers(sb->devmap);
-	flush_buffers(inode->map);
-	if (tuxread(inode, 6, buf, 11))
-		return 1;
-	hexdump(buf, 11);
-	if (tuxread(inode, 5, buf, 11))
-		return 1;
-	hexdump(buf, 11);
 	return 0;
 }

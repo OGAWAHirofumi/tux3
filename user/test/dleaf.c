@@ -417,6 +417,13 @@ void leaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
 			(enbase - i)->limit += enbase->limit;
 }
 
+struct btree_ops dtree_ops = {
+	.leaf_sniff = /*(typeof(fieldtype(btree_ops, leaf_sniff)))*/leaf_sniff,
+	.leaf_init = leaf_init,
+	.leaf_split = leaf_split,
+	.leaf_expand = leaf_expand,
+};
+
 void dleaf_test(SB)
 {
 	printf("--- leaf test ---\n");

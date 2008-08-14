@@ -206,6 +206,13 @@ inum_t find_empty_inode(SB, struct ileaf *leaf, inum_t start)
 	return i + leaf->inum;
 }
 
+struct btree_ops itree_ops = {
+	.leaf_sniff = ileaf_sniff,
+	.leaf_init = ileaf_init,
+	.leaf_split = ileaf_split,
+	.leaf_expand = ileaf_expand,
+};
+
 void test_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	unsigned size = 0;
