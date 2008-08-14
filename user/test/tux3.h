@@ -23,6 +23,21 @@ typedef u64 block_t;
 typedef u64 tuxkey_t;
 typedef u32 mode_t;
 
+static inline int get_bit(unsigned char *bitmap, unsigned bit)
+{
+	return bitmap[bit >> 3] & (1 << (bit & 7));
+}
+
+static inline void set_bit(unsigned char *bitmap, unsigned bit)
+{
+	bitmap[bit >> 3] |= 1 << (bit & 7);
+}
+
+static inline void reset_bit(unsigned char *bitmap, unsigned bit)
+{
+	bitmap[bit >> 3] &= ~(1 << (bit & 7));
+}
+
 struct bleaf
 {
 	le_u16 magic, version;

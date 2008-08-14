@@ -216,7 +216,7 @@ removed:
 
 static void add_buffer_free(struct buffer *buffer)
 {
-	assert(buffer->state == BUFFER_STATE_CLEAN || buffer->state == BUFFER_STATE_EMPTY);
+	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
 	buffer->state = BUFFER_STATE_EMPTY;
 	list_add_tail(&buffer->lrulink, &free_buffers);
 }
@@ -285,7 +285,7 @@ alloc_buffer:
 
 have_buffer:
 	assert(!buffer->count);
-	assert(buffer->state == BUFFER_STATE_EMPTY);
+	assert(buffer_empty(buffer));
 	buffer->map = map;
 	buffer->index = block;
 	buffer->count++;
@@ -333,9 +333,9 @@ struct buffer *bread(struct map *map, sector_t block)
 
 	if (!(buffer = getblk(map, block)))
 		return NULL;
-	if (buffer->state != BUFFER_STATE_EMPTY)
+	if (!buffer_empty(buffer))
 		return buffer;
-	buftrace(warn("read buffer %Lx", buffer->index););
+	buftrace(warn("read buffer %Lx, state %i", buffer->index, buffer->state););
 	if ((err = (buffer->map->ops->blockio)(buffer, 0))) {
 		warn("failed to read block %Lx (%s)", block, strerror(-err));
 		brelse(buffer);

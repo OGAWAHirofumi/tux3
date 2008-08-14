@@ -70,14 +70,19 @@ static inline unsigned bufsize(struct buffer *buffer)
 	return 1 << buffer->map->dev->bits;
 }
 
-static inline int buffer_dirty(struct buffer *buffer)
+static inline int buffer_empty(struct buffer *buffer)
 {
-	return buffer->state == BUFFER_STATE_DIRTY;
+	return buffer->state == BUFFER_STATE_EMPTY;
 }
 
 static inline int buffer_uptodate(struct buffer *buffer)
 {
 	return buffer->state == BUFFER_STATE_CLEAN;
+}
+
+static inline int buffer_dirty(struct buffer *buffer)
+{
+	return buffer->state == BUFFER_STATE_DIRTY;
 }
 
 static inline int buffer_journaled(struct buffer *buffer)
