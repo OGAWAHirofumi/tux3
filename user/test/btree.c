@@ -259,9 +259,9 @@ int delete_tree_partial(SB, struct btree_ops *ops, struct btree *root, struct de
 			leaf_t *this = leafbuf->data;
 			leaf_t *that = leafprev->data;
 			trace_off(warn("check leaf %p against %p", leafbuf, leafprev););
-			trace_off(warn("need = %i, free = %i", (ops->leaf_used)(sb, this), leaf_free(sb, that)););
+			trace_off(warn("need = %i, free = %i", (ops->leaf_need)(sb, this), leaf_free(sb, that)););
 			/* try to merge leaf with prev */
-			if ((ops->leaf_used)(sb, this) <= (ops->leaf_free)(sb, that)) {
+			if ((ops->leaf_need)(sb, this) <= (ops->leaf_free)(sb, that)) {
 				trace_off(warn(">>> can merge leaf %p into leaf %p", leafbuf, leafprev););
 				(ops->leaf_merge)(sb, that, this);
 				remove_index(path, level);

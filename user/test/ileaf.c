@@ -51,7 +51,7 @@ void ileaf_destroy(SB, struct ileaf *leaf)
 	free(leaf);
 }
 
-unsigned ileaf_used(SB, struct ileaf *leaf)
+unsigned ileaf_need(SB, struct ileaf *leaf)
 {
 	u16 *dict = (void *)leaf + sb->blocksize, *base = dict - leaf->count;
 	return (void *)dict - (void *)base + base == dict ? 0 : *base ;
@@ -59,7 +59,7 @@ unsigned ileaf_used(SB, struct ileaf *leaf)
 
 unsigned ileaf_free(SB, struct ileaf *leaf)
 {
-	return sb->blocksize - ileaf_used(sb, leaf) - sizeof(struct ileaf);
+	return sb->blocksize - ileaf_need(sb, leaf) - sizeof(struct ileaf);
 }
 
 void ileaf_dump(SB, struct ileaf *leaf)

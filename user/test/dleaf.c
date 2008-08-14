@@ -117,7 +117,7 @@ unsigned leaf_free(SB, struct dleaf *leaf)
 	return leaf->used - leaf->free;
 }
 
-unsigned leaf_used(SB, struct dleaf *leaf)
+unsigned leaf_need(SB, struct dleaf *leaf)
 {
 	return sb->blocksize - leaf_free(sb, leaf) - sizeof(struct dleaf);
 }
@@ -383,7 +383,7 @@ void leaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	printf("merge %p into %p\n", from, leaf);
-	//assert(leaf_used(from) <= leaf_free(leaf));
+	//assert(leaf_need(from) <= leaf_free(leaf));
 
 	/* append extents */
 	unsigned size = from->free - sizeof(struct dleaf);

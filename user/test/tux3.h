@@ -109,7 +109,7 @@ struct btree_ops {
 	tuxkey_t (*leaf_split)(SB, void *base, void *base2, int fudge);
 	void *(*leaf_expand)(SB, void *base, inum_t inum, unsigned more);
 	void (*leaf_dump)(SB, struct dleaf *leaf);
-	unsigned (*leaf_used)(SB, struct dleaf *leaf);
+	unsigned (*leaf_need)(SB, struct dleaf *leaf);
 	unsigned (*leaf_free)(SB, struct dleaf *leaf);
 	void (*leaf_merge)(SB, struct dleaf *leaf, struct dleaf *from);
 };
