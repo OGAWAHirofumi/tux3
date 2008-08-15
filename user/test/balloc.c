@@ -8,10 +8,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "hexdump.c"
 #include "buffer.h"
 #include "tux3.h"
 
-#define trace trace_on
+#define trace trace_off
 
 unsigned freeblocks;
 
@@ -22,12 +23,13 @@ block_t balloc_range(struct inode *inode, block_t start, block_t count)
 	unsigned blocksize = 1 << blockbits;
 	unsigned mapshift = blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned blocks = (limit + blocksize - 1) >> blockbits;
+	unsigned blocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
 
-	for (u64 block = start >> mapshift; block < blocks; block++) {
+	for (unsigned block = start >> mapshift; block < blocks; block++) {
+		trace(printf("search block %x/%x\n", block, blocks);)
 		struct buffer *buffer = bread(inode->map, block);
 		if (!buffer)
 			return -1;
@@ -83,23 +85,28 @@ block_t balloc(SB)
 }
 #endif
 
-#if 0
+#ifndef main
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .bits = 8 };
+	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
 	struct inode *inode = &(struct inode){ .map = map };
 	init_buffers(dev, 1 << 20);
+	unsigned blocksize = 1 << dev->bits;
 	for (int block = 0; block < 10; block++) {
 		struct buffer *buffer = getblk(map, block);
-		memset(buffer->data, 0, 1 << dev->bits);
+		memset(buffer->data, 0, blocksize);
 		set_buffer_uptodate(buffer);
 	}
-	for (int i = 0; i < 11; i++) {
-		block_t block = balloc_range(inode, 10, 5);
+	for (int i = 0; i < 12; i++) {
+		block_t block = balloc_range(inode, 121, 10);
 		printf("%Li\n", block);
-		hexdump(getblk(map, 0)->data, 16);
 	}
+	
+	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
+	hexdump(getblk(map, 0)->data, dumpsize);
+	hexdump(getblk(map, 1)->data, dumpsize);
+	hexdump(getblk(map, 2)->data, dumpsize);
 	return 0;
 }
 #endif
