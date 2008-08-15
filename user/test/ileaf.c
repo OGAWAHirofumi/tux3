@@ -223,6 +223,12 @@ void test_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 	memset(inode + size, fill, more);
 }
 
+#ifndef main
+block_t balloc(SB)
+{
+        return ++sb->image.lastalloc;
+}
+
 int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .blocksize = 4096 };
@@ -252,3 +258,4 @@ int main(int argc, char *argv[])
 	ileaf_destroy(sb, dest);
 	return 0;
 }
+#endif

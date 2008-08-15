@@ -22,6 +22,7 @@ typedef uint64_t inum_t;
 typedef u64 block_t;
 typedef u64 tuxkey_t;
 typedef u32 mode_t;
+typedef int fd_t;
 
 static inline int get_bit(unsigned char *bitmap, unsigned bit)
 {
@@ -114,5 +115,8 @@ struct btree_ops {
 	void (*leaf_merge)(SB, struct dleaf *leaf, struct dleaf *from);
 	block_t (*balloc)(SB);
 };
+
+void hexdump(void *data, unsigned size);
+block_t balloc(SB);
 
 #endif

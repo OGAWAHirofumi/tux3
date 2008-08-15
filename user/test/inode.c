@@ -185,9 +185,21 @@ open:
 
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU), .bits = 12 };
+	char *name = argv[1];
+	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+	ftruncate(fd, 1 << 24);
+	size_t size = fdsize64(fd);
+	printf("fd '%s' = %i (0x%zx bytes)\n", name, fd, size);
+
+	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .image = { .magic = SB_MAGIC }, .devmap = map, .alloc_per_node = 20 };
+
+	struct sb *sb = &(struct sb){
+		.image = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
+		.alloc_per_node = 20,
+		.devmap = map,
+	};
+
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 

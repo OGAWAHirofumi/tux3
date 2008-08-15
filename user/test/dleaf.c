@@ -470,8 +470,15 @@ void dleaf_test(SB)
 	leaf_destroy(sb, dest);
 }
 
+#ifndef main
+block_t balloc(SB)
+{
+        return ++sb->image.lastalloc;
+}
+
 int main(int argc, char *argv[])
 {
 	dleaf_test(&(struct sb){ .blocksize = 4096 });
 	return 0;
 }
+#endif

@@ -430,7 +430,7 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 
 int devmap_blockio(struct buffer *buffer, int write)
 {
-	warn("block %Lx", buffer->index);
+	warn("%s block %Lx", write ? "write" : "read", buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 9 && dev->fd);
 	return (write ? diskwrite : diskread)

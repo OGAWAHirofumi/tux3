@@ -8,7 +8,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "hexdump.c"
 #include "buffer.h"
 #include "tux3.h"
 
@@ -78,12 +77,13 @@ found:
 	return block;
 }
 #else
-static block_t balloc(SB)
+block_t balloc(SB)
 {
         return ++sb->image.lastalloc;
 }
 #endif
 
+#if 0
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
@@ -102,3 +102,4 @@ int main(int argc, char *argv[])
 	}
 	return 0;
 }
+#endif
