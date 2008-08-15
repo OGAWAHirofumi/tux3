@@ -9,6 +9,10 @@
  * the right to distribute those changes under any license.
  */
 
+#define main notmain0
+#include "balloc.c"
+#undef main
+
 #define main notmain1
 #include "dleaf.c"
 #undef main
@@ -124,7 +128,7 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 		*inode = (struct inode){ .sb = sb, .inum = inum, .map = map, .i_mode = create->mode };
 		map->inode = inode;
 
-		struct buffer *rootbuf = new_node(sb);
+		struct buffer *rootbuf = new_node(sb, &dtree_ops);
 		struct buffer *leafbuf = new_leaf(sb, &dtree_ops);
 		init_btree(rootbuf->data, leafbuf->index);
 		attr2.btree.index = rootbuf->index;
@@ -146,7 +150,7 @@ void init_tux3(SB)
 {
 	sb->image.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->image.blockbits;
-	struct buffer *rootbuf = new_node(sb);
+	struct buffer *rootbuf = new_node(sb, &itree_ops);
 	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
 	init_btree(rootbuf->data, leafbuf->index);
 	sb->image.iroot.index = rootbuf->index;

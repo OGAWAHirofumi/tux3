@@ -422,6 +422,7 @@ struct btree_ops dtree_ops = {
 	.leaf_init = leaf_init,
 	.leaf_split = leaf_split,
 	.leaf_expand = leaf_expand,
+	.balloc = balloc,
 };
 
 void dleaf_test(SB)

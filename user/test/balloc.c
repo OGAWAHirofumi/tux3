@@ -16,11 +16,9 @@
 
 unsigned freeblocks;
 
-block_t balloc_range(struct inode *inode, block_t start, block_t count, block_t limit)
+block_t balloc_range(struct inode *inode, block_t start, block_t count)
 {
-	assert(limit >= start + count);
-	if (limit > start + count)
-		limit = start + count;
+	block_t limit = start + count;
 	unsigned blockbits = inode->map->dev->bits;
 	unsigned blocksize = 1 << blockbits;
 	unsigned mapshift = blockbits + 3;
@@ -65,6 +63,27 @@ final_partial_byte:
 	return -1;
 }
 
+#if 0
+block_t balloc(SB)
+{
+	block_t last = sb->image.lastalloc, total = sb->image.blocks, block;
+	if ((block = balloc_range(sb->bitmap, last, total - last)) >= 0)
+		goto found;
+	if ((block = balloc_range(sb->bitmap, 0, last)) >= 0)
+		goto found;
+	return -1;
+found:
+	sb->image.lastalloc = block;
+	//set_sb_dirty(sb);
+	return block;
+}
+#else
+static block_t balloc(SB)
+{
+        return ++sb->image.lastalloc;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
@@ -77,7 +96,7 @@ int main(int argc, char *argv[])
 		set_buffer_uptodate(buffer);
 	}
 	for (int i = 0; i < 11; i++) {
-		block_t block = balloc_range(inode, 10, 5, 16);
+		block_t block = balloc_range(inode, 10, 5);
 		printf("%Li\n", block);
 		hexdump(getblk(map, 0)->data, 16);
 	}

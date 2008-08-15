@@ -67,10 +67,9 @@ struct superblock
 	u64 flags;
 	u32 levels;
 	u32 sequence; /* commit block sequence number */
-	block_t bitmap_base;
-	block_t blocks; /* if zero then snapdata is combined in metadata space */
+	block_t blocks;
 	block_t freeblocks;
-	block_t last_alloc;
+	block_t lastalloc;
 	u64 bitblocks;
 	u32 blockbits;
 };
@@ -82,6 +81,7 @@ struct sb
 	struct map *devmap;
 	u32 alloc_per_node;
 	struct buffer *rootbuf;
+	struct inode *bitmap;
 	unsigned blocksize;
 };
 
@@ -112,6 +112,7 @@ struct btree_ops {
 	unsigned (*leaf_need)(SB, struct dleaf *leaf);
 	unsigned (*leaf_free)(SB, struct dleaf *leaf);
 	void (*leaf_merge)(SB, struct dleaf *leaf, struct dleaf *from);
+	block_t (*balloc)(SB);
 };
 
 #endif

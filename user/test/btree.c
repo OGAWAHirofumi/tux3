@@ -47,24 +47,19 @@ struct bnode
  * (Not done yet.)
  */
 
-static block_t balloc(SB)
-{
-        return ++sb->image.last_alloc;
-}
-
 static void free_block(SB, sector_t block)
 {
 }
 
-static struct buffer *new_block(SB)
+static struct buffer *new_block(SB, struct btree_ops *ops)
 {
-        return getblk(sb->devmap, balloc(sb));
+        return getblk(sb->devmap, (ops->balloc)(sb));
 }
 
 static struct buffer *new_leaf(SB, struct btree_ops *ops)
 {
 	trace(printf("new leaf\n"););
-	struct buffer *buffer = new_block(sb); 
+	struct buffer *buffer = new_block(sb, ops); 
 	if (!buffer)
 		return NULL;
 	memset(buffer->data, 0, bufsize(buffer));
@@ -73,10 +68,10 @@ static struct buffer *new_leaf(SB, struct btree_ops *ops)
 	return buffer;
 }
 
-static struct buffer *new_node(SB)
+static struct buffer *new_node(SB, struct btree_ops *ops)
 {
 	trace(printf("new node\n"););
-	struct buffer *buffer = new_block(sb); 
+	struct buffer *buffer = new_block(sb, ops); 
 	if (!buffer)
 		return buffer;
 	memset(buffer->data, 0, bufsize(buffer));
@@ -401,7 +396,7 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 		}
 
 		/* split a full index node */
-		struct buffer *newbuf = new_node(sb); 
+		struct buffer *newbuf = new_node(sb, ops);
 		if (!newbuf) 
 			return NULL; // !!! err_ptr(ENOMEM)
 		struct bnode *newnode = newbuf->data;
@@ -425,7 +420,7 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 		brelse(newbuf);
 	}
 	trace(printf("add tree level\n");)
-	struct buffer *newbuf = new_node(sb);
+	struct buffer *newbuf = new_node(sb, ops);
 	if (!newbuf)
 		return NULL; // !!! err_ptr(ENOMEM)
 	struct bnode *newroot = newbuf->data;
