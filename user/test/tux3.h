@@ -18,8 +18,8 @@ typedef uint64_t le_u64;
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
 typedef u32 millisecond_t;
-typedef uint64_t inum_t;
-typedef u64 block_t;
+typedef int64_t block_t;
+typedef int64_t inum_t;
 typedef u64 tuxkey_t;
 typedef u32 mode_t;
 typedef int fd_t;
@@ -69,8 +69,6 @@ struct superblock
 	u32 levels;
 	u32 sequence; /* commit block sequence number */
 	block_t blocks;
-	block_t freeblocks;
-	block_t lastalloc;
 	u64 bitblocks;
 	u32 blockbits;
 };
@@ -84,6 +82,8 @@ struct sb
 	struct buffer *rootbuf;
 	struct inode *bitmap;
 	unsigned blocksize;
+	block_t freeblocks;
+	block_t nextalloc;
 };
 
 struct inode {

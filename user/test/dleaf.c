@@ -473,7 +473,7 @@ void dleaf_test(SB)
 #ifndef main
 block_t balloc(SB)
 {
-        return ++sb->image.lastalloc;
+	return sb->nextalloc++;
 }
 
 int main(int argc, char *argv[])

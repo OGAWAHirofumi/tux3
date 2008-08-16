@@ -226,7 +226,7 @@ void test_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 #ifndef main
 block_t balloc(SB)
 {
-        return ++sb->image.lastalloc;
+	return sb->nextalloc++;
 }
 
 int main(int argc, char *argv[])
