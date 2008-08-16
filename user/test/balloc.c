@@ -61,7 +61,6 @@ final_partial_byte:
 	return -1;
 }
 
-#if 0
 block_t balloc(SB)
 {
 	block_t goal = sb->nextalloc, total = sb->image.blocks, block;
@@ -73,14 +72,9 @@ block_t balloc(SB)
 found:
 	sb->nextalloc = block + 1;
 	//set_sb_dirty(sb);
+	printf("balloc => %Li\n", block);
 	return block;
 }
-#else
-block_t balloc(SB)
-{
-	return sb->nextalloc++;
-}
-#endif
 
 #ifndef main
 int main(int argc, char *argv[])

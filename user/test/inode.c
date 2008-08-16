@@ -38,11 +38,13 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct sb *sb = inode->sb;
 	struct map *devmap = sb->devmap;
 	struct dev *dev = devmap->dev;
-	warn("<%Lx:%Lx>", inode->inum, buffer->index);
+	warn("%s <%Lx:%Lx>", write ? "write" : "read", inode->inum, buffer->index);
 	assert(dev->bits >= 9 && dev->fd);
 
 	int err, levels = inode->root.levels;
 	struct treepath path[levels + 1];
+	if (!levels)
+		goto unmapped;
 	if ((err = probe(sb, &inode->root, buffer->index, path, &dtree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
@@ -65,30 +67,38 @@ int filemap_blockio(struct buffer *buffer, int write)
 			*store = (struct extent){ .block = physical };
 		}
 		brelse_path(path, levels);
-		goto io;
+		return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 	}
 	/* read */
 	brelse_path(path, levels);
-	if (!count) {
-		/* found a hole */
-		memset(buffer->data, 0, sb->blocksize);
-		return 0;
-	}
+	if (!count)
+		goto unmapped;
 	physical = found->block;
 	trace(warn("found physical block %Lx", (long long)physical);)
-io:
-	return (write ? diskwrite : diskread)
-		(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
+	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 eek:
 	warn("unable to add extent to tree: %s", strerror(-err));
 	free_block(sb, physical);
 	brelse_path(path, levels);
 	return -EIO;
+unmapped:
+	/* found a hole */
+	trace(warn("unmapped block %Lx", buffer->index);)
+	memset(buffer->data, 0, sb->blocksize);
+	return 0;
 }
 
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
-
 struct create { mode_t mode; unsigned uid, gid; };
+
+struct inode *new_inode(SB, inum_t inum, struct create *create)
+{
+	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
+	struct inode *inode = malloc(sizeof(*inode));
+	*inode = (struct inode){ .sb = sb, .inum = inum, .map = map, .i_mode = create->mode };
+	map->inode = inode;
+	return inode;
+}
 
 struct inode *open_inode(SB, inum_t inum, struct create *create)
 {
@@ -123,10 +133,7 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 			goto eek;
 		}
 
-		struct map *map = new_map(sb->devmap->dev, &filemap_ops);
-		inode = malloc(sizeof(*inode));
-		*inode = (struct inode){ .sb = sb, .inum = inum, .map = map, .i_mode = create->mode };
-		map->inode = inode;
+		inode = new_inode(sb, inum, create);
 
 		struct buffer *rootbuf = new_node(sb, &dtree_ops);
 		struct buffer *leafbuf = new_leaf(sb, &dtree_ops);
@@ -148,6 +155,8 @@ eek:
 
 void init_tux3(SB)
 {
+	struct inode *bitmap = new_inode(sb, -1, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	sb->bitmap = bitmap;
 	sb->image.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->image.blockbits;
 	struct buffer *rootbuf = new_node(sb, &itree_ops);
