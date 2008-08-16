@@ -177,9 +177,10 @@ int write_buffer_to(struct buffer *buffer, sector_t block)
 int write_buffer(struct buffer *buffer)
 {
 	buftrace(warn("write buffer %Lx", buffer->index););
+	set_buffer_uptodate(buffer);
 	int err = write_buffer_to(buffer, buffer->index);
-	if (!err)
-		set_buffer_uptodate(buffer);
+	if (err)
+		set_buffer_dirty(buffer);
 	return err;
 }
 
@@ -389,13 +390,13 @@ int flush_buffers(struct map *map) // !!! should use lru list
 int preallocate_buffers(unsigned bufsize) {
 	struct buffer *buffers = (struct buffer *)malloc(max_buffers*sizeof(struct buffer));
 	unsigned char *data_pool = NULL;
-	int i, error = -ENOMEM; /* if malloc fails */
+	int i, err = -ENOMEM; /* if malloc fails */
 
 	buftrace(warn("Pre-allocating buffers..."););
 	if (!buffers)
 		goto buffers_allocation_failure;
 	buftrace(warn("Pre-allocating data for buffers..."););
-	if ((error = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
+	if ((err = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
 		goto data_allocation_failure;
 
 	/* let's clear out the buffer array and data and set to deadly data 0xdd */
@@ -409,11 +410,11 @@ int preallocate_buffers(unsigned bufsize) {
 	return 0; /* sucess on pre-allocation of buffers */
 
 data_allocation_failure:
-	warn("Error: %s unable to allocate space for buffer data", strerror(error));
+	warn("Error: %s unable to allocate space for buffer data", strerror(err));
 	free(buffers);
 buffers_allocation_failure:
 	warn("Unable to pre-allocate buffers. Using on demand allocation for buffers");
-	return error;
+	return err;
 }
 
 void init_buffers(struct dev *dev, unsigned poolsize)

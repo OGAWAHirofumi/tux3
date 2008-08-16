@@ -43,8 +43,11 @@ int filemap_blockio(struct buffer *buffer, int write)
 
 	int err, levels = inode->root.levels;
 	struct treepath path[levels + 1];
-	if (!levels)
-		goto unmapped;
+	if (!levels) {
+		if (!write)
+			goto unmapped;
+		return -EIO;
+	}
 	if ((err = probe(sb, &inode->root, buffer->index, path, &dtree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
@@ -228,6 +231,9 @@ int main(int argc, char *argv[])
 	tuxwrite(inode, 5, "world", 5);
 	flush_buffers(sb->devmap);
 	flush_buffers(inode->map);
+	int err = flush_buffers(sb->bitmap->map);
+	if (err)
+		warn("Bitmap flush failed (%s)", strerror(-err));
 	if (tuxread(inode, 6, buf, 11))
 		return 1;
 	hexdump(buf, 11);
