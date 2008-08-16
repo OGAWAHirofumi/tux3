@@ -12,7 +12,46 @@
 #include "buffer.h"
 #include "tux3.h"
 
-unsigned freeblocks;
+static int bytebits(unsigned char c)
+{
+	unsigned count = 0;
+	for (; c; c >>= 1)
+		count += c & 1;
+	return count;
+}
+
+block_t count_range(struct inode *inode, block_t start, block_t count)
+{
+	assert(!start & 7);
+	unsigned char ones[256];
+	for (int i = 0; i < 256; i++)
+		ones[i] = bytebits(i);
+
+	block_t limit = start + count;
+	unsigned blocksize = 1 << inode->map->dev->bits;
+	unsigned mapshift = inode->map->dev->bits + 3;
+	unsigned mapmask = (1 << mapshift) - 1;
+	unsigned blocks = (limit + mapmask) >> mapshift;
+	unsigned offset = (start & mapmask) >> 3;
+	block_t tail = (count + 7) >> 3, total = 0;
+
+	for (unsigned block = start >> mapshift; block < blocks; block++) {
+		//printf("count block %x/%x\n", block, blocks);
+		struct buffer *buffer = bread(inode->map, block);
+		if (!buffer)
+			return -1;
+		unsigned bytes = blocksize - offset;
+		if (bytes > tail)
+			bytes = tail;
+		unsigned char *p = buffer->data + offset, *top = p + bytes;
+		while (p < top)
+			total += ones[*p++];
+		brelse(buffer);
+		tail -= bytes;
+		offset = 0;
+	}
+	return total;
+}
 
 block_t balloc_range(struct inode *inode, block_t start, block_t count)
 {
@@ -47,9 +86,11 @@ block_t balloc_range(struct inode *inode, block_t start, block_t count)
 					goto final_partial_byte;
 				}
 				set_bit(buffer->data, found & mapmask);
-				freeblocks--;
 				set_buffer_dirty(buffer);
 				brelse(buffer);
+				inode->sb->nextalloc = found + 1;
+				inode->sb->freeblocks--;
+				//set_sb_dirty(sb);
 				return found;
 			}
 		}
@@ -70,8 +111,6 @@ block_t balloc(SB)
 		goto found;
 	return -1;
 found:
-	sb->nextalloc = block + 1;
-	//set_sb_dirty(sb);
 	printf("balloc => %Li\n", block);
 	return block;
 }
@@ -81,7 +120,12 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
-	struct inode *bitmap = &(struct inode){ .map = map };
+	struct sb *sb = &(struct sb){ .image = { .blocks = 150 } };
+	struct inode *bitmap = &(struct inode){ .sb = sb, .map = map };
+	sb->freeblocks = sb->image.blocks;
+	sb->nextalloc = sb->image.blocks; // this should wrap around to zero
+	sb->bitmap = bitmap;
+
 	init_buffers(dev, 1 << 20);
 	unsigned blocksize = 1 << dev->bits;
 	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
@@ -99,15 +143,14 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
 
-	struct sb *sb = &(struct sb){ .image = { .blocks = 100 }, .nextalloc = 100, .bitmap = bitmap };
-
-	for (int i = 0; i < 10; i++) {
-		block_t block = balloc(sb);
-		printf("0x%Lx\n", block);
-	}
+	for (int i = 0; i < 10; i++)
+		balloc(sb);
 	hexdump(getblk(map, 0)->data, dumpsize);
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
+
+	printf("used = %Li\n", count_range(bitmap, 0, sb->image.blocks));
+	printf("free = %Li\n", sb->freeblocks);
 	return 0;
 }
 #endif
