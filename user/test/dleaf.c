@@ -130,7 +130,7 @@ void leaf_dump(SB, struct dleaf *leaf)
 
 	printf("%i entry groups:\n", leaf->groups);
 	for (struct group *group = groups; group > grbase; group--) {
-		printf("  %u/%i:", groups - group, group->count);
+		printf("  %u/%i:", (int)(groups - group), group->count);
 		//printf(" [%i]", extents - leaf->table);
 		struct entry *enbase = entry - group->count;
 		while (entry > enbase) {
@@ -242,7 +242,7 @@ target = target & 0xffffffffffffLL;
 	/* insert new group if no match  */
 	if (group == grbase || loghi < group->loghi || (entries - group->count)->limit == grouplim) {
 		int split = group != grbase && loghi == group->loghi;
-		printf("new group at %u\n", group - grbase);
+		printf("new group at %u\n", (int)(group - grbase));
 		memmove(used - sizeof(*group), used, (void *)(group + 1) - used);
 		*group = (struct group){ .loghi = loghi, .count = 0 };
 		used -= sizeof(*group);
@@ -273,7 +273,7 @@ target = target & 0xffffffffffffLL;
 
 	/* insert new entry if no match  */
 	if (entry == enbase || loglo < entry->loglo) {
-		printf("insert 0x%Lx at %u in group %u\n", (L)target, entries - entry, groups - group);
+		printf("insert 0x%Lx at %u in group %u\n", (L)target, (int)(entries - entry), (int)(groups - group));
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
 		unsigned limit = !group->count || entry == entries ? 0 : (entry + 1)->limit;
 		*entry = (struct entry){ .loglo = loglo, .limit = limit };
