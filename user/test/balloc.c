@@ -64,6 +64,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3, begin = -1;
 
+	printf("%i bitmap blocks\n", blocks);
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
 		struct buffer *buffer = bread(inode->map, block);
@@ -107,7 +108,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		} else if (ended)
 			printf("\n");
 	}
-	printf("(%i/%i bitmap blocks active)\n", active, blocks);
+	printf("(%i active)\n", active);
 	return -1;
 }
 
@@ -168,8 +169,32 @@ block_t balloc(SB)
 		goto found;
 	return -1;
 found:
-	printf("balloc => %Li\n", block);
+	printf("balloc -> %Lxh\n", block);
 	return block;
+}
+
+void bfree(SB, block_t block)
+{
+	unsigned mapshift = sb->bitmap->map->dev->bits + 3;
+	unsigned mapmask = (1 << mapshift) - 1;
+	unsigned mapblock = block >> mapshift;
+	char *why = "free failed";
+	struct buffer *buffer = bread(sb->bitmap->map, mapblock);
+	printf("free <- %Lxh\n", block);
+	if (!buffer)
+		goto eek;
+	if (!get_bit(buffer->data, block & mapmask))
+		goto eek2;
+	reset_bit(buffer->data, block & mapmask);
+	brelse_dirty(buffer);
+	sb->freeblocks++;
+	//set_sb_dirty(sb);
+	return;
+eek2:
+	why = "already free";
+	brelse(buffer);
+eek:
+	warn("block 0x%Lx %s!\n", (L)block, why);
 }
 
 #ifndef main
@@ -213,6 +238,8 @@ int main(int argc, char *argv[])
 	bitmap_dump(bitmap, 0, sb->image.blocks);
 	printf("used = %Li\n", count_range(bitmap, 0, sb->image.blocks));
 	printf("free = %Li\n", sb->freeblocks);
+	bfree(sb, 0x7f);
+	bitmap_dump(bitmap, 0, sb->image.blocks);
 	return 0;
 }
 #endif
