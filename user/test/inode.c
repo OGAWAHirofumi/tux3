@@ -160,6 +160,7 @@ void init_tux3(SB)
 	sb->image.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->image.blockbits;
 	sb->image.iroot = new_btree(sb, &itree_ops);
+	bitmap->root = new_btree(sb, &dtree_ops);
 }
 
 struct inode *tuxopen(struct inode *dir, char *name, int len, inum_t inum, struct create *create)
@@ -229,5 +230,6 @@ int main(int argc, char *argv[])
 	if (tuxread(inode, 5, buf, 11))
 		return 1;
 	hexdump(buf, 11);
+	bitmap_dump(sb->bitmap, 0, sb->image.blocks);
 	return 0;
 }
