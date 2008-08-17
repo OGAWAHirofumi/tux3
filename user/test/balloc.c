@@ -76,6 +76,8 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		unsigned char *p = buffer->data + offset, *top = p + bytes;
 		for (; p < top; p++, startbit = 0) {
 			unsigned c = *p;
+			if (!any && c)
+				printf("%x: ", block);
 			any |= c;
 			if ((!c && begin < 0) || (c == 0xff && begin >= 0))
 				continue;
@@ -86,9 +88,9 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 				if (begin < 0)
 					begin = found;
 				else {
-					if (!ended)
-						printf("%x: ", block);
-					if (begin == found - 1)
+					if ((begin >> mapshift) != block)
+						printf("-%Lx ", found - 1);
+					else if (begin == found - 1)
 						printf("%Lx ", begin);
 					else
 						printf("%Lx-%Lx ", begin, found - 1);
@@ -101,11 +103,9 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		brelse(buffer);
 		tail -= bytes;
 		offset = 0;
-		if (begin >= 0) {
-			if (!ended)
-				printf("%x: ", block);
-			printf("%Lx-\n", begin);
-		} else if (ended)
+		if (begin >= 0)
+			printf("%Lx-", begin);
+		if (any)
 			printf("\n");
 	}
 	printf("(%i active)\n", active);
@@ -236,9 +236,9 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 2)->data, dumpsize);
 
 	bitmap_dump(bitmap, 0, sb->image.blocks);
-	printf("used = %Li\n", count_range(bitmap, 0, sb->image.blocks));
-	printf("free = %Li\n", sb->freeblocks);
-	bfree(sb, 0x7f);
+	printf("%Li used, %Li free\n", count_range(bitmap, 0, sb->image.blocks), sb->freeblocks);
+	bfree(sb, 0x7e);
+	bfree(sb, 0x80);
 	bitmap_dump(bitmap, 0, sb->image.blocks);
 	return 0;
 }
