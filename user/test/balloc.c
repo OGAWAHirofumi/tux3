@@ -24,7 +24,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 {
 	assert(!start & 7);
 	unsigned char ones[256];
-	for (int i = 0; i < 256; i++)
+	for (int i = 0; i < sizeof(ones); i++)
 		ones[i] = bytebits(i);
 
 	block_t limit = start + count;
@@ -64,7 +64,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3, begin = -1;
 
-	printf("%i bitmap blocks\n", blocks);
+	printf("%i bitmap blocks:\n", blocks);
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
 		struct buffer *buffer = bread(inode->map, block);
@@ -77,7 +77,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		for (; p < top; p++, startbit = 0) {
 			unsigned c = *p;
 			if (!any && c)
-				printf("%x: ", block);
+				printf("[%x] ", block);
 			any |= c;
 			if ((!c && begin < 0) || (c == 0xff && begin >= 0))
 				continue;
