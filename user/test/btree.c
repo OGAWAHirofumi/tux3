@@ -360,29 +360,9 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count++;
 }
 
-void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct treepath path[], unsigned levels, struct btree_ops *ops)
+int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struct treepath path[], struct btree_ops *ops)
 {
-	struct buffer *leafbuf = path[levels].buffer;
-	set_buffer_dirty(leafbuf);
-	void *space = (ops->leaf_expand)(sb, leafbuf->data, target, size);
-	if (space)
-		return space;
-
-	trace(warn("split leaf");)
-	struct buffer *childbuf = new_leaf(sb, ops);
-	if (!childbuf) 
-		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
-	u64 childkey = (ops->leaf_split)(sb, leafbuf->data, childbuf->data, 0);
-	block_t childblock = childbuf->index;
-	if (target < childkey) {
-		struct buffer *swap = leafbuf;
-		leafbuf = childbuf;
-		childbuf = swap;
-	}
-	brelse_dirty(childbuf);
-	space = (ops->leaf_expand)(sb, leafbuf->data, target, size);
-	assert(space);
-
+	int levels = root->levels;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
 		struct buffer *parentbuf = path[levels].buffer;
@@ -392,13 +372,13 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 		if (parent->count < sb->alloc_per_node) {
 			add_child(parent, next, childblock, childkey);
 			set_buffer_dirty(parentbuf);
-			return space;
+			return 0;
 		}
 
 		/* split a full index node */
 		struct buffer *newbuf = new_node(sb, ops);
 		if (!newbuf) 
-			return NULL; // !!! err_ptr(ENOMEM)
+			return -ENOMEM;
 		struct bnode *newnode = newbuf->data;
 		unsigned half = parent->count / 2;
 		u64 newkey = parent->entries[half].key;
@@ -422,7 +402,7 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 	trace(printf("add tree level\n");)
 	struct buffer *newbuf = new_node(sb, ops);
 	if (!newbuf)
-		return NULL; // !!! err_ptr(ENOMEM)
+		return -ENOMEM;
 	struct bnode *newroot = newbuf->data;
 
 	newroot->count = 2;
@@ -433,6 +413,32 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 	root->levels++;
 	//set_sb_dirty(sb);
 	brelse_dirty(newbuf);
+	return 0;
+}
+
+void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct treepath path[], unsigned levels, struct btree_ops *ops)
+{
+	struct buffer *leafbuf = path[levels].buffer;
+	set_buffer_dirty(leafbuf);
+	void *space = (ops->leaf_expand)(sb, leafbuf->data, target, size);
+	if (space)
+		return space;
+
+	trace(warn("split leaf");)
+	struct buffer *childbuf = new_leaf(sb, ops);
+	if (!childbuf) 
+		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
+	u64 childkey = (ops->leaf_split)(sb, leafbuf->data, childbuf->data, 0);
+	block_t childblock = childbuf->index;
+	if (target < childkey) {
+		struct buffer *swap = leafbuf;
+		leafbuf = childbuf;
+		childbuf = swap;
+	}
+	brelse_dirty(childbuf);
+	space = (ops->leaf_expand)(sb, leafbuf->data, target, size);
+	assert(space);
+	insert_child(sb, root, childkey, childblock, path, ops); // !!! error return?
 	return space;
 }
 
