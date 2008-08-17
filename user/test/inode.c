@@ -91,6 +91,12 @@ unmapped:
 	return 0;
 }
 
+/* this will be iattr.c... */
+
+enum { MTIME_SIZE_ATTR, DATA_BTREE_ATTR };
+
+struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
+struct data_btree_attr { u64 kind:4; struct btree btree; };
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
 struct create { mode_t mode; unsigned uid, gid; };
 
@@ -135,15 +141,7 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 		}
 
 		inode = new_inode(sb, inum, create);
-
-		struct buffer *rootbuf = new_node(sb, &dtree_ops);
-		struct buffer *leafbuf = new_leaf(sb, &dtree_ops);
-		init_btree(rootbuf->data, leafbuf->index);
-		inode->root = (struct btree){ .index = rootbuf->index, .levels = 1 };
-		printf("droot at %Li\n", rootbuf->index);
-		printf("dleaf at %Li\n", leafbuf->index);
-		brelse_dirty(rootbuf);
-		brelse_dirty(leafbuf);
+		inode->root = new_btree(sb, &dtree_ops);
 
 		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
 		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .btree = inode->root };
@@ -161,15 +159,7 @@ void init_tux3(SB)
 	sb->bitmap = bitmap;
 	sb->image.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->image.blockbits;
-
-	struct buffer *rootbuf = new_node(sb, &itree_ops);
-	struct buffer *leafbuf = new_leaf(sb, &itree_ops);
-	init_btree(rootbuf->data, leafbuf->index);
-	sb->image.iroot = (struct btree){ .index = rootbuf->index, .levels = 1 };
-	printf("iroot at %Lx\n", rootbuf->index);
-	printf("ileaf at %Lx\n", leafbuf->index);
-	brelse_dirty(rootbuf);
-	brelse_dirty(leafbuf);
+	sb->image.iroot = new_btree(sb, &itree_ops);
 }
 
 struct inode *tuxopen(struct inode *dir, char *name, int len, inum_t inum, struct create *create)

@@ -457,15 +457,19 @@ int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
 	return 0;
 }
 
-enum { MTIME_SIZE_ATTR, DATA_BTREE_ATTR };
-
-struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
-struct data_btree_attr { u64 kind:4; struct btree btree; };
-
-void init_btree(struct bnode *root, block_t leaf)
+struct btree new_btree(SB, struct btree_ops *ops)
 {
-	root->entries[0].block = leaf;
+	struct buffer *rootbuf = new_node(sb, ops);
+	struct buffer *leafbuf = new_leaf(sb, ops);
+	struct bnode *root = rootbuf->data;
+	root->entries[0].block = leafbuf->index;
 	root->count = 1;
+	struct btree btree = { .index = rootbuf->index, .levels = 1 };
+	printf("root at %Li\n", rootbuf->index);
+	printf("leaf at %Li\n", leafbuf->index);
+	brelse_dirty(rootbuf);
+	brelse_dirty(leafbuf);
+	return btree;
 }
 
 int main(int argc, char *argv[])
