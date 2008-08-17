@@ -137,11 +137,11 @@ void leaf_dump(SB, struct dleaf *leaf)
 			--entry;
 			unsigned offset = entry == entries - 1 ? 0 : (entry + 1)->limit;
 			int count = entry->limit - offset;
-			printf(" %Lx ->", ((llui_t)group->loghi << 24) + entry->loglo);
+			printf(" %Lx ->", ((L)group->loghi << 24) + entry->loglo);
 			if (count < 0)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++)
-				printf(" %Lx", (llui_t)(extents + offset + i)->block);
+				printf(" %Lx", (L)(extents + offset + i)->block);
 			//printf(" {%u}", entry->limit);
 			printf(";");
 		}
@@ -273,7 +273,7 @@ target = target & 0xffffffffffffLL;
 
 	/* insert new entry if no match  */
 	if (entry == enbase || loglo < entry->loglo) {
-		printf("insert 0x%Lx at %u in group %u\n", (llui_t)target, (unsigned int)(entries - entry), (unsigned int)(groups - group));
+		printf("insert 0x%Lx at %u in group %u\n", (L)target, (unsigned int)(entries - entry), (unsigned int)(groups - group));
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
 		unsigned limit = !group->count || entry == entries ? 0 : (entry + 1)->limit;
 		*entry = (struct entry){ .loglo = loglo, .limit = limit };
@@ -300,7 +300,7 @@ target = target & 0xffffffffffffLL;
 
 void leaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
 {
-	printf("insert 0x%Lx -> 0x%Lx\n", (llui_t)target, (llui_t)extent.block);
+	printf("insert 0x%Lx -> 0x%Lx\n", (L)target, (L)extent.block);
 	struct extent *store = leaf_expand(sb, leaf, target, sizeof(extent));
 	*store = extent;
 }
@@ -458,7 +458,7 @@ void dleaf_test(SB)
 
 	struct dleaf *dest = leaf_create(sb);
 	tuxkey_t key = leaf_split(sb, leaf, dest, 0);
-	printf("split key 0x%Lx\n", (llui_t)key);
+	printf("split key 0x%Lx\n", (L)key);
 	leaf_dump(sb, leaf);
 	leaf_dump(sb, dest);
 	leaf_check(sb, leaf);
