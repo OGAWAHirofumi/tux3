@@ -111,7 +111,7 @@ struct inode *new_inode(SB, inum_t inum, struct create *create)
 
 struct inode *open_inode(SB, inum_t inum, struct create *create)
 {
-	int err, levels = sb->image.iroot.levels;
+	int err = -ENOENT, levels = sb->image.iroot.levels;
 	struct treepath path[levels + 1];
 	if ((err = probe(sb, &sb->image.iroot, inum, path, &itree_ops)))
 		return NULL;
@@ -128,10 +128,8 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 		/* may have to expand */
 	} else {
 		trace(warn("no inode 0x%Lx", inum);)
-		if (!create) {
-			err = -ENOENT;
+		if (!create)
 			goto eek;
-		}
 		trace(warn("new inode 0x%Lx", inum);)
 		/*
 		 * We know target is less than base inum of succ block (do we?)
@@ -140,12 +138,15 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 		 * inode in this block, splitting if necessary.  Otherwise insert
 		 * a new block with inum base aligned down to 64 (32?)
 		 */
+		if (0) {
+			struct ileaf *ileaf = ileaf_create(sb);
+			ileaf->ibase = inum;
+		}
+
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
 		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, levels, &itree_ops);
-		if (!ibase) {
-			err = -EINVAL;
-			goto eek;
-		}
+		if (!ibase)
+			goto eek2;
 
 		inode = new_inode(sb, inum, create);
 		inode->root = new_btree(sb, &dtree_ops);
@@ -155,6 +156,8 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 		*(typeof(attr1) *)ibase = attr1;
 		*(typeof(attr2) *)(ibase + sizeof(attr2)) = attr2;
 	}
+eek2:
+	err = -EINVAL;
 eek:
 	brelse_path(path, levels);
 	return inode;
