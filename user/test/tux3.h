@@ -11,6 +11,7 @@ typedef uint64_t u64;
 typedef uint16_t le_u16;
 typedef uint32_t le_u32;
 typedef uint64_t le_u64;
+typedef long long unsigned int llui_t;
 
 #define fieldtype(structure, field) typeof(((struct structure *)NULL)->field)
 #define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))

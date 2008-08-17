@@ -86,7 +86,7 @@ void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *result)
 	assert(inum >= leaf->inum);
 	inum_t at = inum - leaf->inum;
 	assert(at < 999); // !!! calculate this properly: max inode possible with max dict
-	printf("lookup inode %Lx, %Lx + %Lx\n", inum, leaf->inum, at);
+	printf("lookup inode %Lx, %Lx + %Lx\n", (llui_t)inum, (llui_t)leaf->inum, (llui_t)at);
 	unsigned size = 0;
 	void *inode = NULL;
 	if (at < leaf->count) {
@@ -253,7 +253,7 @@ int main(int argc, char *argv[])
 	char *inode = ileaf_lookup(sb, leaf, 3, &size);
 	hexdump(inode, size);
 	for (int i = 0; i <= 10; i++)
-		printf("goal %i, free: %Lu\n", i, find_empty_inode(sb, leaf, i));
+		printf("goal %i, free: %Lu\n", i, (llui_t)find_empty_inode(sb, leaf, i));
 	ileaf_destroy(sb, leaf);
 	ileaf_destroy(sb, dest);
 	return 0;

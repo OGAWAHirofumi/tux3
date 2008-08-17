@@ -125,7 +125,7 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 
 void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 {
-	printf("dirents <%Lx:%Lx>: ", buffer->map->inode->inum, buffer->index);
+	printf("dirents <%Lx:%Lx>: ", (llui_t)buffer->map->inode->inum, buffer->index);
 	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
 	while (dirent < limit) {
@@ -204,7 +204,7 @@ ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct bu
 		while (dirent <= limit) {
 			if (dirent->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length dirent at <%Lx:%x>", inode->inum, block);
+				warn("zero length dirent at <%Lx:%x>", (llui_t)inode->inum, block);
 				return NULL;
 			}
 			if (ext2_match(len, name, dirent)) {
@@ -266,7 +266,7 @@ static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
 		for (ext2_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length entry at <%Lx:%x>", inode->inum, block);
+				warn("zero length entry at <%Lx:%x>", (llui_t)inode->inum, block);
 				return -EIO;
 			}
 			if (entry->inode) {
