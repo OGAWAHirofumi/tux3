@@ -133,6 +133,13 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 			goto eek;
 		}
 		trace(warn("new inode 0x%Lx", inum);)
+		/*
+		 * We know target is less than base inum of succ block (do we?)
+		 * if lie inside actual inum range of this block, or if the block
+		 * is not too full and within 64 (32?) or so of base then create the
+		 * inode in this block, splitting if necessary.  Otherwise insert
+		 * a new block with inum base aligned down to 64 (32?)
+		 */
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
 		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, levels, &itree_ops);
 		if (!ibase) {
