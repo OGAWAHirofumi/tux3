@@ -53,12 +53,69 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 	return total;
 }
 
+block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
+{
+	block_t limit = start + count;
+	unsigned blocksize = 1 << inode->map->dev->bits;
+	unsigned mapshift = inode->map->dev->bits + 3;
+	unsigned mapmask = (1 << mapshift) - 1;
+	unsigned blocks = (limit + mapmask) >> mapshift, active = 0;
+	unsigned offset = (start & mapmask) >> 3;
+	unsigned startbit = start & 7;
+	block_t tail = (count + startbit + 7) >> 3, begin = -1;
+
+	for (unsigned block = start >> mapshift; block < blocks; block++) {
+		int ended = 0, any = 0;
+		struct buffer *buffer = bread(inode->map, block);
+		if (!buffer)
+			return -1;
+		unsigned bytes = blocksize - offset;
+		if (bytes > tail)
+			bytes = tail;
+		unsigned char *p = buffer->data + offset, *top = p + bytes;
+		for (; p < top; p++, startbit = 0) {
+			unsigned c = *p;
+			any |= c;
+			if ((!c && begin < 0) || (c == 0xff && begin >= 0))
+				continue;
+			for (int i = startbit, mask = 1 << startbit; i < 8; i++, mask <<= 1) {
+				if (!(c & mask) == (begin < 0))
+					continue;
+				block_t found = i + (((void *)p - buffer->data) << 3) + (block << mapshift);
+				if (begin < 0)
+					begin = found;
+				else {
+					if (!ended)
+						printf("%x: ", block);
+					if (begin == found - 1)
+						printf("%Lx ", begin);
+					else
+						printf("%Lx-%Lx ", begin, found - 1);
+					begin = -1;
+					ended++;
+				}
+			}
+		}
+		active += !!any;
+		brelse(buffer);
+		tail -= bytes;
+		offset = 0;
+		if (begin >= 0) {
+			if (!ended)
+				printf("%x: ", block);
+			printf("%Lx-\n", begin);
+		} else if (ended)
+			printf("\n");
+	}
+	printf("(%i/%i bitmap blocks active)\n", active, blocks);
+	return -1;
+}
+
 block_t balloc_range(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
-	unsigned blockbits = inode->map->dev->bits;
-	unsigned blocksize = 1 << blockbits;
-	unsigned mapshift = blockbits + 3;
+	unsigned blocksize = 1 << inode->map->dev->bits;
+	unsigned mapshift = inode->map->dev->bits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -143,12 +200,17 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
 
+	sb->nextalloc++; // gap
+	for (int i = 0; i < 1; i++)
+		balloc(sb);
+	sb->nextalloc++; // gap
 	for (int i = 0; i < 10; i++)
 		balloc(sb);
 	hexdump(getblk(map, 0)->data, dumpsize);
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
 
+	bitmap_dump(bitmap, 0, sb->image.blocks);
 	printf("used = %Li\n", count_range(bitmap, 0, sb->image.blocks));
 	printf("free = %Li\n", sb->freeblocks);
 	return 0;
