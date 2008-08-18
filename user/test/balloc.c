@@ -89,11 +89,11 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 					begin = found;
 				else {
 					if ((begin >> mapshift) != block)
-						printf("-%Lx ", found - 1);
+						printf("-%Lx ", (L)(found - 1));
 					else if (begin == found - 1)
-						printf("%Lx ", begin);
+						printf("%Lx ", (L)begin);
 					else
-						printf("%Lx-%Lx ", begin, found - 1);
+						printf("%Lx-%Lx ", (L)begin, (L)(found - 1));
 					begin = -1;
 					ended++;
 				}
@@ -104,7 +104,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		tail -= bytes;
 		offset = 0;
 		if (begin >= 0)
-			printf("%Lx-", begin);
+			printf("%Lx-", (L)begin);
 		if (any)
 			printf("\n");
 	}
@@ -169,7 +169,7 @@ block_t balloc(SB)
 		goto found;
 	return -1;
 found:
-	printf("balloc -> %Lxh\n", block);
+	printf("balloc -> %Lxh\n", (L)block);
 	return block;
 }
 
@@ -180,7 +180,7 @@ void bfree(SB, block_t block)
 	unsigned mapblock = block >> mapshift;
 	char *why = "free failed";
 	struct buffer *buffer = bread(sb->bitmap->map, mapblock);
-	printf("free <- %Lxh\n", block);
+	printf("free <- %Lxh\n", (L)block);
 	if (!buffer)
 		goto eek;
 	if (!get_bit(buffer->data, block & mapmask))

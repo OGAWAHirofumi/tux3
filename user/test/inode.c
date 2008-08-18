@@ -38,7 +38,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct sb *sb = inode->sb;
 	struct map *devmap = sb->devmap;
 	struct dev *dev = devmap->dev;
-	warn("%s <%Lx:%Lx>", write ? "write" : "read", inode->inum, buffer->index);
+	warn("%s <%Lx:%Lx>", write ? "write" : "read", (L)inode->inum, buffer->index);
 	assert(dev->bits >= 9 && dev->fd);
 
 	int err, levels = inode->root.levels;
@@ -60,10 +60,10 @@ int filemap_blockio(struct buffer *buffer, int write)
 	if (write) {
 		if (count) {
 			physical = found->block;
-			trace(warn("found physical block %Lx", (long long)physical);)
+			trace(warn("found physical block %Lx", (L)physical);)
 		} else {
 			physical = balloc(sb); // !!! need an error return
-			trace(warn("new physical block %Lx", physical);)
+			trace(warn("new physical block %Lx", (L)physical);)
 			struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->index, sizeof(struct extent), path, levels, &dtree_ops);
 			if (!store)
 				goto eek;
@@ -123,14 +123,14 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 	//ileaf_dump(sb, leafbuf->data);
 
 	if (size) {
-		trace(warn("found inode 0x%Lx", inum);)
+		trace(warn("found inode 0x%Lx", (L)inum);)
 		hexdump(ibase, size);
 		/* may have to expand */
 	} else {
-		trace(warn("no inode 0x%Lx", inum);)
+		trace(warn("no inode 0x%Lx", (L)inum);)
 		if (!create)
 			goto eek;
-		trace(warn("new inode 0x%Lx", inum);)
+		trace(warn("new inode 0x%Lx", (L)inum);)
 		/*
 		 * search this and successor blocks for a suitable empty inode.
 		 * Find successor ibase to know whether to advance or create
