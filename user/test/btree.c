@@ -480,7 +480,7 @@ int advance(struct inode *inode, struct treepath *path, int levels)
 		brelse(buffer);
 		buffer = path[--level].buffer;
 		node = buffer->data;
-		printf("pop to level %i, %i of %i nodes\n", level, path[level].next - node->entries, node->count);
+		printf("pop to level %i, %ti of %i nodes\n", level, path[level].next - node->entries, node->count);
 	} while (finished_level(path, level));
 	do {
 		if (!(buffer = bread(inode->map, path[level++].next++->block))) {
