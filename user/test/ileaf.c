@@ -120,10 +120,10 @@ void ileaf_trim(SB, struct ileaf *leaf) {
 		leaf->count = 0;
 }
 
-tuxkey_t ileaf_split(SB, void *base, void *base2, int fudge)
+tuxkey_t ileaf_split(SB, void *from, void *into, int fudge)
 {
-	assert(ileaf_sniff(sb, base));
-	struct ileaf *leaf = base, *dest = base2;
+	assert(ileaf_sniff(sb, from));
+	struct ileaf *leaf = from, *dest = into;
 	u16 *dict = (void *)leaf + sb->blocksize, *destdict = (void *)dest + sb->blocksize;
 
 	/* binsearch inum nearest middle */

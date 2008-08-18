@@ -135,6 +135,7 @@ eek:
 
 static void show_leaf_range(struct btree_ops *ops, struct buffer *buffer, block_t start, block_t finish)
 {
+	assert((ops->leaf_sniff)(buffer->map->inode->sb, buffer->data));
 	(ops->leaf_dump)(buffer->map->inode->sb, buffer->data);
 }
 
@@ -493,20 +494,33 @@ int advance(struct inode *inode, struct treepath *path, int levels)
 }
 
 #ifndef main
+struct leaf { unsigned count, magic; struct entry { unsigned key, val; } entries[]; };
+
+static inline struct leaf *to_leaf(void *leaf)
+{
+	return leaf;
+}
+
 int leaf_sniff(SB, void *leaf)
 {
-	return 0;
+	return to_leaf(leaf)->magic == 0xc0de;
 }
 
 int leaf_init(SB, void *leaf)
 {
-	memset(leaf, 0xdd, sb->blocksize);
+	*to_leaf(leaf) = (struct leaf){ .magic = 0xc0de };
 	return 0;
 }
 
-tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
+tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
 {
-	memcpy(base2, base, sb->blocksize);
+	assert(leaf_sniff(sb, from));
+	struct leaf *leaf = from;
+	unsigned split = leaf->count / 2, tail = leaf->count - split;
+	leaf_init(sb, into);
+	veccopy(into, from + split, tail);
+	to_leaf(into)->count = tail;
+	leaf->count = split;
 	return 0;
 }
 
@@ -515,22 +529,26 @@ void *leaf_expand(SB, void *base, inum_t inum, unsigned more)
 	return 0;
 }
 
-void leaf_dump(SB, struct dleaf *leaf)
+void leaf_dump(SB, void *p)
 {
-	printf("leaf %p\n", leaf);
+	assert(leaf_sniff(sb, p));
+	struct leaf *leaf = p;
+	struct entry *limit = leaf->entries + leaf->count;
+	for (struct entry *entry = leaf->entries; entry < limit; entry++)
+		printf("key %x = %x\n", entry->key, entry->val);
 }
 
-unsigned leaf_need(SB, struct dleaf *leaf)
+unsigned leaf_need(SB, void *leaf)
 {
 	return 0;
 }
 
-unsigned leaf_free(SB, struct dleaf *leaf)
+unsigned leaf_free(SB, void *leaf)
 {
 	return 0;
 }
 
-void leaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
+void leaf_merge(SB, void *into, void *from)
 {
 }
 

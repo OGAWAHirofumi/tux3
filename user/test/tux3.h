@@ -111,12 +111,12 @@ struct dleaf;
 struct btree_ops {
 	int (*leaf_sniff)(SB, void *leaf);
 	int (*leaf_init)(SB, void *leaf);
-	tuxkey_t (*leaf_split)(SB, void *base, void *base2, int fudge);
+	tuxkey_t (*leaf_split)(SB, void *from, void *into, int fudge);
 	void *(*leaf_expand)(SB, void *base, inum_t inum, unsigned more);
-	void (*leaf_dump)(SB, struct dleaf *leaf);
-	unsigned (*leaf_need)(SB, struct dleaf *leaf);
-	unsigned (*leaf_free)(SB, struct dleaf *leaf);
-	void (*leaf_merge)(SB, struct dleaf *leaf, struct dleaf *from);
+	void (*leaf_dump)(SB, void *p);
+	unsigned (*leaf_need)(SB, void *p);
+	unsigned (*leaf_free)(SB, void *p);
+	void (*leaf_merge)(SB, void *into, void *from);
 	block_t (*balloc)(SB);
 };
 

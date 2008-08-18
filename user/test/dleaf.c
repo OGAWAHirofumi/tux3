@@ -86,11 +86,16 @@ struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
  *  12) fuzztest - started
  */
 
+static inline struct dleaf *to_dleaf(void *leaf)
+{
+	return leaf;
+}
+
 int leaf_init(SB, void *leaf)
 {
 	if (!leaf)
 		return -1;
-	*(struct dleaf *)leaf = (struct dleaf){ .magic = 0x1eaf, .free = sizeof(struct dleaf), .used = sb->blocksize };
+	*to_dleaf(leaf) = (struct dleaf){ .magic = 0x1eaf, .free = sizeof(struct dleaf), .used = sb->blocksize };
 	return 0;
 }
 
@@ -103,18 +108,18 @@ struct dleaf *leaf_create(SB)
 
 int leaf_sniff(SB, void *leaf)
 {
-	return ((struct dleaf *)leaf)->magic == 0x1eaf;
+	return (to_dleaf(leaf))->magic == 0x1eaf;
 }
 
-void leaf_destroy(SB, struct dleaf *leaf)
+void dleaf_destroy(SB, struct dleaf *leaf)
 {
 	assert(leaf_sniff(sb, leaf));
 	free(leaf);
 }
 
-unsigned leaf_free(SB, struct dleaf *leaf)
+unsigned leaf_free(SB, void *leaf)
 {
-	return leaf->used - leaf->free;
+	return to_dleaf(leaf)->used - to_dleaf(leaf)->free;
 }
 
 unsigned leaf_need(SB, struct dleaf *leaf)
@@ -122,7 +127,7 @@ unsigned leaf_need(SB, struct dleaf *leaf)
 	return sb->blocksize - leaf_free(sb, leaf) - sizeof(struct dleaf);
 }
 
-void leaf_dump(SB, struct dleaf *leaf)
+void dleaf_dump(SB, struct dleaf *leaf)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -176,7 +181,7 @@ void *leaf_lookup(SB, struct dleaf *leaf, block_t target, unsigned *count)
 	return NULL;
 }
 
-int leaf_check(SB, struct dleaf *leaf)
+int dleaf_check(SB, struct dleaf *leaf)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -298,7 +303,7 @@ target = target & 0xffffffffffffLL;
 	return where;
 }
 
-void leaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
+void dleaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
 {
 	printf("insert 0x%Lx -> 0x%Lx\n", (L)target, (L)extent.block);
 	struct extent *store = leaf_expand(sb, leaf, target, sizeof(extent));
@@ -317,11 +322,11 @@ void leaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
  *  - decrease used by 4
  */
 
-tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
+tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
 {
-	assert(leaf_sniff(sb, base));
-	struct dleaf *leaf = base, *dest = base2;
-	struct group *groups = base + sb->blocksize, *grbase = groups - leaf->groups;
+	assert(leaf_sniff(sb, from));
+	struct dleaf *leaf = from, *dest = into;
+	struct group *groups = from + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	printf("split %p into %p\n", leaf, dest);
 	unsigned encount = 0, recount = 0, grsplit = 0, exsplit = 0;
@@ -346,7 +351,7 @@ tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
 	printf("split %i entries at group %i, entry %x\n", encount, grsplit, cut);
 	printf("split extents at %i\n", exsplit);
 	/* copy extents */
-	unsigned size = base + leaf->free - (void *)(leaf->table + exsplit);
+	unsigned size = from + leaf->free - (void *)(leaf->table + exsplit);
 	memcpy(dest->table, leaf->table + exsplit, size);
 
 	/* copy groups */
@@ -370,15 +375,15 @@ tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
 	vecmove(groups - leaf->groups - split, entries - split, split);
 
 	/* clean up */
-	leaf->free = (void *)(leaf->table + exsplit) - base;
-	dest->free = (void *)leaf->table + size - base;
-	leaf->used = (void *)(grbase - split) - base;
-	dest->used = (void *)(groups - dest->groups - encount + split) - base;
-	memset(base + leaf->free, 0, leaf->used - leaf->free);
+	leaf->free = (void *)(leaf->table + exsplit) - from;
+	dest->free = (void *)leaf->table + size - from;
+	leaf->used = (void *)(grbase - split) - from;
+	dest->used = (void *)(groups - dest->groups - encount + split) - from;
+	memset(from + leaf->free, 0, leaf->used - leaf->free);
 	return ((destgroups - 1)->loghi << 24) | (destentries - 1)->loglo;
 }
 
-void leaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
+void dleaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
 {
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -433,18 +438,18 @@ void dleaf_test(SB)
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
 	for (int i = 0; i < 32; i++)
-		leaf_insert(sb, leaf, (i << 12) + i, (struct extent){ .block = i });
-	leaf_dump(sb, leaf);
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x111 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x222 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x333 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x444 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x555 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x666 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x777 });
-	leaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x888 });
-	leaf_insert(sb, leaf, targets[next], (struct extent){ .block = 0x999 });
-	leaf_dump(sb, leaf);
+		dleaf_insert(sb, leaf, (i << 12) + i, (struct extent){ .block = i });
+	dleaf_dump(sb, leaf);
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x111 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x222 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x333 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x444 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x555 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x666 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x777 });
+	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x888 });
+	dleaf_insert(sb, leaf, targets[next], (struct extent){ .block = 0x999 });
+	dleaf_dump(sb, leaf);
 	for (int i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) {
 		unsigned target = targets[i];
 		unsigned count;
@@ -459,15 +464,15 @@ void dleaf_test(SB)
 	struct dleaf *dest = leaf_create(sb);
 	tuxkey_t key = leaf_split(sb, leaf, dest, 0);
 	printf("split key 0x%Lx\n", (L)key);
-	leaf_dump(sb, leaf);
-	leaf_dump(sb, dest);
-	leaf_check(sb, leaf);
-	leaf_check(sb, dest);
-	leaf_merge(sb, leaf, dest);
-	leaf_check(sb, leaf);
-	leaf_dump(sb, leaf);
-	leaf_destroy(sb, leaf);
-	leaf_destroy(sb, dest);
+	dleaf_dump(sb, leaf);
+	dleaf_dump(sb, dest);
+	dleaf_check(sb, leaf);
+	dleaf_check(sb, dest);
+	dleaf_merge(sb, leaf, dest);
+	dleaf_check(sb, leaf);
+	dleaf_dump(sb, leaf);
+	dleaf_destroy(sb, leaf);
+	dleaf_destroy(sb, dest);
 }
 
 #ifndef main

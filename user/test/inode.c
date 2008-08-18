@@ -54,7 +54,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	
 	unsigned count = 0;
 	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->index, &count);
-	leaf_dump(sb, leafbuf->data);
+	dleaf_dump(sb, leafbuf->data);
 	block_t physical;
 
 	if (write) {
