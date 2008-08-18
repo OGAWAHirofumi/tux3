@@ -443,27 +443,6 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 	return space;
 }
 
-int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
-{
-	struct buffer *blockbuf = bread(inode->map, target);
-	if (!blockbuf)
-		return -EIO;
-	memcpy(data, blockbuf->data, len);
-	brelse(blockbuf);
-	return 0;
-}
-
-int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
-{
-	struct buffer *blockbuf = getblk(inode->map, target);
-	if (!blockbuf)
-		return -EIO;
-	memcpy(blockbuf->data, data, len);
-	set_buffer_dirty(blockbuf);
-	brelse(blockbuf);
-	return 0;
-}
-
 struct btree new_btree(SB, struct btree_ops *ops)
 {
 	struct buffer *rootbuf = new_node(sb, ops);

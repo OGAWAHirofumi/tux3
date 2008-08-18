@@ -171,6 +171,27 @@ eek:
 	return inode;
 }
 
+int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
+{
+	struct buffer *blockbuf = bread(inode->map, target);
+	if (!blockbuf)
+		return -EIO;
+	memcpy(data, blockbuf->data, len);
+	brelse(blockbuf);
+	return 0;
+}
+
+int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
+{
+	struct buffer *blockbuf = getblk(inode->map, target);
+	if (!blockbuf)
+		return -EIO;
+	memcpy(blockbuf->data, data, len);
+	set_buffer_dirty(blockbuf);
+	brelse(blockbuf);
+	return 0;
+}
+
 void init_tux3(SB)
 {
 	struct inode *bitmap = new_inode(sb, -1, &(struct create){ .mode = S_IFREG | S_IRWXU });
