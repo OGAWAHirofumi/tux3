@@ -58,7 +58,6 @@ static struct buffer *new_block(SB, struct btree_ops *ops)
 
 static struct buffer *new_leaf(SB, struct btree_ops *ops)
 {
-	trace(printf("new leaf\n"););
 	struct buffer *buffer = new_block(sb, ops); 
 	if (!buffer)
 		return NULL;
@@ -70,7 +69,6 @@ static struct buffer *new_leaf(SB, struct btree_ops *ops)
 
 static struct buffer *new_node(SB, struct btree_ops *ops)
 {
-	trace(printf("new node\n"););
 	struct buffer *buffer = new_block(sb, ops); 
 	if (!buffer)
 		return buffer;
@@ -495,6 +493,59 @@ int advance(struct inode *inode, struct treepath *path, int levels)
 }
 
 #ifndef main
+int leaf_sniff(SB, void *leaf)
+{
+	return 0;
+}
+
+int leaf_init(SB, void *leaf)
+{
+	memset(leaf, 0xdd, sb->blocksize);
+	return 0;
+}
+
+tuxkey_t leaf_split(SB, void *base, void *base2, int fudge)
+{
+	memcpy(base2, base, sb->blocksize);
+	return 0;
+}
+
+void *leaf_expand(SB, void *base, inum_t inum, unsigned more)
+{
+	return 0;
+}
+
+void leaf_dump(SB, struct dleaf *leaf)
+{
+	printf("leaf %p\n", leaf);
+}
+
+unsigned leaf_need(SB, struct dleaf *leaf)
+{
+	return 0;
+}
+
+unsigned leaf_free(SB, struct dleaf *leaf)
+{
+	return 0;
+}
+
+void leaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
+{
+}
+
+struct btree_ops ops = {
+	.leaf_sniff = leaf_sniff,
+	.leaf_init = leaf_init,
+	.leaf_split = leaf_split,
+	.leaf_expand = leaf_expand,
+	.leaf_dump = leaf_dump,
+	.leaf_need = leaf_need,
+	.leaf_free = leaf_free,
+	.leaf_merge = leaf_merge,
+	.balloc = balloc,
+};
+
 block_t balloc(SB)
 {
 	return sb->nextalloc++;
@@ -502,6 +553,13 @@ block_t balloc(SB)
 
 int main(int argc, char *argv[])
 {
+	struct dev *dev = &(struct dev){ .bits = 6 };
+	struct map *map = new_map(dev, NULL);
+	SB = &(struct sb){ .devmap = map, .blocksize = 4096 };
+	map->inode = &(struct inode){ .sb = sb, .map = map };
+	init_buffers(dev, 1 << 20);
+	struct btree btree = new_btree(sb, &ops);
+	show_tree_range(sb, &ops, &btree, 0, -1);
 	return 0;
 }
 #endif
