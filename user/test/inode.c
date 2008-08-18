@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	printf("fd '%s' = %i (0x%Lx bytes)\n", name, fd, size);
+	printf("fd '%s' = %i (0x%Lx bytes)\n", name, fd, (L)size);
 
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	struct map *map = new_map(dev, NULL);
