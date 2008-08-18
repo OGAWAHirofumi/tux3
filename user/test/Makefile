@@ -30,7 +30,7 @@ dirtest: dir
 inode: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c
 	$(CC) $(CFLAGS) inode.c buffer.c diskio.c -o inode
 inodetest: inode
-	$(VG) $(VGFLAGS) ./inode
+	$(VG) $(VGFLAGS) ./inode foodev
 
 clean:
 	rm -f $(binaries) *.o a.out foodev
