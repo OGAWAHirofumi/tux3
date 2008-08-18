@@ -132,16 +132,24 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 			goto eek;
 		trace(warn("new inode 0x%Lx", inum);)
 		/*
-		 * We know target is less than base inum of succ block (do we?)
-		 * if lie inside actual inum range of this block, or if the block
+		 * search this and successor blocks for a suitable empty inode.
+		 * Find successor ibase to know whether to advance or create
+		 */
+if (0) {
+		tuxkey_t *p = next_key(path, levels), next = p ? *p : MAX_INODES;
+		if (next > inum + sb->max_inodes_per_block) {
+			struct ileaf *ileaf = ileaf_create(sb);
+			ileaf->ibase = inum;
+		}
+}
+
+		/*
+		 * We know target is less than base inum of next block (do we?)
+		 * if lies inside actual inum range of this block, or if the block
 		 * is not too full and within 64 (32?) or so of base then create the
 		 * inode in this block, splitting if necessary.  Otherwise insert
 		 * a new block with inum base aligned down to 64 (32?)
 		 */
-		if (0) {
-			struct ileaf *ileaf = ileaf_create(sb);
-			ileaf->ibase = inum;
-		}
 
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
 		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, levels, &itree_ops);
@@ -200,15 +208,17 @@ int main(int argc, char *argv[])
 	char *name = argv[1];
 	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
 	ftruncate(fd, 1 << 24);
-	size_t size = fdsize64(fd);
-	printf("fd '%s' = %i (0x%zx bytes)\n", name, fd, size);
+	u64 size = 0;
+	if (fdsize64(fd, &size))
+		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
+	printf("fd '%s' = %i (0x%Lx bytes)\n", name, fd, size);
 
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	struct map *map = new_map(dev, NULL);
-
 	struct sb *sb = &(struct sb){
 		.image = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
-		.alloc_per_node = 20,
+		.max_inodes_per_block = 64,
+		.entries_per_node = 20,
 		.devmap = map,
 	};
 

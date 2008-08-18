@@ -95,9 +95,9 @@ struct leafpath { struct buffer *buffer; void *object; };
  * point at the next entry that will be accessed if the path is
  * advanced, which seemed to work out better than pointing right at
  * the element accessed, particularly for mass delete.  On the other
- * hand, the leaf object points right at the object.
+ * hand, the leaf object points right at the object because the object
+ * has not been used yet.
  */
-
 static inline struct bnode *path_node(struct treepath path[], int level)
 {
 	return (struct bnode *)path[level].buffer;
@@ -171,33 +171,40 @@ void show_tree(SB, struct btree_ops *ops)
 
 /* Deletion */
 
+static inline int finished_level(struct treepath path[], int level)
+{
+	struct bnode *node = path_node(path, level);
+	return path[level].next == node->entries + node->count;
+}
+
 static void remove_index(struct treepath path[], int level)
 {
 	struct bnode *node = path_node(path, level);
 	int count = node->count, i;
 
-	// stomps the node count (if 0th key holds count)
+	/* stomps the node count (if 0th key holds count) */
 	memmove(path[level].next - 1, path[level].next,
 		(char *)&node->entries[count] - (char *)path[level].next);
 	node->count = count - 1;
 	--(path[level].next);
 	set_buffer_dirty(path[level].buffer);
 
-	// no pivot for last entry
-	if (path[level].next == node->entries + node->count)
+	/* no separator for last entry */
+	if (finished_level(path, level))
 		return;
-
-	// climb up to common parent and set pivot to deleted key
-	// what if index is now empty? (no deleted key)
-	// then some key above is going to be deleted and used to set pivot
+	/*
+	 * Climb up to common parent and set separating key to deleted key.
+	 * What if index is now empty?  (no deleted key)
+	 * Then some key above is going to be deleted and used to set sep
+	 * Climb the path while at first entry, bail out at root
+	 * find the node with the old sep, set it to deleted key
+	 */
 	if (path[level].next == node->entries && level) {
-		block_t pivot = (path[level].next)->key;
-		/* climb the path while at first entry */
+		block_t sep = (path[level].next)->key;
 		for (i = level - 1; path[i].next - 1 == path_node(path, i)->entries; i--)
-			if (!i) /* bail out at root */
+			if (!i)
 				return;
-		/* found the node with the old pivot, set it to deleted key */
-		(path[i].next - 1)->key = pivot;
+		(path[i].next - 1)->key = sep;
 		set_buffer_dirty(path[i].buffer);
 	}
 }
@@ -217,12 +224,6 @@ static void brelse_free(SB, struct buffer *buffer)
 	}
 	free_block(sb, buffer->index);
 	set_buffer_empty(buffer);
-}
-
-static inline int finished_level(struct treepath path[], int level)
-{
-	struct bnode *node = path_node(path, level);
-	return path[level].next == node->entries + node->count;
 }
 
 typedef u32 tag_t;
@@ -287,7 +288,7 @@ keep_prev_leaf:
 				trace_off(warn("check node %p against %p", this, that););
 				trace_off(warn("this count = %i prev count = %i", this->count, that->count););
 				/* try to merge with node to left */
-				if (this->count <= sb->alloc_per_node - that->count) {
+				if (this->count <= sb->entries_per_node - that->count) {
 					trace(warn(">>> can merge node %p into node %p", this, that););
 					merge_nodes(that, this);
 					remove_index(path, level - 1);
@@ -369,7 +370,7 @@ int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struc
 		struct bnode *parent = parentbuf->data;
 
 		/* insert and exit if not full */
-		if (parent->count < sb->alloc_per_node) {
+		if (parent->count < sb->entries_per_node) {
 			add_child(parent, next, childblock, childkey);
 			set_buffer_dirty(parentbuf);
 			return 0;
@@ -478,7 +479,50 @@ struct btree new_btree(SB, struct btree_ops *ops)
 	return btree;
 }
 
+/*
+ * Climb up the path until we find the first level where we have not yet read
+ * all the way to the end of the index block, there we find the key that
+ * separates the subtree we are in (a leaf) from the next subtree to the right.
+ */
+tuxkey_t *next_key(struct treepath *path, int levels)
+{
+	for (int level = levels; level--;)
+		if (!finished_level(path, level))
+			return &path[level].next->key;
+	return NULL;
+}
+
+int advance(struct inode *inode, struct treepath *path, int levels)
+{
+	int level = levels;
+	struct buffer *buffer = path[level].buffer;
+	struct bnode *node;
+	do {
+		brelse(buffer);
+		buffer = path[--level].buffer;
+		node = buffer->data;
+		printf("pop to level %i, %i of %i nodes\n", level, path[level].next - node->entries, node->count);
+	} while (finished_level(path, level));
+	do {
+		if (!(buffer = bread(inode->map, path[level++].next++->block))) {
+			brelse_path(path, level);
+			return -EIO;
+		}
+		node = buffer->data;
+		path[level] = (struct treepath){ .buffer = buffer, .next = node->entries };
+		printf("push to level %i, %i nodes\n", level, node->count);
+	} while (level < levels);
+	return 0;
+}
+
+#ifndef main
+block_t balloc(SB)
+{
+	return sb->nextalloc++;
+}
+
 int main(int argc, char *argv[])
 {
 	return 0;
 }
+#endif

@@ -57,6 +57,9 @@ struct bleaf
  * 2008-08-06: Beginning of time
  */
 
+
+#define MAX_INODES (1ULL << 48)
+
 struct btree { u64 index; u16 levels, pad[3]; };
 
 struct superblock
@@ -79,12 +82,12 @@ struct sb
 	struct superblock image;
 	char bogopad[4096 - sizeof(struct superblock)];
 	struct map *devmap;
-	u32 alloc_per_node;
 	struct buffer *rootbuf;
 	struct inode *bitmap;
 	unsigned blocksize;
 	block_t freeblocks;
 	block_t nextalloc;
+	unsigned entries_per_node, max_inodes_per_block;
 };
 
 struct inode {

@@ -71,19 +71,14 @@ int streamwrite(int fd, void *data, size_t count)
 	return iorel(fd, data, count, 1);
 }
 
-uint64_t fdsize64(int fd)
+int fdsize64(int fd, uint64_t *size)
 {
-	uint64_t bytes;
 	struct stat stat;
-
-	if (fstat(fd, &stat) == -1)
+	if (fstat(fd, &stat))
 		return -1;
-
-	if (S_ISREG(stat.st_mode))
-		return stat.st_size;
-
-	if (ioctl(fd, BLKGETSIZE64, &bytes))
-		return -1;
-
-	return bytes;
+	if (S_ISREG(stat.st_mode)) {
+		*size = stat.st_size;
+		return 0;
+	}
+	return ioctl(fd, BLKGETSIZE64, size);
 }
