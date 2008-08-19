@@ -410,29 +410,30 @@ int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struc
 	return 0;
 }
 
-void *tree_expand(SB, struct btree *root, u64 target, unsigned more, struct treepath path[], struct btree_ops *ops)
+void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct treepath path[], struct btree_ops *ops)
 {
 	struct buffer *leafbuf = path[root->levels].buffer;
 	set_buffer_dirty(leafbuf);
-	void *space = (ops->leaf_expand)(sb, leafbuf->data, target, more);
+	void *space = (ops->leaf_expand)(sb, leafbuf->data, key, more);
 	if (space)
 		return space;
-
 	trace(warn("split leaf");)
-	struct buffer *childbuf = new_leaf(sb, ops);
-	if (!childbuf) 
+	struct buffer *newbuf = new_leaf(sb, ops);
+	if (!newbuf) 
 		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
-	u64 childkey = (ops->leaf_split)(sb, leafbuf->data, childbuf->data, 0);
-	block_t childblock = childbuf->index;
-	if (target < childkey) {
+	u64 newkey = (ops->leaf_split)(sb, leafbuf->data, newbuf->data, 0);
+	block_t childblock = newbuf->index;
+	printf("key %Li %Li\n", key, newkey);
+	if (key > newkey) {
 		struct buffer *swap = leafbuf;
-		leafbuf = childbuf;
-		childbuf = swap;
+		leafbuf = path[root->levels].buffer = newbuf;
+		newbuf = swap;
 	}
-	brelse_dirty(childbuf);
-	space = (ops->leaf_expand)(sb, leafbuf->data, target, more);
+	brelse_dirty(newbuf);
+	space = (ops->leaf_expand)(sb, leafbuf->data, key, more);
 	assert(space);
-	insert_child(sb, root, childkey, childblock, path, ops); // !!! error return?
+	if (insert_child(sb, root, newkey, childblock, path, ops))
+		return NULL; // error code???
 	return space;
 }
 
