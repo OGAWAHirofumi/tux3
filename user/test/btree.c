@@ -79,29 +79,27 @@ static struct buffer *new_node(SB, struct btree_ops *ops)
 	return buffer;
 }
 
-struct treepath { struct buffer *buffer; struct index_entry *next; };
-
+struct path { struct buffer *buffer; struct index_entry *next; };
 /*
- * A btree path for a btree of depth N consists of N treepath entries
- * and one pathleaf entry.  After a probe the treepath->next fields
- * point at the next entry that will be accessed if the path is
- * advanced, which seemed to work out better than pointing right at
- * the element accessed, particularly for mass delete.  On the other
- * hand, the leaf object points right at the object because the object
- * has not been used yet.
+ * A btree path has n + 1 entries for a btree of depth n, with the first n
+ * entries pointing at internal nodes and entry n + 1 pointing at a leaf.
+ * The next field points at the next index entry that will be loaded in a left
+ * to right tree traversal, not the current entry.  The next pointer is null
+ * for the leaf, which has its own specialized traversal algorithms.
  */
-static inline struct bnode *path_node(struct treepath path[], int level)
+
+static inline struct bnode *path_node(struct path path[], int level)
 {
 	return (struct bnode *)path[level].buffer;
 }
 
-static void brelse_path(struct treepath *path, int levels)
+static void brelse_path(struct path *path, int levels)
 {
 	for (int i = 0; i < levels; i++)
 		brelse(path[i].buffer);
 }
 
-static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path, struct btree_ops *ops)
+static int probe(SB, struct btree *root, tuxkey_t target, struct path *path, struct btree_ops *ops)
 {
 	unsigned i, levels = root->levels;
 	struct buffer *buffer = bread(sb->devmap, root->index);
@@ -114,13 +112,13 @@ static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path,
 		while (++next < top) /* binary search goes here */
 			if (next->key > target)
 				break;
-		path[i] = (struct treepath){ buffer, next };
+		path[i] = (struct path){ buffer, next };
 		if (!(buffer = bread(sb->devmap, (next - 1)->block)))
 			goto eek;
 		node = (struct bnode *)buffer->data;
 	}
 	assert((ops->leaf_sniff)(sb, buffer->data));
-	path[levels] = (struct treepath){ buffer };
+	path[levels] = (struct path){ buffer };
 	return 0;
 eek:
 	brelse_path(path, i - 1);
@@ -163,13 +161,13 @@ void show_tree(SB, struct btree_ops *ops)
 
 /* Deletion */
 
-static inline int finished_level(struct treepath path[], int level)
+static inline int finished_level(struct path path[], int level)
 {
 	struct bnode *node = path_node(path, level);
 	return path[level].next == node->entries + node->count;
 }
 
-static void remove_index(struct treepath path[], int level)
+static void remove_index(struct path path[], int level)
 {
 	struct bnode *node = path_node(path, level);
 	int count = node->count, i;
@@ -230,7 +228,7 @@ int delete_from_leaf(SB, leaf_t *leaf, struct delete_info *info, int *freed)
 int delete_tree_partial(SB, struct btree_ops *ops, struct btree *root, struct delete_info *info, millisecond_t deadline, int maxblocks)
 {
 	int levels = root->levels, level = levels - 1, suspend = 0, freed = 0;
-	struct treepath path[levels + 1], prev[levels + 1];
+	struct path path[levels + 1], prev[levels + 1];
 	struct buffer *leafbuf, *leafprev = NULL;
 	memset(path, 0, sizeof(path));
 
@@ -353,7 +351,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count++;
 }
 
-int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struct treepath path[], struct btree_ops *ops)
+int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struct path path[], struct btree_ops *ops)
 {
 	printf("insert child with key %Lu, tree levels %i\n", (L)childkey, root->levels);
 	int levels = root->levels;
@@ -404,13 +402,13 @@ int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struc
 	newroot->entries[1].block = childblock;
 	root->index = newbuf->index;
 	vecmove(path + 1, path, root->levels++ + 1);
-	path[0] = (struct treepath){ .buffer = newbuf }; // .next = ???
+	path[0] = (struct path){ .buffer = newbuf }; // .next = ???
 	//set_sb_dirty(sb);
 	set_buffer_dirty(newbuf);
 	return 0;
 }
 
-void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct treepath path[], struct btree_ops *ops)
+void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct path path[], struct btree_ops *ops)
 {
 	struct buffer *leafbuf = path[root->levels].buffer;
 	set_buffer_dirty(leafbuf);
@@ -456,7 +454,7 @@ struct btree new_btree(SB, struct btree_ops *ops)
  * all the way to the end of the index block, there we find the key that
  * separates the subtree we are in (a leaf) from the next subtree to the right.
  */
-tuxkey_t *next_key(struct treepath *path, int levels)
+tuxkey_t *next_key(struct path *path, int levels)
 {
 	for (int level = levels; level--;)
 		if (!finished_level(path, level))
@@ -464,7 +462,7 @@ tuxkey_t *next_key(struct treepath *path, int levels)
 	return NULL;
 }
 
-int advance(struct inode *inode, struct treepath *path, int levels)
+int advance(struct inode *inode, struct path *path, int levels)
 {
 	int level = levels;
 	struct buffer *buffer = path[level].buffer;
@@ -481,7 +479,7 @@ int advance(struct inode *inode, struct treepath *path, int levels)
 			return -EIO;
 		}
 		node = buffer->data;
-		path[level] = (struct treepath){ .buffer = buffer, .next = node->entries };
+		path[level] = (struct path){ .buffer = buffer, .next = node->entries };
 		printf("push to level %i, %i nodes\n", level, node->count);
 	} while (level < levels);
 	return 0;
@@ -606,7 +604,7 @@ int main(int argc, char *argv[])
 	}
 
 	struct btree btree = new_btree(sb, &ops);
-	struct treepath path[30];
+	struct path path[30];
 	for (int i = 0; i < 30; i++) {
 		int key = i;
 		if (probe(sb, &btree, key, path, &ops))
