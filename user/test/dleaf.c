@@ -69,23 +69,6 @@ struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
  * the entry list is stored in reverse.
  */
 
-/*
- * file index leaf operations:
- *
- *  1) dump - done
- *  2) check - started
- *  3) lookup - done
- *  4) insert - done
- *  5) split - done
- *  6) merge - done
- *  7) delete - thinking about it
- *  8) create - done
- *  9) destroy - done
- *  10) freespace - done
- *  11) needspace - done
- *  12) fuzztest - started
- */
-
 static inline struct dleaf *to_dleaf(vleaf *leaf)
 {
 	return leaf;
@@ -210,7 +193,7 @@ eek:
 
 void *dleaf_expand(SB, vleaf *base, tuxkey_t key, unsigned size)
 {
-key = key & 0xffffffffffffLL;
+	//key = key & 0xffffffffffffLL;
 	assert(dleaf_sniff(sb, base));
 	struct dleaf *leaf = base;
 	struct group *groups = base + sb->blocksize, *grbase = --groups - leaf->groups;
