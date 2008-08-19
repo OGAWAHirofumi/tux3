@@ -347,7 +347,7 @@ keep_prev_node:
 
 static void add_child(struct bnode *node, struct index_entry *p, block_t child, u64 childkey)
 {
-	memmove(p + 1, p, (char *)(&node->entries[0] + node->count) - (char *)p);
+	vecmove(p + 1, p, node->entries + node->count - p);
 	p->block = child;
 	p->key = childkey;
 	node->count++;
@@ -398,15 +398,15 @@ int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struc
 	if (!newbuf)
 		return -ENOMEM;
 	struct bnode *newroot = newbuf->data;
-
 	newroot->count = 2;
 	newroot->entries[0].block = root->index;
 	newroot->entries[1].key = childkey;
 	newroot->entries[1].block = childblock;
 	root->index = newbuf->index;
-	root->levels++;
+	vecmove(path + 1, path, root->levels++ + 1);
+	path[0] = (struct treepath){ .buffer = newbuf }; // .next = ???
 	//set_sb_dirty(sb);
-	brelse_dirty(newbuf);
+	set_buffer_dirty(newbuf);
 	return 0;
 }
 
@@ -423,7 +423,6 @@ void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct tr
 		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
 	u64 newkey = (ops->leaf_split)(sb, leafbuf->data, newbuf->data, 0);
 	block_t childblock = newbuf->index;
-	printf("key %Li %Li\n", key, newkey);
 	if (key > newkey) {
 		struct buffer *swap = leafbuf;
 		leafbuf = path[root->levels].buffer = newbuf;
@@ -520,9 +519,8 @@ unsigned leaf_free(SB, vleaf *leaf)
 
 void leaf_dump(SB, vleaf *data)
 {
-	assert(leaf_sniff(sb, data));
 	struct leaf *leaf = data;
-	printf("leaf with %i entries:", leaf->count);
+	printf("leaf %p with %i entries:", leaf, leaf->count);
 	struct entry *limit = leaf->entries + leaf->count;
 	for (struct entry *entry = leaf->entries; entry < limit; entry++)
 		printf(" %x -> %x;", entry->key, entry->val);
@@ -596,6 +594,8 @@ int main(int argc, char *argv[])
 	SB = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
 	map->inode = &(struct inode){ .sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
+	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
+	printf("entries_per_node = %i\n", sb->entries_per_node);
 
 	if (0) {
 		struct buffer *buffer = new_leaf(sb, &ops);
@@ -606,16 +606,16 @@ int main(int argc, char *argv[])
 	}
 
 	struct btree btree = new_btree(sb, &ops);
-	for (int i = 0; i < 9; i++) {
+	struct treepath path[30];
+	for (int i = 0; i < 30; i++) {
 		int key = i;
-		struct treepath path[btree.levels + 1];
 		if (probe(sb, &btree, key, path, &ops))
 			error("probe for %i failed", key);
 		struct entry *entry = tree_expand(sb, &btree, key, 1, path, &ops);
 		*entry = (struct entry){ .key = key, .val = key + 0x100 };
-		show_tree_range(sb, &ops, &btree, 0, -1);
-		brelse_path(path, btree.levels);
+		brelse_path(path, btree.levels + 1);
 	}
+	show_tree_range(sb, &ops, &btree, 0, -1);
 	show_buffers(map);
 	return 0;
 }
