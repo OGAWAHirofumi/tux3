@@ -167,7 +167,7 @@ void ileaf_merge(SB, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *ileaf_expand(SB, void *base, inum_t inum, unsigned more)
+void *ileaf_expand(SB, void *base, tuxkey_t inum, unsigned more)
 {
 	assert(ileaf_sniff(sb, base));
 	struct ileaf *leaf = base;

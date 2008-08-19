@@ -91,7 +91,7 @@ static inline struct dleaf *to_dleaf(void *leaf)
 	return leaf;
 }
 
-int leaf_init(SB, void *leaf)
+int dleaf_init(SB, void *leaf)
 {
 	if (!leaf)
 		return -1;
@@ -102,18 +102,18 @@ int leaf_init(SB, void *leaf)
 struct dleaf *leaf_create(SB)
 {
 	struct dleaf *leaf = malloc(sb->blocksize);
-	leaf_init(sb, leaf);
+	dleaf_init(sb, leaf);
 	return leaf;
 }
 
-int leaf_sniff(SB, void *leaf)
+int dleaf_sniff(SB, void *leaf)
 {
 	return (to_dleaf(leaf))->magic == 0x1eaf;
 }
 
 void dleaf_destroy(SB, struct dleaf *leaf)
 {
-	assert(leaf_sniff(sb, leaf));
+	assert(dleaf_sniff(sb, leaf));
 	free(leaf);
 }
 
@@ -208,15 +208,15 @@ eek:
 	return -1;
 }
 
-void *leaf_expand(SB, void *base, block_t target, unsigned size)
+void *dleaf_expand(SB, void *base, tuxkey_t key, unsigned size)
 {
-target = target & 0xffffffffffffLL;
-	assert(leaf_sniff(sb, base));
+key = key & 0xffffffffffffLL;
+	assert(dleaf_sniff(sb, base));
 	struct dleaf *leaf = base;
 	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
-	unsigned loglo = target & 0xffffff, loghi = target >> 24;
+	unsigned loglo = key & 0xffffff, loghi = key >> 24;
 	void *used = leaf->used + (void *)leaf;
 	const int grouplim = 7;
 
@@ -230,7 +230,7 @@ target = target & 0xffffffffffffLL;
 		if (loghi <= group->loghi) {
 			if (loghi < group->loghi)
 				break;
-			//printf("is target in this group?\n");
+			//printf("is key in this group?\n");
 			if (loglo <= (entries - group->count)->loglo)
 				break;
 			//printf("is there another group?\n");
@@ -278,7 +278,7 @@ target = target & 0xffffffffffffLL;
 
 	/* insert new entry if no match  */
 	if (entry == enbase || loglo < entry->loglo) {
-		printf("insert 0x%Lx at %ti in group %ti\n", (L)target, entries - entry, groups - group);
+		printf("insert 0x%Lx at %ti in group %ti\n", (L)key, entries - entry, groups - group);
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
 		unsigned limit = !group->count || entry == entries ? 0 : (entry + 1)->limit;
 		*entry = (struct entry){ .loglo = loglo, .limit = limit };
@@ -303,13 +303,6 @@ target = target & 0xffffffffffffLL;
 	return where;
 }
 
-void dleaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
-{
-	printf("insert 0x%Lx -> 0x%Lx\n", (L)target, (L)extent.block);
-	struct extent *store = leaf_expand(sb, leaf, target, sizeof(extent));
-	*store = extent;
-}
-
 /*
  * Fast path insert
  *
@@ -322,9 +315,9 @@ void dleaf_insert(SB, struct dleaf *leaf, block_t target, struct extent extent)
  *  - decrease used by 4
  */
 
-tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
+tuxkey_t dleaf_split(SB, void *from, void *into, int fudge)
 {
-	assert(leaf_sniff(sb, from));
+	assert(dleaf_sniff(sb, from));
 	struct dleaf *leaf = from, *dest = into;
 	struct group *groups = from + sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -423,12 +416,20 @@ void dleaf_merge(SB, struct dleaf *leaf, struct dleaf *from)
 }
 
 struct btree_ops dtree_ops = {
-	.leaf_sniff = /*(typeof(fieldtype(btree_ops, leaf_sniff)))*/leaf_sniff,
-	.leaf_init = leaf_init,
-	.leaf_split = leaf_split,
-	.leaf_expand = leaf_expand,
+	.leaf_sniff = dleaf_sniff,
+	.leaf_init = dleaf_init,
+	.leaf_split = dleaf_split,
+	.leaf_expand = dleaf_expand,
 	.balloc = balloc,
 };
+
+#ifndef main
+void dleaf_insert(SB, struct dleaf *leaf, block_t key, struct extent extent)
+{
+	printf("insert 0x%Lx -> 0x%Lx\n", (L)key, (L)extent.block);
+	struct extent *store = dleaf_expand(sb, leaf, key, sizeof(extent));
+	*store = extent;
+}
 
 void dleaf_test(SB)
 {
@@ -436,33 +437,33 @@ void dleaf_test(SB)
 	struct dleaf *leaf = leaf_create(sb);
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
-	unsigned targets[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
+	unsigned keys[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
 	for (int i = 0; i < 32; i++)
 		dleaf_insert(sb, leaf, (i << 12) + i, (struct extent){ .block = i });
 	dleaf_dump(sb, leaf);
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x111 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x222 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x333 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x444 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x555 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x666 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x777 });
-	dleaf_insert(sb, leaf, targets[next++], (struct extent){ .block = 0x888 });
-	dleaf_insert(sb, leaf, targets[next], (struct extent){ .block = 0x999 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x111 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x222 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x333 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x444 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x555 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x666 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x777 });
+	dleaf_insert(sb, leaf, keys[next++], (struct extent){ .block = 0x888 });
+	dleaf_insert(sb, leaf, keys[next], (struct extent){ .block = 0x999 });
 	dleaf_dump(sb, leaf);
-	for (int i = 0; i < sizeof(targets) / sizeof(targets[0]); i++) {
-		unsigned target = targets[i];
+	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+		unsigned key = keys[i];
 		unsigned count;
-		void *found = leaf_lookup(sb, leaf, target, &count);
+		void *found = leaf_lookup(sb, leaf, key, &count);
 		if (count) {
-			printf("lookup 0x%x, found [%i] ", target, count );
+			printf("lookup 0x%x, found [%i] ", key, count );
 			hexdump(found, count);
 		} else
-			printf("0x%x not found\n", target);
+			printf("0x%x not found\n", key);
 	}
 
 	struct dleaf *dest = leaf_create(sb);
-	tuxkey_t key = leaf_split(sb, leaf, dest, 0);
+	tuxkey_t key = dleaf_split(sb, leaf, dest, 0);
 	printf("split key 0x%Lx\n", (L)key);
 	dleaf_dump(sb, leaf);
 	dleaf_dump(sb, dest);
@@ -475,7 +476,6 @@ void dleaf_test(SB)
 	dleaf_destroy(sb, dest);
 }
 
-#ifndef main
 block_t balloc(SB)
 {
 	return sb->nextalloc++;

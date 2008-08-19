@@ -512,6 +512,28 @@ int leaf_init(SB, void *leaf)
 	return 0;
 }
 
+unsigned leaf_need(SB, void *leaf)
+{
+	return to_leaf(leaf)->count;
+}
+
+unsigned leaf_free(SB, void *leaf)
+{
+	unsigned max_entries = (struct entry *)(leaf + sb->blocksize) - to_leaf(leaf)->entries;
+	return max_entries - to_leaf(leaf)->count;
+}
+
+void leaf_dump(SB, void *data)
+{
+	assert(leaf_sniff(sb, data));
+	struct leaf *leaf = data;
+	printf("btree leaf with %i entries:", leaf->count);
+	struct entry *limit = leaf->entries + leaf->count;
+	for (struct entry *entry = leaf->entries; entry < limit; entry++)
+		printf(" %x -> %x;", entry->key, entry->val);
+	printf(" %x free\n", leaf_free(sb, leaf));
+}
+
 tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
 {
 	assert(leaf_sniff(sb, from));
@@ -524,28 +546,19 @@ tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
 	return 0;
 }
 
-void *leaf_expand(SB, void *base, inum_t inum, unsigned more)
+void *leaf_expand(SB, void *data, tuxkey_t key, unsigned more)
 {
-	return 0;
-}
+	assert(leaf_sniff(sb, data));
+	struct leaf *leaf = data;
 
-void leaf_dump(SB, void *p)
-{
-	assert(leaf_sniff(sb, p));
-	struct leaf *leaf = p;
-	struct entry *limit = leaf->entries + leaf->count;
-	for (struct entry *entry = leaf->entries; entry < limit; entry++)
-		printf("key %x = %x\n", entry->key, entry->val);
-}
-
-unsigned leaf_need(SB, void *leaf)
-{
-	return 0;
-}
-
-unsigned leaf_free(SB, void *leaf)
-{
-	return 0;
+	if (leaf_free(sb, leaf) < more)
+		return NULL;
+	unsigned at = 0;
+	while (at < leaf->count && leaf->entries[at].key < key)
+		at++;
+	printf("expand leaf at 0x%x by %i\n", at, more);
+	vecmove(leaf->entries + at + more, leaf->entries + at, leaf->count++ - at);
+	return leaf->entries + at;
 }
 
 void leaf_merge(SB, void *into, void *from)
@@ -569,15 +582,26 @@ block_t balloc(SB)
 	return sb->nextalloc++;
 }
 
+void leaf_insert(SB, struct leaf *leaf, unsigned key, unsigned val)
+{
+	printf("insert 0x%x -> 0x%x\n", key, val);
+	struct entry *entry = leaf_expand(sb, leaf, key, 1);
+	*entry = (struct entry){ .key = key, .val = val };
+}
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	struct map *map = new_map(dev, NULL);
-	SB = &(struct sb){ .devmap = map, .blocksize = 4096 };
+	SB = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
 	map->inode = &(struct inode){ .sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
 	struct btree btree = new_btree(sb, &ops);
 	show_tree_range(sb, &ops, &btree, 0, -1);
+	struct buffer *buffer = new_leaf(sb, &ops);
+	for (int i = 0; i < 3; i++)
+		leaf_insert(sb, buffer->data, i, i + 0x100);
+	leaf_dump(sb, buffer->data);
 	return 0;
 }
 #endif
