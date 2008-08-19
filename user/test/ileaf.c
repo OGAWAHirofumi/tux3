@@ -123,7 +123,7 @@ void ileaf_trim(SB, struct ileaf *leaf) {
 		leaf->count = 0;
 }
 
-tuxkey_t ileaf_split(SB, vleaf *from, vleaf *into, int fudge)
+tuxkey_t ileaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
 {
 	assert(ileaf_sniff(sb, from));
 	struct ileaf *leaf = from, *dest = into;
@@ -138,7 +138,7 @@ tuxkey_t ileaf_split(SB, vleaf *from, vleaf *into, int fudge)
 		else
 			hi = mid;
 	}
-	printf("split at %i\n", (sb->blocksize / 2) + fudge);
+	printf("split at %i\n", (sb->blocksize / 2));
 
 	/* should trim leading empty inodes on copy */
 	unsigned split = *(dict - at), free = *(dict - leaf->count);

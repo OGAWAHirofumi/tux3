@@ -111,7 +111,7 @@ typedef void vleaf;
 struct btree_ops {
 	int (*leaf_sniff)(SB, vleaf *leaf);
 	int (*leaf_init)(SB, vleaf *leaf);
-	tuxkey_t (*leaf_split)(SB, vleaf *from, vleaf *into, int fudge);
+	tuxkey_t (*leaf_split)(SB, vleaf *from, vleaf *into, tuxkey_t key);
 	void *(*leaf_expand)(SB, vleaf *leaf, tuxkey_t key, unsigned more);
 	void (*leaf_dump)(SB, vleaf *leaf);
 	unsigned (*leaf_need)(SB, vleaf *leaf);

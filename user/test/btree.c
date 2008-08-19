@@ -419,7 +419,7 @@ void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct pa
 	struct buffer *newbuf = new_leaf(sb, ops);
 	if (!newbuf) 
 		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
-	u64 newkey = (ops->leaf_split)(sb, leafbuf->data, newbuf->data, 0);
+	u64 newkey = (ops->leaf_split)(sb, leafbuf->data, newbuf->data, key);
 	block_t childblock = newbuf->index;
 	if (key > newkey) {
 		struct buffer *swap = leafbuf;
@@ -527,16 +527,19 @@ void uleaf_dump(SB, vleaf *data)
 
 #include "hexdump.c"
 
-tuxkey_t uleaf_split(SB, vleaf *from, vleaf *into, int fudge)
+tuxkey_t uleaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
 {
 	assert(uleaf_sniff(sb, from));
 	struct uleaf *leaf = from;
-	unsigned split = leaf->count / 2, tail = leaf->count - split;
+	unsigned split = leaf->count / 2;
+	if (leaf->count && key > leaf->entries[leaf->count - 1].key) // binsearch!
+		split = leaf->count;
+	unsigned tail = leaf->count - split;
 	uleaf_init(sb, into);
 	veccopy(to_uleaf(into)->entries, leaf->entries + split, tail);
 	to_uleaf(into)->count = tail;
 	leaf->count = split;
-	return leaf->entries[split].key;
+	return leaf->count ? leaf->entries[split].key : key;
 }
 
 void *uleaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)

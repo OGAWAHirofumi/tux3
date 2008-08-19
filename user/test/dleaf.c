@@ -298,7 +298,7 @@ void *dleaf_expand(SB, vleaf *base, tuxkey_t key, unsigned size)
  *  - decrease used by 4
  */
 
-tuxkey_t dleaf_split(SB, vleaf *from, vleaf *into, int fudge)
+tuxkey_t dleaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
 {
 	assert(dleaf_sniff(sb, from));
 	struct dleaf *leaf = from, *dest = into;
@@ -310,7 +310,7 @@ tuxkey_t dleaf_split(SB, vleaf *from, vleaf *into, int fudge)
 	/* find middle in terms of entries - may be unbalanced in extents */
 	for (struct group *group = groups - 1; group >= grbase; group--)
 		encount += group->count;
-	unsigned split = encount / 2 + /* test!!! */fudge;
+	unsigned split = encount / 2;
 	for (struct group *group = groups - 1; group >= grbase; group--, grsplit++) {
 		if (recount + group->count > split)
 			break;
