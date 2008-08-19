@@ -486,64 +486,64 @@ int advance(struct inode *inode, struct path *path, int levels)
 }
 
 #ifndef main
-struct leaf { unsigned count, magic; struct entry { unsigned key, val; } entries[]; };
+struct uleaf { unsigned count, magic; struct entry { unsigned key, val; } entries[]; };
 
-static inline struct leaf *to_leaf(vleaf *leaf)
+static inline struct uleaf *to_uleaf(vleaf *leaf)
 {
 	return leaf;
 }
 
-int leaf_sniff(SB, vleaf *leaf)
+int uleaf_sniff(SB, vleaf *leaf)
 {
-	return to_leaf(leaf)->magic == 0xc0de;
+	return to_uleaf(leaf)->magic == 0xc0de;
 }
 
-int leaf_init(SB, vleaf *leaf)
+int uleaf_init(SB, vleaf *leaf)
 {
-	*to_leaf(leaf) = (struct leaf){ .magic = 0xc0de };
+	*to_uleaf(leaf) = (struct uleaf){ .magic = 0xc0de };
 	return 0;
 }
 
-unsigned leaf_need(SB, vleaf *leaf)
+unsigned uleaf_need(SB, vleaf *leaf)
 {
-	return to_leaf(leaf)->count;
+	return to_uleaf(leaf)->count;
 }
 
-unsigned leaf_free(SB, vleaf *leaf)
+unsigned uleaf_free(SB, vleaf *leaf)
 {
-	unsigned max_entries = (struct entry *)(leaf + sb->blocksize) - to_leaf(leaf)->entries;
-	return max_entries - to_leaf(leaf)->count;
+	unsigned max_entries = (struct entry *)(leaf + sb->blocksize) - to_uleaf(leaf)->entries;
+	return max_entries - to_uleaf(leaf)->count;
 }
 
-void leaf_dump(SB, vleaf *data)
+void uleaf_dump(SB, vleaf *data)
 {
-	struct leaf *leaf = data;
+	struct uleaf *leaf = data;
 	printf("leaf %p with %i entries:", leaf, leaf->count);
 	struct entry *limit = leaf->entries + leaf->count;
 	for (struct entry *entry = leaf->entries; entry < limit; entry++)
 		printf(" %x -> %x;", entry->key, entry->val);
-	printf(" %x free\n", leaf_free(sb, leaf));
+	printf(" %x free\n", uleaf_free(sb, leaf));
 }
 
 #include "hexdump.c"
 
-tuxkey_t leaf_split(SB, vleaf *from, vleaf *into, int fudge)
+tuxkey_t uleaf_split(SB, vleaf *from, vleaf *into, int fudge)
 {
-	assert(leaf_sniff(sb, from));
-	struct leaf *leaf = from;
+	assert(uleaf_sniff(sb, from));
+	struct uleaf *leaf = from;
 	unsigned split = leaf->count / 2, tail = leaf->count - split;
-	leaf_init(sb, into);
-	veccopy(to_leaf(into)->entries, leaf->entries + split, tail);
-	to_leaf(into)->count = tail;
+	uleaf_init(sb, into);
+	veccopy(to_uleaf(into)->entries, leaf->entries + split, tail);
+	to_uleaf(into)->count = tail;
 	leaf->count = split;
 	return leaf->entries[split].key;
 }
 
-void *leaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
+void *uleaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
 {
-	assert(leaf_sniff(sb, data));
-	struct leaf *leaf = data;
-	if (leaf_free(sb, leaf) < more)
+	assert(uleaf_sniff(sb, data));
+	struct uleaf *leaf = data;
+	if (uleaf_free(sb, leaf) < more)
 		return NULL;
 	unsigned at = 0;
 	while (at < leaf->count && leaf->entries[at].key < key)
@@ -553,19 +553,19 @@ void *leaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
 	return leaf->entries + at;
 }
 
-void leaf_merge(SB, vleaf *into, vleaf *from)
+void uleaf_merge(SB, vleaf *into, vleaf *from)
 {
 }
 
 struct btree_ops ops = {
-	.leaf_sniff = leaf_sniff,
-	.leaf_init = leaf_init,
-	.leaf_split = leaf_split,
-	.leaf_expand = leaf_expand,
-	.leaf_dump = leaf_dump,
-	.leaf_need = leaf_need,
-	.leaf_free = leaf_free,
-	.leaf_merge = leaf_merge,
+	.leaf_sniff = uleaf_sniff,
+	.leaf_init = uleaf_init,
+	.leaf_split = uleaf_split,
+	.leaf_expand = uleaf_expand,
+	.leaf_dump = uleaf_dump,
+	.leaf_need = uleaf_need,
+	.leaf_free = uleaf_free,
+	.leaf_merge = uleaf_merge,
 	.balloc = balloc,
 };
 
@@ -574,10 +574,10 @@ block_t balloc(SB)
 	return sb->nextalloc++;
 }
 
-int leaf_insert(SB, struct leaf *leaf, unsigned key, unsigned val)
+int uleaf_insert(SB, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
-	struct entry *entry = leaf_expand(sb, leaf, key, 1);
+	struct entry *entry = uleaf_expand(sb, leaf, key, 1);
 	if (!entry)
 		return 1; // need to expand
 	assert(entry);
@@ -598,8 +598,8 @@ int main(int argc, char *argv[])
 	if (0) {
 		struct buffer *buffer = new_leaf(sb, &ops);
 		for (int i = 0; i < 7; i++)
-			leaf_insert(sb, buffer->data, i, i + 0x100);
-		leaf_dump(sb, buffer->data);
+			uleaf_insert(sb, buffer->data, i, i + 0x100);
+		uleaf_dump(sb, buffer->data);
 		return 0;
 	}
 
