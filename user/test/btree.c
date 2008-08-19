@@ -85,7 +85,7 @@ static struct buffer *blockread(SB, block_t block)
 }
 
 struct treepath { struct buffer *buffer; struct index_entry *next; };
-struct leafpath { struct buffer *buffer; void *object; };
+struct leafpath { struct buffer *buffer; vleaf *object; };
 
 /*
  * A btree path for a btree of depth N consists of N treepath entries
@@ -496,34 +496,34 @@ int advance(struct inode *inode, struct treepath *path, int levels)
 #ifndef main
 struct leaf { unsigned count, magic; struct entry { unsigned key, val; } entries[]; };
 
-static inline struct leaf *to_leaf(void *leaf)
+static inline struct leaf *to_leaf(vleaf *leaf)
 {
 	return leaf;
 }
 
-int leaf_sniff(SB, void *leaf)
+int leaf_sniff(SB, vleaf *leaf)
 {
 	return to_leaf(leaf)->magic == 0xc0de;
 }
 
-int leaf_init(SB, void *leaf)
+int leaf_init(SB, vleaf *leaf)
 {
 	*to_leaf(leaf) = (struct leaf){ .magic = 0xc0de };
 	return 0;
 }
 
-unsigned leaf_need(SB, void *leaf)
+unsigned leaf_need(SB, vleaf *leaf)
 {
 	return to_leaf(leaf)->count;
 }
 
-unsigned leaf_free(SB, void *leaf)
+unsigned leaf_free(SB, vleaf *leaf)
 {
 	unsigned max_entries = (struct entry *)(leaf + sb->blocksize) - to_leaf(leaf)->entries;
 	return max_entries - to_leaf(leaf)->count;
 }
 
-void leaf_dump(SB, void *data)
+void leaf_dump(SB, vleaf *data)
 {
 	assert(leaf_sniff(sb, data));
 	struct leaf *leaf = data;
@@ -534,7 +534,7 @@ void leaf_dump(SB, void *data)
 	printf(" %x free\n", leaf_free(sb, leaf));
 }
 
-tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
+tuxkey_t leaf_split(SB, vleaf *from, vleaf *into, int fudge)
 {
 	assert(leaf_sniff(sb, from));
 	struct leaf *leaf = from;
@@ -546,11 +546,10 @@ tuxkey_t leaf_split(SB, void *from, void *into, int fudge)
 	return 0;
 }
 
-void *leaf_expand(SB, void *data, tuxkey_t key, unsigned more)
+void *leaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
 {
 	assert(leaf_sniff(sb, data));
 	struct leaf *leaf = data;
-
 	if (leaf_free(sb, leaf) < more)
 		return NULL;
 	unsigned at = 0;
@@ -561,7 +560,7 @@ void *leaf_expand(SB, void *data, tuxkey_t key, unsigned more)
 	return leaf->entries + at;
 }
 
-void leaf_merge(SB, void *into, void *from)
+void leaf_merge(SB, vleaf *into, vleaf *from)
 {
 }
 

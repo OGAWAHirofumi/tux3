@@ -86,12 +86,12 @@ struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
  *  12) fuzztest - started
  */
 
-static inline struct dleaf *to_dleaf(void *leaf)
+static inline struct dleaf *to_dleaf(vleaf *leaf)
 {
 	return leaf;
 }
 
-int dleaf_init(SB, void *leaf)
+int dleaf_init(SB, vleaf *leaf)
 {
 	if (!leaf)
 		return -1;
@@ -106,7 +106,7 @@ struct dleaf *leaf_create(SB)
 	return leaf;
 }
 
-int dleaf_sniff(SB, void *leaf)
+int dleaf_sniff(SB, vleaf *leaf)
 {
 	return (to_dleaf(leaf))->magic == 0x1eaf;
 }
@@ -117,7 +117,7 @@ void dleaf_destroy(SB, struct dleaf *leaf)
 	free(leaf);
 }
 
-unsigned leaf_free(SB, void *leaf)
+unsigned leaf_free(SB, vleaf *leaf)
 {
 	return to_dleaf(leaf)->used - to_dleaf(leaf)->free;
 }
@@ -208,16 +208,16 @@ eek:
 	return -1;
 }
 
-void *dleaf_expand(SB, void *base, tuxkey_t key, unsigned size)
+void *dleaf_expand(SB, vleaf *base, tuxkey_t key, unsigned size)
 {
 key = key & 0xffffffffffffLL;
 	assert(dleaf_sniff(sb, base));
 	struct dleaf *leaf = base;
-	struct group *groups = (void *)leaf + sb->blocksize, *grbase = --groups - leaf->groups;
+	struct group *groups = base + sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
 	unsigned loglo = key & 0xffffff, loghi = key >> 24;
-	void *used = leaf->used + (void *)leaf;
+	void *used = leaf->used + base;
 	const int grouplim = 7;
 
 	/* need room for one extent + maybe one group + maybe one entry */
@@ -290,7 +290,7 @@ key = key & 0xffffffffffffLL;
 	/* insert the extent */
 	struct extent *where = extents + entry->limit;
 	printf("limit = %i, free = %i\n", entry->limit, leaf_free(sb, leaf));
-	int tail = (void *)leaf + leaf->free - (void *)where;
+	int tail = base + leaf->free - (void *)where;
 	assert(tail >= 0);
 	memmove(where + 1, where, tail);
 	leaf->free += sizeof(*where);
@@ -315,7 +315,7 @@ key = key & 0xffffffffffffLL;
  *  - decrease used by 4
  */
 
-tuxkey_t dleaf_split(SB, void *from, void *into, int fudge)
+tuxkey_t dleaf_split(SB, vleaf *from, vleaf *into, int fudge)
 {
 	assert(dleaf_sniff(sb, from));
 	struct dleaf *leaf = from, *dest = into;

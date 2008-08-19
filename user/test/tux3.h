@@ -106,17 +106,17 @@ struct file {
 	loff_t f_pos;
 };
 
-struct dleaf;
+typedef void vleaf;
 
 struct btree_ops {
-	int (*leaf_sniff)(SB, void *leaf);
-	int (*leaf_init)(SB, void *leaf);
-	tuxkey_t (*leaf_split)(SB, void *from, void *into, int fudge);
-	void *(*leaf_expand)(SB, void *base, tuxkey_t key, unsigned more);
-	void (*leaf_dump)(SB, void *p);
-	unsigned (*leaf_need)(SB, void *p);
-	unsigned (*leaf_free)(SB, void *p);
-	void (*leaf_merge)(SB, void *into, void *from);
+	int (*leaf_sniff)(SB, vleaf *leaf);
+	int (*leaf_init)(SB, vleaf *leaf);
+	tuxkey_t (*leaf_split)(SB, vleaf *from, vleaf *into, int fudge);
+	void *(*leaf_expand)(SB, vleaf *leaf, tuxkey_t key, unsigned more);
+	void (*leaf_dump)(SB, vleaf *leaf);
+	unsigned (*leaf_need)(SB, vleaf *leaf);
+	unsigned (*leaf_free)(SB, vleaf *leaf);
+	void (*leaf_merge)(SB, vleaf *into, vleaf *from);
 	block_t (*balloc)(SB);
 };
 
