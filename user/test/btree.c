@@ -614,7 +614,9 @@ int main(int argc, char *argv[])
 		struct entry *entry = tree_expand(sb, &btree, key, 1, path, &ops);
 		*entry = (struct entry){ .key = key, .val = key + 0x100 };
 		show_tree_range(sb, &ops, &btree, 0, -1);
+		brelse_path(path, btree.levels);
 	}
+	show_buffers(map);
 	return 0;
 }
 #endif
