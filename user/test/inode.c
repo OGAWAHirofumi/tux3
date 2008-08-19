@@ -64,7 +64,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 		} else {
 			physical = balloc(sb); // !!! need an error return
 			trace(warn("new physical block %Lx", (L)physical);)
-			struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->index, sizeof(struct extent), path, levels, &dtree_ops);
+			struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->index, sizeof(struct extent), path, &dtree_ops);
 			if (!store)
 				goto eek;
 			*store = (struct extent){ .block = physical };
@@ -152,7 +152,7 @@ if (0) {
 		 */
 
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
-		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, levels, &itree_ops);
+		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, &itree_ops);
 		if (!ibase)
 			goto eek2;
 

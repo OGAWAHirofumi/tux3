@@ -79,13 +79,7 @@ static struct buffer *new_node(SB, struct btree_ops *ops)
 	return buffer;
 }
 
-static struct buffer *blockread(SB, block_t block)
-{
-	return bread(sb->devmap, block);
-}
-
 struct treepath { struct buffer *buffer; struct index_entry *next; };
-struct leafpath { struct buffer *buffer; vleaf *object; };
 
 /*
  * A btree path for a btree of depth N consists of N treepath entries
@@ -110,7 +104,7 @@ static void brelse_path(struct treepath *path, int levels)
 static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path, struct btree_ops *ops)
 {
 	unsigned i, levels = root->levels;
-	struct buffer *buffer = blockread(sb, root->index);
+	struct buffer *buffer = bread(sb->devmap, root->index);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = buffer->data;
@@ -121,7 +115,7 @@ static int probe(SB, struct btree *root, tuxkey_t target, struct treepath *path,
 			if (next->key > target)
 				break;
 		path[i] = (struct treepath){ buffer, next };
-		if (!(buffer = blockread(sb, (next - 1)->block)))
+		if (!(buffer = bread(sb->devmap, (next - 1)->block)))
 			goto eek;
 		node = (struct bnode *)buffer->data;
 	}
@@ -141,10 +135,9 @@ static void show_leaf_range(struct btree_ops *ops, struct buffer *buffer, block_
 
 static void show_subtree_range(SB, struct btree_ops *ops, struct bnode *node, block_t start, block_t finish, int levels, int indent)
 {
-	int i;
-
-	for (i = 0; i < node->count; i++) {
-		struct buffer *buffer = blockread(sb, node->entries[i].block);
+	//printf("node %p with %i children\n", node, node->count);
+	for (int i = 0; i < node->count; i++) {
+		struct buffer *buffer = bread(sb->devmap, node->entries[i].block);
 		if (levels)
 			show_subtree_range(sb, ops, buffer->data, start, finish, levels - 1, indent + 3);
 		else {
@@ -156,7 +149,7 @@ static void show_subtree_range(SB, struct btree_ops *ops, struct bnode *node, bl
 
 void show_tree_range(SB, struct btree_ops *ops, struct btree *root, block_t start, block_t finish)
 {
-	struct buffer *buffer = blockread(sb, root->index);
+	struct buffer *buffer = bread(sb->devmap, root->index);
 	if (!buffer)
 		return;
 	show_subtree_range(sb, ops, buffer->data, start, finish, root->levels - 1, 0);
@@ -330,7 +323,7 @@ keep_prev_node:
 
 		/* push back down to leaf level */
 		while (level < levels - 1) {
-			struct buffer *buffer = blockread(sb, path[level++].next++->block);
+			struct buffer *buffer = bread(sb->devmap, path[level++].next++->block);
 			if (!buffer) {
 				brelse(leafprev);
 				brelse_path(path, level - 1);
@@ -343,7 +336,7 @@ keep_prev_node:
 		//dirty_buffer_count_check(sb);
 
 		/* go to next leaf */
-		if (!(leafbuf = blockread(sb, path[level].next++->block))) {
+		if (!(leafbuf = bread(sb->devmap, path[level].next++->block))) {
 			brelse_path(path, level);
 			return -ENOMEM;
 		}
@@ -362,6 +355,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 
 int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struct treepath path[], struct btree_ops *ops)
 {
+	printf("insert child with key %Lu, tree levels %i\n", (L)childkey, root->levels);
 	int levels = root->levels;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
@@ -416,11 +410,11 @@ int insert_child(SB, struct btree *root, u64 childkey, block_t childblock, struc
 	return 0;
 }
 
-void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct treepath path[], unsigned levels, struct btree_ops *ops)
+void *tree_expand(SB, struct btree *root, u64 target, unsigned more, struct treepath path[], struct btree_ops *ops)
 {
-	struct buffer *leafbuf = path[levels].buffer;
+	struct buffer *leafbuf = path[root->levels].buffer;
 	set_buffer_dirty(leafbuf);
-	void *space = (ops->leaf_expand)(sb, leafbuf->data, target, size);
+	void *space = (ops->leaf_expand)(sb, leafbuf->data, target, more);
 	if (space)
 		return space;
 
@@ -436,7 +430,7 @@ void *tree_expand(SB, struct btree *root, u64 target, unsigned size, struct tree
 		childbuf = swap;
 	}
 	brelse_dirty(childbuf);
-	space = (ops->leaf_expand)(sb, leafbuf->data, target, size);
+	space = (ops->leaf_expand)(sb, leafbuf->data, target, more);
 	assert(space);
 	insert_child(sb, root, childkey, childblock, path, ops); // !!! error return?
 	return space;
@@ -527,12 +521,14 @@ void leaf_dump(SB, vleaf *data)
 {
 	assert(leaf_sniff(sb, data));
 	struct leaf *leaf = data;
-	printf("btree leaf with %i entries:", leaf->count);
+	printf("leaf with %i entries:", leaf->count);
 	struct entry *limit = leaf->entries + leaf->count;
 	for (struct entry *entry = leaf->entries; entry < limit; entry++)
 		printf(" %x -> %x;", entry->key, entry->val);
 	printf(" %x free\n", leaf_free(sb, leaf));
 }
+
+#include "hexdump.c"
 
 tuxkey_t leaf_split(SB, vleaf *from, vleaf *into, int fudge)
 {
@@ -540,10 +536,10 @@ tuxkey_t leaf_split(SB, vleaf *from, vleaf *into, int fudge)
 	struct leaf *leaf = from;
 	unsigned split = leaf->count / 2, tail = leaf->count - split;
 	leaf_init(sb, into);
-	veccopy(into, from + split, tail);
+	veccopy(to_leaf(into)->entries, leaf->entries + split, tail);
 	to_leaf(into)->count = tail;
 	leaf->count = split;
-	return 0;
+	return leaf->entries[split].key;
 }
 
 void *leaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
@@ -581,11 +577,15 @@ block_t balloc(SB)
 	return sb->nextalloc++;
 }
 
-void leaf_insert(SB, struct leaf *leaf, unsigned key, unsigned val)
+int leaf_insert(SB, struct leaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
 	struct entry *entry = leaf_expand(sb, leaf, key, 1);
+	if (!entry)
+		return 1; // need to expand
+	assert(entry);
 	*entry = (struct entry){ .key = key, .val = val };
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -595,12 +595,25 @@ int main(int argc, char *argv[])
 	SB = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
 	map->inode = &(struct inode){ .sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
+
+	if (0) {
+		struct buffer *buffer = new_leaf(sb, &ops);
+		for (int i = 0; i < 7; i++)
+			leaf_insert(sb, buffer->data, i, i + 0x100);
+		leaf_dump(sb, buffer->data);
+		return 0;
+	}
+
 	struct btree btree = new_btree(sb, &ops);
-	show_tree_range(sb, &ops, &btree, 0, -1);
-	struct buffer *buffer = new_leaf(sb, &ops);
-	for (int i = 0; i < 3; i++)
-		leaf_insert(sb, buffer->data, i, i + 0x100);
-	leaf_dump(sb, buffer->data);
+	for (int i = 0; i < 9; i++) {
+		int key = i;
+		struct treepath path[btree.levels + 1];
+		if (probe(sb, &btree, key, path, &ops))
+			error("probe for %i failed", key);
+		struct entry *entry = tree_expand(sb, &btree, key, 1, path, &ops);
+		*entry = (struct entry){ .key = key, .val = key + 0x100 };
+		show_tree_range(sb, &ops, &btree, 0, -1);
+	}
 	return 0;
 }
 #endif
