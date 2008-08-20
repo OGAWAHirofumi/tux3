@@ -157,18 +157,18 @@ eek:
 	return -EIO;
 }
 
-void show_tree_range(SB, struct btree_ops *ops, struct btree *root, block_t start, block_t finish)
+void show_tree_range(SB, struct btree_ops *ops, struct btree *root, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree %p at %Li:\n", root->levels, root, root->index);
 	struct path path[30]; // check for overflow!!!
-	if (probe(sb, root, 0, path, ops))
+	if (probe(sb, root, start, path, ops))
 		error("probe for %i failed", 0);
 	struct buffer *buffer;
 	do {
 		buffer = path[root->levels].buffer;
 		assert((ops->leaf_sniff)(sb, buffer->data));
 		(ops->leaf_dump)(sb, buffer->data);
-	} while (advance(buffer->map, path, root->levels));
+	} while (--count && advance(buffer->map, path, root->levels));
 }
 
 void show_tree(SB, struct btree_ops *ops)
