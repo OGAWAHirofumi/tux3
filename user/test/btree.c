@@ -140,50 +140,35 @@ int advance(struct map *map, struct path *path, int levels)
 	do {
 		brelse(buffer);
 		if (!level)
-			return 1;
+			return 0;
 		node = (buffer = path[--level].buffer)->data;
-		printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
+		//printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
 	} while (finished_level(path, level));
 	do {
-		printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
+		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
 		if (!(buffer = bread(map, path[level++].next++->block)))
 			goto eek;
 		node = buffer->data;
 		path[level] = (struct path){ .buffer = buffer, .next = node->entries };
 	} while (level < levels);
-	return 0;
+	return 1;
 eek:
 	brelse_path(path, level);
 	return -EIO;
 }
 
-static void show_leaf_range(struct btree_ops *ops, struct buffer *buffer, block_t start, block_t finish)
-{
-	assert((ops->leaf_sniff)(buffer->map->inode->sb, buffer->data));
-	(ops->leaf_dump)(buffer->map->inode->sb, buffer->data);
-}
-
-static void show_subtree_range(SB, struct btree_ops *ops, struct bnode *node, block_t start, block_t finish, int levels, int indent)
-{
-	//printf("node %p with %i children\n", node, node->count);
-	for (int i = 0; i < node->count; i++) {
-		struct buffer *buffer = bread(sb->devmap, node->entries[i].block);
-		if (levels)
-			show_subtree_range(sb, ops, buffer->data, start, finish, levels - 1, indent + 3);
-		else {
-			show_leaf_range(ops, buffer, start, finish);
-		}
-		brelse(buffer);
-	}
-}
-
 void show_tree_range(SB, struct btree_ops *ops, struct btree *root, block_t start, block_t finish)
 {
-	struct buffer *buffer = bread(sb->devmap, root->index);
-	if (!buffer)
-		return;
-	show_subtree_range(sb, ops, buffer->data, start, finish, root->levels - 1, 0);
-	brelse(buffer);
+	printf("%i level btree %p at %Li:\n", root->levels, root, root->index);
+	struct path path[30]; // check for overflow!!!
+	if (probe(sb, root, 0, path, ops))
+		error("probe for %i failed", 0);
+	struct buffer *buffer;
+	do {
+		buffer = path[root->levels].buffer;
+		assert((ops->leaf_sniff)(sb, buffer->data));
+		(ops->leaf_dump)(sb, buffer->data);
+	} while (advance(buffer->map, path, root->levels));
 }
 
 void show_tree(SB, struct btree_ops *ops)
@@ -525,11 +510,11 @@ unsigned uleaf_free(SB, vleaf *leaf)
 void uleaf_dump(SB, vleaf *data)
 {
 	struct uleaf *leaf = data;
-	printf("leaf %p with %i entries:", leaf, leaf->count);
+	printf("leaf %p/%i:", leaf, leaf->count);
 	struct entry *limit = leaf->entries + leaf->count;
 	for (struct entry *entry = leaf->entries; entry < limit; entry++)
-		printf(" %x -> %x;", entry->key, entry->val);
-	printf(" %x free\n", uleaf_free(sb, leaf));
+		printf(" %x->%x", entry->key, entry->val);
+	printf(" (%x free)\n", uleaf_free(sb, leaf));
 }
 
 #include "hexdump.c"
@@ -624,14 +609,6 @@ int main(int argc, char *argv[])
 		brelse_path(path, btree.levels + 1);
 	}
 	show_tree_range(sb, &ops, &btree, 0, -1);
-	printf("iterative btree dump:\n");
-	if (probe(sb, &btree, 0, path, &ops))
-		error("probe for %i failed", 0);
-	for (int i = 0; i < 30; i++) {
-		uleaf_dump(sb, path[btree.levels].buffer->data);
-		if (advance(map, path, btree.levels))
-			break;
-	}
 	show_buffers(map);
 	return 0;
 }
