@@ -126,6 +126,37 @@ eek:
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
+static inline int finished_level(struct path path[], int level)
+{
+	struct bnode *node = path_node(path, level);
+	return path[level].next == node->entries + node->count;
+}
+
+int advance(struct map *map, struct path *path, int levels)
+{
+	int level = levels;
+	struct buffer *buffer = path[level].buffer;
+	struct bnode *node;
+	do {
+		brelse(buffer);
+		if (!level)
+			return 1;
+		node = (buffer = path[--level].buffer)->data;
+		printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
+	} while (finished_level(path, level));
+	do {
+		printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
+		if (!(buffer = bread(map, path[level++].next++->block)))
+			goto eek;
+		node = buffer->data;
+		path[level] = (struct path){ .buffer = buffer, .next = node->entries };
+	} while (level < levels);
+	return 0;
+eek:
+	brelse_path(path, level);
+	return -EIO;
+}
+
 static void show_leaf_range(struct btree_ops *ops, struct buffer *buffer, block_t start, block_t finish)
 {
 	assert((ops->leaf_sniff)(buffer->map->inode->sb, buffer->data));
@@ -162,10 +193,15 @@ void show_tree(SB, struct btree_ops *ops)
 
 /* Deletion */
 
-static inline int finished_level(struct path path[], int level)
+static void brelse_free(SB, struct buffer *buffer)
 {
-	struct bnode *node = path_node(path, level);
-	return path[level].next == node->entries + node->count;
+	brelse(buffer);
+	if (buffer->count) {
+		warn("free block %Lx still in use!", (long long)buffer->index);
+		return;
+	}
+	free_block(sb, buffer->index);
+	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
 
 static void remove_index(struct path path[], int level)
@@ -204,17 +240,6 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 {
 	memcpy(&node->entries[node->count], &node2->entries[0], node2->count * sizeof(struct index_entry));
 	node->count += node2->count;
-}
-
-static void brelse_free(SB, struct buffer *buffer)
-{
-	brelse(buffer);
-	if (buffer->count) {
-		warn("free block %Lx still in use!", (long long)buffer->index);
-		return;
-	}
-	free_block(sb, buffer->index);
-	set_buffer_empty(buffer);
 }
 
 typedef u32 tag_t;
@@ -465,31 +490,6 @@ tuxkey_t *next_key(struct path *path, int levels)
 		if (!finished_level(path, level))
 			return &path[level].next->key;
 	return NULL;
-}
-
-int advance(struct map *map, struct path *path, int levels)
-{
-	int level = levels;
-	struct buffer *buffer = path[level].buffer;
-	struct bnode *node;
-	do {
-		brelse(buffer);
-		if (!level)
-			return 1;
-		node = (buffer = path[--level].buffer)->data;
-		printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
-	} while (finished_level(path, level));
-	do {
-		printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
-		if (!(buffer = bread(map, path[level++].next++->block)))
-			goto eek;
-		node = buffer->data;
-		path[level] = (struct path){ .buffer = buffer, .next = node->entries };
-	} while (level < levels);
-	return 0;
-eek:
-	brelse_path(path, level);
-	return -EIO;
 }
 
 #ifndef main
