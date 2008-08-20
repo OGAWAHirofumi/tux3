@@ -90,7 +90,7 @@ struct path { struct buffer *buffer; struct index_entry *next; };
 
 static inline struct bnode *path_node(struct path path[], int level)
 {
-	return (struct bnode *)path[level].buffer;
+	return (struct bnode *)path[level].buffer->data;
 }
 
 static void brelse_path(struct path *path, int levels)
@@ -99,7 +99,7 @@ static void brelse_path(struct path *path, int levels)
 		brelse(path[i].buffer);
 }
 
-static int probe(SB, struct btree *root, tuxkey_t target, struct path *path, struct btree_ops *ops)
+static int probe(SB, struct btree *root, tuxkey_t key, struct path *path, struct btree_ops *ops)
 {
 	unsigned i, levels = root->levels;
 	struct buffer *buffer = bread(sb->devmap, root->index);
@@ -110,8 +110,9 @@ static int probe(SB, struct btree *root, tuxkey_t target, struct path *path, str
 	for (i = 0; i < levels; i++) {
 		struct index_entry *next = node->entries, *top = next + node->count;
 		while (++next < top) /* binary search goes here */
-			if (next->key > target)
+			if (next->key > key)
 				break;
+		//printf("probe level %i, %ti of %i\n", i, next - node->entries, node->count);
 		path[i] = (struct path){ buffer, next };
 		if (!(buffer = bread(sb->devmap, (next - 1)->block)))
 			goto eek;
@@ -421,7 +422,8 @@ void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct pa
 		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
 	u64 newkey = (ops->leaf_split)(sb, leafbuf->data, newbuf->data, key);
 	block_t childblock = newbuf->index;
-	if (key > newkey) {
+	trace_off(warn("use upper? %Li %Li", key, newkey);)
+	if (key >= newkey) {
 		struct buffer *swap = leafbuf;
 		leafbuf = path[root->levels].buffer = newbuf;
 		newbuf = swap;
@@ -429,8 +431,11 @@ void *tree_expand(SB, struct btree *root, tuxkey_t key, unsigned more, struct pa
 	brelse_dirty(newbuf);
 	space = (ops->leaf_expand)(sb, leafbuf->data, key, more);
 	assert(space);
-	if (insert_child(sb, root, newkey, childblock, path, ops))
-		return NULL; // error code???
+	int err = insert_child(sb, root, newkey, childblock, path, ops);
+	if (err) {
+		warn("insert_child failed (%s)", strerror(-err));
+		return NULL;
+	}
 	return space;
 }
 
@@ -462,31 +467,33 @@ tuxkey_t *next_key(struct path *path, int levels)
 	return NULL;
 }
 
-int advance(struct inode *inode, struct path *path, int levels)
+int advance(struct map *map, struct path *path, int levels)
 {
 	int level = levels;
 	struct buffer *buffer = path[level].buffer;
 	struct bnode *node;
 	do {
 		brelse(buffer);
-		buffer = path[--level].buffer;
-		node = buffer->data;
-		printf("pop to level %i, %ti of %i nodes\n", level, path[level].next - node->entries, node->count);
+		if (!level)
+			return 1;
+		node = (buffer = path[--level].buffer)->data;
+		printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
 	} while (finished_level(path, level));
 	do {
-		if (!(buffer = bread(inode->map, path[level++].next++->block))) {
-			brelse_path(path, level);
-			return -EIO;
-		}
+		printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
+		if (!(buffer = bread(map, path[level++].next++->block)))
+			goto eek;
 		node = buffer->data;
 		path[level] = (struct path){ .buffer = buffer, .next = node->entries };
-		printf("push to level %i, %i nodes\n", level, node->count);
 	} while (level < levels);
 	return 0;
+eek:
+	brelse_path(path, level);
+	return -EIO;
 }
 
 #ifndef main
-struct uleaf { unsigned count, magic; struct entry { unsigned key, val; } entries[]; };
+struct uleaf { u32 magic, count; struct entry { u32 key, val; } entries[]; };
 
 static inline struct uleaf *to_uleaf(vleaf *leaf)
 {
@@ -531,15 +538,15 @@ tuxkey_t uleaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
 {
 	assert(uleaf_sniff(sb, from));
 	struct uleaf *leaf = from;
-	unsigned split = leaf->count / 2;
+	unsigned at = leaf->count / 2;
 	if (leaf->count && key > leaf->entries[leaf->count - 1].key) // binsearch!
-		split = leaf->count;
-	unsigned tail = leaf->count - split;
+		at = leaf->count;
+	unsigned tail = leaf->count - at;
 	uleaf_init(sb, into);
-	veccopy(to_uleaf(into)->entries, leaf->entries + split, tail);
+	veccopy(to_uleaf(into)->entries, leaf->entries + at, tail);
 	to_uleaf(into)->count = tail;
-	leaf->count = split;
-	return leaf->count ? leaf->entries[split].key : key;
+	leaf->count = at;
+	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
 }
 
 void *uleaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
@@ -617,6 +624,14 @@ int main(int argc, char *argv[])
 		brelse_path(path, btree.levels + 1);
 	}
 	show_tree_range(sb, &ops, &btree, 0, -1);
+	printf("iterative btree dump:\n");
+	if (probe(sb, &btree, 0, path, &ops))
+		error("probe for %i failed", 0);
+	for (int i = 0; i < 30; i++) {
+		uleaf_dump(sb, path[btree.levels].buffer->data);
+		if (advance(map, path, btree.levels))
+			break;
+	}
 	show_buffers(map);
 	return 0;
 }
