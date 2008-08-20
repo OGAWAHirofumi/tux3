@@ -157,17 +157,32 @@ eek:
 	return -EIO;
 }
 
+/*
+ * Climb up the path until we find the first level where we have not yet read
+ * all the way to the end of the index block, there we find the key that
+ * separates the subtree we are in (a leaf) from the next subtree to the right.
+ */
+tuxkey_t *next_key(struct path *path, int levels)
+{
+	for (int level = levels; level--;)
+		if (!finished_level(path, level))
+			return &path[level].next->key;
+	return NULL;
+}
+
 void show_tree_range(SB, struct btree_ops *ops, struct btree *root, tuxkey_t start, unsigned count)
 {
-	printf("%i level btree %p at %Li:\n", root->levels, root, root->index);
+	printf("%i level btree %p at %Li:\n", root->levels, root, (L)root->index);
 	struct path path[30]; // check for overflow!!!
 	if (probe(sb, root, start, path, ops))
-		error("probe for %i failed", 0);
+		error("probe failed for some unknown reason"); // probe should return error!!!
 	struct buffer *buffer;
 	do {
 		buffer = path[root->levels].buffer;
 		assert((ops->leaf_sniff)(sb, buffer->data));
 		(ops->leaf_dump)(sb, buffer->data);
+		//tuxkey_t *next = next_key(path, root->levels);
+		//printf("next key = %Lx:\n", next ? (L)*next : 0);
 	} while (--count && advance(buffer->map, path, root->levels));
 }
 
@@ -462,19 +477,6 @@ struct btree new_btree(SB, struct btree_ops *ops)
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
 	return btree;
-}
-
-/*
- * Climb up the path until we find the first level where we have not yet read
- * all the way to the end of the index block, there we find the key that
- * separates the subtree we are in (a leaf) from the next subtree to the right.
- */
-tuxkey_t *next_key(struct path *path, int levels)
-{
-	for (int level = levels; level--;)
-		if (!finished_level(path, level))
-			return &path[level].next->key;
-	return NULL;
 }
 
 #ifndef main
