@@ -103,8 +103,8 @@ static void release_path(struct path *path, int levels)
 
 static int probe(SB, struct btree *btree, tuxkey_t key, struct path *path, struct btree_ops *ops)
 {
-	unsigned i, levels = btree->levels;
-	struct buffer *buffer = bread(sb->devmap, btree->root);
+	unsigned i, levels = btree->root.levels;
+	struct buffer *buffer = bread(sb->devmap, btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = buffer->data;
@@ -173,23 +173,18 @@ tuxkey_t *next_key(struct path *path, int levels)
 
 void show_tree_range(SB, struct btree_ops *ops, struct btree *btree, tuxkey_t start, unsigned count)
 {
-	printf("%i level btree %p at %Li:\n", btree->levels, btree, (L)btree->root);
+	printf("%i level btree %p at %Li:\n", btree->root.levels, btree, (L)btree->root.block);
 	struct path path[30]; // check for overflow!!!
 	if (probe(sb, btree, start, path, ops))
 		error("probe failed for some unknown reason"); // probe should return error!!!
 	struct buffer *buffer;
 	do {
-		buffer = path[btree->levels].buffer;
+		buffer = path[btree->root.levels].buffer;
 		assert((ops->leaf_sniff)(sb, buffer->data));
 		(ops->leaf_dump)(sb, buffer->data);
 		//tuxkey_t *next = next_key(path, btree->levels);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
-	} while (--count && advance(buffer->map, path, btree->levels));
-}
-
-void show_tree(SB, struct btree_ops *ops)
-{
-	show_tree_range(sb, ops, &sb->image.iroot, 0, -1);
+	} while (--count && advance(buffer->map, path, btree->root.levels));
 }
 
 /* Deletion */
@@ -254,7 +249,7 @@ int delete_from_leaf(SB, leaf_t *leaf, struct delete_info *info, int *freed)
 
 int delete_tree_partial(SB, struct btree_ops *ops, struct btree *btree, struct delete_info *info, millisecond_t deadline, int maxblocks)
 {
-	int levels = btree->levels, level = levels - 1, suspend = 0, freed = 0;
+	int levels = btree->root.levels, level = levels - 1, suspend = 0, freed = 0;
 	struct path path[levels + 1], prev[levels + 1];
 	struct buffer *leafbuf, *leafprev = NULL;
 	memset(path, 0, sizeof(path));
@@ -327,10 +322,10 @@ keep_prev_node:
 			if (!level) { /* remove levels if possible */
 				while (levels > 1 && path_node(prev, 0)->count == 1) {
 					trace_off(warn("drop btree level"););
-					btree->root = prev[1].buffer->index;
+					btree->root.block = prev[1].buffer->index;
 					brelse_free(sb, prev[0].buffer);
 					//dirty_buffer_count_check(sb);
-					levels = --btree->levels;
+					levels = --btree->root.levels;
 					memcpy(prev, prev + 1, levels * sizeof(prev[0]));
 					//set_sb_dirty(sb);
 				}
@@ -381,7 +376,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 int insert_child(SB, struct btree *btree, u64 childkey, block_t childblock, struct path path[], struct btree_ops *ops)
 {
 	trace(printf("insert child with key %Lu, tree levels %i\n", (L)childkey, btree->levels);)
-	int levels = btree->levels;
+	int levels = btree->root.levels;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
 		struct buffer *parentbuf = path[levels].buffer;
@@ -424,11 +419,11 @@ int insert_child(SB, struct btree *btree, u64 childkey, block_t childblock, stru
 		return -ENOMEM;
 	struct bnode *newroot = newbuf->data;
 	newroot->count = 2;
-	newroot->entries[0].block = btree->root;
+	newroot->entries[0].block = btree->root.block;
 	newroot->entries[1].key = childkey;
 	newroot->entries[1].block = childblock;
-	btree->root = newbuf->index;
-	vecmove(path + 1, path, btree->levels++ + 1);
+	btree->root.block = newbuf->index;
+	vecmove(path + 1, path, btree->root.levels++ + 1);
 	path[0] = (struct path){ .buffer = newbuf }; // .next = ???
 	//set_sb_dirty(sb);
 	set_buffer_dirty(newbuf);
@@ -437,7 +432,7 @@ int insert_child(SB, struct btree *btree, u64 childkey, block_t childblock, stru
 
 void *tree_expand(SB, struct btree *btree, tuxkey_t key, unsigned more, struct path path[], struct btree_ops *ops)
 {
-	struct buffer *leafbuf = path[btree->levels].buffer;
+	struct buffer *leafbuf = path[btree->root.levels].buffer;
 	set_buffer_dirty(leafbuf);
 	void *space = (ops->leaf_expand)(sb, leafbuf->data, key, more);
 	if (space)
@@ -451,7 +446,7 @@ void *tree_expand(SB, struct btree *btree, tuxkey_t key, unsigned more, struct p
 	trace_off(warn("use upper? %Li %Li", key, newkey);)
 	if (key >= newkey) {
 		struct buffer *swap = leafbuf;
-		leafbuf = path[btree->levels].buffer = newbuf;
+		leafbuf = path[btree->root.levels].buffer = newbuf;
 		newbuf = swap;
 	}
 	brelse_dirty(newbuf);
@@ -472,7 +467,7 @@ struct btree new_btree(SB, struct btree_ops *ops)
 	struct bnode *root = rootbuf->data;
 	root->entries[0].block = leafbuf->index;
 	root->count = 1;
-	struct btree btree = { .root = rootbuf->index, .levels = 1 };
+	struct btree btree = { .root = { .block = rootbuf->index, .levels = 1 } };
 	printf("root at %Li\n", rootbuf->index);
 	printf("leaf at %Li\n", leafbuf->index);
 	brelse_dirty(rootbuf);
@@ -606,7 +601,7 @@ int main(int argc, char *argv[])
 			error("probe for %i failed", key);
 		struct entry *entry = tree_expand(sb, &btree, key, 1, path, &ops);
 		*entry = (struct entry){ .key = key, .val = key + 0x100 };
-		release_path(path, btree.levels + 1);
+		release_path(path, btree.root.levels + 1);
 	}
 	show_tree_range(sb, &ops, &btree, 0, -1);
 	return 0;

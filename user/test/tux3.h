@@ -52,15 +52,16 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 
 #define MAX_INODES (1ULL << 48)
 
-struct btree { u64 root; u16 levels, entries_per_leaf; };
+struct diskroot { u64 block:48, levels:8, unused:8; };
+struct btree { struct diskroot root; u16 entries_per_leaf; };
 
 struct superblock
 {
 	typeof((char[])SB_MAGIC) magic;
+	struct diskroot itree;
+	struct diskroot ftree;
+	struct diskroot atree;
 	u64 create_time;
-	struct btree iroot;
-	struct btree froot;
-	struct btree aroot;
 	u64 flags;
 	u32 levels;
 	u32 sequence; /* commit block sequence number */
@@ -72,6 +73,9 @@ struct superblock
 struct sb
 {
 	struct superblock image;
+	struct btree itree;
+	struct btree ftree;
+	struct btree atree;
 	char bogopad[4096 - sizeof(struct superblock)];
 	struct map *devmap;
 	struct buffer *rootbuf;
@@ -85,7 +89,7 @@ struct sb
 struct inode {
 	struct sb *sb;
 	struct map *map;
-	struct btree root;
+	struct btree btree;
 	inum_t inum;
 	u64 i_size, i_ctime, i_mtime, i_atime;
 	mode_t i_mode;

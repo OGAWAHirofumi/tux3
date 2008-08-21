@@ -55,7 +55,7 @@ void vleaf_dump(SB, vleaf *data)
 	printf("leaf %p/%i", leaf, leaf->count);
 	struct entry *limit = leaf->entries + leaf->count;
 	for (struct entry *entry = leaf->entries; entry < limit; entry++)
-		printf(" %x@%Li/%u", entry->key, (L)entry->btree.root, entry->btree.levels);
+		printf(" %x@%Li/%u", entry->key, (L)entry->btree.root.block, entry->btree.root.levels);
 	printf(" (%x free)\n", vleaf_free(sb, leaf));
 }
 
@@ -111,7 +111,7 @@ block_t balloc(SB)
 
 int vleaf_insert(SB, struct vleaf *leaf, unsigned key, struct btree *btree)
 {
-	printf("insert 0x%x: 0x%Lx/%i\n", key, btree->root, btree->levels);
+	printf("insert 0x%x: 0x%Lx/%i\n", key, (L)btree->root.block, btree->root.levels);
 	struct entry *entry = vleaf_expand(sb, leaf, key, 1);
 	if (!entry)
 		return 1; // need to expand
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 	if (0) {
 		struct buffer *buffer = new_leaf(sb, &ops);
 		for (int key = 0; key < 7; key++)
-			vleaf_insert(sb, buffer->data, key, &(struct btree){ key + 0x100, 1 });
+			vleaf_insert(sb, buffer->data, key, &(struct btree){ .root = { key + 0x100, 1 } });
 		vleaf_dump(sb, buffer->data);
 		return 0;
 	}
@@ -146,8 +146,8 @@ int main(int argc, char *argv[])
 		if (probe(sb, &btree, key, path, &ops))
 			error("probe for %i failed", key);
 		struct entry *entry = tree_expand(sb, &btree, key, 1, path, &ops);
-		*entry = (struct entry){ .key = key, .btree = { key + 0x100, 1 } };
-		release_path(path, btree.levels + 1);
+		*entry = (struct entry){ .key = key, .btree = { .root = { key + 0x100, 1 } } };
+		release_path(path, btree.root.levels + 1);
 	}
 	show_tree_range(sb, &ops, &btree, 0, -1);
 	show_buffers(map);

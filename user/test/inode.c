@@ -41,14 +41,14 @@ int filemap_blockio(struct buffer *buffer, int write)
 	warn("%s <%Lx:%Lx>", write ? "write" : "read", (L)inode->inum, buffer->index);
 	assert(dev->bits >= 9 && dev->fd);
 
-	int err, levels = inode->root.levels;
+	int err, levels = inode->btree.root.levels;
 	struct path path[levels + 1];
 	if (!levels) {
 		if (write)
 			return -EIO;
 		goto unmapped;
 	}
-	if ((err = probe(sb, &inode->root, buffer->index, path, &dtree_ops)))
+	if ((err = probe(sb, &inode->btree, buffer->index, path, &dtree_ops)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
 	
@@ -64,7 +64,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 		} else {
 			physical = balloc(sb); // !!! need an error return
 			trace(warn("new physical block %Lx", (L)physical);)
-			struct extent *store = tree_expand(sb, &sb->image.iroot, buffer->index, sizeof(struct extent), path, &dtree_ops);
+			struct extent *store = tree_expand(sb, &sb->itree, buffer->index, sizeof(struct extent), path, &dtree_ops);
 			if (!store)
 				goto eek;
 			*store = (struct extent){ .block = physical };
@@ -111,9 +111,9 @@ struct inode *new_inode(SB, inum_t inum, struct create *create)
 
 struct inode *open_inode(SB, inum_t inum, struct create *create)
 {
-	int err = -ENOENT, levels = sb->image.iroot.levels;
+	int err = -ENOENT, levels = sb->itree.root.levels;
 	struct path path[levels + 1];
-	if ((err = probe(sb, &sb->image.iroot, inum, path, &itree_ops)))
+	if ((err = probe(sb, &sb->itree, inum, path, &itree_ops)))
 		return NULL;
 	struct buffer *leafbuf = path[levels].buffer;
 	
@@ -152,15 +152,15 @@ if (0) {
 		 */
 
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
-		ibase = tree_expand(sb, &sb->image.iroot, inum, size, path, &itree_ops);
+		ibase = tree_expand(sb, &sb->itree, inum, size, path, &itree_ops);
 		if (!ibase)
 			goto eek2;
 
 		inode = new_inode(sb, inum, create);
-		inode->root = new_btree(sb, &dtree_ops);
+		inode->btree = new_btree(sb, &dtree_ops);
 
 		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
-		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .btree = inode->root };
+		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .btree = inode->btree };
 		*(typeof(attr1) *)ibase = attr1;
 		*(typeof(attr2) *)(ibase + sizeof(attr2)) = attr2;
 	}
@@ -198,8 +198,8 @@ void init_tux3(SB)
 	sb->bitmap = bitmap;
 	sb->image.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->image.blockbits;
-	sb->image.iroot = new_btree(sb, &itree_ops);
-	bitmap->root = new_btree(sb, &dtree_ops);
+	sb->itree = new_btree(sb, &itree_ops);
+	bitmap->btree = new_btree(sb, &dtree_ops);
 }
 
 struct inode *tuxopen(struct inode *dir, char *name, int len, inum_t inum, struct create *create)
