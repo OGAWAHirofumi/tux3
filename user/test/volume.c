@@ -45,8 +45,7 @@ unsigned vleaf_need(BTREE, vleaf *leaf)
 
 unsigned vleaf_free(BTREE, vleaf *leaf)
 {
-	unsigned max_entries = (struct entry *)(leaf + btree->sb->blocksize) - to_vleaf(leaf)->entries;
-	return max_entries - to_vleaf(leaf)->count;
+	return btree->entries_per_leaf - to_vleaf(leaf)->count;
 }
 
 void vleaf_dump(BTREE, vleaf *data)

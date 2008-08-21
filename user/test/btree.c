@@ -502,8 +502,7 @@ unsigned uleaf_need(BTREE, vleaf *leaf)
 
 unsigned uleaf_free(BTREE, vleaf *leaf)
 {
-	unsigned max_entries = (struct entry *)(leaf + btree->sb->blocksize) - to_uleaf(leaf)->entries;
-	return max_entries - to_uleaf(leaf)->count;
+	return btree->entries_per_leaf - to_uleaf(leaf)->count;
 }
 
 void uleaf_dump(BTREE, vleaf *data)
@@ -587,6 +586,7 @@ int main(int argc, char *argv[])
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = new_btree(sb, &ops);
+	btree.entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct entry);
 
 	if (0) {
 		struct buffer *buffer = new_leaf(&btree);
