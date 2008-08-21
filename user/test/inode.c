@@ -48,7 +48,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 			return -EIO;
 		goto unmapped;
 	}
-	if ((err = probe(sb, &inode->btree, buffer->index, path, &dtree_ops)))
+	if ((err = probe(&inode->btree, buffer->index, path)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
 	
@@ -113,7 +113,7 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 {
 	int err = -ENOENT, levels = sb->itree.root.levels;
 	struct path path[levels + 1];
-	if ((err = probe(sb, &sb->itree, inum, path, &itree_ops)))
+	if ((err = probe(&sb->itree, inum, path)))
 		return NULL;
 	struct buffer *leafbuf = path[levels].buffer;
 	
