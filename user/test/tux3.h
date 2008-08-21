@@ -53,7 +53,13 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 #define MAX_INODES (1ULL << 48)
 
 struct diskroot { u64 block:48, levels:8, unused:8; };
-struct btree { struct diskroot root; u16 entries_per_leaf; };
+
+struct btree {
+	struct sb *sb;
+	struct btree_ops *ops;
+	struct diskroot root;
+	u16 entries_per_leaf;
+};
 
 struct superblock
 {
@@ -104,15 +110,17 @@ struct file {
 
 typedef void vleaf;
 
+#define BTREE struct btree *btree
+
 struct btree_ops {
-	int (*leaf_sniff)(SB, vleaf *leaf);
-	int (*leaf_init)(SB, vleaf *leaf);
-	tuxkey_t (*leaf_split)(SB, vleaf *from, vleaf *into, tuxkey_t key);
-	void *(*leaf_expand)(SB, vleaf *leaf, tuxkey_t key, unsigned more);
-	void (*leaf_dump)(SB, vleaf *leaf);
-	unsigned (*leaf_need)(SB, vleaf *leaf);
-	unsigned (*leaf_free)(SB, vleaf *leaf);
-	void (*leaf_merge)(SB, vleaf *into, vleaf *from);
+	int (*leaf_sniff)(BTREE, vleaf *leaf);
+	int (*leaf_init)(BTREE, vleaf *leaf);
+	tuxkey_t (*leaf_split)(BTREE, vleaf *from, vleaf *into, tuxkey_t key);
+	void *(*leaf_expand)(BTREE, vleaf *leaf, tuxkey_t key, unsigned more);
+	void (*leaf_dump)(BTREE, vleaf *leaf);
+	unsigned (*leaf_need)(BTREE, vleaf *leaf);
+	unsigned (*leaf_free)(BTREE, vleaf *leaf);
+	void (*leaf_merge)(BTREE, vleaf *into, vleaf *from);
 	block_t (*balloc)(SB);
 };
 

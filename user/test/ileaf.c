@@ -26,49 +26,49 @@ struct ileaf { u16 magic, count; inum_t ibase; char table[]; };
  * leaf->ibase, the base inum of the table block.
  */
 
-int ileaf_init(SB, vleaf *leaf)
+int ileaf_init(BTREE, vleaf *leaf)
 {
 	printf("initialize inode leaf %p\n", leaf);
 	*(struct ileaf *)leaf = (struct ileaf){ 0x90de };
 	return 0;
 }
 
-struct ileaf *ileaf_create(SB)
+struct ileaf *ileaf_create(BTREE)
 {
-	struct ileaf *ileaf = malloc(sb->blocksize);
-	ileaf_init(sb, ileaf);
+	struct ileaf *ileaf = malloc(btree->sb->blocksize);
+	ileaf_init(btree, ileaf);
 	return ileaf;
 }
 
-int ileaf_sniff(SB, vleaf *leaf)
+int ileaf_sniff(BTREE, vleaf *leaf)
 {
 	return ((struct ileaf *)leaf)->magic == 0x90de;
 }
 
-void ileaf_destroy(SB, struct ileaf *leaf)
+void ileaf_destroy(BTREE, struct ileaf *leaf)
 {
-	assert(ileaf_sniff(sb, leaf));
+	assert(ileaf_sniff(btree, leaf));
 	free(leaf);
 }
 
-unsigned ileaf_need(SB, vleaf *vleaf)
+unsigned ileaf_need(BTREE, vleaf *vleaf)
 {
 	struct ileaf *leaf = vleaf;
-	u16 *dict = vleaf + sb->blocksize, *base = dict - leaf->count;
+	u16 *dict = vleaf + btree->sb->blocksize, *base = dict - leaf->count;
 	return (void *)dict - (void *)base + base == dict ? 0 : *base ;
 }
 
-unsigned ileaf_free(SB, vleaf *vleaf)
+unsigned ileaf_free(BTREE, vleaf *vleaf)
 {
 	struct ileaf *leaf = vleaf;
-	return sb->blocksize - ileaf_need(sb, leaf) - sizeof(struct ileaf);
+	return btree->sb->blocksize - ileaf_need(btree, leaf) - sizeof(struct ileaf);
 }
 
-void ileaf_dump(SB, vleaf *vleaf)
+void ileaf_dump(BTREE, vleaf *vleaf)
 {
 	struct ileaf *leaf = vleaf;
-	u16 *dict = vleaf + sb->blocksize, offset = 0, inum = leaf->ibase;
-	printf("%i inodes, %i free:\n", leaf->count, ileaf_free(sb, leaf));
+	u16 *dict = vleaf + btree->sb->blocksize, offset = 0, inum = leaf->ibase;
+	printf("%i inodes, %i free:\n", leaf->count, ileaf_free(btree, leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
 		int limit = dict[i], size = limit - offset;
@@ -84,7 +84,7 @@ void ileaf_dump(SB, vleaf *vleaf)
 	}
 }
 
-void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *result)
+void *ileaf_lookup(BTREE, struct ileaf *leaf, inum_t inum, unsigned *result)
 {
 	assert(inum >= leaf->ibase);
 	inum_t at = inum - leaf->ibase;
@@ -93,7 +93,7 @@ void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *result)
 	unsigned size = 0;
 	void *attrs = NULL;
 	if (at < leaf->count) {
-		u16 *dict = (void *)leaf + sb->blocksize;
+		u16 *dict = (void *)leaf + btree->	sb->blocksize;
 		unsigned offset = at ? *(dict - at) : 0;
 		size = *(dict - at - 1) - offset;
 		if (size)
@@ -103,7 +103,7 @@ void *ileaf_lookup(SB, struct ileaf *leaf, inum_t inum, unsigned *result)
 	return attrs;
 }
 
-int ileaf_check(SB, struct ileaf *leaf)
+int ileaf_check(BTREE, struct ileaf *leaf)
 {
 	char *why;
 	why = "not an inode table leaf";
@@ -115,30 +115,30 @@ eek:
 	return -1;
 }
 
-void ileaf_trim(SB, struct ileaf *leaf) {
-	u16 *dict = (void *)leaf + sb->blocksize;
+void ileaf_trim(BTREE, struct ileaf *leaf) {
+	u16 *dict = (void *)leaf + btree->sb->blocksize;
 	while (leaf->count > 1 && *(dict - leaf->count) == *(dict - leaf->count + 1))
 		leaf->count--;
 	if (leaf->count == 1 && !*(dict - 1))
 		leaf->count = 0;
 }
 
-tuxkey_t ileaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
+tuxkey_t ileaf_split(BTREE, vleaf *from, vleaf *into, tuxkey_t key)
 {
-	assert(ileaf_sniff(sb, from));
+	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
-	u16 *dict = from + sb->blocksize, *destdict = into + sb->blocksize;
+	u16 *dict = from + btree->sb->blocksize, *destdict = into + btree->sb->blocksize;
 
 	/* binsearch inum nearest middle */
 	unsigned at = 1, hi = leaf->count;
 	while (at < hi) {
 		int mid = (at + hi) / 2;
-		if (*(dict - mid) < (sb->blocksize / 2))
+		if (*(dict - mid) < (btree->sb->blocksize / 2))
 			at = mid + 1;
 		else
 			hi = mid;
 	}
-	printf("split at %i\n", (sb->blocksize / 2));
+	printf("split at %i\n", (btree->sb->blocksize / 2));
 
 	/* should trim leading empty inodes on copy */
 	unsigned split = *(dict - at), free = *(dict - leaf->count);
@@ -152,15 +152,15 @@ tuxkey_t ileaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
 	dest->ibase = leaf->ibase + at;
 	leaf->count = at;
 	memset(leaf->table + split, 0, (char *)(dict - leaf->count) - (leaf->table + split));
-	ileaf_trim(sb, leaf);
+	ileaf_trim(btree, leaf);
 	return dest->ibase;
 }
 
-void ileaf_merge(SB, struct ileaf *leaf, struct ileaf *from)
+void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 {
 	if (!from->count)
 		return;
-	u16 *dict = (void *)leaf + sb->blocksize, *fromdict = (void *)from + sb->blocksize;
+	u16 *dict = (void *)leaf + btree->sb->blocksize, *fromdict = (void *)from + btree->sb->blocksize;
 	unsigned at = leaf->count, free = at ? *(dict - at) : 0;
 	unsigned size = from->count ? *(fromdict - from->count) : 0;
 	printf("copy in %i bytes %i %i\n", size, at + 1, at + from->count);
@@ -170,12 +170,12 @@ void ileaf_merge(SB, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *ileaf_expand(SB, vleaf *base, tuxkey_t inum, unsigned more)
+void *ileaf_expand(BTREE, vleaf *base, tuxkey_t inum, unsigned more)
 {
-	assert(ileaf_sniff(sb, base));
+	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
 	assert(inum >= leaf->ibase);
-	u16 *dict = base + sb->blocksize;
+	u16 *dict = base + btree->sb->blocksize;
 	unsigned at = inum - leaf->ibase;
 
 	/* extend with empty inodes */
@@ -194,11 +194,11 @@ void *ileaf_expand(SB, vleaf *base, tuxkey_t inum, unsigned more)
 	return attrs;
 }
 
-inum_t find_empty_inode(SB, struct ileaf *leaf, inum_t start)
+inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t start)
 {
 	assert(start >= leaf->ibase);
 	start -= leaf->ibase;
-	u16 *dict = (void *)leaf + sb->blocksize;
+	u16 *dict = (void *)leaf + btree->sb->blocksize;
 	unsigned i, offset = start && start < leaf->count ? *(dict - start) : 0;
 	for (i = start; i < leaf->count; i++) {
 		unsigned limit = *(dict - i - 1);
@@ -217,12 +217,12 @@ struct btree_ops itree_ops = {
 	.balloc = balloc,
 };
 
-void test_append(SB, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+void test_append(BTREE, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	unsigned size = 0;
-	char *inode = ileaf_lookup(sb, leaf, inum, &size);
+	char *inode = ileaf_lookup(btree, leaf, inum, &size);
 	printf("inode size = %i\n", size);
-	inode = ileaf_expand(sb, leaf, inum, more);
+	inode = ileaf_expand(btree, leaf, inum, more);
 	memset(inode + size, fill, more);
 }
 
@@ -234,31 +234,32 @@ block_t balloc(SB)
 
 int main(int argc, char *argv[])
 {
-	SB = &(struct sb){ .blocksize = 4096 };
 	printf("--- test inode table leaf methods ---\n");
-	struct ileaf *leaf = ileaf_create(sb);
-	struct ileaf *dest = ileaf_create(sb);
-	ileaf_dump(sb, leaf);
-	test_append(sb, leaf, 3, 2, 'a');
-	test_append(sb, leaf, 4, 4, 'b');
-	test_append(sb, leaf, 6, 6, 'c');
-	ileaf_dump(sb, leaf);
-	ileaf_split(sb, leaf, dest, -(sb->blocksize / 2));
-	ileaf_dump(sb, leaf);
-	ileaf_dump(sb, dest);
-	ileaf_merge(sb, leaf, dest);
-	ileaf_dump(sb, leaf);
-	test_append(sb, leaf, 3, 3, 'x');
-	ileaf_dump(sb, leaf);
-	test_append(sb, leaf, 8, 3, 'y');
-	ileaf_dump(sb, leaf);
+	SB = &(struct sb){ .blocksize = 4096 };
+	struct btree *btree = &(struct btree){ .sb = sb, .ops = &itree_ops };
+	struct ileaf *leaf = ileaf_create(btree);
+	struct ileaf *dest = ileaf_create(btree);
+	ileaf_dump(btree, leaf);
+	test_append(btree, leaf, 3, 2, 'a');
+	test_append(btree, leaf, 4, 4, 'b');
+	test_append(btree, leaf, 6, 6, 'c');
+	ileaf_dump(btree, leaf);
+	ileaf_split(btree, leaf, dest, -(btree->sb->blocksize / 2));
+	ileaf_dump(btree, leaf);
+	ileaf_dump(btree, dest);
+	ileaf_merge(btree, leaf, dest);
+	ileaf_dump(btree, leaf);
+	test_append(btree, leaf, 3, 3, 'x');
+	ileaf_dump(btree, leaf);
+	test_append(btree, leaf, 8, 3, 'y');
+	ileaf_dump(btree, leaf);
 	unsigned size = 0;
-	char *inode = ileaf_lookup(sb, leaf, 3, &size);
+	char *inode = ileaf_lookup(btree, leaf, 3, &size);
 	hexdump(inode, size);
 	for (int i = 0; i <= 10; i++)
-		printf("goal %i, free: %Lu\n", i, (L)find_empty_inode(sb, leaf, i));
-	ileaf_destroy(sb, leaf);
-	ileaf_destroy(sb, dest);
+		printf("goal %i, free: %Lu\n", i, (L)find_empty_inode(btree, leaf, i));
+	ileaf_destroy(btree, leaf);
+	ileaf_destroy(btree, dest);
 	return 0;
 }
 #endif

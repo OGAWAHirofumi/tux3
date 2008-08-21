@@ -53,8 +53,8 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct buffer *leafbuf = path[levels].buffer;
 	
 	unsigned count = 0;
-	struct extent *found = leaf_lookup(sb, leafbuf->data, buffer->index, &count);
-	dleaf_dump(sb, leafbuf->data);
+	struct extent *found = leaf_lookup(&inode->btree, leafbuf->data, buffer->index, &count);
+	dleaf_dump(&inode->btree, leafbuf->data);
 	block_t physical;
 
 	if (write) {
@@ -64,7 +64,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 		} else {
 			physical = balloc(sb); // !!! need an error return
 			trace(warn("new physical block %Lx", (L)physical);)
-			struct extent *store = tree_expand(sb, &sb->itree, buffer->index, sizeof(struct extent), path, &dtree_ops);
+			struct extent *store = tree_expand(&inode->btree, buffer->index, sizeof(struct extent), path);
 			if (!store)
 				goto eek;
 			*store = (struct extent){ .block = physical };
@@ -119,7 +119,7 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 	
 	struct inode *inode = NULL;
 	unsigned size = 0;
-	void *ibase = ileaf_lookup(sb, leafbuf->data, inum, &size);
+	void *ibase = ileaf_lookup(&sb->itree, leafbuf->data, inum, &size);
 	//ileaf_dump(sb, leafbuf->data);
 
 	if (size) {
@@ -138,7 +138,7 @@ struct inode *open_inode(SB, inum_t inum, struct create *create)
 if (0) {
 		tuxkey_t *p = next_key(path, levels), next = p ? *p : MAX_INODES;
 		if (next > inum + sb->max_inodes_per_block) {
-			struct ileaf *ileaf = ileaf_create(sb);
+			struct ileaf *ileaf = ileaf_create(&sb->itree);
 			ileaf->ibase = inum;
 		}
 }
@@ -152,7 +152,7 @@ if (0) {
 		 */
 
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
-		ibase = tree_expand(sb, &sb->itree, inum, size, path, &itree_ops);
+		ibase = tree_expand(&sb->itree, inum, size, path);
 		if (!ibase)
 			goto eek2;
 

@@ -27,58 +27,58 @@ static inline struct vleaf *to_vleaf(vleaf *leaf)
 	return leaf;
 }
 
-int vleaf_sniff(SB, vleaf *leaf)
+int vleaf_sniff(BTREE, vleaf *leaf)
 {
 	return to_vleaf(leaf)->magic == 0x2008;
 }
 
-int vleaf_init(SB, vleaf *leaf)
+int vleaf_init(BTREE, vleaf *leaf)
 {
 	*to_vleaf(leaf) = (struct vleaf){ .magic = 0x2008 };
 	return 0;
 }
 
-unsigned vleaf_need(SB, vleaf *leaf)
+unsigned vleaf_need(BTREE, vleaf *leaf)
 {
 	return to_vleaf(leaf)->count;
 }
 
-unsigned vleaf_free(SB, vleaf *leaf)
+unsigned vleaf_free(BTREE, vleaf *leaf)
 {
-	unsigned max_entries = (struct entry *)(leaf + sb->blocksize) - to_vleaf(leaf)->entries;
+	unsigned max_entries = (struct entry *)(leaf + btree->sb->blocksize) - to_vleaf(leaf)->entries;
 	return max_entries - to_vleaf(leaf)->count;
 }
 
-void vleaf_dump(SB, vleaf *data)
+void vleaf_dump(BTREE, vleaf *data)
 {
 	struct vleaf *leaf = data;
 	printf("leaf %p/%i", leaf, leaf->count);
 	struct entry *limit = leaf->entries + leaf->count;
 	for (struct entry *entry = leaf->entries; entry < limit; entry++)
 		printf(" %x@%Li/%u", entry->key, (L)entry->btree.root.block, entry->btree.root.levels);
-	printf(" (%x free)\n", vleaf_free(sb, leaf));
+	printf(" (%x free)\n", vleaf_free(btree, leaf));
 }
 
-tuxkey_t vleaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
+tuxkey_t vleaf_split(BTREE, vleaf *from, vleaf *into, tuxkey_t key)
 {
-	assert(vleaf_sniff(sb, from));
+	assert(vleaf_sniff(btree, from));
 	struct vleaf *leaf = from;
 	unsigned at = leaf->count / 2;
 	if (leaf->count && key > leaf->entries[leaf->count - 1].key) // binsearch!
 		at = leaf->count;
 	unsigned tail = leaf->count - at;
-	vleaf_init(sb, into);
+	vleaf_init(btree, into);
 	veccopy(to_vleaf(into)->entries, leaf->entries + at, tail);
 	to_vleaf(into)->count = tail;
 	leaf->count = at;
 	return at < leaf->count ? to_vleaf(into)->entries[0].key : key;
 }
 
-void *vleaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
+void *vleaf_expand(BTREE, vleaf *data, tuxkey_t key, unsigned more)
 {
-	assert(vleaf_sniff(sb, data));
+	assert(vleaf_sniff(btree, data));
 	struct vleaf *leaf = data;
-	if (vleaf_free(sb, leaf) < more)
+	if (vleaf_free(btree, leaf) < more)
 		return NULL;
 	unsigned at = 0;
 	while (at < leaf->count && leaf->entries[at].key < key)
@@ -88,7 +88,7 @@ void *vleaf_expand(SB, vleaf *data, tuxkey_t key, unsigned more)
 	return leaf->entries + at;
 }
 
-void vleaf_merge(SB, vleaf *into, vleaf *from)
+void vleaf_merge(BTREE, vleaf *into, vleaf *from)
 {
 }
 
@@ -112,7 +112,7 @@ block_t balloc(SB)
 int vleaf_insert(SB, struct vleaf *leaf, unsigned key, struct btree *btree)
 {
 	printf("insert 0x%x: 0x%Lx/%i\n", key, (L)btree->root.block, btree->root.levels);
-	struct entry *entry = vleaf_expand(sb, leaf, key, 1);
+	struct entry *entry = vleaf_expand(btree, leaf, key, 1);
 	if (!entry)
 		return 1; // need to expand
 	assert(entry);
@@ -130,14 +130,6 @@ int main(int argc, char *argv[])
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 
-	if (0) {
-		struct buffer *buffer = new_leaf(sb, &ops);
-		for (int key = 0; key < 7; key++)
-			vleaf_insert(sb, buffer->data, key, &(struct btree){ .root = { key + 0x100, 1 } });
-		vleaf_dump(sb, buffer->data);
-		return 0;
-	}
-
 	struct btree btree = new_btree(sb, &ops);
 	struct path path[30];
 	btree.entries_per_leaf = (sb->blocksize - offsetof(struct vleaf, entries)) / sizeof(struct entry);
@@ -145,7 +137,7 @@ int main(int argc, char *argv[])
 	for (int key = 0; key < 10; key++) {
 		if (probe(sb, &btree, key, path, &ops))
 			error("probe for %i failed", key);
-		struct entry *entry = tree_expand(sb, &btree, key, 1, path, &ops);
+		struct entry *entry = tree_expand(&btree, key, 1, path);
 		*entry = (struct entry){ .key = key, .btree = { .root = { key + 0x100, 1 } } };
 		release_path(path, btree.root.levels + 1);
 	}
