@@ -40,14 +40,6 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 	bitmap[bit >> 3] &= ~(1 << (bit & 7));
 }
 
-struct bleaf
-{
-	le_u16 magic, version;
-	le_u32 count;
-	le_u64 using_mask;
-	struct etree_map { le_u32 offset; le_u32 block; } map[];
-};
-
 #define SB struct sb *sb
 #define SB_MAGIC { 't', 'e', 's', 't', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
 /*
@@ -60,7 +52,7 @@ struct bleaf
 
 #define MAX_INODES (1ULL << 48)
 
-struct btree { u64 index; u16 levels, pad[3]; };
+struct btree { u64 root; u16 levels, entries_per_leaf; };
 
 struct superblock
 {

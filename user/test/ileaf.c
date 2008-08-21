@@ -133,7 +133,7 @@ tuxkey_t ileaf_split(SB, vleaf *from, vleaf *into, tuxkey_t key)
 	unsigned at = 1, hi = leaf->count;
 	while (at < hi) {
 		int mid = (at + hi) / 2;
-		if (*(dict - mid) < (sb->blocksize / 2) + fudge)
+		if (*(dict - mid) < (sb->blocksize / 2))
 			at = mid + 1;
 		else
 			hi = mid;

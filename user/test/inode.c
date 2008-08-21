@@ -69,11 +69,11 @@ int filemap_blockio(struct buffer *buffer, int write)
 				goto eek;
 			*store = (struct extent){ .block = physical };
 		}
-		brelse_path(path, levels);
+		release_path(path, levels);
 		return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 	}
 	/* read */
-	brelse_path(path, levels);
+	release_path(path, levels);
 	if (!count)
 		goto unmapped;
 	physical = found->block;
@@ -82,7 +82,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 eek:
 	warn("unable to add extent to tree: %s", strerror(-err));
 	free_block(sb, physical);
-	brelse_path(path, levels);
+	release_path(path, levels);
 	return -EIO;
 unmapped:
 	/* found a hole */
@@ -167,7 +167,7 @@ if (0) {
 eek2:
 	err = -EINVAL;
 eek:
-	brelse_path(path, levels);
+	release_path(path, levels);
 	return inode;
 }
 
