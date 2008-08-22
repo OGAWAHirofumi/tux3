@@ -123,7 +123,7 @@ void ileaf_trim(BTREE, struct ileaf *leaf) {
 		leaf->count = 0;
 }
 
-tuxkey_t ileaf_split(BTREE, vleaf *from, vleaf *into, tuxkey_t key)
+tuxkey_t ileaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
@@ -177,7 +177,7 @@ void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *ileaf_expand(BTREE, vleaf *base, tuxkey_t inum, unsigned more)
+void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, unsigned more)
 {
 	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
@@ -229,7 +229,7 @@ void test_append(BTREE, struct ileaf *leaf, inum_t inum, unsigned more, char fil
 	unsigned size = 0;
 	char *inode = ileaf_lookup(btree, leaf, inum, &size);
 	printf("inode size = %i\n", size);
-	inode = ileaf_expand(btree, leaf, inum, more);
+	inode = ileaf_expand(btree, inum, leaf, more);
 	memset(inode + size, fill, more);
 }
 
@@ -252,7 +252,7 @@ int main(int argc, char *argv[])
 	test_append(btree, leaf, 0x14, 4, 'b');
 	test_append(btree, leaf, 0x16, 6, 'c');
 	ileaf_dump(btree, leaf);
-	ileaf_split(btree, leaf, dest, 0x10);
+	ileaf_split(btree, 0x10, leaf, dest);
 	ileaf_dump(btree, leaf);
 	ileaf_dump(btree, dest);
 return 0;

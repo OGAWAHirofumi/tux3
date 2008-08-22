@@ -191,7 +191,7 @@ eek:
 	return -1;
 }
 
-void *dleaf_expand(BTREE, vleaf *base, tuxkey_t key, unsigned size)
+void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 {
 	//key = key & 0xffffffffffffLL;
 	assert(dleaf_sniff(btree, base));
@@ -298,7 +298,7 @@ void *dleaf_expand(BTREE, vleaf *base, tuxkey_t key, unsigned size)
  *  - decrease used by 4
  */
 
-tuxkey_t dleaf_split(BTREE, vleaf *from, vleaf *into, tuxkey_t key)
+tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(dleaf_sniff(btree, from));
 	struct dleaf *leaf = from, *dest = into;
@@ -410,7 +410,7 @@ struct btree_ops dtree_ops = {
 void dleaf_insert(BTREE, struct dleaf *leaf, block_t key, struct extent extent)
 {
 	printf("insert 0x%Lx -> 0x%Lx\n", (L)key, (L)extent.block);
-	struct extent *store = dleaf_expand(btree, leaf, key, sizeof(extent));
+	struct extent *store = dleaf_expand(btree, key, leaf, sizeof(extent));
 	*store = extent;
 }
 
@@ -453,7 +453,7 @@ int main(int argc, char *argv[])
 	}
 
 	struct dleaf *dest = leaf_create(btree);
-	tuxkey_t key = dleaf_split(btree, leaf, dest, 0);
+	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
 	printf("split key 0x%Lx\n", (L)key);
 	dleaf_dump(btree, leaf);
 	dleaf_dump(btree, dest);

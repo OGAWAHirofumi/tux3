@@ -432,14 +432,14 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned more, struct path 
 	struct buffer *leafbuf = path[btree->root.levels].buffer;
 	struct btree_ops *ops = btree->ops;
 	set_buffer_dirty(leafbuf);
-	void *space = (ops->leaf_expand)(btree, leafbuf->data, key, more);
+	void *space = (ops->leaf_expand)(btree, key, leafbuf->data, more);
 	if (space)
 		return space;
 	trace(warn("split leaf");)
 	struct buffer *newbuf = new_leaf(btree);
 	if (!newbuf) 
 		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
-	u64 newkey = (ops->leaf_split)(btree, leafbuf->data, newbuf->data, key);
+	u64 newkey = (ops->leaf_split)(btree, key, leafbuf->data, newbuf->data);
 	block_t childblock = newbuf->index;
 	trace_off(warn("use upper? %Li %Li", key, newkey);)
 	if (key >= newkey) {
@@ -448,7 +448,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned more, struct path 
 		newbuf = swap;
 	}
 	brelse_dirty(newbuf);
-	space = (ops->leaf_expand)(btree, leafbuf->data, key, more);
+	space = (ops->leaf_expand)(btree, key, leafbuf->data, more);
 	assert(space);
 	int err = insert_child(btree, newkey, childblock, path);
 	if (err) {
@@ -513,7 +513,7 @@ void uleaf_dump(BTREE, vleaf *data)
 	printf(" (%x free)\n", uleaf_free(btree, leaf));
 }
 
-tuxkey_t uleaf_split(BTREE, vleaf *from, vleaf *into, tuxkey_t key)
+tuxkey_t uleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(uleaf_sniff(btree, from));
 	struct uleaf *leaf = from;
@@ -528,7 +528,7 @@ tuxkey_t uleaf_split(BTREE, vleaf *from, vleaf *into, tuxkey_t key)
 	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
 }
 
-void *uleaf_expand(BTREE, vleaf *data, tuxkey_t key, unsigned more)
+void *uleaf_expand(BTREE, tuxkey_t key, vleaf *data, unsigned more)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;
@@ -566,7 +566,7 @@ block_t balloc(SB)
 int uleaf_insert(BTREE, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
-	struct entry *entry = uleaf_expand(btree, leaf, key, 1);
+	struct entry *entry = uleaf_expand(btree, key, leaf, 1);
 	if (!entry)
 		return 1; // need to expand
 	assert(entry);
