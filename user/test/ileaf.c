@@ -84,7 +84,7 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 	}
 }
 
-void *ileaf_lookup(BTREE, struct ileaf *leaf, inum_t inum, unsigned *result)
+void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= leaf->ibase);
 	inum_t at = inum - leaf->ibase;
@@ -227,7 +227,7 @@ struct btree_ops itree_ops = {
 void test_append(BTREE, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	unsigned size = 0;
-	char *inode = ileaf_lookup(btree, leaf, inum, &size);
+	char *inode = ileaf_lookup(btree, inum, leaf, &size);
 	printf("inode size = %i\n", size);
 	inode = ileaf_expand(btree, inum, leaf, more);
 	memset(inode + size, fill, more);
@@ -255,7 +255,6 @@ int main(int argc, char *argv[])
 	ileaf_split(btree, 0x10, leaf, dest);
 	ileaf_dump(btree, leaf);
 	ileaf_dump(btree, dest);
-return 0;
 	ileaf_merge(btree, leaf, dest);
 	ileaf_dump(btree, leaf);
 	test_append(btree, leaf, 0x13, 3, 'x');
@@ -263,10 +262,10 @@ return 0;
 	test_append(btree, leaf, 0x18, 3, 'y');
 	ileaf_dump(btree, leaf);
 	unsigned size = 0;
-	char *inode = ileaf_lookup(btree, leaf, 3, &size);
+	char *inode = ileaf_lookup(btree, 0x13, leaf, &size);
 	hexdump(inode, size);
-	for (int i = 0; i <= 10; i++)
-		printf("goal %i, free: %Lu\n", i, (L)find_empty_inode(btree, leaf, i));
+	for (int i = 0x11; i <= 0x23; i++)
+		printf("goal 0x%x => 0x%Lx\n", i, (L)find_empty_inode(btree, leaf, i));
 	ileaf_destroy(btree, leaf);
 	ileaf_destroy(btree, dest);
 	return 0;
