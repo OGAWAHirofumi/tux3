@@ -123,11 +123,12 @@ eek:
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
-static inline int finished_level(struct path path[], int level)
+static inline int level_finished(struct path path[], int level)
 {
 	struct bnode *node = path_node(path, level);
 	return path[level].next == node->entries + node->count;
 }
+// also write level_beginning!!!
 
 int advance(struct map *map, struct path *path, int levels)
 {
@@ -140,7 +141,7 @@ int advance(struct map *map, struct path *path, int levels)
 			return 0;
 		node = (buffer = path[--level].buffer)->data;
 		//printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
-	} while (finished_level(path, level));
+	} while (level_finished(path, level));
 	do {
 		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, node->count);
 		if (!(buffer = bread(map, path[level].next++->block)))
@@ -158,26 +159,33 @@ eek:
  * all the way to the end of the index block, there we find the key that
  * separates the subtree we are in (a leaf) from the next subtree to the right.
  */
-tuxkey_t *next_key(struct path *path, int levels)
+tuxkey_t *next_keyp(struct path *path, int levels)
 {
 	for (int level = levels; level--;)
-		if (!finished_level(path, level))
+		if (!level_finished(path, level))
 			return &path[level].next->key;
 	return NULL;
 }
+
+tuxkey_t next_key(struct path *path, int levels)
+{
+	tuxkey_t *keyp = next_keyp(path, levels);
+	return keyp ? *keyp : -1;
+}
+// also write this_key!!!
 
 void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree %p at %Li:\n", btree->root.levels, btree, (L)btree->root.block);
 	struct path path[30]; // check for overflow!!!
 	if (probe(btree, start, path))
-		error("probe failed for some unknown reason"); // probe should return error!!!
+		error("tell me why!!!");
 	struct buffer *buffer;
 	do {
 		buffer = path[btree->root.levels].buffer;
 		assert((btree->ops->leaf_sniff)(btree, buffer->data));
 		(btree->ops->leaf_dump)(btree, buffer->data);
-		//tuxkey_t *next = next_key(path, btree->levels);
+		//tuxkey_t *next = pnext_key(path, btree->levels);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
 	} while (--count && advance(buffer->map, path, btree->root.levels));
 }
@@ -208,7 +216,7 @@ static void remove_index(struct path path[], int level)
 	set_buffer_dirty(path[level].buffer);
 
 	/* no separator for last entry */
-	if (finished_level(path, level))
+	if (level_finished(path, level))
 		return;
 	/*
 	 * Climb up to common parent and set separating key to deleted key.
@@ -288,7 +296,7 @@ keep_prev_leaf:
 			suspend = -1;
 
 		/* pop and try to merge finished nodes */
-		while (suspend || finished_level(path, level)) {
+		while (suspend || level_finished(path, level)) {
 			/* try to merge node with prev */
 			if (prev[level].buffer) {
 				assert(level); /* node has no prev */
@@ -312,7 +320,7 @@ keep_prev_leaf:
 keep_prev_node:
 
 			/* deepest key in the path is the resume address */
-			if (suspend == -1 && !finished_level(path, level)) {
+			if (suspend == -1 && !level_finished(path, level)) {
 				suspend = 1; /* only set resume once */
 				info->resume = (path[level].next)->key;
 			}
@@ -372,7 +380,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 
 int insert_child(struct btree *btree, u64 childkey, block_t childblock, struct path path[])
 {
-	trace(printf("insert child with key %Lu, tree levels %i\n", (L)childkey, btree->levels);)
+	trace(printf("insert child with key %Lu into tree at 0x%Li\n", (L)childkey, (L)btree->root.block);)
 	int levels = btree->root.levels;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;

@@ -9,6 +9,8 @@
  * the right to distribute those changes under any license.
  */
 
+#define trace trace_on
+
 #define main notmain0
 #include "balloc.c"
 #undef main
@@ -53,7 +55,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct buffer *leafbuf = path[levels].buffer;
 	
 	unsigned count = 0;
-	struct extent *found = leaf_lookup(&inode->btree, leafbuf->data, buffer->index, &count);
+	struct extent *found = leaf_lookup(&inode->btree, buffer->index, leafbuf->data, &count);
 	dleaf_dump(&inode->btree, leafbuf->data);
 	block_t physical;
 
@@ -109,54 +111,47 @@ struct inode *new_inode(SB, inum_t inum, struct create *create)
 	return inode;
 }
 
-struct inode *open_inode(SB, inum_t inum, struct create *create)
+struct inode *open_inode(SB, inum_t goal, struct create *create)
 {
 	int err = -ENOENT, levels = sb->itree.root.levels;
 	struct path path[levels + 1];
-	if ((err = probe(&sb->itree, inum, path)))
+	if ((err = probe(&sb->itree, goal, path)))
 		return NULL;
 	struct buffer *leafbuf = path[levels].buffer;
-	
-	struct inode *inode = NULL;
 	unsigned size = 0;
-	void *ibase = ileaf_lookup(&sb->itree, leafbuf->data, inum, &size);
-	//ileaf_dump(sb, leafbuf->data);
+	void *ibase = ileaf_lookup(&sb->itree, goal, leafbuf->data, &size);
+	struct inode *inode = NULL;
 
+	//ileaf_dump(sb, leafbuf->data);
 	if (size) {
-		trace(warn("found inode 0x%Lx", (L)inum);)
+		trace(warn("found inode 0x%Lx", (L)goal);)
 		hexdump(ibase, size);
 		/* may have to expand */
 	} else {
-		trace(warn("no inode 0x%Lx", (L)inum);)
+		trace(warn("no inode 0x%Lx", (L)goal);)
 		if (!create)
 			goto eek;
-		trace(warn("new inode 0x%Lx", (L)inum);)
+		trace(warn("new inode 0x%Lx", (L)goal);)
 		/*
-		 * search this and successor blocks for a suitable empty inode.
-		 * Find successor ibase to know whether to advance or create
+		 * If not at end then next key is greater than goal.  This
+		 * block has the highest ibase less than or equal to goal.
+		 * Ibase should be equal to btree key, so assert.  Search block
+		 * even if base inum is way too low.  Whatever inum comes back
+		 * from the search (it will be above the highest inum in the
+		 * block if base was too low) expand that empty inum.  If ibase
+		 * was too low, low level split will fail and expand will create
+		 * a new inode table block with ibase at the goal.  Need some
+		 * way to verify that expanded inum was empty, pass size by ref?
 		 */
-if (0) {
-		tuxkey_t *p = next_key(path, levels), next = p ? *p : MAX_INODES;
-		if (next > inum + sb->max_inodes_per_block) {
-			struct ileaf *ileaf = ileaf_create(&sb->itree);
-			ileaf->ibase = inum;
-		}
-}
-
-		/*
-		 * We know target is less than base inum of next block (do we?)
-		 * if lies inside actual inum range of this block, or if the block
-		 * is not too full and within 64 (32?) or so of base then create the
-		 * inode in this block, splitting if necessary.  Otherwise insert
-		 * a new block with inum base aligned down to 64 (32?)
-		 */
+		goal = find_empty_inode(&sb->itree, leafbuf->data, goal);
+		assert(goal < next_key(path, levels));
 
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
-		ibase = tree_expand(&sb->itree, inum, size, path);
+		ibase = tree_expand(&sb->itree, goal, size, path);
 		if (!ibase)
 			goto eek2;
 
-		inode = new_inode(sb, inum, create);
+		inode = new_inode(sb, goal, create);
 		inode->btree = new_btree(sb, &dtree_ops);
 
 		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
@@ -246,8 +241,9 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
-	struct inode *root = open_inode(sb, 0, &(struct create){ .mode = S_IFDIR | S_IRWXU });
-
+	struct inode *root = open_inode(sb, 100, &(struct create){ .mode = S_IFDIR | S_IRWXU });
+show_tree_range(&sb->itree, 0, -1);
+return 0;
 	struct inode *inode = tuxopen(root, "foo", 3, 5, &(struct create){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
