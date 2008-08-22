@@ -139,7 +139,7 @@ void dleaf_dump(BTREE, struct dleaf *leaf)
 	}
 }
 
-void *leaf_lookup(BTREE, struct dleaf *leaf, block_t target, unsigned *count)
+void *leaf_lookup(BTREE, block_t target, struct dleaf *leaf, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
@@ -407,7 +407,7 @@ struct btree_ops dtree_ops = {
 };
 
 #ifndef main
-void dleaf_insert(BTREE, struct dleaf *leaf, block_t key, struct extent extent)
+void dleaf_insert(BTREE, block_t key, struct dleaf *leaf, struct extent extent)
 {
 	printf("insert 0x%Lx -> 0x%Lx\n", (L)key, (L)extent.block);
 	struct extent *store = dleaf_expand(btree, key, leaf, sizeof(extent));
@@ -429,22 +429,22 @@ int main(int argc, char *argv[])
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned keys[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
 	for (int i = 0; i < 32; i++)
-		dleaf_insert(btree, leaf, (i << 12) + i, (struct extent){ .block = i });
+		dleaf_insert(btree, (i << 12) + i, leaf, (struct extent){ .block = i });
 	dleaf_dump(btree, leaf);
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x111 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x222 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x333 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x444 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x555 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x666 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x777 });
-	dleaf_insert(btree, leaf, keys[next++], (struct extent){ .block = 0x888 });
-	dleaf_insert(btree, leaf, keys[next], (struct extent){ .block = 0x999 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x111 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x222 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x333 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x444 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x555 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x666 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x777 });
+	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x888 });
+	dleaf_insert(btree, keys[next], leaf, (struct extent){ .block = 0x999 });
 	dleaf_dump(btree, leaf);
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
 		unsigned count;
-		void *found = leaf_lookup(btree, leaf, key, &count);
+		void *found = leaf_lookup(btree, key, leaf, &count);
 		if (count) {
 			printf("lookup 0x%x, found [%i] ", key, count );
 			hexdump(found, count);
