@@ -431,7 +431,7 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 
 int devmap_blockio(struct buffer *buffer, int write)
 {
-	warn("%s block %Lx", write ? "write" : "read", buffer->index);
+	warn("%s [%Lx]", write ? "write" : "read", (long long)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 9 && dev->fd);
 	return (write ? diskwrite : diskread)
@@ -446,6 +446,12 @@ struct map *new_map(struct dev *dev, struct map_ops *ops)
 	*map = (struct map){ .dev = dev, .ops = ops ? ops : &devmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
 	return map;
+}
+
+void free_map(struct map *map)
+{
+	assert(list_empty(&map->dirty));
+	free(map);
 }
 
 int buffer_main(int argc, char *argv[])

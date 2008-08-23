@@ -56,26 +56,25 @@ int filemap_blockio(struct buffer *buffer, int write)
 	
 	unsigned count = 0;
 	struct extent *found = leaf_lookup(&inode->btree, buffer->index, leafbuf->data, &count);
-	dleaf_dump(&inode->btree, leafbuf->data);
+	//dleaf_dump(&inode->btree, leafbuf->data);
 	block_t physical;
 
 	if (write) {
 		if (count) {
 			physical = found->block;
-			trace(warn("found physical block %Lx", (L)physical);)
+			trace(warn("found block [%Lx]", (L)physical);)
 		} else {
 			physical = balloc(sb); // !!! need an error return
-			trace(warn("new physical block %Lx", (L)physical);)
 			struct extent *store = tree_expand(&inode->btree, buffer->index, sizeof(struct extent), path);
 			if (!store)
 				goto eek;
 			*store = (struct extent){ .block = physical };
 		}
-		release_path(path, levels);
+		release_path(path, levels + 1);
 		return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 	}
 	/* read */
-	release_path(path, levels);
+	release_path(path, levels + 1);
 	if (!count)
 		goto unmapped;
 	physical = found->block;
@@ -84,7 +83,6 @@ int filemap_blockio(struct buffer *buffer, int write)
 eek:
 	warn("unable to add extent to tree: %s", strerror(-err));
 	free_block(sb, physical);
-	release_path(path, levels);
 	return -EIO;
 unmapped:
 	/* found a hole */
@@ -146,7 +144,6 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 
 		inode = new_inode(sb, goal, create);
 		inode->btree = new_btree(sb, &dtree_ops);
-
 		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
 		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .root = inode->btree.root };
 		*(typeof(attr1) *)attrs = attr1;
@@ -164,7 +161,7 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 eek:
 	err = -EINVAL;
 out:
-	release_path(path, levels);
+	release_path(path, levels + 1);
 	return inode;
 }
 
@@ -221,6 +218,20 @@ open:
 	return open_inode(dir->sb, inum, create);
 }
 
+void tuxsync(struct inode *inode)
+{
+	int err = flush_buffers(inode->map);
+	if (err)
+		warn("Sync failed (%s)", strerror(-err));
+}
+
+void tuxclose(struct inode *inode)
+{
+	tuxsync(inode);
+	free_map(inode->map);
+	free(inode);
+}
+
 int main(int argc, char *argv[])
 {
 	char *name = argv[1];
@@ -249,24 +260,23 @@ int main(int argc, char *argv[])
 		return 1;
 	ext2_dump_entries(getblk(root->map, 0), 1 << map->dev->bits);
 
-	flush_buffers(root->map);
-	show_buffers(root->map);
-	show_buffers(sb->devmap);
-
+	tuxsync(root);
 	char buf[100] = { };
 	tuxwrite(inode, 6, "hello", 5);
 	tuxwrite(inode, 5, "world", 5);
+	tuxsync(inode);
+	tuxsync(sb->bitmap);
 	flush_buffers(sb->devmap);
-	flush_buffers(inode->map);
-	int err = flush_buffers(sb->bitmap->map);
-	if (err)
-		warn("Bitmap flush failed (%s)", strerror(-err));
+
 	if (tuxread(inode, 6, buf, 11))
 		return 1;
 	hexdump(buf, 11);
 	if (tuxread(inode, 5, buf, 11))
 		return 1;
 	hexdump(buf, 11);
+	show_buffers(inode->map);
+	show_buffers(root->map);
+	show_buffers(sb->devmap);
 	bitmap_dump(sb->bitmap, 0, sb->image.blocks);
 	show_tree_range(&sb->itree, 0, -1);
 	return 0;

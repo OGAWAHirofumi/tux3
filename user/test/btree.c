@@ -96,6 +96,14 @@ static void release_path(struct path *path, int levels)
 		brelse(path[i].buffer);
 }
 
+void show_path(struct path *path, int levels)
+{
+	printf(">>> path %p/%i:", path, levels);
+	for (int i = 0; i < levels; i++)
+		printf(" [%Lx/%i]", (L)path[i].buffer->index, path[i].buffer->count);
+	printf("\n");
+}
+
 static int probe(BTREE, tuxkey_t key, struct path *path)
 {
 	unsigned i, levels = btree->root.levels;
@@ -396,8 +404,8 @@ int insert_child(struct btree *btree, u64 childkey, block_t childblock, struct p
 
 		/* split a full index node */
 		struct buffer *newbuf = new_node(btree);
-		if (!newbuf) 
-			return -ENOMEM;
+		if (!newbuf)
+			goto eek;
 		struct bnode *newnode = newbuf->data;
 		unsigned half = parent->count / 2;
 		u64 newkey = parent->entries[half].key;
@@ -421,7 +429,7 @@ int insert_child(struct btree *btree, u64 childkey, block_t childblock, struct p
 	trace(printf("add tree level\n");)
 	struct buffer *newbuf = new_node(btree);
 	if (!newbuf)
-		return -ENOMEM;
+		goto eek;
 	struct bnode *newroot = newbuf->data;
 	newroot->count = 2;
 	newroot->entries[0].block = btree->root.block;
@@ -433,6 +441,9 @@ int insert_child(struct btree *btree, u64 childkey, block_t childblock, struct p
 	//set_sb_dirty(sb);
 	set_buffer_dirty(newbuf);
 	return 0;
+eek:
+	release_path(path, levels + 1);
+	return -ENOMEM;
 }
 
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned more, struct path path[])
@@ -445,8 +456,11 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned more, struct path 
 		return space;
 	trace(warn("split leaf");)
 	struct buffer *newbuf = new_leaf(btree);
-	if (!newbuf) 
-		return NULL; // !!! err_ptr(ENOMEM) this is the right thing to do???
+	if (!newbuf) {
+		/* the rule: release path at point of error */
+		release_path(path, btree->root.levels);
+		return NULL;
+	}
 	u64 newkey = (ops->leaf_split)(btree, key, leafbuf->data, newbuf->data);
 	block_t childblock = newbuf->index;
 	trace_off(warn("use upper? %Li %Li", key, newkey);)

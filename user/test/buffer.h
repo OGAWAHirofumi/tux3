@@ -91,4 +91,5 @@ static inline int buffer_journaled(struct buffer *buffer)
 }
 
 struct map *new_map(struct dev *dev, struct map_ops *ops); // belongs here???
+void free_map(struct map *map);
 #endif

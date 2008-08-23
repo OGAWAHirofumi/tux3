@@ -169,7 +169,7 @@ block_t balloc(SB)
 		goto found;
 	return -1;
 found:
-	printf("balloc -> %Lxh\n", (L)block);
+	printf("balloc -> [%Lx]\n", (L)block);
 	return block;
 }
 
@@ -180,7 +180,7 @@ void bfree(SB, block_t block)
 	unsigned mapblock = block >> mapshift;
 	char *why = "free failed";
 	struct buffer *buffer = bread(sb->bitmap->map, mapblock);
-	printf("free <- %Lxh\n", (L)block);
+	printf("free <- [%Lx]\n", (L)block);
 	if (!buffer)
 		goto eek;
 	if (!get_bit(buffer->data, block & mapmask))
