@@ -86,9 +86,8 @@ struct sb
 	struct map *devmap;
 	struct buffer *rootbuf;
 	struct inode *bitmap;
-	unsigned blocksize;
-	block_t freeblocks;
-	block_t nextalloc;
+	unsigned blocksize, blockbits, blockmask;
+	block_t freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
 };
 

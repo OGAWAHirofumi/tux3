@@ -165,25 +165,44 @@ out:
 	return inode;
 }
 
-int tuxread(struct inode *inode, block_t target, char *data, unsigned len)
+int tuxread(struct file *file, char *data, unsigned len)
 {
-	struct buffer *blockbuf = bread(inode->map, target);
+	loff_t pos = file->f_pos;
+	struct inode *inode = file->f_inode;
+	if (pos > inode->i_size)
+		return 0;
+	if (inode->i_size < pos + len)
+		len = inode->i_size - pos;
+	warn("read %Lx/%x", pos & inode->sb->blockmask, len);
+	struct buffer *blockbuf = getblk(inode->map, pos >> inode->sb->blockbits);
 	if (!blockbuf)
 		return -EIO;
-	memcpy(data, blockbuf->data, len);
+	memcpy(data, blockbuf->data + (pos & inode->sb->blockmask), len);
 	brelse(blockbuf);
-	return 0;
+	file->f_pos += len;
+	return len;
 }
 
-int tuxwrite(struct inode *inode, block_t target, char *data, unsigned len)
+int tuxwrite(struct file *file, char *data, unsigned len)
 {
-	struct buffer *blockbuf = getblk(inode->map, target);
+	loff_t pos = file->f_pos;
+	struct inode *inode = file->f_inode;
+	//warn("write %Lx/%x", pos & inode->sb->blockmask, len);
+	struct buffer *blockbuf = getblk(inode->map, pos >> inode->sb->blockbits);
 	if (!blockbuf)
 		return -EIO;
-	memcpy(blockbuf->data, data, len);
+	memcpy(blockbuf->data + (pos & inode->sb->blockmask), data, len);
 	set_buffer_dirty(blockbuf);
 	brelse(blockbuf);
-	return 0;
+	file->f_pos += len;
+	if (inode->i_size < file->f_pos)
+		inode->i_size = file->f_pos;
+	return len;
+}
+
+void tuxseek(struct file *file, loff_t pos)
+{
+	file->f_pos = pos;
 }
 
 void init_tux3(SB)
@@ -249,6 +268,9 @@ int main(int argc, char *argv[])
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.devmap = map,
+		.blockbits = dev->bits,
+		.blocksize = 1 << dev->bits,
+		.blockmask = (1 << dev->bits) - 1,
 	};
 
 	init_buffers(dev, 1 << 20);
@@ -262,18 +284,19 @@ int main(int argc, char *argv[])
 
 	tuxsync(root);
 	char buf[100] = { };
-	tuxwrite(inode, 6, "hello", 5);
-	tuxwrite(inode, 5, "world", 5);
+	struct file *file = &(struct file){ .f_inode = inode };
+	tuxwrite(file, "hello ", 6);
+	tuxwrite(file, "world!", 6);
 	tuxsync(inode);
 	tuxsync(sb->bitmap);
 	flush_buffers(sb->devmap);
 
-	if (tuxread(inode, 6, buf, 11))
+	tuxseek(file, 0);
+	int got = tuxread(file, buf, sizeof(buf));
+	//printf("got %x bytes\n", got);
+	if (got < 0)
 		return 1;
-	hexdump(buf, 11);
-	if (tuxread(inode, 5, buf, 11))
-		return 1;
-	hexdump(buf, 11);
+	hexdump(buf, got);
 	show_buffers(inode->map);
 	show_buffers(root->map);
 	show_buffers(sb->devmap);
