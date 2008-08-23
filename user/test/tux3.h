@@ -52,7 +52,7 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 
 #define MAX_INODES (1ULL << 48)
 
-struct diskroot { u64 block:48, levels:8, unused:8; };
+struct diskroot { u64 levels:16, block:48; };
 
 struct btree {
 	struct sb *sb;

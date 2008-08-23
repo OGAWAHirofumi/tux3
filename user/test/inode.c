@@ -95,10 +95,10 @@ unmapped:
 
 /* this will be iattr.c... */
 
-enum { MTIME_SIZE_ATTR, DATA_BTREE_ATTR };
+enum { MTIME_SIZE_ATTR = 8, DATA_BTREE_ATTR = 9 };
 
 struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
-struct data_btree_attr { u64 kind:4; struct btree btree; };
+struct data_btree_attr { u64 kind:4; struct diskroot root; };
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
 struct create { mode_t mode; unsigned uid, gid; };
 
@@ -119,18 +119,11 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 		return NULL;
 	struct buffer *leafbuf = path[levels].buffer;
 	unsigned size = 0;
-	void *ibase = ileaf_lookup(&sb->itree, goal, leafbuf->data, &size);
+	void *attrs = ileaf_lookup(&sb->itree, goal, leafbuf->data, &size);
 	struct inode *inode = NULL;
 
 	//ileaf_dump(sb, leafbuf->data);
-	if (size) {
-		trace(warn("found inode 0x%Lx", (L)goal);)
-		hexdump(ibase, size);
-		/* may have to expand */
-	} else {
-		trace(warn("no inode 0x%Lx", (L)goal);)
-		if (!create)
-			goto eek;
+	if (create) {
 		trace(warn("new inode 0x%Lx", (L)goal);)
 		/*
 		 * If not at end then next key is greater than goal.  This
@@ -147,21 +140,30 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 		assert(goal < next_key(path, levels));
 
 		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
-		ibase = tree_expand(&sb->itree, goal, size, path);
-		if (!ibase)
-			goto eek2;
+		attrs = tree_expand(&sb->itree, goal, size, path);
+		if (!attrs)
+			goto eek; // what was the error???
 
 		inode = new_inode(sb, goal, create);
 		inode->btree = new_btree(sb, &dtree_ops);
 
 		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
-		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .btree = inode->btree };
-		*(typeof(attr1) *)ibase = attr1;
-		*(typeof(attr2) *)(ibase + sizeof(attr2)) = attr2;
+		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .root = inode->btree.root };
+		*(typeof(attr1) *)attrs = attr1;
+		*(typeof(attr2) *)(attrs + sizeof(attr1)) = attr2;
+		goto out;
 	}
-eek2:
-	err = -EINVAL;
+	if (size) {
+		trace(warn("found inode 0x%Lx", (L)goal);)
+		hexdump(attrs, size);
+		/* may have to expand */
+		// inode = do we have to have an inode/dentry cache now?
+		goto out;
+	}
+	trace(warn("no inode 0x%Lx", (L)goal);)
 eek:
+	err = -EINVAL;
+out:
 	release_path(path, levels);
 	return inode;
 }
@@ -242,8 +244,6 @@ int main(int argc, char *argv[])
 	init_tux3(sb);
 
 	struct inode *root = open_inode(sb, 100, &(struct create){ .mode = S_IFDIR | S_IRWXU });
-show_tree_range(&sb->itree, 0, -1);
-return 0;
 	struct inode *inode = tuxopen(root, "foo", 3, 5, &(struct create){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
@@ -268,5 +268,6 @@ return 0;
 		return 1;
 	hexdump(buf, 11);
 	bitmap_dump(sb->bitmap, 0, sb->image.blocks);
+	show_tree_range(&sb->itree, 0, -1);
 	return 0;
 }

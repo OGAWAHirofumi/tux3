@@ -40,9 +40,9 @@ int ileaf_init(BTREE, vleaf *leaf)
 
 struct ileaf *ileaf_create(BTREE)
 {
-	struct ileaf *ileaf = malloc(btree->sb->blocksize);
-	ileaf_init(btree, ileaf);
-	return ileaf;
+	struct ileaf *leaf = malloc(btree->sb->blocksize);
+	ileaf_init(btree, leaf);
+	return leaf;
 }
 
 int ileaf_sniff(BTREE, vleaf *leaf)
@@ -174,7 +174,7 @@ void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 	u16 *dict = (void *)leaf + btree->sb->blocksize, *fromdict = (void *)from + btree->sb->blocksize;
 	unsigned at = leaf->count, free = at ? *(dict - at) : 0;
 	unsigned size = from->count ? *(fromdict - from->count) : 0;
-	printf("copy in %i bytes %i %i\n", size, at + 1, at + from->count);
+	printf("copy in %i bytes\n", size);
 	memcpy(leaf->table + free, from->table, size);
 	veccopy(dict - (leaf->count += from->count), fromdict - from->count, from->count);
 	for (int i = at + 1; at && i <= at + from->count; i++)
@@ -204,10 +204,11 @@ void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, unsigned more)
 	u16 free = *(dict - leaf->count);
 	unsigned offset = at ? *(dict - at) : 0, size = *(dict - at - 1) - offset;
 	void *attrs = leaf->table + offset;
-	printf("expand inum 0x%Lx at 0x%x/%i by %i %i\n", (L)inum, offset, size, more, leaf->count);
+	printf("expand inum 0x%Lx at 0x%x/%i by %i\n", (L)inum, offset, size, more);
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
 	memmove(attrs + size + more, attrs + size, free - offset);
+//	memset(attrs, 0xaa, size + more);
 	return attrs;
 }
 
