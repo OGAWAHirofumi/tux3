@@ -211,14 +211,15 @@ void tuxseek(struct file *file, loff_t pos)
 	file->f_pos = pos;
 }
 
-void init_tux3(SB)
+int purge_inum(BTREE, inum_t inum)
 {
-	struct inode *bitmap = new_inode(sb, -1, &(struct create){ .mode = S_IFREG | S_IRWXU });
-	sb->bitmap = bitmap;
-	sb->image.blockbits = sb->devmap->dev->bits;
-	sb->blocksize = 1 << sb->image.blockbits;
-	sb->itree = new_btree(sb, &itree_ops);
-	bitmap->btree = new_btree(sb, &dtree_ops);
+	int err = -ENOENT, levels = btree->sb->itree.root.levels;
+	struct path path[levels + 1];
+	if (!(err = probe(btree, inum, path))) {
+		err = ileaf_purge(btree, inum, to_ileaf(path[levels].buffer));
+		release_path(path, levels + 1);
+	}
+	return err;
 }
 
 struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *create)
@@ -240,7 +241,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *cre
 	struct inode *inode = open_inode(dir->sb, dir->sb->nextalloc, create);
 	if (inode) {
 		if (ext2_create_entry(dir, name, len, inode->inum, create->mode)) {
-			// !!! what about the orphan above?
+			purge_inum(&dir->sb->itree, inode->inum); // test me!!!
 			free_inode(inode);
 			inode = NULL;
 		}
@@ -259,6 +260,17 @@ void tuxclose(struct inode *inode)
 {
 	tuxsync(inode);
 	free_inode(inode);
+}
+
+void init_tux3(SB) // why am I separate?
+{
+	struct inode *bitmap = new_inode(sb, -1, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	sb->bitmap = bitmap;
+	sb->image.blockbits = sb->devmap->dev->bits;
+	sb->blocksize = 1 << sb->image.blockbits;
+	sb->itree = new_btree(sb, &itree_ops);
+	sb->itree.entries_per_leaf = 64; // !!! should depend on blocksize
+	bitmap->btree = new_btree(sb, &dtree_ops);
 }
 
 int main(int argc, char *argv[])

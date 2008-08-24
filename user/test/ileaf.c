@@ -9,6 +9,7 @@
  */
 
 #include <stdio.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
@@ -98,7 +99,7 @@ void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 	unsigned size = 0;
 	void *attrs = NULL;
 	if (at < leaf->count) {
-		u16 *dict = (void *)leaf + btree->	sb->blocksize;
+		u16 *dict = (void *)leaf + btree->sb->blocksize;
 		unsigned offset = at ? *(dict - at) : 0;
 		size = *(dict - at - 1) - offset;
 		if (size)
@@ -201,13 +202,13 @@ void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, unsigned more)
 		leaf->count++;
 	}
 
-	u16 free = *(dict - leaf->count);
+	unsigned free = *(dict - leaf->count);
 	unsigned offset = at ? *(dict - at) : 0, size = *(dict - at - 1) - offset;
 	void *attrs = leaf->table + offset;
 	printf("expand inum 0x%Lx at 0x%x/%i by %i\n", (L)inum, offset, size, more);
+	memmove(attrs + size + more, attrs + size, free - offset);
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
-	memmove(attrs + size + more, attrs + size, free - offset);
 //	memset(attrs, 0xaa, size + more);
 	return attrs;
 }
@@ -225,6 +226,26 @@ inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t start)
 		offset = limit;
 	}
 	return i + leaf->ibase;
+}
+
+int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf)
+{
+	if (inum < leaf->ibase || inum - leaf->ibase >= btree->entries_per_leaf)
+		return -EINVAL;
+	u16 *dict = (void *)leaf + btree->sb->blocksize;
+	unsigned at = inum - leaf->ibase;
+	unsigned offset = at ? *(dict - at) : 0;
+	unsigned size = *(dict - at - 1) - offset;
+	printf("delete inode %Lx from %p[%x/%x]\n", (L)inum, leaf, at, size);
+	if (!size)
+		return -ENOENT;
+	unsigned free = *(dict - leaf->count), tail = free - offset - size;
+	assert(offset + size + tail <= free);
+	memmove(leaf->table + offset, leaf->table + offset + size, tail);
+	for (int i = at + 1; i <= leaf->count; i++)
+		*(dict - i) -= size;
+	ileaf_trim(btree, leaf);
+	return 0;
 }
 
 struct btree_ops itree_ops = {
@@ -256,6 +277,7 @@ int main(int argc, char *argv[])
 	printf("--- test inode table leaf methods ---\n");
 	SB = &(struct sb){ .blocksize = 4096 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &itree_ops };
+	btree->entries_per_leaf = 64; // !!! should depend on blocksize
 	struct ileaf *leaf = ileaf_create(btree);
 	struct ileaf *dest = ileaf_create(btree);
 	leaf->ibase = 0x10;
@@ -278,6 +300,9 @@ int main(int argc, char *argv[])
 	hexdump(inode, size);
 	for (int i = 0x11; i <= 0x23; i++)
 		printf("goal 0x%x => 0x%Lx\n", i, (L)find_empty_inode(btree, leaf, i));
+	ileaf_purge(btree, 0x14, leaf);
+	ileaf_purge(btree, 0x18, leaf);
+	ileaf_dump(btree, leaf);
 	ileaf_destroy(btree, leaf);
 	ileaf_destroy(btree, dest);
 	return 0;
