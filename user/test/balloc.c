@@ -1,3 +1,14 @@
+/*
+ * Block allocation
+ *
+ * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
+ * Portions copyright (c) 2006-2008 Google Inc.
+ * Licensed under the GPL version 3
+ *
+ * By contributing changes to this file you grant the original copyright holder
+ * the right to distribute those changes under any license.
+ */
+
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>

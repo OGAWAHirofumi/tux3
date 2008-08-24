@@ -1,5 +1,5 @@
 /*
- * Generic btree operations
+ * Volume table operations
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
  * Portions copyright (c) 2006-2008 Google Inc.

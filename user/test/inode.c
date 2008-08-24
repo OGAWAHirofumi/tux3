@@ -31,6 +31,10 @@
 #include "btree.c"
 #undef main
 
+#define main notmain5
+#include "iattr.c"
+#undef main
+
 /* High level operations */
 
 int filemap_blockio(struct buffer *buffer, int write)
@@ -91,12 +95,6 @@ unmapped:
 	return 0;
 }
 
-/* this will be iattr.c... */
-
-enum { MTIME_SIZE_ATTR = 8, DATA_BTREE_ATTR = 9 };
-
-struct size_mtime_attr { u64 kind:4, size:60, version:10, mtime:54; };
-struct data_btree_attr { u64 kind:4; struct diskroot root; };
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
 struct create { mode_t mode; unsigned uid, gid; };
 
