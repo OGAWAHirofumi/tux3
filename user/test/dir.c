@@ -66,7 +66,7 @@ typedef u16 le16;
 #define EXT2_MAX_REC_LEN ((1<<16)-1)
 #define EXT2_NAME_LEN 255
 
-typedef struct { u32 inode; u16 rec_len; u8 name_len, type; char name[]; } ext2_dirent;
+typedef struct { u32 inum; u16 rec_len; u8 name_len, type; char name[]; } ext2_dirent;
 
 static inline unsigned ext2_rec_len_from_disk(le16 dlen)
 {
@@ -89,7 +89,7 @@ static inline int ext2_match(int len, const char *const name, ext2_dirent *de)
 {
 	if (len != de->name_len)
 		return 0;
-	if (!de->inode)
+	if (!de->inum)
 		return 0;
 	return !memcmp(name, de->name, len);
 }
@@ -129,11 +129,11 @@ void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
 	while (dirent < limit) {
-		if (dirent->inode)
+		if (dirent->inum)
 			printf("%.*s (%x:%i) ",
 				dirent->name_len,
 				dirent->name,
-				dirent->inode,
+				dirent->inum,
 				dirent->type);
 		dirent = next_entry(dirent);
 	}
@@ -160,7 +160,7 @@ int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, u
 			}
 			name_len = EXT2_REC_LEN(dirent->name_len);
 			rec_len = ext2_rec_len_from_disk(dirent->rec_len);
-			if (!dirent->inode && rec_len >= reclen)
+			if (!dirent->inum && rec_len >= reclen)
 				goto create;
 			if (rec_len >= name_len + reclen)
 				goto create;
@@ -176,7 +176,7 @@ int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, u
 	inode->i_size += blocksize;
 	set_buffer_dirty(buffer);
 create:
-	if (dirent->inode) {
+	if (dirent->inum) {
 		ext2_dirent *newent = (ext2_dirent *)((char *)dirent + name_len);
 		newent->rec_len = ext2_rec_len_to_disk(rec_len - name_len);
 		dirent->rec_len = ext2_rec_len_to_disk(name_len);
@@ -184,7 +184,7 @@ create:
 	}
 	dirent->name_len = len;
 	memcpy(dirent->name, name, len);
-	dirent->inode = cpu_to_le32(inum);
+	dirent->inum = cpu_to_le32(inum);
 	dirent->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 	mark_inode_dirty(inode);
@@ -269,12 +269,12 @@ static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
 				warn("zero length entry at <%Lx:%x>", (L)inode->inum, block);
 				return -EIO;
 			}
-			if (entry->inode) {
+			if (entry->inum) {
 				unsigned type = (entry->type < EXT2_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
 				int full = filldir(
 					dirents, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
-					le32_to_cpu(entry->inode), type);
+					le32_to_cpu(entry->inum), type);
 				if (full) {
 					brelse(buffer);
 					return 0;
@@ -303,7 +303,7 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 	if (prev)
 		prev->rec_len = ext2_rec_len_to_disk((void *)dirent +
 		ext2_rec_len_from_disk(dirent->rec_len) - (void *)prev);
-	dirent->inode = 0;
+	dirent->inum = 0;
 	brelse(buffer);
 	return 0;
 }

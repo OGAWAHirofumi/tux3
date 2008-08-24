@@ -229,7 +229,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *cre
 	if (!create) {
 		if (!buffer)
 			return NULL;
-		inum_t inum = entry->inode;
+		inum_t inum = entry->inum;
 		brelse(buffer);
 		open_inode(dir->sb, inum, NULL);
 	}
