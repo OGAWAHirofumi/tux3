@@ -233,20 +233,20 @@ struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *cre
 		brelse(buffer);
 		open_inode(dir->sb, inum, NULL);
 	}
-	/* create */
+	/* create it */
 	if (buffer) {
 		brelse(buffer);
 		return NULL; // err_ptr(-EEXIST) ???
 	}
 	struct inode *inode = open_inode(dir->sb, dir->sb->nextalloc, create);
-	if (inode) {
-		if (ext2_create_entry(dir, name, len, inode->inum, create->mode)) {
-			purge_inum(&dir->sb->itree, inode->inum); // test me!!!
-			free_inode(inode);
-			inode = NULL;
-		}
-	}
-	return inode;
+	if (!inode)
+		return NULL; // err ???
+	if (!ext2_create_entry(dir, name, len, inode->inum, create->mode))
+		return inode;
+	purge_inum(&dir->sb->itree, inode->inum); // test me!!!
+	free_inode(inode);
+	inode = NULL;
+	return NULL; // err ???
 }
 
 void tuxsync(struct inode *inode)
