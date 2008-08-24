@@ -47,7 +47,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	warn("%s <%Lx:%Lx>", write ? "write" : "read", (L)inode->inum, buffer->index);
 	assert(dev->bits >= 9 && dev->fd);
 
-	int err, levels = inode->btree.root.levels;
+	int err, levels = inode->btree.root.depth;
 	struct path path[levels + 1];
 	if (!levels) {
 		if (write)
@@ -115,7 +115,7 @@ void free_inode(struct inode *inode)
 
 struct inode *open_inode(SB, inum_t goal, struct create *create)
 {
-	int err = -ENOENT, levels = sb->itree.root.levels;
+	int err = -ENOENT, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
 	if ((err = probe(&sb->itree, goal, path)))
 		return NULL;
@@ -148,8 +148,8 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 
 		inode = new_inode(sb, goal, create);
 		inode->btree = new_btree(sb, &dtree_ops);
-		struct size_mtime_attr attr1 = { .kind = MTIME_SIZE_ATTR };
-		struct data_btree_attr attr2 = { .kind = DATA_BTREE_ATTR, .root = inode->btree.root };
+		struct size_mtime_attr attr1 = { };
+		struct data_btree_attr attr2 = { .root = inode->btree.root };
 		*(typeof(attr1) *)attrs = attr1;
 		*(typeof(attr2) *)(attrs + sizeof(attr1)) = attr2;
 		goto out;
@@ -211,7 +211,7 @@ void tuxseek(struct file *file, loff_t pos)
 
 int purge_inum(BTREE, inum_t inum)
 {
-	int err = -ENOENT, levels = btree->sb->itree.root.levels;
+	int err = -ENOENT, levels = btree->sb->itree.root.depth;
 	struct path path[levels + 1];
 	if (!(err = probe(btree, inum, path))) {
 		err = ileaf_purge(btree, inum, to_ileaf(path[levels].buffer));
