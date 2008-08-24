@@ -2,6 +2,7 @@
 #define TUX3_H
 
 #include <inttypes.h>
+#include <byteswap.h>
 #include "trace.h"
 
 typedef uint8_t u8;
@@ -25,6 +26,11 @@ typedef u64 tuxkey_t;
 typedef u32 mode_t;
 typedef int fd_t;
 
+/* Bitmaps */
+
+// !!! change to bit zero at high end of byte, consistent with big endian !!! //
+// Careful about bitops on kernel port - need to reverse on le arch, maybe some be too.
+
 static inline int get_bit(unsigned char *bitmap, unsigned bit)
 {
 	return bitmap[bit >> 3] & (1 << (bit & 7));
@@ -40,6 +46,29 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 	bitmap[bit >> 3] &= ~(1 << (bit & 7));
 }
 
+/* Endian support */
+
+typedef u16 be_u16;
+typedef u32 be_u32;
+typedef u64 be_u64;
+
+static inline u16 be_to_u16(be_u16 val)
+{
+	return bswap_16(val);
+}
+
+static inline u32 be_to_u32(be_u32 val)
+{
+	return bswap_32(val);
+}
+
+static inline u64 be_to_u64(be_u64 val)
+{
+	return bswap_64(val);
+}
+
+/* Tux3 disk format */
+
 #define SB struct sb *sb
 #define SB_MAGIC { 't', 'e', 's', 't', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
 /*
@@ -52,21 +81,14 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 
 #define MAX_INODES (1ULL << 48)
 
-struct diskroot { u64 depth:16, block:48; };
+struct disktree { be_u64 depth:16, block:48; };
 
-struct btree {
-	struct sb *sb;
-	struct btree_ops *ops;
-	struct diskroot root;
-	u16 entries_per_leaf;
-};
-
-struct superblock
+struct disksuper
 {
 	typeof((char[])SB_MAGIC) magic;
-	struct diskroot itree;
-	struct diskroot ftree;
-	struct diskroot atree;
+	struct disktree itree;
+	struct disktree ftree;
+	struct disktree atree;
 	u64 create_time;
 	u64 flags;
 	u32 levels;
@@ -76,13 +98,22 @@ struct superblock
 	u32 blockbits;
 };
 
+struct root { u64 depth:16, block:48; };
+
+struct btree {
+	struct sb *sb;
+	struct btree_ops *ops;
+	struct root root;
+	u16 entries_per_leaf;
+};
+
 struct sb
 {
-	struct superblock image;
+	struct disksuper super;
 	struct btree itree;
 	struct btree ftree;
 	struct btree atree;
-	char bogopad[4096 - sizeof(struct superblock)];
+	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	struct map *devmap;
 	struct buffer *rootbuf;
 	struct inode *bitmap;

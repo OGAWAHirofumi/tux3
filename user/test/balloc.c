@@ -173,7 +173,7 @@ final_partial_byte:
 
 block_t balloc(SB)
 {
-	block_t goal = sb->nextalloc, total = sb->image.blocks, block;
+	block_t goal = sb->nextalloc, total = sb->super.blocks, block;
 	if ((block = balloc_range(sb->bitmap, goal, total - goal)) >= 0)
 		goto found;
 	if ((block = balloc_range(sb->bitmap, 0, goal)) >= 0)
@@ -213,10 +213,10 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .image = { .blocks = 150 } };
+	struct sb *sb = &(struct sb){ .super = { .blocks = 150 } };
 	struct inode *bitmap = &(struct inode){ .sb = sb, .map = map };
-	sb->freeblocks = sb->image.blocks;
-	sb->nextalloc = sb->image.blocks; // this should wrap around to zero
+	sb->freeblocks = sb->super.blocks;
+	sb->nextalloc = sb->super.blocks; // this should wrap around to zero
 	sb->bitmap = bitmap;
 
 	init_buffers(dev, 1 << 20);
@@ -246,11 +246,11 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
 
-	bitmap_dump(bitmap, 0, sb->image.blocks);
-	printf("%Li used, %Li free\n", count_range(bitmap, 0, sb->image.blocks), sb->freeblocks);
+	bitmap_dump(bitmap, 0, sb->super.blocks);
+	printf("%Li used, %Li free\n", count_range(bitmap, 0, sb->super.blocks), sb->freeblocks);
 	bfree(sb, 0x7e);
 	bfree(sb, 0x80);
-	bitmap_dump(bitmap, 0, sb->image.blocks);
+	bitmap_dump(bitmap, 0, sb->super.blocks);
 	return 0;
 }
 #endif

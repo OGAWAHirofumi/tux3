@@ -488,7 +488,7 @@ struct btree new_btree(SB, struct btree_ops *ops)
 	struct bnode *root = rootbuf->data;
 	root->entries[0].block = leafbuf->index;
 	root->count = 1;
-	btree.root = (struct diskroot){ .block = rootbuf->index, .depth = 1 };
+	btree.root = (struct root){ .block = rootbuf->index, .depth = 1 };
 	printf("root at %Li\n", rootbuf->index);
 	printf("leaf at %Li\n", leafbuf->index);
 	brelse_dirty(rootbuf);

@@ -264,8 +264,8 @@ void init_tux3(SB) // why am I separate?
 {
 	struct inode *bitmap = new_inode(sb, -1, &(struct create){ .mode = S_IFREG | S_IRWXU });
 	sb->bitmap = bitmap;
-	sb->image.blockbits = sb->devmap->dev->bits;
-	sb->blocksize = 1 << sb->image.blockbits;
+	sb->super.blockbits = sb->devmap->dev->bits;
+	sb->blocksize = 1 << sb->super.blockbits;
 	sb->itree = new_btree(sb, &itree_ops);
 	sb->itree.entries_per_leaf = 64; // !!! should depend on blocksize
 	bitmap->btree = new_btree(sb, &dtree_ops);
@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	struct map *map = new_map(dev, NULL);
 	struct sb *sb = &(struct sb){
-		.image = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
+		.super = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.devmap = map,
@@ -321,7 +321,7 @@ int main(int argc, char *argv[])
 	show_buffers(inode->map);
 	show_buffers(root->map);
 	show_buffers(sb->devmap);
-	bitmap_dump(sb->bitmap, 0, sb->image.blocks);
+	bitmap_dump(sb->bitmap, 0, sb->super.blocks);
 	show_tree_range(&sb->itree, 0, -1);
 	return 0;
 }

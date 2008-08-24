@@ -12,27 +12,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
-#include <byteswap.h>
 #include "tux3.h"
-
-typedef u16 be_u16;
-typedef u32 be_u32;
-typedef u64 be_u64;
-
-static inline u16 be_to_u16(be_u16 val)
-{
-	return bswap_16(val);
-}
-
-static inline u32 be_to_u32(be_u32 val)
-{
-	return bswap_32(val);
-}
-
-static inline u64 be_to_u64(be_u64 val)
-{
-	return bswap_64(val);
-}
 
 enum {
 	CTIME_OWNER_ATTR = 7,
@@ -46,14 +26,14 @@ unsigned atsize[16] = {
 };
 
 struct size_mtime_attr { u64 size:60, mtime:54; };
-struct data_btree_attr { struct diskroot root; };
+struct data_btree_attr { struct root root; };
 
 struct iattrs {
-	struct diskroot root;
+	struct root root;
 	u64 mtime, isize;
 } iattrs;
 
-int load_inode(void *base, unsigned size )
+int decode_attrs(void *base, unsigned size )
 {
 	struct iattrs iattrs = { };
 	unsigned char *attr = base, *limit = base + size;
@@ -71,7 +51,7 @@ int load_inode(void *base, unsigned size )
 			break;
 		case DATA_BTREE_ATTR:
 			v64 = be_to_u64(*(u64 *)attr);
-			iattrs.root = (struct diskroot){
+			iattrs.root = (struct root){
 				.block = v64 & (-1ULL >> 16),
 				.depth = v64 >> 48 };
 			printf("btree block = %Lx, depth = %u\n", (L)iattrs.root.block, iattrs.root.depth);
@@ -86,6 +66,10 @@ unknown:
 	return 0;
 }
 
+int encode_btree(void *base, struct root *root)
+{
+	return 0;
+}
 
 #ifndef main
 int main(int argc, char *argv[])
