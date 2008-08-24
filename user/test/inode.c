@@ -109,6 +109,12 @@ struct inode *new_inode(SB, inum_t inum, struct create *create)
 	return inode;
 }
 
+void free_inode(struct inode *inode)
+{
+	free_map(inode->map);
+	free(inode);
+}
+
 struct inode *open_inode(SB, inum_t goal, struct create *create)
 {
 	int err = -ENOENT, levels = sb->itree.root.levels;
@@ -215,26 +221,31 @@ void init_tux3(SB)
 	bitmap->btree = new_btree(sb, &dtree_ops);
 }
 
-struct inode *tuxopen(struct inode *dir, char *name, int len, inum_t inum, struct create *create)
+struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *create)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (!create) {
-		if (!entry)
+		if (!buffer)
 			return NULL;
-		inum = entry->inode;
+		inum_t inum = entry->inode;
 		brelse(buffer);
-		goto open;
+		open_inode(dir->sb, inum, NULL);
 	}
-	// !!! choose an inum !!! //
-	if (entry) {
+	/* create */
+	if (buffer) {
 		brelse(buffer);
-		return NULL;
+		return NULL; // err_ptr(-EEXIST) ???
 	}
-	if (ext2_create_entry(dir, name, len, inum, create->mode))
-		return NULL;
-open:
-	return open_inode(dir->sb, inum, create);
+	struct inode *inode = open_inode(dir->sb, dir->sb->nextalloc, create);
+	if (inode) {
+		if (ext2_create_entry(dir, name, len, inode->inum, create->mode)) {
+			// !!! what about the orphan above?
+			free_inode(inode);
+			inode = NULL;
+		}
+	}
+	return inode;
 }
 
 void tuxsync(struct inode *inode)
@@ -247,8 +258,7 @@ void tuxsync(struct inode *inode)
 void tuxclose(struct inode *inode)
 {
 	tuxsync(inode);
-	free_map(inode->map);
-	free(inode);
+	free_inode(inode);
 }
 
 int main(int argc, char *argv[])
@@ -271,13 +281,14 @@ int main(int argc, char *argv[])
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
+		.nextalloc = 0x40,
 	};
 
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
 	struct inode *root = open_inode(sb, 100, &(struct create){ .mode = S_IFDIR | S_IRWXU });
-	struct inode *inode = tuxopen(root, "foo", 3, 5, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	struct inode *inode = tuxopen(root, "foo", 3, &(struct create){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
 	ext2_dump_entries(getblk(root->map, 0), 1 << map->dev->bits);
