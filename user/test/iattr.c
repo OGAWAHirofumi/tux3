@@ -16,17 +16,19 @@
 #include "tux3.h"
 
 enum {
-	CTIME_OWNER_ATTR = 6,
-	MTIME_SIZE_ATTR = 7,
-	DATA_BTREE_ATTR = 9,
-	LINK_COUNT_ATTR = 8,
+	MODE_OWNER_ATTR = 6,
+	CTIME_SIZE_ATTR = 7,
+	DATA_BTREE_ATTR = 8,
+	LINK_COUNT_ATTR = 9,
+	MTIME_ATTR = 10,
 };
 
 unsigned atsize[16] = {
-	[CTIME_OWNER_ATTR] = 18,
-	[MTIME_SIZE_ATTR] = 14,
+	[MODE_OWNER_ATTR] = 12,
+	[CTIME_SIZE_ATTR] = 14,
 	[DATA_BTREE_ATTR] = 8,
 	[LINK_COUNT_ATTR] = 4,
+	[MTIME_ATTR] = 6,
 };
 
 struct size_mtime_attr { u64 size:60, mtime:54; };
@@ -34,7 +36,7 @@ struct data_btree_attr { struct root root; };
 
 struct iattrs {
 	struct root root;
-	u64 mtime, ctime, isize;
+	u64 mtime, ctime, atime, isize;
 	u32 mode, uid, gid, links;
 } iattrs;
 
@@ -77,19 +79,17 @@ int decode_attrs(SB, void *attrs, unsigned size)
 		if ((version = head & 0xfff))
 			continue;
 		switch (kind = (head >> 12)) {
-		case CTIME_OWNER_ATTR:
-			attrs = decode48(sb, attrs, &iattrs.ctime);
+		case MODE_OWNER_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.mode);
 			attrs = decode32(sb, attrs, &iattrs.uid);
 			attrs = decode32(sb, attrs, &iattrs.gid);
-			//printf("ctime = %Lx, mode = %x\n", (L)iattrs.ctime, iattrs.mode);
-			//printf("uid = %x, gid = %x\n", iattrs.uid, iattrs.gid);
+			//printf("mode = %x uid = %x, gid = %x\n", iattrs.mode, iattrs.uid, iattrs.gid);
 			break;
-		case MTIME_SIZE_ATTR:
+		case CTIME_SIZE_ATTR:
 			attrs = decode64(sb, attrs - 2, &v64);
 			attrs = decode64(sb, attrs, &iattrs.isize);
-			iattrs.mtime = v64 & (-1ULL >> 16);
-			//printf("mtime = %Lx, isize = %Lx\n", (L)iattrs.mtime, (L)iattrs.isize);
+			iattrs.ctime = v64 & (-1ULL >> 16);
+			//printf("ctime = %Lx, isize = %Lx\n", (L)iattrs.ctime, (L)iattrs.isize);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(sb, attrs, &v64);
@@ -99,8 +99,12 @@ int decode_attrs(SB, void *attrs, unsigned size)
 			//printf("btree block = %Lx, depth = %u\n", (L)iattrs.root.block, iattrs.root.depth);
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = decode32(sb, attrs, &iattrs.links);
+			attrs = decode48(sb, attrs, &iattrs.mtime);
 			//printf("links = %u\n", iattrs.links);
+			break;
+		case MTIME_ATTR:
+			attrs = decode48(sb, attrs, &iattrs.mtime);
+			printf("mtime = %Lx\n", (L)iattrs.mtime);
 			break;
 		default:
 			warn("unknown attribute kind %i", kind);
@@ -121,19 +125,17 @@ int dump_attrs(SB, void *attrs, unsigned size)
 		if ((version = head & 0xfff))
 			continue;
 		switch (kind = (head >> 12)) {
-		case CTIME_OWNER_ATTR:
-			attrs = decode48(sb, attrs, &iattrs.ctime);
+		case MODE_OWNER_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.mode);
 			attrs = decode32(sb, attrs, &iattrs.uid);
 			attrs = decode32(sb, attrs, &iattrs.gid);
-			printf("ctime %Lx mode %x ", (L)iattrs.ctime, iattrs.mode);
-			printf("uid %x gid %x ", iattrs.uid, iattrs.gid);
+			printf("mode = %x uid = %x gid = %x ", iattrs.mode, iattrs.uid, iattrs.gid);
 			break;
-		case MTIME_SIZE_ATTR:
+		case CTIME_SIZE_ATTR:
 			attrs = decode64(sb, attrs - 2, &v64);
 			attrs = decode64(sb, attrs, &iattrs.isize);
-			iattrs.mtime = v64 & (-1ULL >> 16);
-			printf("mtime %Lx isize %Lx ", (L)iattrs.mtime, (L)iattrs.isize);
+			iattrs.ctime = v64 & (-1ULL >> 16);
+			printf("ctime %Lx isize %Lx ", (L)iattrs.ctime, (L)iattrs.isize);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(sb, attrs, &v64);
@@ -145,6 +147,10 @@ int dump_attrs(SB, void *attrs, unsigned size)
 		case LINK_COUNT_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.links);
 			printf("links %u ", iattrs.links);
+			break;
+		case MTIME_ATTR:
+			attrs = decode48(sb, attrs, &iattrs.mtime);
+			printf("mtime = %Lx ", (L)iattrs.mtime);
 			break;
 		default:
 			printf("<?%i?> ", kind);
@@ -190,17 +196,22 @@ void *encode_btree(SB, void *attrs, struct root *root)
 	return encode64(sb, attrs, ((u64)root->depth) << 48 | root->block);
 }
 
-void *encode_msize(SB, void *attrs, u64 mtime, u64 isize)
+void *encode_csize(SB, void *attrs, u64 ctime, u64 isize)
 {
-	attrs = encode_kind(sb, attrs, MTIME_SIZE_ATTR);
-	attrs = encode48(sb, attrs, mtime);
+	attrs = encode_kind(sb, attrs, CTIME_SIZE_ATTR);
+	attrs = encode48(sb, attrs, ctime);
 	return encode64(sb, attrs, isize);
 }
 
-void *encode_owner(SB, void *attrs, u64 ctime, u32 mode, u32 uid, u32 gid)
+void *encode_mtime(SB, void *attrs, u64 mtime)
 {
-	attrs = encode_kind(sb, attrs, CTIME_OWNER_ATTR);
-	attrs = encode48(sb, attrs, ctime);
+	attrs = encode_kind(sb, attrs, MTIME_ATTR);
+	return encode48(sb, attrs, mtime);
+}
+
+void *encode_owner(SB, void *attrs, u32 mode, u32 uid, u32 gid)
+{
+	attrs = encode_kind(sb, attrs, MODE_OWNER_ATTR);
 	attrs = encode32(sb, attrs, mode);
 	attrs = encode32(sb, attrs, uid);
 	return encode32(sb, attrs, gid);
@@ -225,14 +236,15 @@ unsigned howbig(u8 kind[], unsigned howmany)
 int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .version = 0 };
-	u8 alist[] = { DATA_BTREE_ATTR, MTIME_SIZE_ATTR, CTIME_OWNER_ATTR, LINK_COUNT_ATTR };
+	u8 alist[] = { DATA_BTREE_ATTR, CTIME_SIZE_ATTR, MODE_OWNER_ATTR, LINK_COUNT_ATTR };
 	printf("need %i attr bytes\n", howbig(alist, sizeof(alist)));
 	char iattrs[1000] = { };
 	char *attrs = iattrs;
-	attrs = encode_owner(sb, attrs, 0xdeadfaced00d, 0x666, 0x12121212, 0x34343434);
+	attrs = encode_owner(sb, attrs, 0x666, 0x12121212, 0x34343434);
 	attrs = encode_btree(sb, attrs, &(struct root){ .block = 0xcaba1f00d, .depth = 3 });
-	attrs = encode_msize(sb, attrs, 0xdec0debead, 0x123456789);
+	attrs = encode_csize(sb, attrs, 0xdec0debead, 0x123456789);
 	attrs = encode_links(sb, attrs, 999);
+	attrs = encode_mtime(sb, attrs, 0xdeadfaced00d);
 	decode_attrs(sb, iattrs, attrs - iattrs);
 	dump_attrs(sb, iattrs, attrs - iattrs);
 	return 0;
