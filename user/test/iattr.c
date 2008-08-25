@@ -86,25 +86,22 @@ int decode_attrs(SB, void *attrs, unsigned size)
 			//printf("mode = %x uid = %x, gid = %x\n", iattrs.mode, iattrs.uid, iattrs.gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = decode64(sb, attrs - 2, &v64);
+			attrs = decode48(sb, attrs, &iattrs.ctime);
 			attrs = decode64(sb, attrs, &iattrs.isize);
-			iattrs.ctime = v64 & (-1ULL >> 16);
 			//printf("ctime = %Lx, isize = %Lx\n", (L)iattrs.ctime, (L)iattrs.isize);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(sb, attrs, &v64);
-			iattrs.root = (struct root){
-				.block = v64 & (-1ULL >> 16),
-				.depth = v64 >> 48 };
+			iattrs.root = (struct root){ .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 };
 			//printf("btree block = %Lx, depth = %u\n", (L)iattrs.root.block, iattrs.root.depth);
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = decode48(sb, attrs, &iattrs.mtime);
+			attrs = decode32(sb, attrs, &iattrs.links);
 			//printf("links = %u\n", iattrs.links);
 			break;
 		case MTIME_ATTR:
 			attrs = decode48(sb, attrs, &iattrs.mtime);
-			printf("mtime = %Lx\n", (L)iattrs.mtime);
+			//printf("mtime = %Lx\n", (L)iattrs.mtime);
 			break;
 		default:
 			warn("unknown attribute kind %i", kind);
@@ -129,19 +126,16 @@ int dump_attrs(SB, void *attrs, unsigned size)
 			attrs = decode32(sb, attrs, &iattrs.mode);
 			attrs = decode32(sb, attrs, &iattrs.uid);
 			attrs = decode32(sb, attrs, &iattrs.gid);
-			printf("mode = %x uid = %x gid = %x ", iattrs.mode, iattrs.uid, iattrs.gid);
+			printf("mode %x uid %x gid %x ", iattrs.mode, iattrs.uid, iattrs.gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = decode64(sb, attrs - 2, &v64);
+			attrs = decode48(sb, attrs, &iattrs.ctime);
 			attrs = decode64(sb, attrs, &iattrs.isize);
-			iattrs.ctime = v64 & (-1ULL >> 16);
 			printf("ctime %Lx isize %Lx ", (L)iattrs.ctime, (L)iattrs.isize);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(sb, attrs, &v64);
-			iattrs.root = (struct root){
-				.block = v64 & (-1ULL >> 16),
-				.depth = v64 >> 48 };
+			iattrs.root = (struct root){ .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 };
 			printf("btree (block %Lx depth %u) ", (L)iattrs.root.block, iattrs.root.depth);
 			break;
 		case LINK_COUNT_ATTR:
@@ -150,10 +144,10 @@ int dump_attrs(SB, void *attrs, unsigned size)
 			break;
 		case MTIME_ATTR:
 			attrs = decode48(sb, attrs, &iattrs.mtime);
-			printf("mtime = %Lx ", (L)iattrs.mtime);
+			printf("mtime %Lx ", (L)iattrs.mtime);
 			break;
 		default:
-			printf("<?%i?> ", kind);
+			printf("<%i>? ", kind);
 			break;
 		}
 	}
@@ -236,7 +230,7 @@ unsigned howbig(u8 kind[], unsigned howmany)
 int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .version = 0 };
-	u8 alist[] = { DATA_BTREE_ATTR, CTIME_SIZE_ATTR, MODE_OWNER_ATTR, LINK_COUNT_ATTR };
+	u8 alist[] = { DATA_BTREE_ATTR, CTIME_SIZE_ATTR, MODE_OWNER_ATTR, LINK_COUNT_ATTR, MTIME_ATTR };
 	printf("need %i attr bytes\n", howbig(alist, sizeof(alist)));
 	char iattrs[1000] = { };
 	char *attrs = iattrs;
