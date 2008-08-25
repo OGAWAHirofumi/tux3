@@ -232,7 +232,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *cre
 		open_inode(dir->sb, inum, NULL);
 	}
 	/* create it */
-	if (buffer) {
+	if (entry) {
 		brelse(buffer);
 		return NULL; // err_ptr(-EEXIST) ???
 	}
