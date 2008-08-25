@@ -67,6 +67,21 @@ static inline u64 be_to_u64(be_u64 val)
 	return bswap_64(val);
 }
 
+static inline be_u16 u16_to_be(u16 val)
+{
+	return bswap_16(val);
+}
+
+static inline be_u32 u32_to_be(u32 val)
+{
+	return bswap_32(val);
+}
+
+static inline be_u64 u64_to_be(u64 val)
+{
+	return bswap_64(val);
+}
+
 /* Tux3 disk format */
 
 #define SB struct sb *sb
@@ -120,6 +135,7 @@ struct sb
 	unsigned blocksize, blockbits, blockmask;
 	block_t freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
+	unsigned version;
 };
 
 struct inode {

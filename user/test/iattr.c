@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
+#include "hexdump.c"
 #include "tux3.h"
 
 enum {
@@ -33,14 +34,16 @@ struct iattrs {
 	u64 mtime, isize;
 } iattrs;
 
-int decode_attrs(void *base, unsigned size )
+int decode_attrs(void *base, unsigned size)
 {
+	printf("decode %u attr bytes\n", size);
 	struct iattrs iattrs = { };
 	unsigned char *attr = base, *limit = base + size;
 	unsigned kind;
 	u64 v64; // u32 v32; u16 v16;
 	for (; attr < limit - 1; attr += atsize[kind]) {
 		unsigned c = *attr++, version = ((c & 0xf) << 8) | *attr++;
+		kind = c >> 4;
 		if (version)
 			continue;
 		switch ((kind = c >> 4)) {
@@ -66,22 +69,55 @@ unknown:
 	return 0;
 }
 
-int encode_btree(void *base, struct root *root)
+char *encode_atkind(SB, char *attr, unsigned kind)
 {
-	return 0;
+	*(be_u16 *)attr = u16_to_be((kind << 12) | sb->version);
+	return attr + 2;
+}
+
+char *encode_six(SB, char *attr, u64 val)
+{
+	*(be_u16 *)attr = u16_to_be(val >> 32);
+	*(be_u32 *)(attr + 2) = u32_to_be(val);
+	return attr + 6;
+}
+
+char *encode_eight(SB, char *attr, u64 val)
+{
+	*(be_u64 *)attr = u64_to_be(val);
+	return attr + 8;
+}
+
+char *encode_btree(SB, char *attr, struct root *root)
+{
+	attr = encode_atkind(sb, attr, DATA_BTREE_ATTR);
+	return encode_eight(sb, attr, ((u64)root->depth) << 48 | root->block);
+}
+
+char *encode_msize(SB, char *attr, u64 isize, u64 mtime)
+{
+	attr = encode_atkind(sb, attr, MTIME_SIZE_ATTR);
+	attr = encode_six(sb, attr, mtime);
+	return encode_eight(sb, attr, isize);
 }
 
 #ifndef main
 int main(int argc, char *argv[])
 {
+	SB = &(struct sb){ .version = 0 };
 	char iattrs[] = {
 		DATA_BTREE_ATTR << 4, 0,
 			0, 1, 0, 0, 0, 0, 0x12, 0x34,
 		MTIME_SIZE_ATTR << 4, 0,
-			0xc0, 0xde, 0xba, 0xbe, 0xfa, 0xce,
+			0x0, 0x0, 0xba, 0xbe, 0xfa, 0xce,
 			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x01, 0x23,
 	};
-	load_inode(iattrs, sizeof(iattrs));
+	memset(iattrs, 0, sizeof(iattrs));
+	char *attr = iattrs;
+	attr = encode_msize(sb, attr, 0x123456789, 0xbeefdec0de);
+	attr = encode_btree(sb, attr, &(struct root){ .block = 0xbadbabeface, .depth = 3 });
+	hexdump(iattrs, attr - iattrs);
+	decode_attrs(iattrs, attr - iattrs);
 	return 0;
 }
 #endif
