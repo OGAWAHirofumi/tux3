@@ -31,10 +31,6 @@
 #include "btree.c"
 #undef main
 
-#define main notmain5
-#include "iattr.c"
-#undef main
-
 /* High level operations */
 
 int filemap_blockio(struct buffer *buffer, int write)

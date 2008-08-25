@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include "hexdump.c"
 #include "tux3.h"
+#include "iattr.c"
 
 struct ileaf { u16 magic, count; inum_t ibase; char table[]; };
 
@@ -85,7 +86,8 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 		else if (size == 0)
 			printf("<empty>\n");
 		else
-			hexdump(leaf->table + offset, size);
+			dump_attrs(btree->sb, leaf->table + offset, size);
+//			hexdump(leaf->table + offset, size);
 		offset = limit;
 	}
 }
