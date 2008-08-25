@@ -16,14 +16,16 @@
 #include "tux3.h"
 
 enum {
-	CTIME_OWNER_ATTR = 7,
-	MTIME_SIZE_ATTR = 8,
+	CTIME_OWNER_ATTR = 6,
+	MTIME_SIZE_ATTR = 7,
+	LINK_COUNT_ATTR = 8,
 	DATA_BTREE_ATTR = 9,
 };
 
 unsigned atsize[16] = {
 	[CTIME_OWNER_ATTR] = 18,
 	[MTIME_SIZE_ATTR] = 14,
+	[LINK_COUNT_ATTR] = 4,
 	[DATA_BTREE_ATTR] = 8,
 };
 
@@ -33,7 +35,7 @@ struct data_btree_attr { struct root root; };
 struct iattrs {
 	struct root root;
 	u64 mtime, ctime, isize;
-	u32 mode, uid, gid;
+	u32 mode, uid, gid, links;
 } iattrs;
 
 char *decode16(SB, void *attr, unsigned *val)
@@ -87,6 +89,10 @@ int decode_attrs(SB, void *attr, unsigned size)
 				.block = v64 & (-1ULL >> 16),
 				.depth = v64 >> 48 };
 			printf("btree block = %Lx, depth = %u\n", (L)iattrs.root.block, iattrs.root.depth);
+			break;
+		case LINK_COUNT_ATTR:
+			attr = decode32(sb, attr, &iattrs.links);
+			printf("links = %u\n", iattrs.links);
 			break;
 		case CTIME_OWNER_ATTR:
 			attr = decode48(sb, attr, &iattrs.ctime);
@@ -155,6 +161,12 @@ char *encode_owner(SB, char *attr, u64 ctime, u32 mode, u32 uid, u32 gid)
 	return encode32(sb, attr, gid);
 }
 
+char *encode_links(SB, char *attr, u32 links)
+{
+	attr = encode_kind(sb, attr, LINK_COUNT_ATTR);
+	return encode32(sb, attr, links);
+}
+
 unsigned howmuch(u8 kind[], unsigned howmany)
 {
 	unsigned need = 0;
@@ -168,13 +180,14 @@ int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .version = 0 };
 	char iattrs[1000] = { };
+	u8 alist[] = { DATA_BTREE_ATTR, MTIME_SIZE_ATTR, CTIME_OWNER_ATTR, LINK_COUNT_ATTR };
 	memset(iattrs, 0, sizeof(iattrs));
-	printf("need %i attr bytes\n", howmuch((u8[]){ DATA_BTREE_ATTR, MTIME_SIZE_ATTR, CTIME_OWNER_ATTR }, 3));
+	printf("need %i attr bytes\n", howmuch(alist, sizeof(alist)));
 	char *attr = iattrs;
 	attr = encode_msize(sb, attr, 0xdec0debead, 0x123456789);
 	attr = encode_btree(sb, attr, &(struct root){ .block = 0xcaba1f00d, .depth = 3 });
 	attr = encode_owner(sb, attr, 0xdeadfaced00d, 0x666, 0x12121212, 0x34343434);
-//hexdump(iattrs, 16);
+	attr = encode_links(sb, attr, 999);
 	decode_attrs(sb, iattrs, attr - iattrs);
 	return 0;
 }
