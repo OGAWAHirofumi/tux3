@@ -27,7 +27,7 @@ dir: dir.c diskio.c buffer.c dleaf.c buffer.h tux3.h
 dirtest: dir
 	$(VG) $(VGFLAGS) ./dir
 
-inode: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c
+inode: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c hexdump.c
 	$(CC) $(CFLAGS) inode.c buffer.c diskio.c -o inode
 inodetest: inode
 	$(VG) $(VGFLAGS) ./inode foodev
