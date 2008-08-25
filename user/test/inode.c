@@ -109,6 +109,8 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
+//struct inode *get_inode(SB, inum_t inum, struct buffer **buffer)
+
 struct inode *open_inode(SB, inum_t goal, struct create *create)
 {
 	int err = -ENOENT, levels = sb->itree.root.depth;
@@ -122,7 +124,7 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 
 	//ileaf_dump(sb, leafbuf->data);
 	if (create) {
-		trace(warn("new inode 0x%Lx", (L)goal);)
+		trace(warn("create inode 0x%Lx", (L)goal);)
 		/*
 		 * If not at end then next key is greater than goal.  This
 		 * block has the highest ibase less than or equal to goal.
@@ -135,14 +137,18 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 		 * way to verify that expanded inum was empty, pass size by ref?
 		 */
 		goal = find_empty_inode(&sb->itree, leafbuf->data, goal);
+		/*
+		 * Need to search following blocks if goal is next_key.  Should
+		 * never be greater, assert.
+		 */
 		assert(goal < next_key(path, levels));
 
 		size = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
 		void *base = attrs = tree_expand(&sb->itree, goal, size, path);
 		if (!attrs)
 			goto eek; // what was the error???
-		inode = new_inode(sb, goal, create);
-		inode->btree = new_btree(sb, &dtree_ops);
+		inode = new_inode(sb, goal, create); // error???
+		inode->btree = new_btree(sb, &dtree_ops); // error???
 		attrs = encode_owner(sb, attrs, create->mode, create->uid, create->gid);
 		attrs = encode_btree(sb, attrs, &inode->btree.root);
 		assert(attrs - base == size);
@@ -246,6 +252,7 @@ void tuxsync(struct inode *inode)
 	int err = flush_buffers(inode->map);
 	if (err)
 		warn("Sync failed (%s)", strerror(-err));
+	//encode_csize(sb, attrs, 0, inode->i_size);
 }
 
 void tuxclose(struct inode *inode)
@@ -295,7 +302,7 @@ int main(int argc, char *argv[])
 	struct inode *inode = tuxopen(root, "foo", 3, &(struct create){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(getblk(root->map, 0), 1 << map->dev->bits);
+	ext2_dump_entries(getblk(root->map, 0), sb->blocksize);
 
 	tuxsync(root);
 	char buf[100] = { };

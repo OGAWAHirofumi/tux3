@@ -442,7 +442,7 @@ struct map_ops devmap_ops = { .blockio = devmap_blockio };
 
 struct map *new_map(struct dev *dev, struct map_ops *ops)
 {
-	struct map *map = malloc(sizeof(*map));
+	struct map *map = malloc(sizeof(*map)); // error???
 	*map = (struct map){ .dev = dev, .ops = ops ? ops : &devmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
 	return map;
