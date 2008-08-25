@@ -141,17 +141,15 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 		goal = find_empty_inode(&sb->itree, leafbuf->data, goal);
 		assert(goal < next_key(path, levels));
 
-		size = sizeof(struct size_mtime_attr) + sizeof(struct data_btree_attr);
-		attrs = tree_expand(&sb->itree, goal, size, path);
+		size = howbig((u8[]){ CTIME_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+		void *base = attrs = tree_expand(&sb->itree, goal, size, path);
 		if (!attrs)
 			goto eek; // what was the error???
-
 		inode = new_inode(sb, goal, create);
 		inode->btree = new_btree(sb, &dtree_ops);
-		struct size_mtime_attr attr1 = { };
-		struct data_btree_attr attr2 = { .root = inode->btree.root };
-		*(typeof(attr1) *)attrs = attr1;
-		*(typeof(attr2) *)(attrs + sizeof(attr1)) = attr2;
+		attrs = encode_owner(sb, attrs, 0, create->mode, create->uid, create->gid);
+		attrs = encode_btree(sb, attrs, &inode->btree.root);
+		assert(attrs - base == size);
 		goto out;
 	}
 	if (size) {

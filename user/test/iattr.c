@@ -167,7 +167,7 @@ char *encode_links(SB, char *attr, u32 links)
 	return encode32(sb, attr, links);
 }
 
-unsigned howmuch(u8 kind[], unsigned howmany)
+unsigned howbig(u8 kind[], unsigned howmany)
 {
 	unsigned need = 0;
 	for (int i = 0; i < howmany; i++)
@@ -182,7 +182,7 @@ int main(int argc, char *argv[])
 	char iattrs[1000] = { };
 	u8 alist[] = { DATA_BTREE_ATTR, MTIME_SIZE_ATTR, CTIME_OWNER_ATTR, LINK_COUNT_ATTR };
 	memset(iattrs, 0, sizeof(iattrs));
-	printf("need %i attr bytes\n", howmuch(alist, sizeof(alist)));
+	printf("need %i attr bytes\n", howbig(alist, sizeof(alist)));
 	char *attr = iattrs;
 	attr = encode_msize(sb, attr, 0xdec0debead, 0x123456789);
 	attr = encode_btree(sb, attr, &(struct root){ .block = 0xcaba1f00d, .depth = 3 });
