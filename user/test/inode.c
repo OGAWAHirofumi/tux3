@@ -177,7 +177,7 @@ int tuxread(struct file *file, char *data, unsigned len)
 		return 0;
 	if (inode->i_size < pos + len)
 		len = inode->i_size - pos;
-	warn("read %Lx/%x", pos & inode->sb->blockmask, len);
+	warn("read %Lx/%x", (L)(pos & inode->sb->blockmask), len);
 	struct buffer *blockbuf = getblk(inode->map, pos >> inode->sb->blockbits);
 	if (!blockbuf)
 		return -EIO;

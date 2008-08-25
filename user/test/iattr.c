@@ -79,7 +79,7 @@ int decode_attrs(SB, void *attr, unsigned size)
 			attr = decode_eight(sb, attr - 2, &v64);
 			attr = decode_eight(sb, attr, &iattrs.isize);
 			iattrs.mtime = v64 & (-1ULL >> 16);
-			printf("mtime = %Lx, isize = %Lx\n", (L)iattrs.mtime, iattrs.isize);
+			printf("mtime = %Lx, isize = %Lx\n", (L)iattrs.mtime, (L)iattrs.isize);
 			break;
 		case DATA_BTREE_ATTR:
 			attr = decode_eight(sb, attr, &v64);
@@ -93,7 +93,7 @@ int decode_attrs(SB, void *attr, unsigned size)
 			attr = decode_four(sb, attr, &iattrs.mode);
 			attr = decode_four(sb, attr, &iattrs.uid);
 			attr = decode_four(sb, attr, &iattrs.gid);
-			printf("ctime = %Lx, mode = %x\n", iattrs.ctime, iattrs.mode);
+			printf("ctime = %Lx, mode = %x\n", (L)iattrs.ctime, iattrs.mode);
 			printf("uid = %x, gid = %x\n", iattrs.uid, iattrs.gid);
 			break;
 		default:
