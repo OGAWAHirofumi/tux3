@@ -101,22 +101,24 @@ char *encode_msize(SB, char *attr, u64 isize, u64 mtime)
 	return encode_eight(sb, attr, isize);
 }
 
+unsigned howbig(u8 kind[], unsigned howmany)
+{
+	unsigned need = 0;
+	for (int i = 0; i < howmany; i++)
+		need += 2 + atsize[kind[i]];
+	return need;
+}
+
 #ifndef main
 int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .version = 0 };
-	char iattrs[] = {
-		DATA_BTREE_ATTR << 4, 0,
-			0, 1, 0, 0, 0, 0, 0x12, 0x34,
-		MTIME_SIZE_ATTR << 4, 0,
-			0x0, 0x0, 0xba, 0xbe, 0xfa, 0xce,
-			0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x01, 0x23,
-	};
+	char iattrs[1000] = { };
 	memset(iattrs, 0, sizeof(iattrs));
+	printf("need %i bytes\n", howbig((u8[]){ DATA_BTREE_ATTR, MTIME_SIZE_ATTR }, 2));
 	char *attr = iattrs;
 	attr = encode_msize(sb, attr, 0x123456789, 0xbeefdec0de);
 	attr = encode_btree(sb, attr, &(struct root){ .block = 0xbadbabeface, .depth = 3 });
-	hexdump(iattrs, attr - iattrs);
 	decode_attrs(iattrs, attr - iattrs);
 	return 0;
 }
