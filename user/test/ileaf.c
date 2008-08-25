@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include "hexdump.c"
 #include "tux3.h"
+#define iattr_included_from_ileaf
 #include "iattr.c"
 
 struct ileaf { u16 magic, count; inum_t ibase; char table[]; };

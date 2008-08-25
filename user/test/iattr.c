@@ -221,6 +221,7 @@ unsigned howbig(u8 kind[], unsigned howmany)
 }
 
 #ifndef main
+#ifndef iattr_included_from_ileaf
 int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .version = 0 };
@@ -237,4 +238,5 @@ int main(int argc, char *argv[])
 	dump_attrs(sb, iattrs, attr - iattrs);
 	return 0;
 }
+#endif
 #endif
