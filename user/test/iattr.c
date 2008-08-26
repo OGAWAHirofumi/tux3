@@ -125,8 +125,8 @@ int dump_attrs(SB, void *attrs, unsigned size)
 		unsigned head;
 		attrs = decode16(sb, attrs, &head);
 		unsigned version = head & 0xfff;
-//		if (version)
-			printf("v%i ", version);
+		if (version)
+			printf("v%i:", version);
 		switch (head >> 12) {
 		case MODE_OWNER_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.mode);
