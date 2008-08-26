@@ -35,6 +35,7 @@ struct size_mtime_attr { u64 size:60, mtime:54; };
 struct data_btree_attr { struct root root; };
 
 struct iattrs {
+	unsigned present;
 	struct root root;
 	u64 mtime, ctime, atime, isize;
 	u32 mode, uid, gid, links;
@@ -74,34 +75,38 @@ int decode_attrs(SB, void *attrs, unsigned size)
 	void *limit = attrs + size;
 	u64 v64;
 	while (attrs < limit - 1) {
-		unsigned head, kind, version;
+		unsigned head;
 		attrs = decode16(sb, attrs, &head);
-		if ((version = head & 0xfff))
+		unsigned version = head & 0xfff, kind = head >> 12;
+		if (version != sb->version) {
+			attrs += atsize[kind];
 			continue;
-		switch (kind = (head >> 12)) {
+		}
+		iattrs.present |= 1 << kind;
+		switch (kind) {
 		case MODE_OWNER_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.mode);
 			attrs = decode32(sb, attrs, &iattrs.uid);
 			attrs = decode32(sb, attrs, &iattrs.gid);
-			//printf("mode = %x uid = %x, gid = %x\n", iattrs.mode, iattrs.uid, iattrs.gid);
+			printf("mode = %x uid = %x, gid = %x\n", iattrs.mode, iattrs.uid, iattrs.gid);
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = decode48(sb, attrs, &iattrs.ctime);
 			attrs = decode64(sb, attrs, &iattrs.isize);
-			//printf("ctime = %Lx, isize = %Lx\n", (L)iattrs.ctime, (L)iattrs.isize);
+			printf("ctime = %Lx, isize = %Lx\n", (L)iattrs.ctime, (L)iattrs.isize);
 			break;
 		case MTIME_ATTR:
 			attrs = decode48(sb, attrs, &iattrs.mtime);
-			//printf("mtime = %Lx\n", (L)iattrs.mtime);
+			printf("mtime = %Lx\n", (L)iattrs.mtime);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(sb, attrs, &v64);
 			iattrs.root = (struct root){ .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 };
-			//printf("btree block = %Lx, depth = %u\n", (L)iattrs.root.block, iattrs.root.depth);
+			printf("btree block = %Lx, depth = %u\n", (L)iattrs.root.block, iattrs.root.depth);
 			break;
 		case LINK_COUNT_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.links);
-			//printf("links = %u\n", iattrs.links);
+			printf("links = %u\n", iattrs.links);
 			break;
 		default:
 			warn("unknown attribute kind %i", kind);
@@ -117,11 +122,12 @@ int dump_attrs(SB, void *attrs, unsigned size)
 	void *limit = attrs + size;
 	u64 v64;
 	while (attrs < limit - 1) {
-		unsigned head, kind, version;
+		unsigned head;
 		attrs = decode16(sb, attrs, &head);
-		if ((version = head & 0xfff))
-			continue;
-		switch (kind = (head >> 12)) {
+		unsigned version = head & 0xfff;
+//		if (version)
+			printf("v%i ", version);
+		switch (head >> 12) {
 		case MODE_OWNER_ATTR:
 			attrs = decode32(sb, attrs, &iattrs.mode);
 			attrs = decode32(sb, attrs, &iattrs.uid);
@@ -147,7 +153,7 @@ int dump_attrs(SB, void *attrs, unsigned size)
 			printf("links %u ", iattrs.links);
 			break;
 		default:
-			printf("<%i>? ", kind);
+			printf("<%i>? ", head >> 12);
 			break;
 		}
 	}
@@ -238,6 +244,7 @@ int main(int argc, char *argv[])
 	attrs = encode_btree(sb, attrs, &(struct root){ .block = 0xcaba1f00d, .depth = 3 });
 	attrs = encode_csize(sb, attrs, 0xdec0debead, 0x123456789);
 	attrs = encode_links(sb, attrs, 999);
+sb->version = 9;
 	attrs = encode_mtime(sb, attrs, 0xdeadfaced00d);
 	decode_attrs(sb, iattrs, attrs - iattrs);
 	dump_attrs(sb, iattrs, attrs - iattrs);
