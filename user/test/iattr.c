@@ -70,7 +70,7 @@ void *decode48(SB, void *attrs, u64 *val)
 
 int decode_attrs(SB, void *attrs, unsigned size, struct iattrs *iattrs)
 {
-	printf("decode %u attr bytes\n", size);
+	//printf("decode %u attr bytes\n", size);
 	void *limit = attrs + size;
 	u64 v64;
 	while (attrs < limit - 1) {
@@ -117,7 +117,7 @@ int decode_attrs(SB, void *attrs, unsigned size, struct iattrs *iattrs)
 
 void dump_attrs(SB, struct iattrs *iattrs)
 {
-	printf("present = %x\n", iattrs->present);
+	//printf("present = %x\n", iattrs->present);
 	for (int which = 0; which < 32; which++) {
 		if (!(iattrs->present & (1 << which)))
 			continue;

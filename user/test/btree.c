@@ -184,7 +184,7 @@ tuxkey_t next_key(struct path *path, int levels)
 
 void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 {
-	printf("%i level btree %p at %Li:\n", btree->root.depth, btree, (L)btree->root.block);
+	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
 	struct path path[30]; // check for overflow!!!
 	if (probe(btree, start, path))
 		error("tell me why!!!");

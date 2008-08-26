@@ -73,10 +73,11 @@ unsigned ileaf_free(BTREE, vleaf *leaf)
 
 void ileaf_dump(BTREE, vleaf *vleaf)
 {
+	SB = btree->sb;
 	struct ileaf *leaf = vleaf;
 	inum_t inum = leaf->ibase;
-	u16 *dict = vleaf + btree->sb->blocksize, offset = 0;
-	printf("0x%Lx/%i, %i free:\n", (L)leaf->ibase, leaf->count, ileaf_free(btree, leaf));
+	u16 *dict = vleaf + sb->blocksize, offset = 0;
+	printf("%i inode(s) starting at 0x%Lx (%i free)\n", leaf->count, (L)leaf->ibase, ileaf_free(btree, leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
 		int limit = dict[i], size = limit - offset;
@@ -86,9 +87,11 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 			printf("<corrupt>\n");
 		else if (size == 0)
 			printf("<empty>\n");
-		else
-			dump_attrs(btree->sb, leaf->table + offset, size);
-//			hexdump(leaf->table + offset, size);
+		else {
+			struct iattrs iattrs = { };
+			decode_attrs(sb, leaf->table + offset, size, &iattrs);
+			dump_attrs(sb, &iattrs);
+		}
 		offset = limit;
 	}
 }
