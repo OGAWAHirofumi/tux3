@@ -108,66 +108,81 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
-//struct inode *get_inode(SB, inum_t inum, struct buffer **buffer)
-
-struct inode *get_inode(struct inode *inode, struct iattr *iattr)
+int get_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
-	inum_t goal = inode->inum;
 	int err = -ENOENT, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
-	if ((err = probe(&sb->itree, goal, path)))
-		return NULL;
+	if ((err = probe(&sb->itree, inode->inum, path)))
+		return err;
 	struct buffer *leafbuf = path[levels].buffer;
+	struct ileaf *leaf = to_ileaf(leafbuf->data);
 	unsigned size = 0;
-	void *attrs = ileaf_lookup(&sb->itree, goal, leafbuf->data, &size);
+	void *attrs;
 
-	//ileaf_dump(sb, leafbuf->data);
-	if (iattr) {
-		assert(!inode->btree.root.depth);
-		trace(warn("create inode 0x%Lx", (L)goal);)
-		/*
-		 * If not at end then next key is greater than goal.  This
-		 * block has the highest ibase less than or equal to goal.
-		 * Ibase should be equal to btree key, so assert.  Search block
-		 * even if base inum is way too low.  Whatever inum comes back
-		 * from the search (it will be above the highest inum in the
-		 * block if base was too low) expand that empty inum.  If ibase
-		 * was too low, low level split will fail and expand will create
-		 * a new inode table block with ibase at the goal.  Need some
-		 * way to verify that expanded inum was empty, pass size by ref?
-		 */
-		goal = find_empty_inode(&sb->itree, leafbuf->data, goal);
-		/*
-		 * Need to search following blocks if goal is next_key.  Should
-		 * never be greater, assert.
-		 */
-		assert(goal < next_key(path, levels));
-
-		size = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
-		void *base = attrs = tree_expand(&sb->itree, goal, size, path);
-		if (!attrs)
-			goto eek; // what was the error???
-		inode->btree = new_btree(sb, &dtree_ops); // error???
-		attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
-		attrs = encode_btree(sb, attrs, &inode->btree.root);
-		assert(attrs - base == size);
-		goto out; // !!! load iattrs into inode
-	}
-	if (size) {
-		trace(warn("found inode 0x%Lx", (L)goal);)
+	if (!iattr) {
+		attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &size);
+		if (!attrs) {
+			trace(warn("no inode 0x%Lx", (L)inode->inum);)
+			release_path(path, levels + 1);
+			return -ENOENT;
+		}	
+		trace(warn("found inode 0x%Lx", (L)inode->inum);)
+		//ileaf_dump(sb, leafbuf->data);
 		hexdump(attrs, size);
 		/* may have to expand */
 		// inode = do we have to have an inode/dentry cache now?
-		goto out;
+		release_path(path, levels + 1);
+		return 0;
 	}
-	trace(warn("no inode 0x%Lx", (L)goal);)
-	err = -ENOENT;
+
+	trace(warn("create inode 0x%Lx", (L)inode->inum);)
+	assert(!inode->btree.root.depth);
+	/*
+	 * If not at end then next key is greater than goal.  This
+	 * block has the highest ibase less than or equal to goal.
+	 * Ibase should be equal to btree key, so assert.  Search block
+	 * even if ibase is way too low.  If goal comes
+	 * back equal to next_key then there is no room to create more
+	 * inodes here, advance to the next block and repeat the search.
+	 * Otherwise, expand the inum goal that came back.  If ibase
+	 * was too low to create the inode in that block then the low
+	 * level split will fail and expand will create
+	 * a new inode table block with ibase at the goal.
+	 *
+	 * Need some
+	 * way to verify that expanded inum was empty, pass size by ref?
+	 */
+	inum_t goal = inode->inum;
+	while (1) {
+		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, leaf->ibase);
+		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
+		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
+		if (goal < next_key(path, levels))
+			break;
+		int more = advance(leafbuf->map, path, levels);
+		printf("no more inode space here, advance %i\n", more);
+	}
+	/*
+	 * Need to search following blocks if goal is next_key.  Should
+	 * never be greater, assert.
+	 */
+	assert(goal < next_key(path, levels));
+
+	size = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	void *base = attrs = tree_expand(&sb->itree, goal, size, path);
+	if (!attrs)
+		goto eek; // what was the error???
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
+	attrs = encode_btree(sb, attrs, &inode->btree.root);
+	assert(attrs - base == size);
+	goto out; // !!! load iattrs into inode
 eek:
 	err = -EINVAL;
 out:
 	release_path(path, levels + 1);
-	return inode;
+	return 0;
 }
 
 int tuxread(struct file *file, char *data, unsigned len)
@@ -229,7 +244,8 @@ struct inode *tuxopen(struct inode *dir, char *name, int len)
 		return NULL;
 	inum_t inum = entry->inum;
 	brelse(buffer);
-	return get_inode(new_inode(dir->sb, inum), NULL);
+	struct inode *inode = new_inode(dir->sb, inum);
+	return get_inode(inode, NULL) ? NULL : inode;
 }
 
 struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *iattr)
@@ -240,8 +256,11 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 		brelse(buffer);
 		return NULL; // err_ptr(-EEXIST) ???
 	}
-	struct inode *inode = get_inode(new_inode(dir->sb, dir->sb->nextalloc), iattr);
+	struct inode *inode = new_inode(dir->sb, dir->sb->nextalloc);
 	if (!inode)
+		return NULL; // err ???
+	int err = get_inode(inode, iattr);
+	if (err)
 		return NULL; // err ???
 	if (!ext2_create_entry(dir, name, len, inode->inum, iattr->mode))
 		return inode;
@@ -302,7 +321,8 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
-	struct inode *root = get_inode(new_inode(sb, 100), &(struct iattr){ .mode = S_IFREG | S_IRWXU });
+	struct inode *root = new_inode(sb, 100);
+	get_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
 	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
