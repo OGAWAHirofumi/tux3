@@ -94,7 +94,9 @@ static inline be_u64 u64_to_be(u64 val)
  */
 
 
-#define MAX_INODES (1ULL << 48)
+#define MAX_INODES_BITS 48
+#define MAX_BLOCKS_BITS 48
+#define MAX_FILESIZE_BITS 60
 
 struct disktree { be_u64 depth:16, block:48; };
 

@@ -41,6 +41,8 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct map *devmap = sb->devmap;
 	struct dev *dev = devmap->dev;
 	warn("%s <%Lx:%Lx>", write ? "write" : "read", (L)inode->inum, buffer->index);
+	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
+		return -EIO;
 	assert(dev->bits >= 9 && dev->fd);
 
 	int err, levels = inode->btree.root.depth;
@@ -191,17 +193,21 @@ int tuxread(struct file *file, char *data, unsigned len)
 {
 	loff_t pos = file->f_pos;
 	struct inode *inode = file->f_inode;
+	block_t block = pos >> inode->sb->blockbits;
 	if (pos > inode->i_size)
 		return 0;
 	if (inode->i_size < pos + len)
 		len = inode->i_size - pos;
-	warn("read %Lx/%x", (L)(pos & inode->sb->blockmask), len);
-	struct buffer *blockbuf = getblk(inode->map, pos >> inode->sb->blockbits);
+	warn("read %Lx/%x", (L)pos, len);
+	if (block & (-1LL << MAX_FILESIZE_BITS))
+		return -EIO;
+	struct buffer *blockbuf = getblk(inode->map, block);
 	if (!blockbuf)
 		return -EIO;
 	memcpy(data, blockbuf->data + (pos & inode->sb->blockmask), len);
 	brelse(blockbuf);
 	file->f_pos += len;
+	warn("file pos %Lx", (L)file->f_pos);
 	return len;
 }
 
@@ -209,8 +215,11 @@ int tuxwrite(struct file *file, char *data, unsigned len)
 {
 	loff_t pos = file->f_pos;
 	struct inode *inode = file->f_inode;
+	block_t block = pos >> inode->sb->blockbits;
 	//warn("write %Lx/%x", pos & inode->sb->blockmask, len);
-	struct buffer *blockbuf = getblk(inode->map, pos >> inode->sb->blockbits);
+	if (block & (-1LL << MAX_FILESIZE_BITS))
+		return -EIO;
+	struct buffer *blockbuf = getblk(inode->map, block);
 	if (!blockbuf)
 		return -EIO;
 	memcpy(blockbuf->data + (pos & inode->sb->blockmask), data, len);
@@ -224,6 +233,7 @@ int tuxwrite(struct file *file, char *data, unsigned len)
 
 void tuxseek(struct file *file, loff_t pos)
 {
+	warn("seek to 0x%Lx", pos);
 	file->f_pos = pos;
 }
 
@@ -295,7 +305,7 @@ void tuxclose(struct inode *inode)
 
 void init_tux3(SB) // why am I separate?
 {
-	struct inode *bitmap = new_inode(sb, -1);
+	struct inode *bitmap = new_inode(sb, 0);
 	sb->bitmap = bitmap;
 	sb->super.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->super.blockbits;
@@ -331,7 +341,7 @@ int main(int argc, char *argv[])
 	init_tux3(sb);
 
 printf("---- create root ----\n");
-	struct inode *root = new_inode(sb, 100);
+	struct inode *root = new_inode(sb, 0xd);
 	get_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
 printf("---- create file ----\n");
 	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
@@ -342,13 +352,15 @@ printf("---- create file ----\n");
 	tuxsync(root);
 	char buf[100] = { };
 	struct file *file = &(struct file){ .f_inode = inode };
-	tuxwrite(file, "hello ", 6);
+	tuxseek(file, (1LL << 60) - 12);
+	int err = tuxwrite(file, "hello ", 6);
+printf("err = %i\n", err);
 	tuxwrite(file, "world!", 6);
 	tuxsync(inode);
 	tuxsync(sb->bitmap);
 	flush_buffers(sb->devmap);
 
-	tuxseek(file, 0);
+	tuxseek(file, (1LL << 60) - 12);
 	int got = tuxread(file, buf, sizeof(buf));
 	//printf("got %x bytes\n", got);
 	if (got < 0)
