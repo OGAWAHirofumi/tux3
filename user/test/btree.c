@@ -386,9 +386,9 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count++;
 }
 
-int insert_child(struct btree *btree, u64 childkey, block_t childblock, struct path path[])
+int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct path path[])
 {
-	trace(printf("insert child with key %Lu into tree at 0x%Li\n", (L)childkey, (L)btree->root.block);)
+	trace(printf("insert node 0x%Lx key 0x%Lx into node 0x%Lx\n", (L)childblock, (L)childkey, (L)btree->root.block);)
 	int levels = btree->root.depth;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
@@ -472,9 +472,9 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned more, struct path 
 	brelse_dirty(newbuf);
 	space = (ops->leaf_expand)(btree, key, leafbuf->data, more);
 	assert(space);
-	int err = insert_child(btree, newkey, childblock, path);
+	int err = insert_node(btree, newkey, childblock, path);
 	if (err) {
-		warn("insert_child failed (%s)", strerror(-err));
+		warn("insert_node failed (%s)", strerror(-err));
 		return NULL;
 	}
 	return space;

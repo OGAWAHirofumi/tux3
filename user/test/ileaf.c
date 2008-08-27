@@ -219,13 +219,14 @@ void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, unsigned more)
 	return attrs;
 }
 
-inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t start)
+inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal)
 {
-	assert(start >= leaf->ibase);
-	start -= leaf->ibase;
+	assert(goal >= leaf->ibase);
+	goal -= leaf->ibase;
+	printf("find empty inode starting at %Lx, base %Lx\n", (L)goal, (L)leaf->ibase);
 	u16 *dict = (void *)leaf + btree->sb->blocksize;
-	unsigned i, offset = start && start < leaf->count ? *(dict - start) : 0;
-	for (i = start; i < leaf->count; i++) {
+	unsigned i, offset = goal && goal < leaf->count ? *(dict - goal) : 0;
+	for (i = goal; i < leaf->count; i++) {
 		unsigned limit = *(dict - i - 1);
 		if (offset == limit)
 			break;

@@ -139,19 +139,17 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 	trace(warn("create inode 0x%Lx", (L)inode->inum);)
 	assert(!inode->btree.root.depth);
 	/*
-	 * If not at end then next key is greater than goal.  This
-	 * block has the highest ibase less than or equal to goal.
-	 * Ibase should be equal to btree key, so assert.  Search block
-	 * even if ibase is way too low.  If goal comes
-	 * back equal to next_key then there is no room to create more
+	 * If not at end then next key is greater than goal.  This block has the
+	 * highest ibase less than or equal to goal.  Ibase should be equal to
+	 * btree key, so assert.  Search block even if ibase is way too low.  If
+	 * goal comes back equal to next_key then there is no room to create more
 	 * inodes here, advance to the next block and repeat the search.
-	 * Otherwise, expand the inum goal that came back.  If ibase
-	 * was too low to create the inode in that block then the low
-	 * level split will fail and expand will create
-	 * a new inode table block with ibase at the goal.
 	 *
-	 * Need some
-	 * way to verify that expanded inum was empty, pass size by ref?
+	 * Otherwise, expand the inum goal that came back.  If ibase was too low
+	 * to create the inode in that block then the low level split will fail
+	 * and expand will create a new inode table block with ibase at the goal.
+	 *
+	 * Need some way to verify that expanded inum was empty, pass size by ref?
 	 */
 	inum_t goal = inode->inum;
 	while (1) {
@@ -256,6 +254,13 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 		brelse(buffer);
 		return NULL; // err_ptr(-EEXIST) ???
 	}
+	/*
+	 * For now the inum allocation goal is the same as the block allocation
+	 * goal.  This allows a maximum inum density of one per block and should
+	 * give pretty good spacial correlation between inode table blocks and
+	 * file data belonging to those inodes provided somebody sets the block
+	 * allocation goal based on the directory the file will be in.
+	 */
 	struct inode *inode = new_inode(dir->sb, dir->sb->nextalloc);
 	if (!inode)
 		return NULL; // err ???
@@ -321,8 +326,10 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
+printf("---- create root ----\n");
 	struct inode *root = new_inode(sb, 100);
 	get_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
+printf("---- create file ----\n");
 	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
