@@ -135,13 +135,15 @@ void ileaf_trim(BTREE, struct ileaf *leaf) {
 		leaf->count = 0;
 }
 
+#define SPLIT_AT_INUM
+
 tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
 	u16 *dict = from + btree->sb->blocksize, *destdict = into + btree->sb->blocksize;
 
-#if 1
+#ifdef SPLIT_AT_INUM
 	printf("split at inum 0x%Lx\n", (L)inum);
 	assert(inum >= leaf->ibase);
 	unsigned at = inum - leaf->ibase < leaf->count ? inum - leaf->ibase : leaf->count;
@@ -157,7 +159,8 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	}
 #endif
 	/* should trim leading empty inodes on copy */
-	unsigned split = *(dict - at), free = *(dict - leaf->count);
+	unsigned split = at ? *(dict - at) : 0;
+	unsigned free = *(dict - leaf->count);
 	printf("split at %i (offset %i)\n", at, split);
 	printf("copy out %i bytes at %i\n", free - split, split);
 	assert(free >= split);
@@ -165,9 +168,12 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	dest->count = leaf->count - at;
 	veccopy(destdict - dest->count, dict - leaf->count, dest->count);
 	for (int i = 1; i <= dest->count; i++)
-		*(destdict - i) -= *(dict - at);
-//	dest->ibase = leaf->ibase + at;
+		*(destdict - i) -= split;
+#ifdef SPLIT_AT_INUM
 	dest->ibase = inum;
+#else
+	dest->ibase = leaf->ibase + at;
+#endif
 	leaf->count = at;
 	memset(leaf->table + split, 0, (char *)(dict - leaf->count) - (leaf->table + split));
 	ileaf_trim(btree, leaf);
