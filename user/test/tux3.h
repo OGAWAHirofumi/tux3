@@ -170,6 +170,13 @@ struct btree_ops {
 	block_t (*balloc)(SB);
 };
 
+struct iattr {
+	unsigned present;
+	struct root root;
+	u64 mtime, ctime, atime, isize;
+	u32 mode, uid, gid, links;
+} iattrs;
+
 void hexdump(void *data, unsigned size);
 block_t balloc(SB);
 

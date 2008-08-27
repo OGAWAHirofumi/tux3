@@ -110,7 +110,7 @@ void free_inode(struct inode *inode)
 
 //struct inode *get_inode(SB, inum_t inum, struct buffer **buffer)
 
-struct inode *get_inode(struct inode *inode, struct iattrs *iattr)
+struct inode *get_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
 	inum_t goal = inode->inum;
@@ -232,7 +232,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len)
 	return get_inode(new_inode(dir->sb, inum), NULL);
 }
 
-struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattrs *iattr)
+struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *iattr)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
@@ -302,8 +302,8 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
-	struct inode *root = get_inode(new_inode(sb, 100), &(struct iattrs){ .mode = S_IFREG | S_IRWXU });
-	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattrs){ .mode = S_IFREG | S_IRWXU });
+	struct inode *root = get_inode(new_inode(sb, 100), &(struct iattr){ .mode = S_IFREG | S_IRWXU });
+	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
 	ext2_dump_entries(getblk(root->map, 0), sb->blocksize);

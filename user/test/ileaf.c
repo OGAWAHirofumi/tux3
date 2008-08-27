@@ -88,9 +88,9 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 		else if (size == 0)
 			printf("<empty>\n");
 		else {
-			struct iattrs iattrs = { };
-			decode_attrs(sb, leaf->table + offset, size, &iattrs);
-			dump_attrs(sb, &iattrs);
+			struct iattr iattr = { };
+			decode_attrs(sb, leaf->table + offset, size, &iattr);
+			dump_attrs(sb, &iattr);
 		}
 		offset = limit;
 	}
