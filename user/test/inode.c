@@ -122,18 +122,15 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 
 	if (!iattr) {
 		attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &size);
-		if (!attrs) {
-			trace(warn("no inode 0x%Lx", (L)inode->inum);)
-			release_path(path, levels + 1);
-			return -ENOENT;
-		}	
+		if (!attrs)
+			goto noent;
 		trace(warn("found inode 0x%Lx", (L)inode->inum);)
 		//ileaf_dump(sb, leafbuf->data);
 		hexdump(attrs, size);
 		/* may have to expand */
 		// inode = do we have to have an inode/dentry cache now?
-		release_path(path, levels + 1);
-		return 0;
+		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
+		goto setup;
 	}
 
 	trace(warn("create inode 0x%Lx", (L)inode->inum);)
@@ -175,12 +172,21 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
 	assert(attrs - base == size);
-	goto out; // !!! load iattrs into inode
+	inode->inum = goal;
+setup:
+	release_path(path, levels + 1);
+	inode->i_mode = iattr->mode;
+	inode->i_uid = iattr->uid;
+	inode->i_gid = iattr->gid;
+	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
+	inode->i_links = 1;
+	return 0;
 eek:
 	err = -EINVAL;
-out:
+noent:
 	release_path(path, levels + 1);
-	return 0;
+	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	return err;
 }
 
 int tuxread(struct file *file, char *data, unsigned len)

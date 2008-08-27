@@ -145,7 +145,7 @@ struct inode {
 	inum_t inum;
 	mode_t i_mode;
 	u64 i_size, i_ctime, i_mtime, i_atime, i_uid, i_gid;
-	unsigned i_version;
+	unsigned i_version, i_links;
 };
 
 struct file {
