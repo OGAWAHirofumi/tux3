@@ -143,8 +143,8 @@ struct inode {
 	struct map *map;
 	struct btree btree;
 	inum_t inum;
-	u64 i_size, i_ctime, i_mtime, i_atime;
 	mode_t i_mode;
+	u64 i_size, i_ctime, i_mtime, i_atime, i_uid, i_gid;
 	unsigned i_version;
 };
 

@@ -92,13 +92,12 @@ unmapped:
 }
 
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
-struct create { mode_t mode; unsigned uid, gid; };
 
-struct inode *new_inode(SB, inum_t inum, struct create *create)
+struct inode *new_inode(SB, inum_t inum)
 {
 	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
 	struct inode *inode = malloc(sizeof(*inode));
-	*inode = (struct inode){ .sb = sb, .inum = inum, .map = map, .i_mode = create->mode };
+	*inode = (struct inode){ .sb = sb, .map = map, .inum = inum };
 	map->inode = inode;
 	return inode;
 }
@@ -111,8 +110,10 @@ void free_inode(struct inode *inode)
 
 //struct inode *get_inode(SB, inum_t inum, struct buffer **buffer)
 
-struct inode *open_inode(SB, inum_t goal, struct create *create)
+struct inode *get_inode(struct inode *inode, struct iattrs *iattr)
 {
+	SB = inode->sb;
+	inum_t goal = inode->inum;
 	int err = -ENOENT, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
 	if ((err = probe(&sb->itree, goal, path)))
@@ -120,10 +121,10 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 	struct buffer *leafbuf = path[levels].buffer;
 	unsigned size = 0;
 	void *attrs = ileaf_lookup(&sb->itree, goal, leafbuf->data, &size);
-	struct inode *inode = NULL;
 
 	//ileaf_dump(sb, leafbuf->data);
-	if (create) {
+	if (iattr) {
+		assert(!inode->btree.root.depth);
 		trace(warn("create inode 0x%Lx", (L)goal);)
 		/*
 		 * If not at end then next key is greater than goal.  This
@@ -147,12 +148,11 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 		void *base = attrs = tree_expand(&sb->itree, goal, size, path);
 		if (!attrs)
 			goto eek; // what was the error???
-		inode = new_inode(sb, goal, create); // error???
 		inode->btree = new_btree(sb, &dtree_ops); // error???
-		attrs = encode_owner(sb, attrs, create->mode, create->uid, create->gid);
+		attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
 		attrs = encode_btree(sb, attrs, &inode->btree.root);
 		assert(attrs - base == size);
-		goto out;
+		goto out; // !!! load iattrs into inode
 	}
 	if (size) {
 		trace(warn("found inode 0x%Lx", (L)goal);)
@@ -162,6 +162,7 @@ struct inode *open_inode(SB, inum_t goal, struct create *create)
 		goto out;
 	}
 	trace(warn("no inode 0x%Lx", (L)goal);)
+	err = -ENOENT;
 eek:
 	err = -EINVAL;
 out:
@@ -220,26 +221,29 @@ int purge_inum(BTREE, inum_t inum)
 	return err;
 }
 
-struct inode *tuxopen(struct inode *dir, char *name, int len, struct create *create)
+struct inode *tuxopen(struct inode *dir, char *name, int len)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
-	if (!create) {
-		if (!buffer)
-			return NULL;
-		inum_t inum = entry->inum;
-		brelse(buffer);
-		open_inode(dir->sb, inum, NULL);
-	}
-	/* create it */
+	if (!buffer)
+		return NULL;
+	inum_t inum = entry->inum;
+	brelse(buffer);
+	return get_inode(new_inode(dir->sb, inum), NULL);
+}
+
+struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattrs *iattr)
+{
+	struct buffer *buffer;
+	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
 		brelse(buffer);
 		return NULL; // err_ptr(-EEXIST) ???
 	}
-	struct inode *inode = open_inode(dir->sb, dir->sb->nextalloc, create);
+	struct inode *inode = get_inode(new_inode(dir->sb, dir->sb->nextalloc), iattr);
 	if (!inode)
 		return NULL; // err ???
-	if (!ext2_create_entry(dir, name, len, inode->inum, create->mode))
+	if (!ext2_create_entry(dir, name, len, inode->inum, iattr->mode))
 		return inode;
 	purge_inum(&dir->sb->itree, inode->inum); // test me!!!
 	free_inode(inode);
@@ -263,7 +267,7 @@ void tuxclose(struct inode *inode)
 
 void init_tux3(SB) // why am I separate?
 {
-	struct inode *bitmap = new_inode(sb, -1, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	struct inode *bitmap = new_inode(sb, -1);
 	sb->bitmap = bitmap;
 	sb->super.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->super.blockbits;
@@ -298,8 +302,8 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
-	struct inode *root = open_inode(sb, 100, &(struct create){ .mode = S_IFDIR | S_IRWXU });
-	struct inode *inode = tuxopen(root, "foo", 3, &(struct create){ .mode = S_IFREG | S_IRWXU });
+	struct inode *root = get_inode(new_inode(sb, 100), &(struct iattrs){ .mode = S_IFREG | S_IRWXU });
+	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattrs){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
 	ext2_dump_entries(getblk(root->map, 0), sb->blocksize);
