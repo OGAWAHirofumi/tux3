@@ -122,7 +122,7 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 		unsigned asize;
 		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
 		if (!attrs)
-			goto noent;
+			goto errpath;
 		trace(warn("found inode 0x%Lx", (L)inode->inum);)
 		//ileaf_dump(sb, leafbuf->data);
 		//hexdump(attrs, asize);
@@ -158,11 +158,13 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 			break;
 		int more = advance(leafbuf->map, path, levels);
 		printf("no more inode space here, advance %i\n", more);
+		if (!more)
+			goto errout;
 	}
 	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
 	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
 	if (!attrs)
-		goto eek; // what was the error???
+		goto errmem; // what was the error???
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
@@ -176,10 +178,11 @@ setup:
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
 	inode->i_links = 1;
 	return 0;
-eek:
-	err = -EINVAL;
-noent:
+errmem:
+	err = -ENOMEM;
+errpath:
 	release_path(path, levels + 1);
+errout:
 	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
 	return err;
 }
