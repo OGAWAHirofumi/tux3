@@ -85,13 +85,13 @@ static inline le16 ext2_rec_len_to_disk(unsigned len)
 	return cpu_to_le16(len);
 }
 
-static inline int ext2_match(int len, const char *const name, ext2_dirent *de)
+static inline int ext2_match(int len, const char *const name, ext2_dirent *dirent)
 {
-	if (len != de->name_len)
+	if (len != dirent->name_len)
 		return 0;
-	if (!de->inum)
+	if (!dirent->inum)
 		return 0;
-	return !memcmp(name, de->name, len);
+	return !memcmp(name, dirent->name, len);
 }
 
 static inline ext2_dirent *next_entry(ext2_dirent *p)
@@ -290,6 +290,7 @@ static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
 
 int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 {
+	memset(dirent->name, 0, dirent->name_len);
 	ext2_dirent *prev = NULL, *this = buffer->data;
 	while ((char *)this < (char *)dirent) {
 		if (this->rec_len == 0) {
@@ -303,7 +304,7 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *dirent)
 	if (prev)
 		prev->rec_len = ext2_rec_len_to_disk((void *)dirent +
 		ext2_rec_len_from_disk(dirent->rec_len) - (void *)prev);
-	dirent->inum = 0;
+	dirent->inum = dirent->type = 0;
 	brelse(buffer);
 	return 0;
 }
