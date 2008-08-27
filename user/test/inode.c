@@ -117,18 +117,18 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
-	unsigned size = 0;
-	void *attrs;
 
 	if (!iattr) {
-		attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &size);
+		unsigned asize;
+		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
 		if (!attrs)
 			goto noent;
 		trace(warn("found inode 0x%Lx", (L)inode->inum);)
 		//ileaf_dump(sb, leafbuf->data);
-		hexdump(attrs, size);
-		/* may have to expand */
-		// inode = do we have to have an inode/dentry cache now?
+		//hexdump(attrs, asize);
+		iattr = &(struct iattr){ };
+		decode_attrs(sb, attrs, asize, iattr);
+		dump_attrs(sb, iattr);
 		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
 		goto setup;
 	}
@@ -146,9 +146,10 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 	 * to create the inode in that block then the low level split will fail
 	 * and expand will create a new inode table block with ibase at the goal.
 	 *
-	 * Need some way to verify that expanded inum was empty, pass size by ref?
+	 * Need some way to verify that expanded inum was empty, pass asize by ref?
 	 */
 	inum_t goal = inode->inum;
+	assert(goal < next_key(path, levels));
 	while (1) {
 		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, leaf->ibase);
 		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
@@ -158,20 +159,14 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 		int more = advance(leafbuf->map, path, levels);
 		printf("no more inode space here, advance %i\n", more);
 	}
-	/*
-	 * Need to search following blocks if goal is next_key.  Should
-	 * never be greater, assert.
-	 */
-	assert(goal < next_key(path, levels));
-
-	size = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
-	void *base = attrs = tree_expand(&sb->itree, goal, size, path);
+	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
 	if (!attrs)
 		goto eek; // what was the error???
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
-	assert(attrs - base == size);
+	assert(attrs - base == asize);
 	inode->inum = goal;
 setup:
 	release_path(path, levels + 1);
