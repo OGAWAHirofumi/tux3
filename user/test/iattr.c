@@ -113,7 +113,7 @@ void dump_attrs(SB, struct iattr *iattr)
 			continue;
 		switch (which) {
 		case MODE_OWNER_ATTR:
-			printf("mode %x uid %x gid %x ", iattr->mode, iattr->uid, iattr->gid);
+			printf("mode 0%o uid %x gid %x ", iattr->mode, iattr->uid, iattr->gid);
 			break;
 		case CTIME_SIZE_ATTR:
 			printf("ctime %Lx isize %Lx ", (L)iattr->ctime, (L)iattr->isize);
@@ -122,7 +122,7 @@ void dump_attrs(SB, struct iattr *iattr)
 			printf("mtime %Lx ", (L)iattr->mtime);
 			break;
 		case DATA_BTREE_ATTR:
-			printf("btree %Lx/%u ", (L)iattr->root.block, iattr->root.depth);
+			printf("btree %Lx-%u ", (L)iattr->root.block, iattr->root.depth);
 			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", iattr->links);

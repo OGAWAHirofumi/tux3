@@ -77,15 +77,17 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 	struct ileaf *leaf = vleaf;
 	inum_t inum = leaf->ibase;
 	u16 *dict = vleaf + sb->blocksize, offset = 0;
-	printf("%i inode(s) starting at 0x%Lx (%i free)\n", leaf->count, (L)leaf->ibase, ileaf_free(btree, leaf));
+	printf("inode table 0x%Lx/%i (%i free)\n", (L)leaf->ibase, leaf->count, ileaf_free(btree, leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
 		int limit = dict[i], size = limit - offset;
+		if (!size)
+			continue;
 		printf("  0x%Lx: ", (L)inum);
 		//printf("[%i] ", offset);
 		if (size < 0)
 			printf("<corrupt>\n");
-		else if (size == 0)
+		else if (!size)
 			printf("<empty>\n");
 		else {
 			struct iattr iattr = { };
@@ -170,7 +172,9 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	for (int i = 1; i <= dest->count; i++)
 		*(destdict - i) -= split;
 #ifdef SPLIT_AT_INUM
-	dest->ibase = inum;
+	/* round down to multiple of 64 above ibase */
+	inum_t round = inum & ~0x3fULL;
+	dest->ibase = round > leaf->ibase + leaf->count ? round : inum;
 #else
 	dest->ibase = leaf->ibase + at;
 #endif
