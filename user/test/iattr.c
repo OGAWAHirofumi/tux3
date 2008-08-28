@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 //sb->version = 9;
 	attrs = encode_mtime(sb, attrs, 0xdeadfaced00d);
 	struct iattr iattr = { };
-	printf("decode %i attr bytes\n", attrs - attrbase);
+	printf("decode %ti attr bytes\n", attrs - attrbase);
 	decode_attrs(sb, attrbase, attrs - attrbase, &iattr);
 	dump_attrs(sb, &iattr);
 	return 0;
