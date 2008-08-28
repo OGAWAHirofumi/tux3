@@ -275,32 +275,34 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			return 0;
 		len = inode->i_size - pos;
 	}
-	unsigned blockbits = inode->sb->blockbits;
-	unsigned blocksize = inode->sb->blocksize;
-	unsigned blockmask = inode->sb->blockmask;
+	unsigned bbits = inode->sb->blockbits;
+	unsigned bsize = inode->sb->blocksize;
+	unsigned bmask = inode->sb->blockmask;
 	loff_t tail = len;
 	while (tail) {
-		unsigned offset = pos & blockmask;
-		unsigned chunk = offset + tail > blocksize ? blocksize - offset : tail;
-		struct buffer *blockbuf = getblk(inode->map, pos >> blockbits);
-		if (!blockbuf)
-			return -EIO; // can leave data past inode isize
+		struct buffer *blockbuf = getblk(inode->map, pos >> bbits);
+		if (!blockbuf) {
+			errno = EIO;
+			break;
+		}
+		unsigned from = pos & bmask;
+		unsigned some = from + tail > bsize ? bsize - from : tail;
 		if (write)
-			memcpy(blockbuf->data + offset, data, chunk);
+			memcpy(blockbuf->data + from, data, some);
 		else
-			memcpy(data, blockbuf->data + offset, chunk);
-		printf("%s %u bytes\n", write ? "write" : "read", chunk);
-		hexdump(blockbuf->data + offset, chunk);
+			memcpy(data, blockbuf->data + from, some);
+		printf("%s %u bytes\n", write ? "write" : "read", some);
+		hexdump(blockbuf->data + from, some);
 		set_buffer_dirty(blockbuf);
 		brelse(blockbuf);
-		tail -= chunk;
-		data += chunk;
-		pos += chunk;
+		tail -= some;
+		data += some;
+		pos += some;
 	}
 	file->f_pos = pos;
 	if (write && inode->i_size < pos)
 		inode->i_size = pos;
-	return len - tail;
+	return errno ? -errno : len - tail;
 }
 
 int tuxread(struct file *file, char *data, unsigned len)
