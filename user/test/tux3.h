@@ -1,8 +1,6 @@
 #ifndef TUX3_H
 #define TUX3_H
 
-#include <string.h>
-#include <stdio.h>
 #include <inttypes.h>
 #include <byteswap.h>
 #include "err.h"
@@ -26,6 +24,7 @@ typedef u32 millisecond_t;
 typedef int64_t block_t;
 typedef int64_t inum_t;
 typedef u64 tuxkey_t;
+typedef u32 mode_t;
 typedef int fd_t;
 
 /* Bitmaps */
@@ -84,89 +83,37 @@ static inline be_u64 u64_to_be(u64 val)
 	return bswap_64(val);
 }
 
-static inline void *encode16(void *at, unsigned val)
-{
-	*(be_u16 *)at = u16_to_be(val);
-	return at + sizeof(u16);
-}
-
-static inline void *encode32(void *at, unsigned val)
-{
-	*(be_u32 *)at = u32_to_be(val);
-	return at + sizeof(u32);
-}
-
-static inline void *encode64(void *at, u64 val)
-{
-	*(be_u64 *)at = u64_to_be(val);
-	return at + sizeof(u64);
-}
-
-static inline void *encode48(void *at, u64 val)
-{
-	at = encode16(at, val >> 32);
-	return encode32(at, val);
-}
-
-static inline void *decode16(void *at, unsigned *val)
-{
-	*val = be_to_u16(*(be_u16 *)at);
-	return at + sizeof(u16);
-}
-
-static inline void *decode32(void *at, unsigned *val)
-{
-	*val = be_to_u32(*(be_u32 *)at);
-	return at + sizeof(u32);
-}
-
-static inline void *decode64(void *at, u64 *val)
-{
-	*val = be_to_u64(*(be_u64 *)at);
-	return at + sizeof(u64);
-}
-
-static inline void *decode48(void *at, u64 *val)
-{
-	unsigned part1, part2;
-	at = decode16(at, &part1);
-	at = decode32(at, &part2);
-	*val = (u64)part1 << 32 | part2;
-	return at;
-}
-
 /* Tux3 disk format */
 
 #define SB struct sb *sb
-#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x09, 0x06 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'e', 's', 't', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
  *
  * 2008-08-06: Beginning of time
- * 2008-09-06: Actual checking starts
  */
 
 
 #define MAX_INODES_BITS 48
 #define MAX_BLOCKS_BITS 48
 #define MAX_FILESIZE_BITS 60
-#define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
-#define SB_LOC (1 << 12)
 
 struct disktree { be_u64 depth:16, block:48; };
 
 struct disksuper
 {
 	typeof((char[])SB_MAGIC) magic;
-	be_u64 birthdate;
-	be_u64 flags;
-	be_u64 iroot;
-	be_u64 aroot;
-	be_u16 blockbits;
-	be_u16 unused1;
-	be_u32 unused2;
-	be_u64 volblocks, freeblocks, nextalloc;
+	struct disktree itree;
+	struct disktree ftree;
+	struct disktree atree;
+	u64 create_time;
+	u64 flags;
+	u32 levels;
+	u32 sequence; /* commit block sequence number */
+	block_t blocks;
+	u64 bitblocks;
+	u32 blockbits;
 };
 
 struct root { u64 depth:16, block:48; };
@@ -181,13 +128,15 @@ struct btree {
 struct sb
 {
 	struct disksuper super;
-	struct btree itable;
+	struct btree itree;
+	struct btree ftree;
+	struct btree atree;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	struct map *devmap;
 	struct buffer *rootbuf;
-	struct inode *bitmap, *rootdir, *vtable, *atable;
+	struct inode *bitmap;
 	unsigned blocksize, blockbits, blockmask;
-	block_t volblocks, freeblocks, nextalloc;
+	block_t freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
 	unsigned version;
 };
@@ -197,9 +146,9 @@ struct inode {
 	struct map *map;
 	struct btree btree;
 	inum_t inum;
-	unsigned i_version, present;
-	u64 i_size, i_mtime, i_ctime, i_atime;
-	unsigned i_mode, i_uid, i_gid, i_links;
+	mode_t i_mode;
+	u64 i_size, i_ctime, i_mtime, i_atime, i_uid, i_gid;
+	unsigned i_version, i_links, dirty;
 };
 
 struct file {
@@ -216,34 +165,30 @@ struct btree_ops {
 	int (*leaf_sniff)(BTREE, vleaf *leaf);
 	int (*leaf_init)(BTREE, vleaf *leaf);
 	tuxkey_t (*leaf_split)(BTREE, tuxkey_t key, vleaf *from, vleaf *into);
-	void *(*leaf_resize)(BTREE, tuxkey_t key, vleaf *leaf, unsigned size);
+	void *(*leaf_expand)(BTREE, tuxkey_t key, vleaf *leaf, unsigned more);
 	void (*leaf_dump)(BTREE, vleaf *leaf);
 	unsigned (*leaf_need)(BTREE, vleaf *leaf);
 	unsigned (*leaf_free)(BTREE, vleaf *leaf);
-	int (*leaf_chop)(BTREE, tuxkey_t key, vleaf *leaf);
 	void (*leaf_merge)(BTREE, vleaf *into, vleaf *from);
 	block_t (*balloc)(SB);
-	void (*bfree)(SB, block_t block);
 };
 
 struct iattr {
-	u64 isize, mtime, ctime, atime;
-	unsigned mode, uid, gid, links;
+	unsigned present;
+	struct root root;
+	u64 mtime, ctime, atime, isize;
+	u32 mode, uid, gid, links;
 } iattrs;
 
 void hexdump(void *data, unsigned size);
 block_t balloc(SB);
-void bfree(SB, block_t block);
 
 enum atkind {
-	MIN_ATTR = 6,
 	MODE_OWNER_ATTR = 6,
-	DATA_BTREE_ATTR = 7,
-	CTIME_SIZE_ATTR = 8,
+	CTIME_SIZE_ATTR = 7,
+	DATA_BTREE_ATTR = 8,
 	LINK_COUNT_ATTR = 9,
 	MTIME_ATTR = 10,
-	XATTR_ATTR = 11,
-	MAX_ATTRS
 };
 
 enum atbit {
@@ -252,7 +197,11 @@ enum atbit {
 	DATA_BTREE_BIT = 1 << DATA_BTREE_ATTR,
 	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
 	MTIME_BIT = 1 << MTIME_ATTR,
-	XATTR_BIT = 1 << XATTR_ATTR,
 };
+
+static inline void attr_dirty(struct inode *inode, unsigned mask)
+{
+	inode->dirty |= mask;
+}
 
 #endif

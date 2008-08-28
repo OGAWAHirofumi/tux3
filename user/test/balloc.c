@@ -123,7 +123,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
+block_t balloc_range(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
 	unsigned blocksize = 1 << inode->map->dev->bits;
@@ -173,10 +173,10 @@ final_partial_byte:
 
 block_t balloc(SB)
 {
-	block_t goal = sb->nextalloc, total = sb->volblocks, block;
-	if ((block = balloc_from_range(sb->bitmap, goal, total - goal)) >= 0)
+	block_t goal = sb->nextalloc, total = sb->super.blocks, block;
+	if ((block = balloc_range(sb->bitmap, goal, total - goal)) >= 0)
 		goto found;
-	if ((block = balloc_from_range(sb->bitmap, 0, goal)) >= 0)
+	if ((block = balloc_range(sb->bitmap, 0, goal)) >= 0)
 		goto found;
 	return -1;
 found:
@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
 		set_buffer_uptodate(buffer);
 	}
 	for (int i = 0; i < 12; i++) {
-		block_t block = balloc_from_range(bitmap, 121, 10);
+		block_t block = balloc_range(bitmap, 121, 10);
 		printf("%Li\n", block);
 	}
 	hexdump(getblk(map, 0)->data, dumpsize);

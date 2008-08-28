@@ -123,30 +123,25 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = EXT2_LNK,
 };
 
-void ext2_dump_entries(struct buffer *buffer)
+void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
 {
-	unsigned blocksize = 1 << buffer->map->dev->bits;
 	printf("dirents <%Lx:%Lx>: ", (L)buffer->map->inode->inum, buffer->index);
-	ext2_dirent *entry = (ext2_dirent *)buffer->data;
+	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
-	while (entry < limit) {
-		if (!entry->rec_len) {
-			warn("Zero length entry");
-			break;
-		}
-		if (entry->inum)
+	while (dirent < limit) {
+		if (dirent->inum)
 			printf("%.*s (%x:%i) ",
-				entry->name_len,
-				entry->name,
-				entry->inum,
-				entry->type);
-		entry = next_entry(entry);
+				dirent->name_len,
+				dirent->name,
+				dirent->inum,
+				dirent->type);
+		dirent = next_entry(dirent);
 	}
 	printf("\n");
 	brelse(buffer);
 }
 
-int ext2_create_entry(struct inode *inode, const char *name, int len, unsigned inum, unsigned mode)
+int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, unsigned mode)
 {
 	ext2_dirent *dirent;
 	struct buffer *buffer;
@@ -179,6 +174,7 @@ int ext2_create_entry(struct inode *inode, const char *name, int len, unsigned i
 	rec_len = blocksize;
 	*dirent = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
 	inode->i_size += blocksize;
+	set_buffer_dirty(buffer);
 create:
 	if (dirent->inum) {
 		ext2_dirent *newent = (ext2_dirent *)((char *)dirent + name_len);
@@ -192,24 +188,23 @@ create:
 	dirent->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 	mark_inode_dirty(inode);
-	set_buffer_dirty(buffer);
 	brelse(buffer);
 	return 0;
 }
 
-ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer **result)
+ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct buffer **result)
 {
 	unsigned reclen = EXT2_REC_LEN(len);
-	unsigned blocksize = 1 << dir->map->dev->bits;
-	unsigned blocks = dir->i_size >> dir->map->dev->bits, block;
+	unsigned blocksize = 1 << inode->map->dev->bits;
+	unsigned blocks = inode->i_size >> inode->map->dev->bits, block;
 	for (block = 0; block < blocks; block++) {
-		struct buffer *buffer = bread(dir->map, block);
+		struct buffer *buffer = getblk(inode->map, block);
 		ext2_dirent *dirent = buffer->data;
 		ext2_dirent *limit = (void *)dirent + blocksize - reclen;
 		while (dirent <= limit) {
 			if (dirent->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length dirent at <%Lx:%x>", (L)dir->inum, block);
+				warn("zero length dirent at <%Lx:%x>", (L)inode->inum, block);
 				return NULL;
 			}
 			if (ext2_match(len, name, dirent)) {
@@ -220,7 +215,6 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 		}
 		brelse(buffer);
 	}
-	*result = NULL;
 	return NULL;
 }
 
@@ -239,18 +233,19 @@ static unsigned char filetype[EXT2_TYPES] = {
 
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
 
-static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
+static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
 {
-	loff_t pos = file->f_pos;
-	struct inode *inode = file->f_inode;
-	int revalidate = file->f_version != inode->i_version;
+	loff_t pos = filp->f_pos;
+	struct inode *inode = filp->f_inode;
+	int revalidate = filp->f_version != inode->i_version;
 	unsigned blockbits = inode->map->dev->bits;
 	unsigned blocksize = 1 << blockbits;
 	unsigned blockmask = blocksize - 1;
 	unsigned blocks = inode->i_size >> blockbits;
 	unsigned offset = pos & blockmask;
+
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
-		struct buffer *buffer = bread(inode->map, block);
+		struct buffer *buffer = getblk(inode->map, block);
 		void *base = buffer->data;
 		if (!buffer)
 			return -EIO;
@@ -261,9 +256,9 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 				while (p < entry && p->rec_len)
 					p = next_entry(p);
 				offset = (void *)p - base;
-				file->f_pos = (block << blockbits) + offset;
+				filp->f_pos = (block << blockbits) + offset;
 			}
-			file->f_version = inode->i_version;
+			filp->f_version = inode->i_version;
 			revalidate = 0;
 		}
 		unsigned size = inode->i_size - (block << blockbits);
@@ -276,16 +271,16 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 			}
 			if (entry->inum) {
 				unsigned type = (entry->type < EXT2_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
-				int lame = filldir(
-					state, entry->name, entry->name_len,
+				int full = filldir(
+					dirents, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
 					le32_to_cpu(entry->inum), type);
-				if (lame) {
+				if (full) {
 					brelse(buffer);
 					return 0;
 				}
 			}
-			file->f_pos += ext2_rec_len_from_disk(entry->rec_len);
+			filp->f_pos += ext2_rec_len_from_disk(entry->rec_len);
 		}
 		brelse(buffer);
 		offset = 0;
@@ -332,7 +327,7 @@ int main(int argc, char *argv[])
 	ext2_dirent *entry = ext2_find_entry(map->inode, "hello", 5, &buffer);
 	if (buffer)
 		hexdump(entry, 16);
-	ext2_dump_entries(getblk(map, 0));
+	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
 
 	if (!ext2_delete_entry(buffer, entry)) {
 		show_buffers(map);
@@ -340,15 +335,15 @@ int main(int argc, char *argv[])
 		mark_inode_dirty(map->inode);
 	}
 
-	ext2_dump_entries(getblk(map, 0));
+	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
 	show_buffers(map);
 	struct file *file = &(struct file){ .f_inode = map->inode };
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
-		ext2_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
+		ext2_create_entry(map->inode, name, strlen(name), 0x666, S_IFREG);
 	}
-	ext2_dump_entries(getblk(map, 0));
+	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
 	char dents[10000];
 	ext2_readdir(file, dents, filldir);
 	return 0;

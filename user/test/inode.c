@@ -9,9 +9,7 @@
  * the right to distribute those changes under any license.
  */
 
-#ifndef trace
 #define trace trace_on
-#endif
 
 #define main notmain0
 #include "balloc.c"
@@ -45,7 +43,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	warn("%s <%Lx:%Lx>", write ? "write" : "read", (L)inode->inum, buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	assert(dev->bits >= 8 && dev->fd);
+	assert(dev->bits >= 9 && dev->fd);
 
 	int err, levels = inode->btree.root.depth;
 	struct path path[levels + 1];
@@ -59,20 +57,16 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct buffer *leafbuf = path[levels].buffer;
 	
 	unsigned count = 0;
-	struct extent *found = dleaf_lookup(&inode->btree, leafbuf->data, buffer->index, &count);
+	struct extent *found = leaf_lookup(&inode->btree, buffer->index, leafbuf->data, &count);
 	//dleaf_dump(&inode->btree, leafbuf->data);
 	block_t physical;
 
 	if (write) {
 		if (count) {
 			physical = found->block;
-			trace("found block [%Lx]", (L)physical);
+			trace(warn("found block [%Lx]", (L)physical);)
 		} else {
-			physical = balloc(sb);
-			if (physical == -1) {
-				err = -ENOSPC;
-				goto eek;
-			}
+			physical = balloc(sb); // !!! need an error return
 			struct extent *store = tree_expand(&inode->btree, buffer->index, sizeof(struct extent), path);
 			if (!store)
 				goto eek;
@@ -86,15 +80,15 @@ int filemap_blockio(struct buffer *buffer, int write)
 	if (!count)
 		goto unmapped;
 	physical = found->block;
-	trace("found physical block %Lx", (long long)physical);
+	trace(warn("found physical block %Lx", (long long)physical);)
 	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 eek:
-	warn("cannot add extent to tree: %s", strerror(-err));
+	warn("unable to add extent to tree: %s", strerror(-err));
 	free_block(sb, physical);
 	return -EIO;
 unmapped:
 	/* found a hole */
-	trace("unmapped block %Lx", buffer->index);
+	trace(warn("unmapped block %Lx", buffer->index);)
 	memset(buffer->data, 0, sb->blocksize);
 	return 0;
 }
@@ -104,197 +98,217 @@ struct map_ops filemap_ops = { .blockio = filemap_blockio };
 struct inode *new_inode(SB, inum_t inum)
 {
 	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
-	if (!map)
-		goto eek;
 	struct inode *inode = malloc(sizeof(*inode));
-	if (!inode)
-		goto eek;
 	*inode = (struct inode){ .sb = sb, .map = map, .inum = inum };
-	return inode->map->inode = inode;
-eek:
-	if (map)
-		free_map(map);
-	return NULL;
+	map->inode = inode;
+	return inode;
 }
 
 void free_inode(struct inode *inode)
 {
-	assert(inode->map); /* some inodes are not malloced */
-	free_map(inode->map); // invalidate dirty buffers!!!
+	free_map(inode->map);
 	free(inode);
 }
 
-/*
- * Inode table expansion algorithm
- *
- * First probe for the inode goal.  This retreives the rightmost leaf that
- * contains an inode less than or equal to the goal.  (We could in theory avoid
- * retrieving any leaf at all in some cases if we observe that the the goal must
- * fall into an unallocated gap between two index keys, for what that is worth.
- * Probably not very much.)
- *
- * If not at end then next key is greater than goal.  This block has the highest
- * ibase less than or equal to goal.  Ibase should be equal to btree key, so
- * assert.  Search block even if ibase is way too low.  If goal comes back equal
- * to next_key then there is no room to create more inodes in it, so advance to
- * the next block and repeat.
- *
- * Otherwise, expand the inum goal that came back.  If ibase was too low to
- * create the inode in that block then the low level split will fail and expand
- * will create a new inode table block with ibase at the goal.  We round the
- * goal down to some binary multiple in ileaf_split to reduce the chance of
- * creating inode table blocks with only a small number of inodes.  (Actually
- * we should only round down the split point, not the returned goal.)
- */
-
-int make_inode(struct inode *inode, struct iattr *iattr)
+int get_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
-	int err = -ENOENT, levels = sb->itable.root.depth;
+	int err = -ENOENT, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
-	if ((err = probe(&sb->itable, inode->inum, path)))
+	if ((err = probe(&sb->itree, inode->inum, path)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
 
-	trace("create inode 0x%Lx", (L)inode->inum);
+	if (!iattr) {
+		unsigned asize;
+		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
+		if (!attrs)
+			goto errpath;
+		trace(warn("found inode 0x%Lx", (L)inode->inum);)
+		//ileaf_dump(sb, leafbuf->data);
+		//hexdump(attrs, asize);
+		iattr = &(struct iattr){ };
+		decode_attrs(sb, attrs, asize, iattr);
+		dump_attrs(sb, iattr);
+		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
+		goto setup;
+	}
+
+	trace(warn("create inode 0x%Lx", (L)inode->inum);)
 	assert(!inode->btree.root.depth);
-	inum_t inum = inode->inum;
-	assert(inum < next_key(path, levels));
+	/*
+	 * If not at end then next key is greater than goal.  This block has the
+	 * highest ibase less than or equal to goal.  Ibase should be equal to
+	 * btree key, so assert.  Search block even if ibase is way too low.  If
+	 * goal comes back equal to next_key then there is no room to create more
+	 * inodes here, advance to the next block and repeat the search.
+	 *
+	 * Otherwise, expand the inum goal that came back.  If ibase was too low
+	 * to create the inode in that block then the low level split will fail
+	 * and expand will create a new inode table block with ibase at the goal.
+	 *
+	 * Need some way to verify that expanded inum was empty, pass asize by ref?
+	 */
+	inum_t goal = inode->inum;
+	assert(goal < next_key(path, levels));
 	while (1) {
 		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
-		inum = find_empty_inode(&sb->itable, leafbuf->data, (L)inum);
-		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
-		if (inum < next_key(path, levels))
+		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
+		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
+		if (goal < next_key(path, levels))
 			break;
 		int more = advance(leafbuf->map, path, levels);
 		printf("no more inode space here, advance %i\n", more);
 		if (!more)
 			goto errout;
 	}
-	inode->inum = inum;
+	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
+	if (!attrs)
+		goto errmem; // what was the error???
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
+	attrs = encode_btree(sb, attrs, &inode->btree.root);
+	assert(attrs - base == asize);
+	inode->inum = goal;
+	attr_dirty(inode, MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT);
+setup:
+	release_path(path, levels + 1);
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
 	inode->i_links = 1;
-	inode->btree = new_btree(sb, &dtree_ops); // error???
-	inode->present = MODE_OWNER_BIT|DATA_BTREE_BIT;
-	unsigned size = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
-	void *base = tree_expand(&sb->itable, inum, size, path);
-	if (!base)
-		goto errmem; // what was the error???
-	void *attrs = encode_attrs(sb, base, size, inode);
-	assert(attrs == base + size);
-	release_path(path, levels + 1);
 	return 0;
 errmem:
 	err = -ENOMEM;
+errpath:
 	release_path(path, levels + 1);
 errout:
-	warn("make_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
 	return err;
 }
 
-int open_inode(struct inode *inode)
+int sync_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
-	int err, levels = sb->itable.root.depth;
+	int err = -ENOENT, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
-	if ((err = probe(&sb->itable, inode->inum, path)))
+	if ((err = probe(&sb->itree, inode->inum, path)))
 		return err;
-	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size);
-	if (!attrs) {
-		err = -ENOENT;
-		goto eek;
-	}
-	trace("found inode 0x%Lx", (L)inode->inum);
-	//ileaf_dump(&sb->itable, path[levels].buffer->data);
-	//hexdump(attrs, size);
-	decode_attrs(sb, attrs, size, inode);
-	dump_attrs(inode);
-	err = 0;
-eek:
-	release_path(path, levels + 1);
-	return err;
-}
+	struct buffer *leafbuf = path[levels].buffer;
+	struct ileaf *leaf = to_ileaf(leafbuf->data);
 
-int save_inode(struct inode *inode)
-{
-	trace("save inode 0x%Lx", (L)inode->inum);
-	SB = inode->sb;
-	int err, levels = sb->itable.root.depth;
-	struct path path[levels + 1];
-	if ((err = probe(&sb->itable, inode->inum, path)))
-		return err;
-	unsigned size;
-	void *base = ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size);
-	if (!size)
-		return -EINVAL;
-	if (inode->i_size)
-		inode->present |= CTIME_SIZE_BIT;
-	size = howbig(inode->present);
-	base = tree_expand(&sb->itable, inode->inum, size, path); // error???
-	void *attrs = encode_attrs(sb, base, size, inode);
-	assert(attrs == base + size);
-	release_path(path, levels + 1);
-	dump_attrs(inode);
-	return 0;
-}
-
-int tuxio(struct file *file, char *data, unsigned len, int write)
-{
-	int err = 0;
-	struct inode *inode = file->f_inode;
-	printf("%s %u bytes, isize = 0x%Lx\n", write ? "write" : "read", len, (L)inode->i_size);
-	loff_t pos = file->f_pos;
-	if (write && pos + len > MAX_FILESIZE)
-		return -EFBIG;
-	if (!write && pos + len > inode->i_size) {
-		if (pos >= inode->i_size)
-			return 0;
-		len = inode->i_size - pos;
+	if (!iattr) {
+		unsigned asize;
+		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
+		if (!attrs)
+			goto errpath;
+		trace(warn("found inode 0x%Lx", (L)inode->inum);)
+		//ileaf_dump(sb, leafbuf->data);
+		//hexdump(attrs, asize);
+		iattr = &(struct iattr){ };
+		decode_attrs(sb, attrs, asize, iattr);
+		dump_attrs(sb, iattr);
+		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
+		goto setup;
 	}
-	unsigned bbits = inode->sb->blockbits;
-	unsigned bsize = inode->sb->blocksize;
-	unsigned bmask = inode->sb->blockmask;
-	loff_t tail = len;
-	while (tail) {
-		unsigned from = pos & bmask;
-		unsigned some = from + tail > bsize ? bsize - from : tail;
-		int full = write && some == bsize;
-		struct buffer *buffer = (full ? getblk : bread)(inode->map, pos >> bbits);
-		if (!buffer) {
-			err = -EIO;
+
+	trace(warn("create inode 0x%Lx", (L)inode->inum);)
+	assert(!inode->btree.root.depth);
+	/*
+	 * If not at end then next key is greater than goal.  This block has the
+	 * highest ibase less than or equal to goal.  Ibase should be equal to
+	 * btree key, so assert.  Search block even if ibase is way too low.  If
+	 * goal comes back equal to next_key then there is no room to create more
+	 * inodes here, advance to the next block and repeat the search.
+	 *
+	 * Otherwise, expand the inum goal that came back.  If ibase was too low
+	 * to create the inode in that block then the low level split will fail
+	 * and expand will create a new inode table block with ibase at the goal.
+	 *
+	 * Need some way to verify that expanded inum was empty, pass asize by ref?
+	 */
+	inum_t goal = inode->inum;
+	assert(goal < next_key(path, levels));
+	while (1) {
+		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
+		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
+		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
+		if (goal < next_key(path, levels))
 			break;
-		}
-		if (write)
-			memcpy(buffer->data + from, data, some);
-		else
-			memcpy(data, buffer->data + from, some);
-		printf("transfer %u bytes, block 0x%Lx, buffer %p\n", some, (L)buffer->index, buffer);
-		hexdump(buffer->data + from, some);
-		set_buffer_dirty(buffer);
-		brelse(buffer);
-		tail -= some;
-		data += some;
-		pos += some;
+		int more = advance(leafbuf->map, path, levels);
+		printf("no more inode space here, advance %i\n", more);
+		if (!more)
+			goto errout;
 	}
-	file->f_pos = pos;
-	if (write && inode->i_size < pos)
-		inode->i_size = pos;
-	return err ? err : len - tail;
+	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
+	if (!attrs)
+		goto errmem; // what was the error???
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
+	attrs = encode_btree(sb, attrs, &inode->btree.root);
+	assert(attrs - base == asize);
+	inode->inum = goal;
+setup:
+	release_path(path, levels + 1);
+	inode->i_mode = iattr->mode;
+	inode->i_uid = iattr->uid;
+	inode->i_gid = iattr->gid;
+	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
+	inode->i_links = 1;
+	return 0;
+errmem:
+	err = -ENOMEM;
+errpath:
+	release_path(path, levels + 1);
+errout:
+	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	return err;
 }
 
 int tuxread(struct file *file, char *data, unsigned len)
 {
-	return tuxio(file, data, len, 0);
+	loff_t pos = file->f_pos;
+	struct inode *inode = file->f_inode;
+	block_t block = pos >> inode->sb->blockbits;
+	if (pos > inode->i_size)
+		return 0;
+	if (inode->i_size < pos + len)
+		len = inode->i_size - pos;
+	warn("read %Lx/%x", (L)pos, len);
+	if (pos & (-1LL << MAX_FILESIZE_BITS))
+		return -EIO;
+	struct buffer *blockbuf = getblk(inode->map, block);
+	if (!blockbuf)
+		return -EIO;
+	memcpy(data, blockbuf->data + (pos & inode->sb->blockmask), len);
+	brelse(blockbuf);
+	file->f_pos += len;
+	warn("file pos %Lx", (L)file->f_pos);
+	return len;
 }
 
-int tuxwrite(struct file *file, const char *data, unsigned len)
+int tuxwrite(struct file *file, char *data, unsigned len)
 {
-	return tuxio(file, (void *)data, len, 1);
+	loff_t pos = file->f_pos;
+	struct inode *inode = file->f_inode;
+	block_t block = pos >> inode->sb->blockbits;
+	//warn("write %Lx/%x", pos & inode->sb->blockmask, len);
+	if ((pos + len) & (-1LL << MAX_FILESIZE_BITS))
+		return -EFBIG;
+	struct buffer *blockbuf = getblk(inode->map, block);
+	if (!blockbuf)
+		return -EIO;
+	memcpy(blockbuf->data + (pos & inode->sb->blockmask), data, len);
+	set_buffer_dirty(blockbuf);
+	brelse(blockbuf);
+	file->f_pos += len;
+	if (inode->i_size < file->f_pos)
+		inode->i_size = file->f_pos;
+	return len;
 }
 
 void tuxseek(struct file *file, loff_t pos)
@@ -305,7 +319,7 @@ void tuxseek(struct file *file, loff_t pos)
 
 int purge_inum(BTREE, inum_t inum)
 {
-	int err = -ENOENT, levels = btree->sb->itable.root.depth;
+	int err = -ENOENT, levels = btree->sb->itree.root.depth;
 	struct path path[levels + 1];
 	if (!(err = probe(btree, inum, path))) {
 		err = ileaf_purge(btree, inum, to_ileaf(path[levels].buffer));
@@ -314,25 +328,25 @@ int purge_inum(BTREE, inum_t inum)
 	return err;
 }
 
-struct inode *tuxopen(struct inode *dir, const char *name, int len)
+struct inode *tuxopen(struct inode *dir, char *name, int len)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
-	if (!entry)
+	if (!buffer)
 		return NULL;
 	inum_t inum = entry->inum;
 	brelse(buffer);
 	struct inode *inode = new_inode(dir->sb, inum);
-	return open_inode(inode) ? NULL : inode;
+	return get_inode(inode, NULL) ? NULL : inode;
 }
 
-struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct iattr *iattr)
+struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *iattr)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
 		brelse(buffer);
-		return NULL; // should allow create of a file that already exists
+		return NULL; // err_ptr(-EEXIST) ???
 	}
 	/*
 	 * For now the inum allocation goal is the same as the block allocation
@@ -344,27 +358,23 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct iat
 	struct inode *inode = new_inode(dir->sb, dir->sb->nextalloc);
 	if (!inode)
 		return NULL; // err ???
-	int err = make_inode(inode, iattr);
+	int err = get_inode(inode, iattr);
 	if (err)
 		return NULL; // err ???
 	if (!ext2_create_entry(dir, name, len, inode->inum, iattr->mode))
 		return inode;
-	purge_inum(&dir->sb->itable, inode->inum); // test me!!!
+	purge_inum(&dir->sb->itree, inode->inum); // test me!!!
 	free_inode(inode);
 	inode = NULL;
 	return NULL; // err ???
 }
 
-int tuxflush(struct inode *inode)
+void tuxsync(struct inode *inode)
 {
-	return flush_buffers(inode->map);
-}
-
-int tuxsync(struct inode *inode)
-{
-	tuxflush(inode);
-	save_inode(inode);
-	return 0; // wrong!!!
+	int err = flush_buffers(inode->map);
+	if (err)
+		warn("Sync failed (%s)", strerror(-err));
+	//encode_csize(sb, attrs, 0, inode->i_size);
 }
 
 void tuxclose(struct inode *inode)
@@ -373,180 +383,75 @@ void tuxclose(struct inode *inode)
 	free_inode(inode);
 }
 
-int load_sb(SB)
+void init_tux3(SB) // why am I separate?
 {
-	int err = diskread(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
-	if (err)
-		return err;
-	struct disksuper *disk = &sb->super;
-	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
-		warn("invalid superblock [%Lx]", (L)be_to_u64(*(u64 *)disk->magic));
-		return -ENOENT;
-	}
-	int blockbits = be_to_u16(disk->blockbits);
-	sb->volblocks = be_to_u64(disk->volblocks);
-	sb->nextalloc = be_to_u64(disk->nextalloc);
-	sb->freeblocks = be_to_u64(disk->freeblocks);
-	u64 iroot = be_to_u64(disk->iroot);
-	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
-	sb->blockbits = blockbits,
-	sb->blocksize = 1 << blockbits,
-	sb->blockmask = (1 << blockbits) - 1,
-	sb->devmap->dev->bits = blockbits;
-	//hexdump(&sb->super, sizeof(sb->super));
-	return 0;
+	struct inode *bitmap = new_inode(sb, 0);
+	sb->bitmap = bitmap;
+	sb->super.blockbits = sb->devmap->dev->bits;
+	sb->blocksize = 1 << sb->super.blockbits;
+	sb->itree = new_btree(sb, &itree_ops);
+	sb->itree.entries_per_leaf = 64; // !!! should depend on blocksize
+	bitmap->btree = new_btree(sb, &dtree_ops);
 }
 
-int save_sb(SB)
-{
-	struct disksuper *disk = &sb->super;
-	disk->blockbits = u16_to_be(sb->devmap->dev->bits);
-	disk->volblocks = u64_to_be(sb->volblocks);
-	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
-	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
-	disk->iroot = u64_to_be((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
-	//hexdump(&sb->super, sizeof(sb->super));
-	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
-}
-
-int sync_super(SB)
-{
-	int err;
-	printf("sync bitmap\n");
-	if ((err = tuxsync(sb->bitmap)))
-		return err;
-	printf("sync rootdir\n");
-	if ((err = tuxsync(sb->rootdir)))
-		return err;
-	printf("sync devmap\n");
-	if ((err = flush_buffers(sb->devmap)))
-		return err;
-	printf("sync sb\n");
-	if ((err = save_sb(sb)))
-		return err;
-	return 0;
-}
-
-int make_tux3(SB, int fd)
-{
-	trace("create bitmap");
-	if (!(sb->bitmap = new_inode(sb, 0)))
-		goto eek;
-
-	trace("reserve superblock");
-	/* Always 8K regardless of blocksize */
-	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
-	for (int i = 0; i < reserve; i++)
-		trace("reserve %Lx", (L)balloc_from_range(sb->bitmap, i, 1));
-
-	trace("create inode table");
-	sb->itable = new_btree(sb, &itable_ops);
-	if (!sb->itable.ops)
-		goto eek;
-	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
-	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
-	trace("create bitmap inode");
-	if (make_inode(sb->bitmap, &(struct iattr){ }))
-		goto eek;
-	trace("create version table");
-	if (!(sb->vtable = new_inode(sb, 0x2)))
-		goto eek;
-	if (make_inode(sb->vtable, &(struct iattr){ }))
-		goto eek;
-	trace("create root directory");
-	if (!(sb->rootdir = new_inode(sb, 0xd)))
-		goto eek;
-	if (make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFDIR | 0755 }))
-		goto eek;
-	trace("create atom table");
-	if (!(sb->vtable = new_inode(sb, 0xc)))
-		goto eek;
-	if (make_inode(sb->vtable, &(struct iattr){ }))
-		goto eek;
-	if (sync_super(sb))
-		goto eek;
-
-	show_buffers(sb->bitmap->map);
-	show_buffers(sb->rootdir->map);
-	show_buffers(sb->devmap);
-	return 0;
-eek:
-	free_btree(&sb->itable);
-	free_inode(sb->bitmap);
-	sb->bitmap = NULL;
-	sb->itable = (struct btree){ };
-	return -ENOSPC; // just guess
-}
-
-#ifndef include_inode_c
 int main(int argc, char *argv[])
 {
-	if (argc < 2)
-		error("usage: %s <volname>", argv[0]);
-	int err = 0;
 	char *name = argv[1];
 	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
 	ftruncate(fd, 1 << 24);
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
+	printf("fd '%s' = %i (0x%Lx bytes)\n", name, fd, (L)size);
+
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
-	init_buffers(dev, 1 << 20);
-	SB = &(struct sb){
+	struct map *map = new_map(dev, NULL);
+	struct sb *sb = &(struct sb){
+		.super = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
+		.devmap = map,
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
-		.volblocks = size >> dev->bits,
+		.nextalloc = 0x40,
 	};
 
-	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
-	if ((errno = -make_tux3(sb, fd)))
-		goto eek;
-	trace("create file");
-	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
+	init_buffers(dev, 1 << 20);
+	init_tux3(sb);
+
+printf("---- create root ----\n");
+	struct inode *root = new_inode(sb, 0xd);
+	get_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
+printf("---- create file ----\n");
+	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(getblk(sb->rootdir->map, 0));
+	ext2_dump_entries(getblk(root->map, 0), sb->blocksize);
 
-	trace("write file");
+	tuxsync(root);
 	char buf[100] = { };
 	struct file *file = &(struct file){ .f_inode = inode };
 	tuxseek(file, (1LL << 60) - 12);
-	tuxseek(file, 4092);
+	int err = tuxwrite(file, "01234567890123456789", 20);
+	printf("err = %i\n", err);
 	err = tuxwrite(file, "hello ", 6);
-	err = tuxwrite(file, "world!", 6);
-#if 0
-	tuxflush(sb->bitmap);
+	printf("err = %i\n", err);
+	tuxwrite(file, "world!", 6);
+	tuxsync(inode);
+	tuxsync(sb->bitmap);
 	flush_buffers(sb->devmap);
-#endif
-#if 1
-	trace("close file");
-	save_inode(inode);
-	tuxclose(inode);
-	trace("open file");
-	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
-#endif
 
-	trace("read file");
 	tuxseek(file, (1LL << 60) - 12);
-	tuxseek(file, 4092);
-	memset(buf, 0, sizeof(buf));
 	int got = tuxread(file, buf, sizeof(buf));
-	trace_off("got %x bytes", got);
+	//printf("got %x bytes\n", got);
 	if (got < 0)
 		return 1;
 	hexdump(buf, got);
-	trace("show state");
-	show_buffers(file->f_inode->map);
-	show_buffers(sb->rootdir->map);
+	show_buffers(inode->map);
+	show_buffers(root->map);
 	show_buffers(sb->devmap);
-	bitmap_dump(sb->bitmap, 0, sb->volblocks);
-	show_tree_range(&sb->itable, 0, -1);
+	bitmap_dump(sb->bitmap, 0, sb->super.blocks);
+	show_tree_range(&sb->itree, 0, -1);
 	return 0;
-eek:
-	return error("Eek! %s", strerror(errno));
 }
-#endif
