@@ -2,10 +2,10 @@ CC=gcc
 CFLAGS += -std=gnu99 -Wall
 VG=valgrind
 VGFLAGS=--error-exitcode=200
-binaries = dleaf ileaf btree dir inode
+binaries = dleaf ileaf iattr btree dir inode
 
 all: $(binaries)
-tests: dleaftest ileaftest
+tests: dleaftest ileaftest dirtest iattrtest inodetest
 
 dleaf: dleaf.c tux3.h hexdump.c
 	$(CC) $(CFLAGS) dleaf.c -o dleaf
@@ -26,6 +26,11 @@ dir: dir.c diskio.c buffer.c dleaf.c buffer.h tux3.h
 	$(CC) $(CFLAGS) dir.c buffer.c diskio.c -o dir
 dirtest: dir
 	$(VG) $(VGFLAGS) ./dir
+
+iattr: iattr.c tux3.h hexdump.c
+	$(CC) $(CFLAGS) iattr.c -o iattr
+iattrtest: iattr
+	$(VG) $(VGFLAGS) ./iattr
 
 inode: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c hexdump.c
 	$(CC) $(CFLAGS) inode.c buffer.c diskio.c -o inode
