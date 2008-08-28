@@ -274,6 +274,7 @@ struct btree_ops itree_ops = {
 	.balloc = balloc,
 };
 
+#ifndef main
 void test_append(BTREE, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
 {
 	unsigned size = 0;
@@ -283,7 +284,6 @@ void test_append(BTREE, struct ileaf *leaf, inum_t inum, unsigned more, char fil
 	memset(inode + size, fill, more);
 }
 
-#ifndef main
 block_t balloc(SB)
 {
 	return sb->nextalloc++;

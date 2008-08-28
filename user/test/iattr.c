@@ -114,7 +114,7 @@ void dump_attrs(SB, struct iattr *iattr)
 			printf("mtime %Lx ", (L)iattr->mtime);
 			break;
 		case DATA_BTREE_ATTR:
-			printf("btree %Lx-%u ", (L)iattr->root.block, iattr->root.depth);
+			printf("root %Lx:%u ", (L)iattr->root.block, iattr->root.depth);
 			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", iattr->links);
@@ -189,21 +189,23 @@ void *encode_links(SB, void *attrs, u32 links)
 	return encode32(sb, attrs, links);
 }
 
-unsigned howbig(u8 kind[], unsigned howmany)
+unsigned howbig(unsigned bits)
 {
 	unsigned need = 0;
-	for (int i = 0; i < howmany; i++)
-		need += 2 + atsize[kind[i]];
+	for (int bit = 0; bit < 32; bit++)
+		if ((bits & (1 << bit)))
+			need += atsize[bit] + 2;
 	return need;
 }
+
 
 #ifndef main
 #ifndef iattr_included_from_ileaf
 int main(int argc, char *argv[])
 {
 	SB = &(struct sb){ .version = 0 };
-	u8 alist[] = { DATA_BTREE_ATTR, CTIME_SIZE_ATTR, MODE_OWNER_ATTR, LINK_COUNT_ATTR, MTIME_ATTR };
-	printf("need %i attr bytes\n", howbig(alist, sizeof(alist)));
+	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
+	printf("need %i attr bytes\n", howbig(abits));
 	char attrbase[1000] = { };
 	char *attrs = attrbase;
 	attrs = encode_owner(sb, attrs, 0x666, 0x12121212, 0x34343434);
@@ -213,6 +215,7 @@ int main(int argc, char *argv[])
 //sb->version = 9;
 	attrs = encode_mtime(sb, attrs, 0xdeadfaced00d);
 	struct iattr iattr = { };
+	printf("decode %i attr bytes\n", attrs - attrbase);
 	decode_attrs(sb, attrbase, attrs - attrbase, &iattr);
 	dump_attrs(sb, &iattr);
 	return 0;

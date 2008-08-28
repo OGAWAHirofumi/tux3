@@ -110,7 +110,7 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
-int get_inode(struct inode *inode, struct iattr *iattr)
+int open_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
 	int err = -ENOENT, levels = sb->itree.root.depth;
@@ -163,7 +163,7 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 		if (!more)
 			goto errout;
 	}
-	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	unsigned asize = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
 	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
 	if (!attrs)
 		goto errmem; // what was the error???
@@ -172,7 +172,7 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
 	assert(attrs - base == asize);
 	inode->inum = goal;
-	attr_dirty(inode, MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT);
+//	mark_attr_dirty(inode, MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT);
 setup:
 	release_path(path, levels + 1);
 	inode->i_mode = iattr->mode;
@@ -186,11 +186,11 @@ errmem:
 errpath:
 	release_path(path, levels + 1);
 errout:
-	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	warn("open_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
 	return err;
 }
 
-int sync_inode(struct inode *inode)
+int save_inode(struct inode *inode)
 {
 	SB = inode->sb;
 	int err = -ENOENT, levels = sb->itree.root.depth;
@@ -198,7 +198,7 @@ int sync_inode(struct inode *inode)
 	if ((err = probe(&sb->itree, inode->inum, path)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
-	struct ileaf *leaf = to_ileaf(leafbuf->data);
+//	struct ileaf *leaf = to_ileaf(leafbuf->data);
 	struct iattr *iattr = &(struct iattr){ };
 
 	unsigned asize;
@@ -209,36 +209,39 @@ int sync_inode(struct inode *inode)
 		dump_attrs(sb, iattr);
 	}
 
-	trace(warn("create inode 0x%Lx", (L)inode->inum);)
-	assert(!inode->btree.root.depth);
-	/*
-	 * If not at end then next key is greater than goal.  This block has the
-	 * highest ibase less than or equal to goal.  Ibase should be equal to
-	 * btree key, so assert.  Search block even if ibase is way too low.  If
-	 * goal comes back equal to next_key then there is no room to create more
-	 * inodes here, advance to the next block and repeat the search.
-	 *
-	 * Otherwise, expand the inum goal that came back.  If ibase was too low
-	 * to create the inode in that block then the low level split will fail
-	 * and expand will create a new inode table block with ibase at the goal.
-	 *
-	 * Need some way to verify that expanded inum was empty, pass asize by ref?
-	 */
-	inum_t goal = inode->inum;
-	assert(goal < next_key(path, levels));
-	while (1) {
-		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
-		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
-		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
-		if (goal < next_key(path, levels))
+#if 0
+	for (int which = 0; which < 32; which++) {
+		if (!(iattr->present & (1 << which)))
+			continue;
+		switch (which) {
+		case MODE_OWNER_ATTR:
+			printf("mode 0%o uid %x gid %x ", iattr->mode, iattr->uid, iattr->gid);
 			break;
-		int more = advance(leafbuf->map, path, levels);
-		printf("no more inode space here, advance %i\n", more);
-		if (!more)
-			goto errout;
+		case CTIME_SIZE_ATTR:
+			printf("ctime %Lx isize %Lx ", (L)iattr->ctime, (L)iattr->isize);
+			break;
+		case MTIME_ATTR:
+			printf("mtime %Lx ", (L)iattr->mtime);
+			break;
+		case DATA_BTREE_ATTR:
+			printf("root %Lx:%u ", (L)iattr->root.block, iattr->root.depth);
+			break;
+		case LINK_COUNT_ATTR:
+			printf("links %u ", iattr->links);
+			break;
+		default:
+			printf("<%i>? ", which);
+			break;
+		}
 	}
-	asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
-	attrs = tree_expand(&sb->itree, goal, asize, path);
+#endif
+
+	asize = howbig(inode->dirty);
+	unsigned dirty = howbig(iattr->present);
+	printf("asize = %i\n", asize);
+	printf("dirty = %i\n", dirty);
+return 0;
+	attrs = tree_expand(&sb->itree, inode->inum, asize, path);
 	void *base = attrs;
 	if (!attrs)
 		goto errmem; // what was the error???
@@ -246,7 +249,6 @@ int sync_inode(struct inode *inode)
 	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
 	assert(attrs - base == asize);
-	inode->inum = goal;
 //setup:
 	release_path(path, levels + 1);
 	inode->i_mode = iattr->mode;
@@ -259,8 +261,8 @@ errmem:
 	err = -ENOMEM;
 //errpath:
 	release_path(path, levels + 1);
-errout:
-	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+//errout:
+	warn("open_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
 	return err;
 }
 
@@ -341,7 +343,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len)
 	inum_t inum = entry->inum;
 	brelse(buffer);
 	struct inode *inode = new_inode(dir->sb, inum);
-	return get_inode(inode, NULL) ? NULL : inode;
+	return open_inode(inode, NULL) ? NULL : inode;
 }
 
 struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *iattr)
@@ -362,7 +364,7 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 	struct inode *inode = new_inode(dir->sb, dir->sb->nextalloc);
 	if (!inode)
 		return NULL; // err ???
-	int err = get_inode(inode, iattr);
+	int err = open_inode(inode, iattr);
 	if (err)
 		return NULL; // err ???
 	if (!ext2_create_entry(dir, name, len, inode->inum, iattr->mode))
@@ -427,7 +429,7 @@ int main(int argc, char *argv[])
 
 	printf("---- create root ----\n");
 	struct inode *root = new_inode(sb, 0xd);
-	get_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
+	open_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
 	printf("---- create file ----\n");
 	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
@@ -444,6 +446,9 @@ int main(int argc, char *argv[])
 	printf("err = %i\n", err);
 	err = tuxwrite(file, "world!", 6);
 	printf("err = %i\n", err);
+mark_attr_dirty(file->f_inode, DATA_BTREE_BIT);
+save_inode(file->f_inode);
+return 0;
 	tuxsync(inode);
 	tuxsync(sb->bitmap);
 	flush_buffers(sb->devmap);

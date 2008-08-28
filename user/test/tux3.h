@@ -200,7 +200,7 @@ enum atbit {
 	MTIME_BIT = 1 << MTIME_ATTR,
 };
 
-static inline void attr_dirty(struct inode *inode, unsigned mask)
+static inline void mark_attr_dirty(struct inode *inode, unsigned mask)
 {
 	inode->dirty |= mask;
 }
