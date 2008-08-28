@@ -147,7 +147,7 @@ struct inode {
 	inum_t inum;
 	mode_t i_mode;
 	u64 i_size, i_ctime, i_mtime, i_atime, i_uid, i_gid;
-	unsigned i_version, i_links;
+	unsigned i_version, i_links, dirty;
 };
 
 struct file {
@@ -181,5 +181,26 @@ struct iattr {
 
 void hexdump(void *data, unsigned size);
 block_t balloc(SB);
+
+enum atkind {
+	MODE_OWNER_ATTR = 6,
+	CTIME_SIZE_ATTR = 7,
+	DATA_BTREE_ATTR = 8,
+	LINK_COUNT_ATTR = 9,
+	MTIME_ATTR = 10,
+};
+
+enum atbit {
+	MODE_OWNER_BIT = 1 << MODE_OWNER_ATTR,
+	CTIME_SIZE_BIT = 1 << CTIME_SIZE_ATTR,
+	DATA_BTREE_BIT = 1 << DATA_BTREE_ATTR,
+	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
+	MTIME_BIT = 1 << MTIME_ATTR,
+};
+
+static inline void attr_dirty(struct inode *inode, unsigned mask)
+{
+	inode->dirty |= mask;
+}
 
 #endif

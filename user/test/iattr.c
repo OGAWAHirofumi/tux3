@@ -15,14 +15,6 @@
 #include "hexdump.c"
 #include "tux3.h"
 
-enum {
-	MODE_OWNER_ATTR = 6,
-	CTIME_SIZE_ATTR = 7,
-	DATA_BTREE_ATTR = 8,
-	LINK_COUNT_ATTR = 9,
-	MTIME_ATTR = 10,
-};
-
 unsigned atsize[16] = {
 	[MODE_OWNER_ATTR] = 12,
 	[CTIME_SIZE_ATTR] = 14,

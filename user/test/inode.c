@@ -172,6 +172,86 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
 	assert(attrs - base == asize);
 	inode->inum = goal;
+	attr_dirty(inode, MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT);
+setup:
+	release_path(path, levels + 1);
+	inode->i_mode = iattr->mode;
+	inode->i_uid = iattr->uid;
+	inode->i_gid = iattr->gid;
+	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
+	inode->i_links = 1;
+	return 0;
+errmem:
+	err = -ENOMEM;
+errpath:
+	release_path(path, levels + 1);
+errout:
+	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	return err;
+}
+
+int sync_inode(struct inode *inode, struct iattr *iattr)
+{
+	SB = inode->sb;
+	int err = -ENOENT, levels = sb->itree.root.depth;
+	struct path path[levels + 1];
+	if ((err = probe(&sb->itree, inode->inum, path)))
+		return err;
+	struct buffer *leafbuf = path[levels].buffer;
+	struct ileaf *leaf = to_ileaf(leafbuf->data);
+
+	if (!iattr) {
+		unsigned asize;
+		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
+		if (!attrs)
+			goto errpath;
+		trace(warn("found inode 0x%Lx", (L)inode->inum);)
+		//ileaf_dump(sb, leafbuf->data);
+		//hexdump(attrs, asize);
+		iattr = &(struct iattr){ };
+		decode_attrs(sb, attrs, asize, iattr);
+		dump_attrs(sb, iattr);
+		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
+		goto setup;
+	}
+
+	trace(warn("create inode 0x%Lx", (L)inode->inum);)
+	assert(!inode->btree.root.depth);
+	/*
+	 * If not at end then next key is greater than goal.  This block has the
+	 * highest ibase less than or equal to goal.  Ibase should be equal to
+	 * btree key, so assert.  Search block even if ibase is way too low.  If
+	 * goal comes back equal to next_key then there is no room to create more
+	 * inodes here, advance to the next block and repeat the search.
+	 *
+	 * Otherwise, expand the inum goal that came back.  If ibase was too low
+	 * to create the inode in that block then the low level split will fail
+	 * and expand will create a new inode table block with ibase at the goal.
+	 *
+	 * Need some way to verify that expanded inum was empty, pass asize by ref?
+	 */
+	inum_t goal = inode->inum;
+	assert(goal < next_key(path, levels));
+	while (1) {
+		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
+		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
+		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
+		if (goal < next_key(path, levels))
+			break;
+		int more = advance(leafbuf->map, path, levels);
+		printf("no more inode space here, advance %i\n", more);
+		if (!more)
+			goto errout;
+	}
+	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
+	if (!attrs)
+		goto errmem; // what was the error???
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
+	attrs = encode_btree(sb, attrs, &inode->btree.root);
+	assert(attrs - base == asize);
+	inode->inum = goal;
 setup:
 	release_path(path, levels + 1);
 	inode->i_mode = iattr->mode;
