@@ -279,7 +279,7 @@ int tuxread(struct file *file, char *data, unsigned len)
 	if (inode->i_size < pos + len)
 		len = inode->i_size - pos;
 	warn("read %Lx/%x", (L)pos, len);
-	if (block & (-1LL << MAX_FILESIZE_BITS))
+	if (pos & (-1LL << MAX_FILESIZE_BITS))
 		return -EIO;
 	struct buffer *blockbuf = getblk(inode->map, block);
 	if (!blockbuf)
@@ -297,8 +297,8 @@ int tuxwrite(struct file *file, char *data, unsigned len)
 	struct inode *inode = file->f_inode;
 	block_t block = pos >> inode->sb->blockbits;
 	//warn("write %Lx/%x", pos & inode->sb->blockmask, len);
-	if (block & (-1LL << MAX_FILESIZE_BITS))
-		return -EIO;
+	if ((pos + len) & (-1LL << MAX_FILESIZE_BITS))
+		return -EFBIG;
 	struct buffer *blockbuf = getblk(inode->map, block);
 	if (!blockbuf)
 		return -EIO;
@@ -433,8 +433,10 @@ printf("---- create file ----\n");
 	char buf[100] = { };
 	struct file *file = &(struct file){ .f_inode = inode };
 	tuxseek(file, (1LL << 60) - 12);
-	int err = tuxwrite(file, "hello ", 6);
-printf("err = %i\n", err);
+	int err = tuxwrite(file, "01234567890123456789", 20);
+	printf("err = %i\n", err);
+	err = tuxwrite(file, "hello ", 6);
+	printf("err = %i\n", err);
 	tuxwrite(file, "world!", 6);
 	tuxsync(inode);
 	tuxsync(sb->bitmap);
