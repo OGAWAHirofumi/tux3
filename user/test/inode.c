@@ -153,7 +153,7 @@ int get_inode(struct inode *inode, struct iattr *iattr)
 	inum_t goal = inode->inum;
 	assert(goal < next_key(path, levels));
 	while (1) {
-		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, leaf->ibase);
+		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
 		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
 		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
 		if (goal < next_key(path, levels))
@@ -233,7 +233,7 @@ int tuxwrite(struct file *file, char *data, unsigned len)
 
 void tuxseek(struct file *file, loff_t pos)
 {
-	warn("seek to 0x%Lx", pos);
+	warn("seek to 0x%Lx", (L)pos);
 	file->f_pos = pos;
 }
 
