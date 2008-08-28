@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include <byteswap.h>
+#include "err.h"
 #include "trace.h"
 
 typedef uint8_t u8;
