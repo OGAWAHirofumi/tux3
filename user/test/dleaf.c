@@ -191,7 +191,7 @@ eek:
 	return -1;
 }
 
-void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, unsigned size)
+void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, int size)
 {
 	//key = key & 0xffffffffffffLL;
 	assert(dleaf_sniff(btree, base));

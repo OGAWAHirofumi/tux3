@@ -172,7 +172,7 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
 	assert(attrs - base == asize);
 	inode->inum = goal;
-//	mark_attr_dirty(inode, MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT);
+	iattr->present = inode->dirty = MODE_OWNER_BIT|DATA_BTREE_BIT;
 setup:
 	release_path(path, levels + 1);
 	inode->i_mode = iattr->mode;
@@ -180,6 +180,7 @@ setup:
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
 	inode->i_links = 1;
+	inode->attrs = iattr->present;
 	return 0;
 errmem:
 	err = -ENOMEM;
@@ -236,9 +237,18 @@ int save_inode(struct inode *inode)
 	}
 #endif
 
-	asize = howbig(inode->dirty);
-	unsigned dirty = howbig(iattr->present);
-	printf("asize = %i\n", asize);
+	unsigned saved = howbig(iattr->present);
+	unsigned dirty = howbig(inode->dirty);
+	unsigned using = howbig(inode->attrs);
+// for each attribute from bottom to top
+//    if the attribute changed
+//       encode new attribute
+//    else unless the attribute is dropped
+//       copy old attribute
+// for each new attribute
+//    encode new attribute
+
+	printf("saved = %i\n", saved);
 	printf("dirty = %i\n", dirty);
 return 0;
 	attrs = tree_expand(&sb->itree, inode->inum, asize, path);

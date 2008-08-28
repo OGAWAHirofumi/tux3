@@ -446,7 +446,7 @@ eek:
 	return -ENOMEM;
 }
 
-void *tree_expand(struct btree *btree, tuxkey_t key, unsigned more, struct path path[])
+void *tree_expand(struct btree *btree, tuxkey_t key, int more, struct path path[])
 {
 	struct buffer *leafbuf = path[btree->root.depth].buffer;
 	struct btree_ops *ops = btree->ops;
@@ -550,7 +550,7 @@ tuxkey_t uleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
 }
 
-void *uleaf_expand(BTREE, tuxkey_t key, vleaf *data, unsigned more)
+void *uleaf_expand(BTREE, tuxkey_t key, vleaf *data, int more)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;

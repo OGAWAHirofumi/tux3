@@ -198,7 +198,7 @@ void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, unsigned more)
+void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, int more)
 {
 	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
@@ -275,7 +275,7 @@ struct btree_ops itree_ops = {
 };
 
 #ifndef main
-void test_append(BTREE, struct ileaf *leaf, inum_t inum, unsigned more, char fill)
+void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
 {
 	unsigned size = 0;
 	char *inode = ileaf_lookup(btree, inum, leaf, &size);
