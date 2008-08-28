@@ -1,4 +1,4 @@
-/* Ripped from Linux Kernel by D.Phillips.  GPL v2 */
+/* Ripped from Linux Kernel by D.Phillips, GPL v2 */
 
 #define MAX_ERRNO       4095
 #define IS_ERR_VALUE(x) ((x) >= (unsigned long)-MAX_ERRNO)
