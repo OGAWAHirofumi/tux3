@@ -264,46 +264,53 @@ errout:
 	return err;
 }
 
+int tuxio(struct file *file, char *data, unsigned len, int write)
+{
+	struct inode *inode = file->f_inode;
+	loff_t pos = file->f_pos;
+	if (pos + len > MAX_FILESIZE)
+		return -EFBIG;
+	if (!write && pos + len > inode->i_size) {
+		if (pos >= inode->i_size)
+			return 0;
+		len = inode->i_size - pos;
+	}
+	unsigned blockbits = inode->sb->blockbits;
+	unsigned blocksize = inode->sb->blocksize;
+	unsigned blockmask = inode->sb->blockmask;
+	loff_t tail = len;
+	while (tail) {
+		unsigned offset = pos & blockmask;
+		unsigned chunk = offset + tail > blocksize ? blocksize - offset : tail;
+		struct buffer *blockbuf = getblk(inode->map, pos >> blockbits);
+		if (!blockbuf)
+			return -EIO; // can leave data past inode isize
+		if (write)
+			memcpy(blockbuf->data + offset, data, chunk);
+		else
+			memcpy(data, blockbuf->data + offset, chunk);
+		printf("%s %u bytes\n", write ? "write" : "read", chunk);
+		hexdump(blockbuf->data + offset, chunk);
+		set_buffer_dirty(blockbuf);
+		brelse(blockbuf);
+		tail -= chunk;
+		data += chunk;
+		pos += chunk;
+	}
+	file->f_pos = pos;
+	if (write && inode->i_size < pos)
+		inode->i_size = pos;
+	return len - tail;
+}
+
 int tuxread(struct file *file, char *data, unsigned len)
 {
-	loff_t pos = file->f_pos;
-	struct inode *inode = file->f_inode;
-	block_t block = pos >> inode->sb->blockbits;
-	if (pos > inode->i_size)
-		return 0;
-	if (inode->i_size < pos + len)
-		len = inode->i_size - pos;
-	warn("read %Lx/%x", (L)pos, len);
-	if (pos & (-1LL << MAX_FILESIZE_BITS))
-		return -EIO;
-	struct buffer *blockbuf = getblk(inode->map, block);
-	if (!blockbuf)
-		return -EIO;
-	memcpy(data, blockbuf->data + (pos & inode->sb->blockmask), len);
-	brelse(blockbuf);
-	file->f_pos += len;
-	warn("file pos %Lx", (L)file->f_pos);
-	return len;
+	return tuxio(file, data, len, 0);
 }
 
 int tuxwrite(struct file *file, char *data, unsigned len)
 {
-	loff_t pos = file->f_pos;
-	struct inode *inode = file->f_inode;
-	block_t block = pos >> inode->sb->blockbits;
-	//warn("write %Lx/%x", pos & inode->sb->blockmask, len);
-	if ((pos + len) & (-1LL << MAX_FILESIZE_BITS))
-		return -EFBIG;
-	struct buffer *blockbuf = getblk(inode->map, block);
-	if (!blockbuf)
-		return -EIO;
-	memcpy(blockbuf->data + (pos & inode->sb->blockmask), data, len);
-	set_buffer_dirty(blockbuf);
-	brelse(blockbuf);
-	file->f_pos += len;
-	if (inode->i_size < file->f_pos)
-		inode->i_size = file->f_pos;
-	return len;
+	return tuxio(file, data, len, 1);
 }
 
 void tuxseek(struct file *file, loff_t pos)
@@ -391,6 +398,7 @@ void init_tux3(SB) // why am I separate?
 
 int main(int argc, char *argv[])
 {
+	int err = 0;
 	char *name = argv[1];
 	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
 	ftruncate(fd, 1 << 24);
@@ -415,29 +423,33 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	init_tux3(sb);
 
-printf("---- create root ----\n");
+	printf("---- create root ----\n");
 	struct inode *root = new_inode(sb, 0xd);
 	get_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
-printf("---- create file ----\n");
+	printf("---- create file ----\n");
 	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
 	ext2_dump_entries(getblk(root->map, 0), sb->blocksize);
 
-	tuxsync(root);
+	printf("---- write file ----\n");
 	char buf[100] = { };
 	struct file *file = &(struct file){ .f_inode = inode };
 	tuxseek(file, (1LL << 60) - 12);
-	int err = tuxwrite(file, "01234567890123456789", 20);
+	tuxseek(file, 4092);
 	printf("err = %i\n", err);
 	err = tuxwrite(file, "hello ", 6);
 	printf("err = %i\n", err);
-	tuxwrite(file, "world!", 6);
+	err = tuxwrite(file, "world!", 6);
+	printf("err = %i\n", err);
 	tuxsync(inode);
 	tuxsync(sb->bitmap);
 	flush_buffers(sb->devmap);
 
+	printf("---- read file ----\n");
 	tuxseek(file, (1LL << 60) - 12);
+	tuxseek(file, 4092);
+	memset(buf, 0, sizeof(buf));
 	int got = tuxread(file, buf, sizeof(buf));
 	//printf("got %x bytes\n", got);
 	if (got < 0)
