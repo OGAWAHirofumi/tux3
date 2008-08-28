@@ -7,7 +7,7 @@
 //#define die(code) exit(code)
 #define die(code) asm("int3")
 #define warn(string, args...) do {\
-	fprintf(stderr, "[%u] %s: " string "\n", getpid(), __func__, ##args);\
+	fprintf(stderr, "%s: " string "\n", __func__, ##args);\
 } while (0)
 
 #define error(string, args...) do { warn(string, ##args); die(99); } while (0) 
