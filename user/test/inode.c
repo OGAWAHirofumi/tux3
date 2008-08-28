@@ -190,7 +190,7 @@ errout:
 	return err;
 }
 
-int sync_inode(struct inode *inode, struct iattr *iattr)
+int sync_inode(struct inode *inode)
 {
 	SB = inode->sb;
 	int err = -ENOENT, levels = sb->itree.root.depth;
@@ -199,20 +199,14 @@ int sync_inode(struct inode *inode, struct iattr *iattr)
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
+	struct iattr *iattr = &(struct iattr){ };
 
-	if (!iattr) {
-		unsigned asize;
-		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
-		if (!attrs)
-			goto errpath;
-		trace(warn("found inode 0x%Lx", (L)inode->inum);)
-		//ileaf_dump(sb, leafbuf->data);
-		//hexdump(attrs, asize);
-		iattr = &(struct iattr){ };
+	unsigned asize;
+	void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
+	if (attrs) {
+		trace(warn("Existing attrs %p/%x", attrs, asize);)
 		decode_attrs(sb, attrs, asize, iattr);
 		dump_attrs(sb, iattr);
-		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
-		goto setup;
 	}
 
 	trace(warn("create inode 0x%Lx", (L)inode->inum);)
@@ -243,8 +237,9 @@ int sync_inode(struct inode *inode, struct iattr *iattr)
 		if (!more)
 			goto errout;
 	}
-	unsigned asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
-	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
+	asize = howbig((u8[]){ MODE_OWNER_ATTR, DATA_BTREE_ATTR }, 2);
+	attrs = tree_expand(&sb->itree, goal, asize, path);
+	void *base = attrs;
 	if (!attrs)
 		goto errmem; // what was the error???
 	inode->btree = new_btree(sb, &dtree_ops); // error???
@@ -252,7 +247,7 @@ int sync_inode(struct inode *inode, struct iattr *iattr)
 	attrs = encode_btree(sb, attrs, &inode->btree.root);
 	assert(attrs - base == asize);
 	inode->inum = goal;
-setup:
+//setup:
 	release_path(path, levels + 1);
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
@@ -262,7 +257,7 @@ setup:
 	return 0;
 errmem:
 	err = -ENOMEM;
-errpath:
+//errpath:
 	release_path(path, levels + 1);
 errout:
 	warn("get_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
