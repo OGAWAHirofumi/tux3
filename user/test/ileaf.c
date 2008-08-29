@@ -90,9 +90,13 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 		else if (!size)
 			printf("<empty>\n");
 		else {
+#ifndef main
+			hexdump(leaf->table + offset, size);
+#else
 			struct iattr iattr = { };
 			decode_attrs(sb, leaf->table + offset, size, &iattr);
 			dump_attrs(sb, &iattr);
+#endif
 		}
 		offset = limit;
 	}
@@ -198,7 +202,7 @@ void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, int more)
+void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, int more)
 {
 	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
@@ -210,7 +214,7 @@ void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, int more)
 		return NULL;
 
 	unsigned extend_empty = at >= leaf->count ? at - leaf->count + 1 : 0;
-	if (extend_empty * sizeof(*dict) + more > ileaf_free(btree, leaf))
+	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))
 		return NULL;
 
 	while (extend_empty--) {
@@ -220,12 +224,15 @@ void *ileaf_expand(BTREE, tuxkey_t inum, vleaf *base, int more)
 
 	unsigned free = *(dict - leaf->count);
 	unsigned offset = at ? *(dict - at) : 0, size = *(dict - at - 1) - offset;
+	if (more < 0 && -more > size)
+		return NULL;
 	void *attrs = leaf->table + offset;
 	printf("expand inum 0x%Lx at 0x%x/%i by %i\n", (L)inum, offset, size, more);
+
 	memmove(attrs + size + more, attrs + size, free - offset);
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
-//	memset(attrs, 0xaa, size + more);
+	//memset(attrs, 0xaa, size + more);
 	return attrs;
 }
 
@@ -233,7 +240,7 @@ inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal)
 {
 	assert(goal >= leaf->ibase);
 	goal -= leaf->ibase;
-	printf("find empty inode starting at %Lx, base %Lx\n", (L)goal, (L)leaf->ibase);
+	//printf("find empty inode starting at %Lx, base %Lx\n", (L)goal, (L)leaf->ibase);
 	u16 *dict = (void *)leaf + btree->sb->blocksize;
 	unsigned i, offset = goal && goal < leaf->count ? *(dict - goal) : 0;
 	for (i = goal; i < leaf->count; i++) {
@@ -270,7 +277,7 @@ struct btree_ops itree_ops = {
 	.leaf_sniff = ileaf_sniff,
 	.leaf_init = ileaf_init,
 	.leaf_split = ileaf_split,
-	.leaf_expand = ileaf_expand,
+	.leaf_expand = ileaf_resize,
 	.balloc = balloc,
 };
 
@@ -278,11 +285,20 @@ struct btree_ops itree_ops = {
 void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
 {
 	unsigned size = 0;
-	char *inode = ileaf_lookup(btree, inum, leaf, &size);
-	printf("inode size = %i\n", size);
-	inode = ileaf_expand(btree, inum, leaf, more);
-	memset(inode + size, fill, more);
+	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
+	printf("attrs size = %i\n", size);
+	attrs = ileaf_resize(btree, inum, leaf, more);
+	memset(attrs + size, fill, more);
 }
+
+void test_remove(BTREE, struct ileaf *leaf, inum_t inum, int less)
+{
+	unsigned size = 0;
+	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
+	printf("attrs size = %i\n", size);
+	attrs = ileaf_resize(btree, inum, leaf, -less);
+}
+
 
 block_t balloc(SB)
 {
@@ -312,6 +328,9 @@ int main(int argc, char *argv[])
 	ileaf_dump(btree, leaf);
 	test_append(btree, leaf, 0x18, 3, 'y');
 	ileaf_dump(btree, leaf);
+	test_remove(btree, leaf, 0x16, 5);
+	ileaf_dump(btree, leaf);
+return 0;
 	unsigned size = 0;
 	char *inode = ileaf_lookup(btree, 0x13, leaf, &size);
 	hexdump(inode, size);

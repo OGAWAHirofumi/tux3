@@ -24,7 +24,6 @@ typedef u32 millisecond_t;
 typedef int64_t block_t;
 typedef int64_t inum_t;
 typedef u64 tuxkey_t;
-typedef u32 mode_t;
 typedef int fd_t;
 
 /* Bitmaps */
@@ -147,9 +146,9 @@ struct inode {
 	struct map *map;
 	struct btree btree;
 	inum_t inum;
-	mode_t i_mode;
-	u64 i_size, i_ctime, i_mtime, i_atime, i_uid, i_gid;
-	unsigned i_version, i_links, dirty, attrs;
+	unsigned i_version, dirty, present;
+	u64 i_size, i_mtime, i_ctime, i_atime;
+	unsigned i_mode, i_uid, i_gid, i_links;
 };
 
 struct file {
@@ -177,8 +176,8 @@ struct btree_ops {
 struct iattr {
 	unsigned present;
 	struct root root;
-	u64 mtime, ctime, atime, isize;
-	u32 mode, uid, gid, links;
+	u64 isize, mtime, ctime, atime;
+	unsigned mode, uid, gid, links;
 } iattrs;
 
 void hexdump(void *data, unsigned size);

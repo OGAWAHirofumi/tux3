@@ -180,7 +180,7 @@ setup:
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
 	inode->i_links = 1;
-	inode->attrs = iattr->present;
+	inode->present = iattr->present;
 	return 0;
 errmem:
 	err = -ENOMEM;
@@ -199,81 +199,37 @@ int save_inode(struct inode *inode)
 	if ((err = probe(&sb->itree, inode->inum, path)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
-//	struct ileaf *leaf = to_ileaf(leafbuf->data);
-	struct iattr *iattr = &(struct iattr){ };
-
-	unsigned asize;
-	void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
-	if (attrs) {
-		trace(warn("Existing attrs %p/%x", attrs, asize);)
-		decode_attrs(sb, attrs, asize, iattr);
-		dump_attrs(sb, iattr);
-	}
-
-#if 0
-	for (int which = 0; which < 32; which++) {
-		if (!(iattr->present & (1 << which)))
+	unsigned size;
+	void *base = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &size);
+	if (!size)
+		return -EINVAL;
+	int more = howbig(inode->present) - size;
+	base = tree_expand(&sb->itree, inode->inum, more, path); // error???
+	void *attrs = base;
+	for (int kind = 0; kind < 32; kind++) {
+		if (!(inode->present & (1 << kind)))
 			continue;
-		switch (which) {
+		switch (kind) {
 		case MODE_OWNER_ATTR:
-			printf("mode 0%o uid %x gid %x ", iattr->mode, iattr->uid, iattr->gid);
+			attrs = encode_owner(sb, attrs, inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			printf("ctime %Lx isize %Lx ", (L)iattr->ctime, (L)iattr->isize);
+			attrs = encode_csize(sb, attrs, inode->i_ctime, inode->i_size);
 			break;
 		case MTIME_ATTR:
-			printf("mtime %Lx ", (L)iattr->mtime);
+			attrs = encode_mtime(sb, attrs, inode->i_mtime);
 			break;
 		case DATA_BTREE_ATTR:
-			printf("root %Lx:%u ", (L)iattr->root.block, iattr->root.depth);
+			attrs = encode_btree(sb, attrs, &inode->btree.root);
 			break;
 		case LINK_COUNT_ATTR:
-			printf("links %u ", iattr->links);
-			break;
-		default:
-			printf("<%i>? ", which);
+			attrs = encode_links(sb, attrs, inode->i_links);
 			break;
 		}
 	}
-#endif
-
-	unsigned saved = howbig(iattr->present);
-	unsigned dirty = howbig(inode->dirty);
-	unsigned using = howbig(inode->attrs);
-// for each attribute from bottom to top
-//    if the attribute changed
-//       encode new attribute
-//    else unless the attribute is dropped
-//       copy old attribute
-// for each new attribute
-//    encode new attribute
-
-	printf("saved = %i\n", saved);
-	printf("dirty = %i\n", dirty);
-return 0;
-	attrs = tree_expand(&sb->itree, inode->inum, asize, path);
-	void *base = attrs;
-	if (!attrs)
-		goto errmem; // what was the error???
-	inode->btree = new_btree(sb, &dtree_ops); // error???
-	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
-	attrs = encode_btree(sb, attrs, &inode->btree.root);
-	assert(attrs - base == asize);
-//setup:
+	assert(attrs - base == size + more);
 	release_path(path, levels + 1);
-	inode->i_mode = iattr->mode;
-	inode->i_uid = iattr->uid;
-	inode->i_gid = iattr->gid;
-	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
-	inode->i_links = 1;
 	return 0;
-errmem:
-	err = -ENOMEM;
-//errpath:
-	release_path(path, levels + 1);
-//errout:
-	warn("open_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
-	return err;
 }
 
 int tuxio(struct file *file, char *data, unsigned len, int write)
@@ -451,11 +407,8 @@ int main(int argc, char *argv[])
 	struct file *file = &(struct file){ .f_inode = inode };
 	tuxseek(file, (1LL << 60) - 12);
 	tuxseek(file, 4092);
-	printf("err = %i\n", err);
 	err = tuxwrite(file, "hello ", 6);
-	printf("err = %i\n", err);
 	err = tuxwrite(file, "world!", 6);
-	printf("err = %i\n", err);
 mark_attr_dirty(file->f_inode, DATA_BTREE_BIT);
 save_inode(file->f_inode);
 return 0;
