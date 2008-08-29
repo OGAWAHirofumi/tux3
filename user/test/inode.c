@@ -43,7 +43,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	warn("%s <%Lx:%Lx>", write ? "write" : "read", (L)inode->inum, buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	assert(dev->bits >= 9 && dev->fd);
+	assert(dev->bits >= 8 && dev->fd);
 
 	int err, levels = inode->btree.root.depth;
 	struct path path[levels + 1];

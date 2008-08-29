@@ -433,7 +433,7 @@ int devmap_blockio(struct buffer *buffer, int write)
 {
 	warn("%s [%Lx]", write ? "write" : "read", (long long)buffer->index);
 	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 9 && dev->fd);
+	assert(dev->bits >= 8 && dev->fd);
 	return (write ? diskwrite : diskread)
 		(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
