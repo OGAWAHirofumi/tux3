@@ -53,8 +53,8 @@ void *decode48(SB, void *attrs, u64 *val)
 int decode_attrs(SB, void *attrs, unsigned size, struct iattr *iattr)
 {
 	//printf("decode %u attr bytes\n", size);
-	void *limit = attrs + size;
 	u64 v64;
+	void *limit = attrs + size;
 	while (attrs < limit - 1) {
 		unsigned head;
 		attrs = decode16(sb, attrs, &head);
@@ -69,28 +69,22 @@ int decode_attrs(SB, void *attrs, unsigned size, struct iattr *iattr)
 			attrs = decode32(sb, attrs, &iattr->mode);
 			attrs = decode32(sb, attrs, &iattr->uid);
 			attrs = decode32(sb, attrs, &iattr->gid);
-			//printf("mode = %x uid = %x, gid = %x\n", iattr->mode, iattr->uid, iattr->gid);
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = decode48(sb, attrs, &iattr->ctime);
 			attrs = decode64(sb, attrs, &iattr->isize);
-			//printf("ctime = %Lx, isize = %Lx\n", (L)iattr->ctime, (L)iattr->isize);
 			break;
 		case MTIME_ATTR:
 			attrs = decode48(sb, attrs, &iattr->mtime);
-			//printf("mtime = %Lx\n", (L)iattr->mtime);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(sb, attrs, &v64);
 			iattr->root = (struct root){ .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 };
-			//printf("btree block = %Lx, depth = %u\n", (L)iattr->root.block, iattr->root.depth);
 			break;
 		case LINK_COUNT_ATTR:
 			attrs = decode32(sb, attrs, &iattr->links);
-			//printf("links = %u\n", iattr->links);
 			break;
 		default:
-			warn("unknown attribute kind %i", kind);
 			return -EINVAL;
 		}
 	}
