@@ -93,9 +93,9 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 #ifndef main
 			hexdump(leaf->table + offset, size);
 #else
-			struct iattr iattr = { };
-			decode_attrs(sb, leaf->table + offset, size, &iattr);
-			dump_attrs(sb, &iattr);
+			struct inode inode = { };
+			decode_attrs(sb, leaf->table + offset, size, &inode);
+			dump_attrs(sb, &inode);
 #endif
 		}
 		offset = limit;

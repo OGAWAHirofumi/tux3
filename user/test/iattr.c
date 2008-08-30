@@ -50,7 +50,7 @@ void *decode48(void *attrs, u64 *val)
 	return attrs;
 }
 
-int decode_attrs(SB, void *attrs, unsigned size, struct iattr *iattr)
+int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 {
 	//printf("decode %u attr bytes\n", size);
 	u64 v64;
@@ -63,26 +63,27 @@ int decode_attrs(SB, void *attrs, unsigned size, struct iattr *iattr)
 			attrs += atsize[kind];
 			continue;
 		}
-		iattr->present |= 1 << kind;
+		inode->present |= 1 << kind;
 		switch (kind) {
 		case MODE_OWNER_ATTR:
-			attrs = decode32(attrs, &iattr->mode);
-			attrs = decode32(attrs, &iattr->uid);
-			attrs = decode32(attrs, &iattr->gid);
+			attrs = decode32(attrs, &inode->i_mode);
+			attrs = decode32(attrs, &inode->i_uid);
+			attrs = decode32(attrs, &inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = decode48(attrs, &iattr->ctime);
-			attrs = decode64(attrs, &iattr->isize);
+			attrs = decode48(attrs, &inode->i_ctime);
+			attrs = decode64(attrs, &inode->i_size);
 			break;
 		case MTIME_ATTR:
-			attrs = decode48(attrs, &iattr->mtime);
+			attrs = decode48(attrs, &inode->i_mtime);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			iattr->root = (struct root){ .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 };
+			inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops,
+				.root = { .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 } };
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = decode32(attrs, &iattr->links);
+			attrs = decode32(attrs, &inode->i_links);
 			break;
 		default:
 			return -EINVAL;
@@ -91,27 +92,27 @@ int decode_attrs(SB, void *attrs, unsigned size, struct iattr *iattr)
 	return 0;
 }
 
-void dump_attrs(SB, struct iattr *iattr)
+void dump_attrs(SB, struct inode *inode)
 {
-	//printf("present = %x\n", iattr->present);
+	//printf("present = %x\n", inode->present);
 	for (int which = 0; which < 32; which++) {
-		if (!(iattr->present & (1 << which)))
+		if (!(inode->present & (1 << which)))
 			continue;
 		switch (which) {
 		case MODE_OWNER_ATTR:
-			printf("mode 0%o uid %x gid %x ", iattr->mode, iattr->uid, iattr->gid);
+			printf("mode 0%o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			printf("ctime %Lx isize %Lx ", (L)iattr->ctime, (L)iattr->isize);
+			printf("ctime %Lx isize %Lx ", (L)inode->i_ctime, (L)inode->i_size);
 			break;
 		case MTIME_ATTR:
-			printf("mtime %Lx ", (L)iattr->mtime);
+			printf("mtime %Lx ", (L)inode->i_mtime);
 			break;
 		case DATA_BTREE_ATTR:
-			printf("root %Lx:%u ", (L)iattr->root.block, iattr->root.depth);
+			printf("root %Lx:%u ", (L)inode->btree.root.block, inode->btree.root.depth);
 			break;
 		case LINK_COUNT_ATTR:
-			printf("links %u ", iattr->links);
+			printf("links %u ", inode->i_links);
 			break;
 		default:
 			printf("<%i>? ", which);
@@ -208,10 +209,10 @@ int main(int argc, char *argv[])
 //sb->version = 9;
 	attrs = encode_kind(attrs, MTIME_ATTR, sb->version);
 	attrs = encode_mtime(attrs, 0xdeadfaced00d);
-	struct iattr iattr = { };
+	struct inode inode = { };
 	printf("decode %ti attr bytes\n", attrs - attrbase);
-	decode_attrs(sb, attrbase, attrs - attrbase, &iattr);
-	dump_attrs(sb, &iattr);
+	decode_attrs(sb, attrbase, attrs - attrbase, &inode);
+	dump_attrs(sb, &inode);
 	return 0;
 }
 #endif

@@ -128,10 +128,8 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 		trace(warn("found inode 0x%Lx", (L)inode->inum);)
 		//ileaf_dump(sb, leafbuf->data);
 		//hexdump(attrs, asize);
-		iattr = &(struct iattr){ };
-		decode_attrs(sb, attrs, asize, iattr);
-		dump_attrs(sb, iattr);
-		inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops, .root = iattr->root };
+		decode_attrs(sb, attrs, asize, inode);
+		dump_attrs(sb, inode);
 		goto setup;
 	}
 
@@ -150,39 +148,40 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 	 *
 	 * Need some way to verify that expanded inum was empty, pass asize by ref?
 	 */
-	inum_t goal = inode->inum;
-	assert(goal < next_key(path, levels));
+	inum_t inum = inode->inum;
+	assert(inum < next_key(path, levels));
 	while (1) {
 		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
-		goal = find_empty_inode(&sb->itree, leafbuf->data, (L)goal);
-		printf("result goal is %Lx, next is %Lx\n", (L)goal, (L)next_key(path, levels));
-		if (goal < next_key(path, levels))
+		inum = find_empty_inode(&sb->itree, leafbuf->data, (L)inum);
+		printf("result inum is %Lx, next is %Lx\n", (L)inum, (L)next_key(path, levels));
+		if (inum < next_key(path, levels))
 			break;
 		int more = advance(leafbuf->map, path, levels);
 		printf("no more inode space here, advance %i\n", more);
 		if (!more)
 			goto errout;
 	}
-	unsigned asize = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
-	void *attrs = tree_expand(&sb->itree, goal, asize, path), *base = attrs;
-	if (!attrs)
-		goto errmem; // what was the error???
-	inode->btree = new_btree(sb, &dtree_ops); // error???
-	attrs = encode_kind(attrs, MODE_OWNER_ATTR, sb->version);
-	attrs = encode_owner(attrs, iattr->mode, iattr->uid, iattr->gid);
-	attrs = encode_kind(attrs, DATA_BTREE_ATTR, sb->version);
-	attrs = encode_btree(attrs, &inode->btree.root);
-	assert(attrs - base == asize);
-	inode->inum = goal;
-	iattr->present = inode->dirty = MODE_OWNER_BIT|DATA_BTREE_BIT;
-setup:
-	release_path(path, levels + 1);
+
+	inode->inum = inum;
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
 	inode->i_links = 1;
-	inode->present = iattr->present;
+	inode->present = MODE_OWNER_BIT|DATA_BTREE_BIT;
+
+	unsigned asize = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
+	void *attrs = tree_expand(&sb->itree, inum, asize, path), *base = attrs;
+	if (!attrs)
+		goto errmem; // what was the error???
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	attrs = encode_kind(attrs, MODE_OWNER_ATTR, sb->version);
+	attrs = encode_owner(attrs, inode->i_mode, inode->i_uid, inode->i_gid);
+	attrs = encode_kind(attrs, DATA_BTREE_ATTR, sb->version);
+	attrs = encode_btree(attrs, &inode->btree.root);
+	assert(attrs - base == asize);
+setup:
+	release_path(path, levels + 1);
 	return 0;
 errmem:
 	err = -ENOMEM;
@@ -231,6 +230,7 @@ int save_inode(struct inode *inode)
 	}
 	assert(attrs - base == size + more);
 	release_path(path, levels + 1);
+	dump_attrs(sb, inode);
 	return 0;
 }
 
