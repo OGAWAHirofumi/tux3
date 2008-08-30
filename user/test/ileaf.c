@@ -220,14 +220,13 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))
 		return NULL;
 
-	unsigned newcount = leaf->count + extend_empty;
 	while (extend_empty--) {
 		*(dict - leaf->count - 1) = leaf->count ? *(dict - leaf->count) : 0;
 		leaf->count++;
 	}
 
-	assert(newcount);
-	unsigned itop = *(dict - newcount);
+	assert(leaf->count);
+	unsigned itop = *(dict - leaf->count);
 	void *attrs = leaf->table + offset;
 	printf("resize inum 0x%Lx at 0x%x from %i to %i\n", (L)inum, offset, size, newsize);
 
