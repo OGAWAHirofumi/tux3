@@ -110,6 +110,29 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
+/*
+ * Inode table expansion algorithm
+ *
+ * First probe for the inode goal.  This retreives the rightmost leaf that
+ * contains an inode less than or equal to the goal.  (We could in theory avoid
+ * retrieving any leaf at all in some cases if we observe that the the goal must
+ * fall into an unallocated gap between two index keys, for what that is worth.
+ * Probably not very much.)
+ *
+ * If not at end then next key is greater than goal.  This block has the highest
+ * ibase less than or equal to goal.  Ibase should be equal to btree key, so
+ * assert.  Search block even if ibase is way too low.  If goal comes back equal
+ * to next_key then there is no room to create more inodes in it, so advance to
+ * the next block and repeat.
+ *
+ * Otherwise, expand the inum goal that came back.  If ibase was too low to
+ * create the inode in that block then the low level split will fail and expand
+ * will create a new inode table block with ibase at the goal.  We round the
+ * goal down to some binary multiple in ileaf_split to reduce the chance of
+ * creating inode table blocks with only a small number of inodes.  (Actually
+ * we should only round down the split point, not the returned goal.)
+ */
+
 int open_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
@@ -135,19 +158,6 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 
 	trace(warn("create inode 0x%Lx", (L)inode->inum);)
 	assert(!inode->btree.root.depth);
-	/*
-	 * If not at end then next key is greater than goal.  This block has the
-	 * highest ibase less than or equal to goal.  Ibase should be equal to
-	 * btree key, so assert.  Search block even if ibase is way too low.  If
-	 * goal comes back equal to next_key then there is no room to create more
-	 * inodes here, advance to the next block and repeat the search.
-	 *
-	 * Otherwise, expand the inum goal that came back.  If ibase was too low
-	 * to create the inode in that block then the low level split will fail
-	 * and expand will create a new inode table block with ibase at the goal.
-	 *
-	 * Need some way to verify that expanded inum was empty, pass asize by ref?
-	 */
 	inum_t inum = inode->inum;
 	assert(inum < next_key(path, levels));
 	while (1) {
