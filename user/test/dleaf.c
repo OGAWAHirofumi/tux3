@@ -191,7 +191,13 @@ eek:
 	return -1;
 }
 
-void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, int size)
+/*
+ * Note that dleaf_resize, unlike other resize methods, always makes space for
+ * a new entry and returns a pointer to the new entry, not the base of a group
+ * of entries with the same key.  Is this a bug or a feature?  The high level
+ * btree resize method does not know or care about this detail.
+ */
+void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 {
 	//key = key & 0xffffffffffffLL;
 	assert(dleaf_sniff(btree, base));
@@ -204,7 +210,7 @@ void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, int size)
 	const int grouplim = 7;
 
 	/* need room for one extent + maybe one group + maybe one entry */
-	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) +  size)
+	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) + size)
 		return NULL;
 
 	/* find group position */
@@ -402,7 +408,7 @@ struct btree_ops dtree_ops = {
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
 	.leaf_split = dleaf_split,
-	.leaf_expand = dleaf_expand,
+	.leaf_resize = dleaf_resize,
 	.balloc = balloc,
 };
 
@@ -410,7 +416,7 @@ struct btree_ops dtree_ops = {
 void dleaf_insert(BTREE, block_t key, struct dleaf *leaf, struct extent extent)
 {
 	printf("insert 0x%Lx -> 0x%Lx\n", (L)key, (L)extent.block);
-	struct extent *store = dleaf_expand(btree, key, leaf, sizeof(extent));
+	struct extent *store = dleaf_resize(btree, key, leaf, sizeof(extent));
 	*store = extent;
 }
 

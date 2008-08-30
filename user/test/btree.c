@@ -446,12 +446,12 @@ eek:
 	return -ENOMEM;
 }
 
-void *tree_expand(struct btree *btree, tuxkey_t key, int more, struct path path[])
+void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct path path[])
 {
 	struct buffer *leafbuf = path[btree->root.depth].buffer;
 	struct btree_ops *ops = btree->ops;
 	set_buffer_dirty(leafbuf);
-	void *space = (ops->leaf_expand)(btree, key, leafbuf->data, more);
+	void *space = (ops->leaf_resize)(btree, key, leafbuf->data, newsize);
 	if (space)
 		return space;
 	trace(warn("split leaf");)
@@ -470,7 +470,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, int more, struct path path[
 		newbuf = swap;
 	}
 	brelse_dirty(newbuf);
-	space = (ops->leaf_expand)(btree, key, leafbuf->data, more);
+	space = (ops->leaf_resize)(btree, key, leafbuf->data, newsize);
 	assert(space);
 	int err = insert_node(btree, newkey, childblock, path);
 	if (err) {
@@ -550,17 +550,17 @@ tuxkey_t uleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
 }
 
-void *uleaf_expand(BTREE, tuxkey_t key, vleaf *data, int more)
+void *uleaf_resize(BTREE, tuxkey_t key, vleaf *data, unsigned one)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;
-	if (uleaf_free(btree, leaf) < more)
+	if (uleaf_free(btree, leaf) < one)
 		return NULL;
 	unsigned at = 0;
 	while (at < leaf->count && leaf->entries[at].key < key)
 		at++;
-	printf("expand leaf at 0x%x by %i\n", at, more);
-	vecmove(leaf->entries + at + more, leaf->entries + at, leaf->count++ - at);
+	printf("expand leaf at 0x%x by %i\n", at, one);
+	vecmove(leaf->entries + at + one, leaf->entries + at, leaf->count++ - at);
 	return leaf->entries + at;
 }
 
@@ -572,7 +572,7 @@ struct btree_ops ops = {
 	.leaf_sniff = uleaf_sniff,
 	.leaf_init = uleaf_init,
 	.leaf_split = uleaf_split,
-	.leaf_expand = uleaf_expand,
+	.leaf_resize = uleaf_resize,
 	.leaf_dump = uleaf_dump,
 	.leaf_need = uleaf_need,
 	.leaf_free = uleaf_free,
@@ -588,7 +588,7 @@ block_t balloc(SB)
 int uleaf_insert(BTREE, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
-	struct entry *entry = uleaf_expand(btree, key, leaf, 1);
+	struct entry *entry = uleaf_resize(btree, key, leaf, 1);
 	if (!entry)
 		return 1; // need to expand
 	assert(entry);

@@ -202,7 +202,7 @@ void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 		*(dict - i) += *(dict - at);
 }
 
-void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, int more)
+void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 {
 	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
@@ -214,22 +214,25 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, int more)
 		return NULL;
 
 	unsigned extend_empty = at >= leaf->count ? at - leaf->count + 1 : 0;
+	unsigned offset = at ? *(dict - at) : 0;
+	unsigned size = *(dict - at - 1) - offset;
+	int more = newsize - size;
 	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))
 		return NULL;
 
+	unsigned newcount = leaf->count + extend_empty;
 	while (extend_empty--) {
 		*(dict - leaf->count - 1) = leaf->count ? *(dict - leaf->count) : 0;
 		leaf->count++;
 	}
 
-	unsigned free = *(dict - leaf->count);
-	unsigned offset = at ? *(dict - at) : 0, size = *(dict - at - 1) - offset;
-	if (more < 0 && -more > size)
-		return NULL;
+	assert(newcount);
+	unsigned itop = *(dict - newcount);
 	void *attrs = leaf->table + offset;
-	printf("expand inum 0x%Lx at 0x%x/%i by %i\n", (L)inum, offset, size, more);
+	printf("resize inum 0x%Lx at 0x%x from %i to %i\n", (L)inum, offset, size, newsize);
 
-	memmove(attrs + size + more, attrs + size, free - offset);
+	assert(itop >= offset + size);
+	memmove(attrs + newsize, attrs + size, itop - offset - size);
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
 	//memset(attrs, 0xaa, size + more);
@@ -277,7 +280,7 @@ struct btree_ops itree_ops = {
 	.leaf_sniff = ileaf_sniff,
 	.leaf_init = ileaf_init,
 	.leaf_split = ileaf_split,
-	.leaf_expand = ileaf_resize,
+	.leaf_resize = ileaf_resize,
 	.balloc = balloc,
 };
 
@@ -287,7 +290,7 @@ void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
 	printf("attrs size = %i\n", size);
-	attrs = ileaf_resize(btree, inum, leaf, more);
+	attrs = ileaf_resize(btree, inum, leaf, size + more);
 	memset(attrs + size, fill, more);
 }
 
@@ -296,9 +299,8 @@ void test_remove(BTREE, struct ileaf *leaf, inum_t inum, int less)
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
 	printf("attrs size = %i\n", size);
-	attrs = ileaf_resize(btree, inum, leaf, -less);
+	attrs = ileaf_resize(btree, inum, leaf, size - less);
 }
-
 
 block_t balloc(SB)
 {
