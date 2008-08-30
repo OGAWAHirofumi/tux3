@@ -203,6 +203,8 @@ int save_inode(struct inode *inode)
 	void *base = ileaf_lookup(&sb->itree, inode->inum, path[levels].buffer->data, &size);
 	if (!size)
 		return -EINVAL;
+	if (inode->i_size)
+		inode->present |= CTIME_SIZE_BIT;
 	int more = howbig(inode->present) - size;
 	base = tree_expand(&sb->itree, inode->inum, more, path); // error???
 	void *attrs = base;
@@ -411,7 +413,6 @@ int main(int argc, char *argv[])
 	tuxseek(file, 4092);
 	err = tuxwrite(file, "hello ", 6);
 	err = tuxwrite(file, "world!", 6);
-mark_attr_dirty(file->f_inode, DATA_BTREE_BIT);
 save_inode(file->f_inode);
 return 0;
 	tuxsync(inode);

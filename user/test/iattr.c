@@ -211,7 +211,7 @@ int main(int argc, char *argv[])
 	attrs = encode_links(attrs, 999);
 //sb->version = 9;
 	attrs = encode_kind(attrs, MTIME_ATTR, sb->version);
-	attrs = encode_mtime(attrs, 0xdeadfaced00d);
+	attrs = encode_mtime(attrs, 0xbadfaced00d);
 	struct inode inode = { };
 	printf("decode %ti attr bytes\n", attrs - attrbase);
 	decode_attrs(sb, attrbase, attrs - attrbase, &inode);

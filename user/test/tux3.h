@@ -146,7 +146,7 @@ struct inode {
 	struct map *map;
 	struct btree btree;
 	inum_t inum;
-	unsigned i_version, dirty, present;
+	unsigned i_version, present;
 	u64 i_size, i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_links;
 };
@@ -174,7 +174,6 @@ struct btree_ops {
 };
 
 struct iattr {
-	unsigned present;
 	struct root root;
 	u64 isize, mtime, ctime, atime;
 	unsigned mode, uid, gid, links;
@@ -198,10 +197,5 @@ enum atbit {
 	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
 	MTIME_BIT = 1 << MTIME_ATTR,
 };
-
-static inline void mark_attr_dirty(struct inode *inode, unsigned mask)
-{
-	inode->dirty |= mask;
-}
 
 #endif
