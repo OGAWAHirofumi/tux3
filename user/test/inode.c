@@ -133,7 +133,7 @@ void free_inode(struct inode *inode)
  * we should only round down the split point, not the returned goal.)
  */
 
-int open_inode(struct inode *inode, struct iattr *iattr)
+int make_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
 	int err = -ENOENT, levels = sb->itree.root.depth;
@@ -142,19 +142,6 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
-
-	if (!iattr) {
-		unsigned asize;
-		void *attrs = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &asize);
-		if (!attrs)
-			goto errpath;
-		trace(warn("found inode 0x%Lx", (L)inode->inum);)
-		//ileaf_dump(sb, leafbuf->data);
-		//hexdump(attrs, asize);
-		decode_attrs(sb, attrs, asize, inode);
-		dump_attrs(sb, inode);
-		goto setup;
-	}
 
 	trace(warn("create inode 0x%Lx", (L)inode->inum);)
 	assert(!inode->btree.root.depth);
@@ -185,16 +172,37 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 		goto errmem; // what was the error???
 	void *attrs = encode_attrs(sb, base, size, inode);
 	assert(attrs == base + size);
-setup:
 	release_path(path, levels + 1);
 	return 0;
 errmem:
 	err = -ENOMEM;
-errpath:
 	release_path(path, levels + 1);
 errout:
-	warn("open_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	warn("make_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
 	return err;
+}
+
+int open_inode(struct inode *inode)
+{
+	SB = inode->sb;
+	int err = -ENOENT, levels = sb->itree.root.depth;
+	struct path path[levels + 1];
+	if ((err = probe(&sb->itree, inode->inum, path)))
+		return err;
+	unsigned size;
+	void *attrs = ileaf_lookup(&sb->itree, inode->inum, path[levels].buffer->data, &size);
+	if (!attrs) {
+		release_path(path, levels + 1);
+		warn("open_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+		return -ENOENT;
+	}
+	trace(warn("found inode 0x%Lx", (L)inode->inum);)
+	//ileaf_dump(sb, leafbuf->data);
+	//hexdump(attrs, size);
+	decode_attrs(sb, attrs, size, inode);
+	dump_attrs(sb, inode);
+	release_path(path, levels + 1);
+	return 0;
 }
 
 int save_inode(struct inode *inode)
@@ -296,7 +304,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len)
 	inum_t inum = entry->inum;
 	brelse(buffer);
 	struct inode *inode = new_inode(dir->sb, inum);
-	return open_inode(inode, NULL) ? NULL : inode;
+	return open_inode(inode) ? NULL : inode;
 }
 
 struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *iattr)
@@ -317,7 +325,7 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 	struct inode *inode = new_inode(dir->sb, dir->sb->nextalloc);
 	if (!inode)
 		return NULL; // err ???
-	int err = open_inode(inode, iattr);
+	int err = make_inode(inode, iattr);
 	if (err)
 		return NULL; // err ???
 	if (!ext2_create_entry(dir, name, len, inode->inum, iattr->mode))
@@ -382,7 +390,7 @@ int main(int argc, char *argv[])
 
 	printf("---- create root ----\n");
 	struct inode *root = new_inode(sb, 0xd);
-	open_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
+	make_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
 	printf("---- create file ----\n");
 	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
