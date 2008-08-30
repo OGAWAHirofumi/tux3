@@ -169,17 +169,13 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
 	inode->i_links = 1;
 	inode->present = MODE_OWNER_BIT|DATA_BTREE_BIT;
-
-	unsigned asize = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
-	void *attrs = tree_expand(&sb->itree, inum, asize, path), *base = attrs;
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	unsigned size = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
+	void *attrs = tree_expand(&sb->itree, inum, size, path), *base = attrs;
 	if (!attrs)
 		goto errmem; // what was the error???
-	inode->btree = new_btree(sb, &dtree_ops); // error???
-	attrs = encode_kind(attrs, MODE_OWNER_ATTR, sb->version);
-	attrs = encode_owner(attrs, inode->i_mode, inode->i_uid, inode->i_gid);
-	attrs = encode_kind(attrs, DATA_BTREE_ATTR, sb->version);
-	attrs = encode_btree(attrs, &inode->btree.root);
-	assert(attrs - base == asize);
+	attrs = encode_attrs(sb, base, size, inode);
+	assert(attrs == base + size);
 setup:
 	release_path(path, levels + 1);
 	return 0;
