@@ -182,6 +182,37 @@ inline void *encode_links(void *attrs, u32 links)
 	return encode32(attrs, links);
 }
 
+void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
+{
+	//printf("encode %u attr bytes\n", size);
+	void *limit = attrs + size - 1;
+	for (int kind = 0; kind < 32; kind++) {
+		if (!(inode->present & (1 << kind)))
+			continue;
+		if (attrs >= limit - 1)
+			break;
+		attrs = encode_kind(attrs, kind, sb->version);
+		switch (kind) {
+		case MODE_OWNER_ATTR:
+			attrs = encode_owner(attrs, inode->i_mode, inode->i_uid, inode->i_gid);
+			break;
+		case CTIME_SIZE_ATTR:
+			attrs = encode_csize(attrs, inode->i_ctime, inode->i_size);
+			break;
+		case MTIME_ATTR:
+			attrs = encode_mtime(attrs, inode->i_mtime);
+			break;
+		case DATA_BTREE_ATTR:
+			attrs = encode_btree(attrs, &inode->btree.root);
+			break;
+		case LINK_COUNT_ATTR:
+			attrs = encode_links(attrs, inode->i_links);
+			break;
+		}
+	}
+	return attrs;
+}
+
 unsigned howbig(unsigned bits)
 {
 	unsigned need = 0;
@@ -190,7 +221,6 @@ unsigned howbig(unsigned bits)
 			need += atsize[bit] + 2;
 	return need;
 }
-
 
 #ifndef main
 #ifndef iattr_included_from_ileaf

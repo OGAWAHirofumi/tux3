@@ -207,30 +207,8 @@ int save_inode(struct inode *inode)
 		inode->present |= CTIME_SIZE_BIT;
 	int more = howbig(inode->present) - size;
 	base = tree_expand(&sb->itree, inode->inum, more, path); // error???
-	void *attrs = base;
-	for (int kind = 0; kind < 32; kind++) {
-		if (!(inode->present & (1 << kind)))
-			continue;
-		attrs = encode_kind(attrs, kind, sb->version);
-		switch (kind) {
-		case MODE_OWNER_ATTR:
-			attrs = encode_owner(attrs, inode->i_mode, inode->i_uid, inode->i_gid);
-			break;
-		case CTIME_SIZE_ATTR:
-			attrs = encode_csize(attrs, inode->i_ctime, inode->i_size);
-			break;
-		case MTIME_ATTR:
-			attrs = encode_mtime(attrs, inode->i_mtime);
-			break;
-		case DATA_BTREE_ATTR:
-			attrs = encode_btree(attrs, &inode->btree.root);
-			break;
-		case LINK_COUNT_ATTR:
-			attrs = encode_links(attrs, inode->i_links);
-			break;
-		}
-	}
-	assert(attrs - base == size + more);
+	void *attrs = encode_attrs(sb, base, size += more, inode);
+	assert(attrs == base + size);
 	release_path(path, levels + 1);
 	dump_attrs(sb, inode);
 	return 0;
