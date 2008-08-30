@@ -23,25 +23,25 @@ unsigned atsize[16] = {
 	[MTIME_ATTR] = 6,
 };
 
-void *decode16(void *attrs, unsigned *val)
+inline void *decode16(void *attrs, unsigned *val)
 {
 	*val = be_to_u16(*(be_u16 *)attrs);
 	return attrs + sizeof(u16);
 }
 
-void *decode32(void *attrs, unsigned *val)
+inline void *decode32(void *attrs, unsigned *val)
 {
 	*val = be_to_u32(*(be_u32 *)attrs);
 	return attrs + sizeof(u32);
 }
 
-void *decode64(void *attrs, u64 *val)
+inline void *decode64(void *attrs, u64 *val)
 {
 	*val = be_to_u64(*(be_u64 *)attrs);
 	return attrs + sizeof(u64);
 }
 
-void *decode48(void *attrs, u64 *val)
+inline void *decode48(void *attrs, u64 *val)
 {
 	unsigned part1, part2;
 	attrs = decode16(attrs, &part1);
@@ -63,7 +63,6 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			attrs += atsize[kind];
 			continue;
 		}
-		inode->present |= 1 << kind;
 		switch (kind) {
 		case MODE_OWNER_ATTR:
 			attrs = decode32(attrs, &inode->i_mode);
@@ -91,6 +90,7 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		default:
 			return -EINVAL;
 		}
+		inode->present |= 1 << kind;
 	}
 	return 0;
 }
@@ -125,59 +125,59 @@ void dump_attrs(SB, struct inode *inode)
 	printf("\n");
 }
 
-void *encode16(void *attrs, unsigned val)
+inline void *encode16(void *attrs, unsigned val)
 {
 	*(be_u16 *)attrs = u16_to_be(val);
 	return attrs + sizeof(u16);
 }
 
-void *encode32(void *attrs, unsigned val)
+inline void *encode32(void *attrs, unsigned val)
 {
 	*(be_u32 *)attrs = u32_to_be(val);
 	return attrs + sizeof(u32);
 }
 
-void *encode64(void *attrs, u64 val)
+inline void *encode64(void *attrs, u64 val)
 {
 	*(be_u64 *)attrs = u64_to_be(val);
 	return attrs + sizeof(u64);
 }
 
-void *encode48(void *attrs, u64 val)
+inline void *encode48(void *attrs, u64 val)
 {
 	attrs = encode16(attrs, val >> 32);
 	return encode32(attrs, val);
 }
 
-void *encode_kind(void *attrs, unsigned kind, unsigned version)
+inline void *encode_kind(void *attrs, unsigned kind, unsigned version)
 {
 	return encode16(attrs, (kind << 12) | version);
 }
 
-void *encode_owner(void *attrs, u32 mode, u32 uid, u32 gid)
+inline void *encode_owner(void *attrs, u32 mode, u32 uid, u32 gid)
 {
 	attrs = encode32(attrs, mode);
 	attrs = encode32(attrs, uid);
 	return encode32(attrs, gid);
 }
 
-void *encode_csize(void *attrs, u64 ctime, u64 isize)
+inline void *encode_csize(void *attrs, u64 ctime, u64 isize)
 {
 	attrs = encode48(attrs, ctime);
 	return encode64(attrs, isize);
 }
 
-void *encode_mtime(void *attrs, u64 mtime)
+inline void *encode_mtime(void *attrs, u64 mtime)
 {
 	return encode48(attrs, mtime);
 }
 
-void *encode_btree(void *attrs, struct root *root)
+inline void *encode_btree(void *attrs, struct root *root)
 {
 	return encode64(attrs, ((u64)root->depth) << 48 | root->block);
 }
 
-void *encode_links(void *attrs, u32 links)
+inline void *encode_links(void *attrs, u32 links)
 {
 	return encode32(attrs, links);
 }
