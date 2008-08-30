@@ -78,7 +78,7 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->btree = (struct btree){ .sb = sb,
+			inode->btree = (struct btree){ .sb = sb, .entries_per_leaf = 64, // !!! should depend on blocksize
 #ifdef main
 				.ops = &dtree_ops,
 #endif
