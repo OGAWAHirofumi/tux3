@@ -15,14 +15,6 @@
 #include "hexdump.c"
 #include "tux3.h"
 
-unsigned atsize[16] = {
-	[MODE_OWNER_ATTR] = 12,
-	[CTIME_SIZE_ATTR] = 14,
-	[DATA_BTREE_ATTR] = 8,
-	[LINK_COUNT_ATTR] = 4,
-	[MTIME_ATTR] = 6,
-};
-
 inline void *decode16(void *attrs, unsigned *val)
 {
 	*val = be_to_u16(*(be_u16 *)attrs);
@@ -47,6 +39,82 @@ inline void *decode48(void *attrs, u64 *val)
 	attrs = decode16(attrs, &part1);
 	attrs = decode32(attrs, &part2);
 	*val = (u64)part1 << 32 | part2;
+	return attrs;
+}
+
+inline void *encode16(void *attrs, unsigned val)
+{
+	*(be_u16 *)attrs = u16_to_be(val);
+	return attrs + sizeof(u16);
+}
+
+inline void *encode32(void *attrs, unsigned val)
+{
+	*(be_u32 *)attrs = u32_to_be(val);
+	return attrs + sizeof(u32);
+}
+
+inline void *encode64(void *attrs, u64 val)
+{
+	*(be_u64 *)attrs = u64_to_be(val);
+	return attrs + sizeof(u64);
+}
+
+inline void *encode48(void *attrs, u64 val)
+{
+	attrs = encode16(attrs, val >> 32);
+	return encode32(attrs, val);
+}
+
+unsigned atsize[16] = {
+	[MODE_OWNER_ATTR] = 12,
+	[CTIME_SIZE_ATTR] = 14,
+	[DATA_BTREE_ATTR] = 8,
+	[LINK_COUNT_ATTR] = 4,
+	[MTIME_ATTR] = 6,
+};
+
+unsigned howbig(unsigned bits)
+{
+	unsigned need = 0;
+	for (int bit = 0; bit < 32; bit++)
+		if ((bits & (1 << bit)))
+			need += atsize[bit] + 2;
+	return need;
+}
+
+void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
+{
+	//printf("encode %u attr bytes\n", size);
+	void *limit = attrs + size - 3;
+	for (int kind = 0; kind < 32; kind++) {
+		if (!(inode->present & (1 << kind)))
+			continue;
+		if (attrs >= limit)
+			break;
+		attrs = encode16(attrs, (kind << 12) | sb->version);
+		switch (kind) {
+		case MODE_OWNER_ATTR:
+			attrs = encode32(attrs, inode->i_mode);
+			attrs = encode32(attrs, inode->i_uid);
+			attrs = encode32(attrs, inode->i_gid);
+			break;
+		case CTIME_SIZE_ATTR:
+			attrs = encode48(attrs, inode->i_ctime);
+			attrs = encode64(attrs, inode->i_size);
+			break;
+		case MTIME_ATTR:
+			attrs = encode48(attrs, inode->i_mtime);
+			break;
+		case DATA_BTREE_ATTR:;
+			struct root *root = &inode->btree.root;
+			attrs = encode64(attrs, ((u64)root->depth << 48) | root->block);
+			break;
+		case LINK_COUNT_ATTR:
+			attrs = encode32(attrs, inode->i_links);
+			break;
+		}
+	}
 	return attrs;
 }
 
@@ -123,74 +191,6 @@ void dump_attrs(SB, struct inode *inode)
 		}
 	}
 	printf("\n");
-}
-
-inline void *encode16(void *attrs, unsigned val)
-{
-	*(be_u16 *)attrs = u16_to_be(val);
-	return attrs + sizeof(u16);
-}
-
-inline void *encode32(void *attrs, unsigned val)
-{
-	*(be_u32 *)attrs = u32_to_be(val);
-	return attrs + sizeof(u32);
-}
-
-inline void *encode64(void *attrs, u64 val)
-{
-	*(be_u64 *)attrs = u64_to_be(val);
-	return attrs + sizeof(u64);
-}
-
-inline void *encode48(void *attrs, u64 val)
-{
-	attrs = encode16(attrs, val >> 32);
-	return encode32(attrs, val);
-}
-
-void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
-{
-	//printf("encode %u attr bytes\n", size);
-	void *limit = attrs + size - 3;
-	for (int kind = 0; kind < 32; kind++) {
-		if (!(inode->present & (1 << kind)))
-			continue;
-		if (attrs >= limit)
-			break;
-		attrs = encode16(attrs, (kind << 12) | sb->version);
-		switch (kind) {
-		case MODE_OWNER_ATTR:
-			attrs = encode32(attrs, inode->i_mode);
-			attrs = encode32(attrs, inode->i_uid);
-			attrs = encode32(attrs, inode->i_gid);
-			break;
-		case CTIME_SIZE_ATTR:
-			attrs = encode48(attrs, inode->i_ctime);
-			attrs = encode64(attrs, inode->i_size);
-			break;
-		case MTIME_ATTR:
-			attrs = encode48(attrs, inode->i_mtime);
-			break;
-		case DATA_BTREE_ATTR:;
-			struct root *root = &inode->btree.root;
-			attrs = encode64(attrs, ((u64)root->depth << 48) | root->block);
-			break;
-		case LINK_COUNT_ATTR:
-			attrs = encode32(attrs, inode->i_links);
-			break;
-		}
-	}
-	return attrs;
-}
-
-unsigned howbig(unsigned bits)
-{
-	unsigned need = 0;
-	for (int bit = 0; bit < 32; bit++)
-		if ((bits & (1 << bit)))
-			need += atsize[bit] + 2;
-	return need;
 }
 
 #ifndef main
