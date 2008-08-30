@@ -79,7 +79,10 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->btree = (struct btree){ .sb = sb, .ops = &dtree_ops,
+			inode->btree = (struct btree){ .sb = sb,
+#ifdef main
+				.ops = &dtree_ops,
+#endif
 				.root = { .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 } };
 			break;
 		case LINK_COUNT_ATTR:
