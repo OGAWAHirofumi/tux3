@@ -168,8 +168,10 @@ int open_inode(struct inode *inode, struct iattr *iattr)
 	if (!attrs)
 		goto errmem; // what was the error???
 	inode->btree = new_btree(sb, &dtree_ops); // error???
-	attrs = encode_owner(sb, attrs, iattr->mode, iattr->uid, iattr->gid);
-	attrs = encode_btree(sb, attrs, &inode->btree.root);
+	attrs = encode_kind(attrs, MODE_OWNER_ATTR, sb->version);
+	attrs = encode_owner(attrs, iattr->mode, iattr->uid, iattr->gid);
+	attrs = encode_kind(attrs, DATA_BTREE_ATTR, sb->version);
+	attrs = encode_btree(attrs, &inode->btree.root);
 	assert(attrs - base == asize);
 	inode->inum = goal;
 	iattr->present = inode->dirty = MODE_OWNER_BIT|DATA_BTREE_BIT;
@@ -194,13 +196,12 @@ errout:
 int save_inode(struct inode *inode)
 {
 	SB = inode->sb;
-	int err = -ENOENT, levels = sb->itree.root.depth;
+	int err, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
 	if ((err = probe(&sb->itree, inode->inum, path)))
 		return err;
-	struct buffer *leafbuf = path[levels].buffer;
 	unsigned size;
-	void *base = ileaf_lookup(&sb->itree, inode->inum, leafbuf->data, &size);
+	void *base = ileaf_lookup(&sb->itree, inode->inum, path[levels].buffer->data, &size);
 	if (!size)
 		return -EINVAL;
 	int more = howbig(inode->present) - size;
@@ -209,21 +210,22 @@ int save_inode(struct inode *inode)
 	for (int kind = 0; kind < 32; kind++) {
 		if (!(inode->present & (1 << kind)))
 			continue;
+		attrs = encode_kind(attrs, kind, sb->version);
 		switch (kind) {
 		case MODE_OWNER_ATTR:
-			attrs = encode_owner(sb, attrs, inode->i_mode, inode->i_uid, inode->i_gid);
+			attrs = encode_owner(attrs, inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = encode_csize(sb, attrs, inode->i_ctime, inode->i_size);
+			attrs = encode_csize(attrs, inode->i_ctime, inode->i_size);
 			break;
 		case MTIME_ATTR:
-			attrs = encode_mtime(sb, attrs, inode->i_mtime);
+			attrs = encode_mtime(attrs, inode->i_mtime);
 			break;
 		case DATA_BTREE_ATTR:
-			attrs = encode_btree(sb, attrs, &inode->btree.root);
+			attrs = encode_btree(attrs, &inode->btree.root);
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = encode_links(sb, attrs, inode->i_links);
+			attrs = encode_links(attrs, inode->i_links);
 			break;
 		}
 	}
@@ -346,7 +348,7 @@ void tuxsync(struct inode *inode)
 	int err = flush_buffers(inode->map);
 	if (err)
 		warn("Sync failed (%s)", strerror(-err));
-	//encode_csize(sb, attrs, 0, inode->i_size);
+	//encode_csize(attrs, 0, inode->i_size);
 }
 
 void tuxclose(struct inode *inode)
