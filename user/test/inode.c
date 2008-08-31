@@ -197,7 +197,7 @@ int open_inode(struct inode *inode)
 		return -ENOENT;
 	}
 	trace(warn("found inode 0x%Lx", (L)inode->inum);)
-	//ileaf_dump(sb, leafbuf->data);
+	//ileaf_dump(&sb->itree, path[levels].buffer->data);
 	//hexdump(attrs, size);
 	decode_attrs(sb, attrs, size, inode);
 	dump_attrs(sb, inode);
@@ -207,6 +207,7 @@ int open_inode(struct inode *inode)
 
 int save_inode(struct inode *inode)
 {
+	trace(warn("save inode 0x%Lx", (L)inode->inum);)
 	SB = inode->sb;
 	int err, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
@@ -218,9 +219,9 @@ int save_inode(struct inode *inode)
 		return -EINVAL;
 	if (inode->i_size)
 		inode->present |= CTIME_SIZE_BIT;
-	int more = howbig(inode->present) - size;
-	base = tree_expand(&sb->itree, inode->inum, more, path); // error???
-	void *attrs = encode_attrs(sb, base, size += more, inode);
+	size = howbig(inode->present);
+	base = tree_expand(&sb->itree, inode->inum, size, path); // error???
+	void *attrs = encode_attrs(sb, base, size, inode);
 	assert(attrs == base + size);
 	release_path(path, levels + 1);
 	dump_attrs(sb, inode);
@@ -230,6 +231,7 @@ int save_inode(struct inode *inode)
 int tuxio(struct file *file, char *data, unsigned len, int write)
 {
 	struct inode *inode = file->f_inode;
+	printf("%s %u bytes, isize = 0x%Lx\n", write ? "write" : "read", len, (L)inode->i_size);
 	loff_t pos = file->f_pos;
 	if (pos + len > MAX_FILESIZE)
 		return -EFBIG;
@@ -243,21 +245,22 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 	unsigned bmask = inode->sb->blockmask;
 	loff_t tail = len;
 	while (tail) {
-		struct buffer *blockbuf = getblk(inode->map, pos >> bbits);
-		if (!blockbuf) {
+		unsigned from = pos & bmask;
+		unsigned some = from + tail > bsize ? bsize - from : tail;
+		int full = write && some == bsize;
+		struct buffer *buffer = (full ? getblk : bread)(inode->map, pos >> bbits);
+		if (!buffer) {
 			errno = EIO;
 			break;
 		}
-		unsigned from = pos & bmask;
-		unsigned some = from + tail > bsize ? bsize - from : tail;
 		if (write)
-			memcpy(blockbuf->data + from, data, some);
+			memcpy(buffer->data + from, data, some);
 		else
-			memcpy(data, blockbuf->data + from, some);
-		printf("%s %u bytes\n", write ? "write" : "read", some);
-		hexdump(blockbuf->data + from, some);
-		set_buffer_dirty(blockbuf);
-		brelse(blockbuf);
+			memcpy(data, buffer->data + from, some);
+		printf("transfer %u bytes, block 0x%Lx, buffer %p\n", some, (L)buffer->index, buffer);
+		hexdump(buffer->data + from, some);
+		set_buffer_dirty(buffer);
+		brelse(buffer);
 		tail -= some;
 		data += some;
 		pos += some;
@@ -336,7 +339,7 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 	return NULL; // err ???
 }
 
-void tuxsync(struct inode *inode)
+void tuxflush(struct inode *inode)
 {
 	int err = flush_buffers(inode->map);
 	if (err)
@@ -346,7 +349,7 @@ void tuxsync(struct inode *inode)
 
 void tuxclose(struct inode *inode)
 {
-	tuxsync(inode);
+	tuxflush(inode);
 	free_inode(inode);
 }
 
@@ -404,11 +407,17 @@ int main(int argc, char *argv[])
 	tuxseek(file, 4092);
 	err = tuxwrite(file, "hello ", 6);
 	err = tuxwrite(file, "world!", 6);
-save_inode(file->f_inode);
-return 0;
-	tuxsync(inode);
-	tuxsync(sb->bitmap);
+#if 0
+	tuxflush(sb->bitmap);
 	flush_buffers(sb->devmap);
+#endif
+#if 1
+	printf("---- close file ----\n");
+	save_inode(inode);
+	tuxclose(inode);
+	printf("---- open file ----\n");
+	file = &(struct file){ .f_inode = tuxopen(root, "foo", 3) };
+#endif
 
 	printf("---- read file ----\n");
 	tuxseek(file, (1LL << 60) - 12);
@@ -419,6 +428,7 @@ return 0;
 	if (got < 0)
 		return 1;
 	hexdump(buf, got);
+	printf("---- show state ----\n");
 	show_buffers(inode->map);
 	show_buffers(root->map);
 	show_buffers(sb->devmap);

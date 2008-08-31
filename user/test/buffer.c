@@ -329,20 +329,17 @@ struct buffer *getblk(struct map *map, sector_t block)
 
 struct buffer *bread(struct map *map, sector_t block)
 {
-	int err = 0;
-	struct buffer *buffer;
-
-	if (!(buffer = getblk(map, block)))
-		return NULL;
-	if (!buffer_empty(buffer))
-		return buffer;
-	buftrace(warn("read buffer %Lx, state %i", buffer->index, buffer->state););
-	if ((err = (buffer->map->ops->blockio)(buffer, 0))) {
-		warn("failed to read block %Lx (%s)", block, strerror(-err));
-		brelse(buffer);
-		return NULL;
+	struct buffer *buffer = getblk(map, block);
+	if (buffer && buffer_empty(buffer)) {
+		buftrace(warn("read buffer %Lx, state %i", buffer->index, buffer->state););
+		int err = buffer->map->ops->blockio(buffer, 0);
+		if (err) {
+			warn("failed to read block %Lx (%s)", block, strerror(-err));
+			brelse(buffer);
+			return NULL;
+		}
+		set_buffer_uptodate(buffer);
 	}
-	set_buffer_uptodate(buffer);
 	return buffer;
 }
 
