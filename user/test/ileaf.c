@@ -213,13 +213,12 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	if (at > 64)
 		return NULL;
 
-	unsigned extend_empty = at >= leaf->count ? at - leaf->count + 1 : 0;
-	unsigned offset = at ? *(dict - at) : 0;
-	unsigned size = *(dict - at - 1) - offset;
+	unsigned extend_empty = at < leaf->count ? 0 : at - leaf->count + 1;
+	unsigned offset = at && leaf->count ? *(dict - (at < leaf->count ? at : leaf->count)) : 0;
+	unsigned size = at < leaf->count ? *(dict - at - 1) - offset : 0;
 	int more = newsize - size;
 	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))
 		return NULL;
-
 	while (extend_empty--) {
 		*(dict - leaf->count - 1) = leaf->count ? *(dict - leaf->count) : 0;
 		leaf->count++;
