@@ -429,7 +429,7 @@ int main(int argc, char *argv[])
 		return 1;
 	hexdump(buf, got);
 	printf("---- show state ----\n");
-	show_buffers(inode->map);
+	show_buffers(file->f_inode->map);
 	show_buffers(root->map);
 	show_buffers(sb->devmap);
 	bitmap_dump(sb->bitmap, 0, sb->super.blocks);
