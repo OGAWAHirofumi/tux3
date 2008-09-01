@@ -66,7 +66,11 @@ int filemap_blockio(struct buffer *buffer, int write)
 			physical = found->block;
 			trace(warn("found block [%Lx]", (L)physical);)
 		} else {
-			physical = balloc(sb); // !!! need an error return
+			physical = balloc(sb);
+			if (physical == -1) {
+				err = -ENOSPC;
+				goto eek;
+			}
 			struct extent *store = tree_expand(&inode->btree, buffer->index, sizeof(struct extent), path);
 			if (!store)
 				goto eek;
@@ -83,7 +87,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	trace(warn("found physical block %Lx", (long long)physical);)
 	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 eek:
-	warn("unable to add extent to tree: %s", strerror(-err));
+	warn("cannot add extent to tree: %s", strerror(-err));
 	free_block(sb, physical);
 	return -EIO;
 unmapped:
@@ -234,7 +238,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 	struct inode *inode = file->f_inode;
 	printf("%s %u bytes, isize = 0x%Lx\n", write ? "write" : "read", len, (L)inode->i_size);
 	loff_t pos = file->f_pos;
-	if (pos + len > MAX_FILESIZE)
+	if (write && pos + len > MAX_FILESIZE)
 		return -EFBIG;
 	if (!write && pos + len > inode->i_size) {
 		if (pos >= inode->i_size)
@@ -317,7 +321,7 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
 		brelse(buffer);
-		return NULL; // err_ptr(-EEXIST) ???
+		return NULL; // should allow create of a file that already exists
 	}
 	/*
 	 * For now the inum allocation goal is the same as the block allocation
@@ -364,13 +368,17 @@ int load_sb(SB)
 	if (err)
 		return err;
 	struct disksuper *disk = &sb->super;
-	sb->devmap->dev->bits = be_to_u16(disk->blockbits);
+	int blockbits = be_to_u16(disk->blockbits);
 	sb->volblocks = be_to_u64(disk->volblocks);
 	sb->nextalloc = be_to_u64(disk->nextalloc);
 	sb->freeblocks = be_to_u64(disk->freeblocks);
 	u64 iroot = be_to_u64(disk->iroot);
 	sb->itree.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
-	hexdump(&sb->super, sizeof(sb->super));
+	sb->blockbits = blockbits,
+	sb->blocksize = 1 << blockbits,
+	sb->blockmask = (1 << blockbits) - 1,
+	sb->devmap->dev->bits = blockbits;
+	//hexdump(&sb->super, sizeof(sb->super));
 	return 0;
 }
 
@@ -382,7 +390,7 @@ int save_sb(SB)
 	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
 	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
 	disk->iroot = u64_to_be((u64)sb->itree.root.depth << 48 | sb->itree.root.block);
-	hexdump(&sb->super, sizeof(sb->super));
+	//hexdump(&sb->super, sizeof(sb->super));
 	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 }
 
@@ -473,7 +481,7 @@ int main(int argc, char *argv[])
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(getblk(sb->rootdir->map, 0), sb->blocksize);
+	ext2_dump_entries(getblk(sb->rootdir->map, 0));
 
 	printf("---- write file ----\n");
 	char buf[100] = { };

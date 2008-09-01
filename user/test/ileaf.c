@@ -63,7 +63,7 @@ unsigned ileaf_need(BTREE, vleaf *vleaf)
 {
 	struct ileaf *leaf = vleaf;
 	u16 *dict = vleaf + btree->sb->blocksize, *base = dict - leaf->count;
-	return (void *)dict - (void *)base + base == dict ? 0 : *base ;
+	return (void *)dict - (void *)base + (base == dict ? 0 : *base);
 }
 
 unsigned ileaf_free(BTREE, vleaf *leaf)
@@ -77,14 +77,14 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 	struct ileaf *leaf = vleaf;
 	inum_t inum = leaf->ibase;
 	u16 *dict = vleaf + sb->blocksize, offset = 0;
-	printf("inode table block 0x%Lx/%i (%i bytes free)\n", (L)leaf->ibase, leaf->count, ileaf_free(btree, leaf));
+	printf("inode table block 0x%Lx/%i (%x bytes free)\n", (L)leaf->ibase, leaf->count, ileaf_free(btree, leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
 		int limit = dict[i], size = limit - offset;
 		if (!size)
 			continue;
 		printf("  0x%Lx: ", (L)inum);
-		//printf("[%i] ", offset);
+		printf("[%x] ", offset);
 		if (size < 0)
 			printf("<corrupt>\n");
 		else if (!size)
@@ -167,8 +167,8 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	/* should trim leading empty inodes on copy */
 	unsigned split = at ? *(dict - at) : 0;
 	unsigned free = *(dict - leaf->count);
-	printf("split at %i (offset %i)\n", at, split);
-	printf("copy out %i bytes at %i\n", free - split, split);
+	printf("split at %x of %x\n", at, leaf->count);
+	printf("copy out %x bytes at %x\n", free - split, split);
 	assert(free >= split);
 	memcpy(dest->table, leaf->table + split, free - split);
 	dest->count = leaf->count - at;
@@ -227,7 +227,7 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	assert(leaf->count);
 	unsigned itop = *(dict - leaf->count);
 	void *attrs = leaf->table + offset;
-	printf("resize inum 0x%Lx at 0x%x from %i to %i\n", (L)inum, offset, size, newsize);
+	printf("resize inum 0x%Lx at 0x%x from %x to %x\n", (L)inum, offset, size, newsize);
 
 	assert(itop >= offset + size);
 	memmove(attrs + newsize, attrs + size, itop - offset - size);
