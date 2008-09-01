@@ -134,7 +134,7 @@ struct sb
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	struct map *devmap;
 	struct buffer *rootbuf;
-	struct inode *bitmap;
+	struct inode *bitmap, *rootdir;
 	unsigned blocksize, blockbits, blockmask;
 	block_t freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;

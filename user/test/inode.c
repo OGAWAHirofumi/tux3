@@ -343,7 +343,7 @@ void tuxflush(struct inode *inode)
 {
 	int err = flush_buffers(inode->map);
 	if (err)
-		warn("Sync failed (%s)", strerror(-err));
+		warn("flush failed (%s)", strerror(-err));
 	//encode_csize(attrs, 0, inode->i_size);
 }
 
@@ -353,14 +353,16 @@ void tuxclose(struct inode *inode)
 	free_inode(inode);
 }
 
-int init_tux3(SB) // why am I separate?
+int init_tux3(SB, int fd)
 {
 	struct inode *bitmap = new_inode(sb, 0);
 	if (!bitmap)
-		return -ENOMEM;
+		return -ENOMEM; // just guess
 	sb->bitmap = bitmap;
 	sb->super.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->super.blockbits;
+
+	printf("---- create inode table ----\n");
 	sb->itree = new_btree(sb, &itree_ops);
 	if (!sb->itree.ops)
 		goto eek;
@@ -368,6 +370,16 @@ int init_tux3(SB) // why am I separate?
 	bitmap->btree = new_btree(sb, &dtree_ops);
 	if (!bitmap->btree.ops)
 		goto eek;
+	printf("---- create root ----\n");
+	if (!(sb->rootdir = new_inode(sb, 0xd)))
+		goto eek;
+	make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
+	tuxflush(sb->bitmap);
+	tuxflush(sb->rootdir);
+	flush_buffers(sb->devmap);
+	show_buffers(sb->bitmap->map);
+	show_buffers(sb->rootdir->map);
+	show_buffers(sb->devmap);
 	return 0;
 eek:
 	free_btree(&sb->itree);
@@ -387,33 +399,26 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	printf("fd '%s' = %i (0x%Lx bytes)\n", name, fd, (L)size);
-
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
-	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){
+	init_buffers(dev, 1 << 20);
+	SB = &(struct sb){
 		.super = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = map,
+		.devmap = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
-		.nextalloc = 0x40,
 	};
 
-	init_buffers(dev, 1 << 20);
-	if ((errno = -init_tux3(sb)))
+	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", name, (L)size);
+	if ((errno = -init_tux3(sb, fd)))
 		goto eek;
-
-	printf("---- create root ----\n");
-	struct inode *root = new_inode(sb, 0xd);
-	make_inode(root, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
 	printf("---- create file ----\n");
-	struct inode *inode = tuxcreate(root, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
+	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(getblk(root->map, 0), sb->blocksize);
+	ext2_dump_entries(getblk(sb->rootdir->map, 0), sb->blocksize);
 
 	printf("---- write file ----\n");
 	char buf[100] = { };
@@ -431,7 +436,7 @@ int main(int argc, char *argv[])
 	save_inode(inode);
 	tuxclose(inode);
 	printf("---- open file ----\n");
-	file = &(struct file){ .f_inode = tuxopen(root, "foo", 3) };
+	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
 #endif
 
 	printf("---- read file ----\n");
@@ -445,7 +450,7 @@ int main(int argc, char *argv[])
 	hexdump(buf, got);
 	printf("---- show state ----\n");
 	show_buffers(file->f_inode->map);
-	show_buffers(root->map);
+	show_buffers(sb->rootdir->map);
 	show_buffers(sb->devmap);
 	bitmap_dump(sb->bitmap, 0, sb->super.blocks);
 	show_tree_range(&sb->itree, 0, -1);
