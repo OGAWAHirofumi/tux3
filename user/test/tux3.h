@@ -85,7 +85,7 @@ static inline be_u64 u64_to_be(u64 val)
 /* Tux3 disk format */
 
 #define SB struct sb *sb
-#define SB_MAGIC { 't', 'e', 's', 't', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'u', 'x', '0', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
@@ -98,6 +98,7 @@ static inline be_u64 u64_to_be(u64 val)
 #define MAX_BLOCKS_BITS 48
 #define MAX_FILESIZE_BITS 60
 #define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
+#define SB_LOC (1 << 12)
 
 struct disktree { be_u64 depth:16, block:48; };
 
@@ -111,9 +112,10 @@ struct disksuper
 	u64 flags;
 	u32 levels;
 	u32 sequence; /* commit block sequence number */
-	block_t blocks;
+	block_t volblocks;
 	u64 bitblocks;
 	u32 blockbits;
+	be_u64 freeblocks, nextalloc;
 };
 
 struct root { u64 depth:16, block:48; };
@@ -136,7 +138,7 @@ struct sb
 	struct buffer *rootbuf;
 	struct inode *bitmap, *rootdir;
 	unsigned blocksize, blockbits, blockmask;
-	block_t freeblocks, nextalloc;
+	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
 	unsigned version;
 };

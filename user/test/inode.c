@@ -106,7 +106,7 @@ struct inode *new_inode(SB, inum_t inum)
 
 void free_inode(struct inode *inode)
 {
-	free_map(inode->map);
+	free_map(inode->map); // invalidate dirty buffers!!!
 	free(inode);
 }
 
@@ -353,14 +353,41 @@ void tuxclose(struct inode *inode)
 	free_inode(inode);
 }
 
-int init_tux3(SB, int fd)
+int load_sb(SB)
+{
+	int err = diskread(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
+	if (err)
+		return err;
+	struct disksuper *disk = &sb->super;
+	sb->volblocks = be_to_u64(disk->volblocks);
+	sb->nextalloc = be_to_u64(disk->nextalloc);
+	sb->freeblocks = be_to_u64(disk->freeblocks);
+	hexdump(&sb->super, sizeof(sb->super));
+	return 0;
+}
+
+int save_sb(SB)
+{
+	struct disksuper *disk = &sb->super;
+	disk->volblocks = u64_to_be(sb->volblocks);
+	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
+	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
+	hexdump(&sb->super, sizeof(sb->super));
+	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
+}
+
+int make_tux3(SB, int fd)
 {
 	struct inode *bitmap = new_inode(sb, 0);
 	if (!bitmap)
 		return -ENOMEM; // just guess
 	sb->bitmap = bitmap;
-	sb->super.blockbits = sb->devmap->dev->bits;
-	sb->blocksize = 1 << sb->super.blockbits;
+
+	printf("---- allocate superblock ----\n");
+	/* Always 8K regardless of blocksize */
+	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
+	for (int i = 0; i < reserve; i++)
+		printf("reserve %Lx\n", balloc_from_range(sb->bitmap, i, 1));
 
 	printf("---- create inode table ----\n");
 	sb->itree = new_btree(sb, &itree_ops);
@@ -377,6 +404,8 @@ int init_tux3(SB, int fd)
 	tuxflush(sb->bitmap);
 	tuxflush(sb->rootdir);
 	flush_buffers(sb->devmap);
+	if (save_sb(sb))
+		goto eek;
 	show_buffers(sb->bitmap->map);
 	show_buffers(sb->rootdir->map);
 	show_buffers(sb->devmap);
@@ -402,17 +431,17 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	init_buffers(dev, 1 << 20);
 	SB = &(struct sb){
-		.super = { .magic = SB_MAGIC, .blocks = size >> dev->bits },
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.devmap = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
+		.volblocks = size >> dev->bits,
 	};
 
 	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", name, (L)size);
-	if ((errno = -init_tux3(sb, fd)))
+	if ((errno = -make_tux3(sb, fd)))
 		goto eek;
 	printf("---- create file ----\n");
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
@@ -452,7 +481,7 @@ int main(int argc, char *argv[])
 	show_buffers(file->f_inode->map);
 	show_buffers(sb->rootdir->map);
 	show_buffers(sb->devmap);
-	bitmap_dump(sb->bitmap, 0, sb->super.blocks);
+	bitmap_dump(sb->bitmap, 0, sb->volblocks);
 	show_tree_range(&sb->itree, 0, -1);
 	return 0;
 eek:
