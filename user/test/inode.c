@@ -373,7 +373,7 @@ int main(int argc, char *argv[])
 	int err = 0;
 	char *name = argv[1];
 	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
-//	ftruncate(fd, 1 << 24);
+	ftruncate(fd, 1 << 24);
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
