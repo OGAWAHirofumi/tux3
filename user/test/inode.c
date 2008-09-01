@@ -440,7 +440,7 @@ eek:
 	return -ENOSPC; // just guess
 }
 
-#ifndef included_inode_c
+#ifndef include_inode_c
 int main(int argc, char *argv[])
 {
 	int err = 0;

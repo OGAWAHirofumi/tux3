@@ -85,7 +85,7 @@ static inline be_u64 u64_to_be(u64 val)
 /* Tux3 disk format */
 
 #define SB struct sb *sb
-#define SB_MAGIC { 't', 'u', 'x', '0', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
