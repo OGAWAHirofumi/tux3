@@ -353,23 +353,27 @@ void tuxclose(struct inode *inode)
 	free_inode(inode);
 }
 
-void init_tux3(SB) // why am I separate?
+int init_tux3(SB) // why am I separate?
 {
 	struct inode *bitmap = new_inode(sb, 0);
 	sb->bitmap = bitmap;
 	sb->super.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->super.blockbits;
 	sb->itree = new_btree(sb, &itree_ops);
+	if (!sb->itree.ops)
+		return -ENOSPC; // just guess
 	sb->itree.entries_per_leaf = 64; // !!! should depend on blocksize
 	bitmap->btree = new_btree(sb, &dtree_ops);
+	return 0;
 }
 
+#ifndef included_inode_c
 int main(int argc, char *argv[])
 {
 	int err = 0;
 	char *name = argv[1];
 	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
-	ftruncate(fd, 1 << 24);
+//	ftruncate(fd, 1 << 24);
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
@@ -389,7 +393,8 @@ int main(int argc, char *argv[])
 	};
 
 	init_buffers(dev, 1 << 20);
-	init_tux3(sb);
+	if ((errno = -init_tux3(sb)))
+		goto eek;
 
 	printf("---- create root ----\n");
 	struct inode *root = new_inode(sb, 0xd);
@@ -435,4 +440,8 @@ int main(int argc, char *argv[])
 	bitmap_dump(sb->bitmap, 0, sb->super.blocks);
 	show_tree_range(&sb->itree, 0, -1);
 	return 0;
+eek:
+	fprintf(stderr, "Eek! %s\n", strerror(errno));
+	exit(1);
 }
+#endif

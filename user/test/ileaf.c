@@ -233,7 +233,6 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	memmove(attrs + newsize, attrs + size, itop - offset - size);
 	for (int i = at + 1; i <= leaf->count; i++)
 		*(dict - i) += more;
-	//memset(attrs, 0xaa, size + more);
 	return attrs;
 }
 

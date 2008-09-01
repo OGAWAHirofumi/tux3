@@ -53,26 +53,32 @@ static void free_block(SB, sector_t block)
 {
 }
 
-static struct buffer *new_leaf(struct btree *btree)
+static struct buffer *new_block(struct btree *btree)
 {
-	struct buffer *buffer = getblk(btree->sb->devmap, (btree->ops->balloc)(btree->sb));
+	block_t block = (btree->ops->balloc)(btree->sb);
+	if (block == -1)
+		return NULL;
+	struct buffer *buffer = getblk(btree->sb->devmap, block);
 	if (!buffer)
 		return NULL;
 	memset(buffer->data, 0, bufsize(buffer));
-	(btree->ops->leaf_init)(btree, buffer->data);
 	set_buffer_dirty(buffer);
+	return buffer;
+}
+
+static struct buffer *new_leaf(struct btree *btree)
+{
+	struct buffer *buffer = new_block(btree);
+	if (buffer)
+		(btree->ops->leaf_init)(btree, buffer->data);
 	return buffer;
 }
 
 static struct buffer *new_node(struct btree *btree)
 {
-	struct buffer *buffer = getblk(btree->sb->devmap, (btree->ops->balloc)(btree->sb));
-	if (!buffer)
-		return buffer;
-	memset(buffer->data, 0, bufsize(buffer));
-	struct bnode *node = buffer->data;
-	node->count = 0;
-	set_buffer_dirty(buffer);
+	struct buffer *buffer = new_block(btree);
+	if (buffer)
+		((struct bnode *)buffer->data)->count = 0;
 	return buffer;
 }
 
@@ -485,6 +491,8 @@ struct btree new_btree(SB, struct btree_ops *ops)
 	struct btree btree = { .sb = sb, .ops = ops };
 	struct buffer *rootbuf = new_node(&btree);
 	struct buffer *leafbuf = new_leaf(&btree);
+	if (!rootbuf || !leafbuf)
+		goto eek;
 	struct bnode *root = rootbuf->data;
 	root->entries[0].block = leafbuf->index;
 	root->count = 1;
@@ -494,6 +502,12 @@ struct btree new_btree(SB, struct btree_ops *ops)
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
 	return btree;
+eek:
+	if (rootbuf)
+		brelse(rootbuf);
+	if (leafbuf)
+		brelse(leafbuf);
+	return (struct btree){ };
 }
 
 #ifndef main
