@@ -510,6 +510,11 @@ eek:
 	return (struct btree){ };
 }
 
+void free_btree(struct btree *btree)
+{
+	// write me
+}
+
 #ifndef main
 struct uleaf { u32 magic, count; struct entry { u32 key, val; } entries[]; };
 

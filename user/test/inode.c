@@ -356,15 +356,25 @@ void tuxclose(struct inode *inode)
 int init_tux3(SB) // why am I separate?
 {
 	struct inode *bitmap = new_inode(sb, 0);
+	if (!bitmap)
+		return -ENOMEM;
 	sb->bitmap = bitmap;
 	sb->super.blockbits = sb->devmap->dev->bits;
 	sb->blocksize = 1 << sb->super.blockbits;
 	sb->itree = new_btree(sb, &itree_ops);
 	if (!sb->itree.ops)
-		return -ENOSPC; // just guess
+		goto eek;
 	sb->itree.entries_per_leaf = 64; // !!! should depend on blocksize
 	bitmap->btree = new_btree(sb, &dtree_ops);
+	if (!bitmap->btree.ops)
+		goto eek;
 	return 0;
+eek:
+	free_btree(&sb->itree);
+	free_inode(bitmap);
+	sb->bitmap = NULL;
+	sb->itree = (struct btree){ };
+	return -ENOSPC; // just guess
 }
 
 #ifndef included_inode_c
