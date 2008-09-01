@@ -359,9 +359,12 @@ int load_sb(SB)
 	if (err)
 		return err;
 	struct disksuper *disk = &sb->super;
+	sb->devmap->dev->bits = be_to_u16(disk->blockbits);
 	sb->volblocks = be_to_u64(disk->volblocks);
 	sb->nextalloc = be_to_u64(disk->nextalloc);
 	sb->freeblocks = be_to_u64(disk->freeblocks);
+	u64 iroot = be_to_u64(disk->iroot);
+	sb->itree.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
 	hexdump(&sb->super, sizeof(sb->super));
 	return 0;
 }
@@ -369,9 +372,11 @@ int load_sb(SB)
 int save_sb(SB)
 {
 	struct disksuper *disk = &sb->super;
+	disk->blockbits = u16_to_be(sb->devmap->dev->bits);
 	disk->volblocks = u64_to_be(sb->volblocks);
 	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
 	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
+	disk->iroot = u64_to_be((u64)sb->itree.root.depth << 48 | sb->itree.root.block);
 	hexdump(&sb->super, sizeof(sb->super));
 	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 }
@@ -397,6 +402,7 @@ int make_tux3(SB, int fd)
 	bitmap->btree = new_btree(sb, &dtree_ops);
 	if (!bitmap->btree.ops)
 		goto eek;
+
 	printf("---- create root ----\n");
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;

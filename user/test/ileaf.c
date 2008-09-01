@@ -77,7 +77,7 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 	struct ileaf *leaf = vleaf;
 	inum_t inum = leaf->ibase;
 	u16 *dict = vleaf + sb->blocksize, offset = 0;
-	printf("inode table 0x%Lx/%i (%i free)\n", (L)leaf->ibase, leaf->count, ileaf_free(btree, leaf));
+	printf("inode table block 0x%Lx/%i (%i bytes free)\n", (L)leaf->ibase, leaf->count, ileaf_free(btree, leaf));
 	//hexdump(dict - leaf->count, leaf->count * 2);
 	for (int i = -1; i >= -leaf->count; i--, inum++) {
 		int limit = dict[i], size = limit - offset;
@@ -105,9 +105,9 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= leaf->ibase);
-	inum_t at = inum - leaf->ibase;
-	assert(at < 999); // !!! calculate this properly: max inode possible with max dict
-	printf("lookup inode %Lx, %Lx + %Lx\n", (L)inum, (L)leaf->ibase, (L)at);
+	assert(inum < leaf->ibase + btree->entries_per_leaf);
+	unsigned at = inum - leaf->ibase;
+	printf("lookup inode 0x%Lx, %Lx + %x\n", (L)inum, (L)leaf->ibase, at);
 	unsigned size = 0;
 	void *attrs = NULL;
 	if (at < leaf->count) {

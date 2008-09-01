@@ -105,17 +105,14 @@ struct disktree { be_u64 depth:16, block:48; };
 struct disksuper
 {
 	typeof((char[])SB_MAGIC) magic;
-	struct disktree itree;
-	struct disktree ftree;
-	struct disktree atree;
-	u64 create_time;
-	u64 flags;
-	u32 levels;
-	u32 sequence; /* commit block sequence number */
-	block_t volblocks;
-	u64 bitblocks;
-	u32 blockbits;
-	be_u64 freeblocks, nextalloc;
+	be_u64 birthdate;
+	be_u64 flags;
+	be_u64 iroot;
+	be_u64 aroot;
+	be_u16 blockbits;
+	be_u16 unused1;
+	be_u32 unused2;
+	be_u64 volblocks, freeblocks, nextalloc;
 };
 
 struct root { u64 depth:16, block:48; };
@@ -131,7 +128,6 @@ struct sb
 {
 	struct disksuper super;
 	struct btree itree;
-	struct btree ftree;
 	struct btree atree;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	struct map *devmap;

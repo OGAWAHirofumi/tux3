@@ -110,8 +110,9 @@ unsigned leaf_need(BTREE, struct dleaf *leaf)
 	return btree->sb->blocksize - leaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
-void dleaf_dump(BTREE, struct dleaf *leaf)
+void dleaf_dump(BTREE, vleaf *vleaf)
 {
+	struct dleaf *leaf = vleaf;
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
 	struct extent *extents = leaf->table;
@@ -407,6 +408,7 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 struct btree_ops dtree_ops = {
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
+	.leaf_dump = dleaf_dump,
 	.leaf_split = dleaf_split,
 	.leaf_resize = dleaf_resize,
 	.balloc = balloc,
