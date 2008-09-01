@@ -150,7 +150,7 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	while (1) {
 		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
 		inum = find_empty_inode(&sb->itree, leafbuf->data, (L)inum);
-		printf("result inum is %Lx, next is %Lx\n", (L)inum, (L)next_key(path, levels));
+		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
 		if (inum < next_key(path, levels))
 			break;
 		int more = advance(leafbuf->map, path, levels);
@@ -185,24 +185,25 @@ errout:
 int open_inode(struct inode *inode)
 {
 	SB = inode->sb;
-	int err = -ENOENT, levels = sb->itree.root.depth;
+	int err, levels = sb->itree.root.depth;
 	struct path path[levels + 1];
 	if ((err = probe(&sb->itree, inode->inum, path)))
 		return err;
 	unsigned size;
 	void *attrs = ileaf_lookup(&sb->itree, inode->inum, path[levels].buffer->data, &size);
 	if (!attrs) {
-		release_path(path, levels + 1);
-		warn("open_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
-		return -ENOENT;
+		err = -ENOENT;
+		goto eek;
 	}
 	trace(warn("found inode 0x%Lx", (L)inode->inum);)
 	//ileaf_dump(&sb->itree, path[levels].buffer->data);
 	//hexdump(attrs, size);
 	decode_attrs(sb, attrs, size, inode);
 	dump_attrs(sb, inode);
+	err = 0;
+eek:
 	release_path(path, levels + 1);
-	return 0;
+	return err;
 }
 
 int save_inode(struct inode *inode)
@@ -302,7 +303,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
-	if (!buffer)
+	if (!entry)
 		return NULL;
 	inum_t inum = entry->inum;
 	brelse(buffer);
@@ -339,17 +340,21 @@ struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *ia
 	return NULL; // err ???
 }
 
-void tuxflush(struct inode *inode)
+int tuxflush(struct inode *inode)
 {
-	int err = flush_buffers(inode->map);
-	if (err)
-		warn("flush failed (%s)", strerror(-err));
-	//encode_csize(attrs, 0, inode->i_size);
+	return flush_buffers(inode->map);
+}
+
+int tuxsync(struct inode *inode)
+{
+	tuxflush(inode);
+	save_inode(inode);
+	return 0; // wrong!!!
 }
 
 void tuxclose(struct inode *inode)
 {
-	tuxflush(inode);
+	tuxsync(inode);
 	free_inode(inode);
 }
 
@@ -381,13 +386,26 @@ int save_sb(SB)
 	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 }
 
+int sync_super(SB)
+{
+	int err;
+	printf("sync bitmap\n");
+	if ((err = tuxsync(sb->bitmap)))
+		return err;
+	printf("sync rootdir\n");
+	if ((err = tuxsync(sb->rootdir)))
+		return err;
+	printf("sync devmap\n");
+	if ((err = flush_buffers(sb->devmap)))
+		return err;
+	printf("sync sb\n");
+	if ((err = save_sb(sb)))
+		return err;
+	return 0;
+}
+
 int make_tux3(SB, int fd)
 {
-	struct inode *bitmap = new_inode(sb, 0);
-	if (!bitmap)
-		return -ENOMEM; // just guess
-	sb->bitmap = bitmap;
-
 	printf("---- allocate superblock ----\n");
 	/* Always 8K regardless of blocksize */
 	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
@@ -399,26 +417,24 @@ int make_tux3(SB, int fd)
 	if (!sb->itree.ops)
 		goto eek;
 	sb->itree.entries_per_leaf = 64; // !!! should depend on blocksize
-	bitmap->btree = new_btree(sb, &dtree_ops);
-	if (!bitmap->btree.ops)
+	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
+	if (make_inode(sb->bitmap, &(struct iattr){ }))
 		goto eek;
-
 	printf("---- create root ----\n");
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
 	make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
-	tuxflush(sb->bitmap);
-	tuxflush(sb->rootdir);
-	flush_buffers(sb->devmap);
-	if (save_sb(sb))
+
+	if (sync_super(sb))
 		goto eek;
+
 	show_buffers(sb->bitmap->map);
 	show_buffers(sb->rootdir->map);
 	show_buffers(sb->devmap);
 	return 0;
 eek:
 	free_btree(&sb->itree);
-	free_inode(bitmap);
+	free_inode(sb->bitmap);
 	sb->bitmap = NULL;
 	sb->itree = (struct btree){ };
 	return -ENOSPC; // just guess
@@ -445,6 +461,10 @@ int main(int argc, char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
+
+	sb->bitmap = new_inode(sb, 0);
+	if (!sb->bitmap)
+		goto eek;
 
 	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", name, (L)size);
 	if ((errno = -make_tux3(sb, fd)))

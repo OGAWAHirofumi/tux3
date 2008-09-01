@@ -172,7 +172,6 @@ struct btree_ops {
 };
 
 struct iattr {
-	struct root root;
 	u64 isize, mtime, ctime, atime;
 	unsigned mode, uid, gid, links;
 } iattrs;
@@ -182,8 +181,8 @@ block_t balloc(SB);
 
 enum atkind {
 	MODE_OWNER_ATTR = 6,
-	CTIME_SIZE_ATTR = 7,
-	DATA_BTREE_ATTR = 8,
+	DATA_BTREE_ATTR = 7,
+	CTIME_SIZE_ATTR = 8,
 	LINK_COUNT_ATTR = 9,
 	MTIME_ATTR = 10,
 };

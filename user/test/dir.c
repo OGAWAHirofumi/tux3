@@ -123,8 +123,9 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = EXT2_LNK,
 };
 
-void ext2_dump_entries(struct buffer *buffer, unsigned blocksize)
+void ext2_dump_entries(struct buffer *buffer)
 {
+	unsigned blocksize = 1 << buffer->map->dev->bits;
 	printf("dirents <%Lx:%Lx>: ", (L)buffer->map->inode->inum, buffer->index);
 	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
@@ -174,7 +175,6 @@ int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, u
 	rec_len = blocksize;
 	*dirent = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
 	inode->i_size += blocksize;
-	set_buffer_dirty(buffer);
 create:
 	if (dirent->inum) {
 		ext2_dirent *newent = (ext2_dirent *)((char *)dirent + name_len);
@@ -188,23 +188,24 @@ create:
 	dirent->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	inode->i_mtime = inode->i_ctime = CURRENT_TIME_SEC;
 	mark_inode_dirty(inode);
+	set_buffer_dirty(buffer);
 	brelse(buffer);
 	return 0;
 }
 
-ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct buffer **result)
+ext2_dirent *ext2_find_entry(struct inode *dir, char *name, int len, struct buffer **result)
 {
 	unsigned reclen = EXT2_REC_LEN(len);
-	unsigned blocksize = 1 << inode->map->dev->bits;
-	unsigned blocks = inode->i_size >> inode->map->dev->bits, block;
+	unsigned blocksize = 1 << dir->map->dev->bits;
+	unsigned blocks = dir->i_size >> dir->map->dev->bits, block;
 	for (block = 0; block < blocks; block++) {
-		struct buffer *buffer = getblk(inode->map, block);
+		struct buffer *buffer = bread(dir->map, block);
 		ext2_dirent *dirent = buffer->data;
 		ext2_dirent *limit = (void *)dirent + blocksize - reclen;
 		while (dirent <= limit) {
 			if (dirent->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length dirent at <%Lx:%x>", (L)inode->inum, block);
+				warn("zero length dirent at <%Lx:%x>", (L)dir->inum, block);
 				return NULL;
 			}
 			if (ext2_match(len, name, dirent)) {
@@ -215,6 +216,7 @@ ext2_dirent *ext2_find_entry(struct inode *inode, char *name, int len, struct bu
 		}
 		brelse(buffer);
 	}
+	*result = NULL;
 	return NULL;
 }
 
@@ -327,7 +329,7 @@ int main(int argc, char *argv[])
 	ext2_dirent *entry = ext2_find_entry(map->inode, "hello", 5, &buffer);
 	if (buffer)
 		hexdump(entry, 16);
-	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
+	ext2_dump_entries(getblk(map, 0));
 
 	if (!ext2_delete_entry(buffer, entry)) {
 		show_buffers(map);
@@ -335,15 +337,15 @@ int main(int argc, char *argv[])
 		mark_inode_dirty(map->inode);
 	}
 
-	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
+	ext2_dump_entries(getblk(map, 0));
 	show_buffers(map);
 	struct file *file = &(struct file){ .f_inode = map->inode };
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
-		ext2_create_entry(map->inode, name, strlen(name), 0x666, S_IFREG);
+		ext2_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
 	}
-	ext2_dump_entries(getblk(map, 0), 1 << dev->bits);
+	ext2_dump_entries(getblk(map, 0));
 	char dents[10000];
 	ext2_readdir(file, dents, filldir);
 	return 0;

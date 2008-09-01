@@ -171,16 +171,16 @@ void dump_attrs(SB, struct inode *inode)
 			continue;
 		switch (which) {
 		case MODE_OWNER_ATTR:
-			printf("mode 0%o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
-			break;
-		case CTIME_SIZE_ATTR:
-			printf("ctime %Lx isize %Lx ", (L)inode->i_ctime, (L)inode->i_size);
-			break;
-		case MTIME_ATTR:
-			printf("mtime %Lx ", (L)inode->i_mtime);
+			printf("mode 0%.6o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case DATA_BTREE_ATTR:
 			printf("root %Lx:%u ", (L)inode->btree.root.block, inode->btree.root.depth);
+			break;
+		case CTIME_SIZE_ATTR:
+			printf("ctime %Lx size %Lx ", (L)inode->i_ctime, (L)inode->i_size);
+			break;
+		case MTIME_ATTR:
+			printf("mtime %Lx ", (L)inode->i_mtime);
 			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", inode->i_links);
