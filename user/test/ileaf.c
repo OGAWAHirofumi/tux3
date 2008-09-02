@@ -224,11 +224,8 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	int more = newsize - size;
 	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))
 		return NULL;
-	while (extend_empty--) {
-		*(dict - leaf->count - 1) = leaf->count ? *(dict - leaf->count) : 0;
-		leaf->count++;
-	}
-
+	for (; extend_empty--; leaf->count++)
+		*(dict - leaf->count - 1) = atdict(dict, leaf->count);
 	assert(leaf->count);
 	unsigned itop = *(dict - leaf->count);
 	void *attrs = leaf->table + offset;
