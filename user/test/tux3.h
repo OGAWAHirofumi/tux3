@@ -82,55 +82,55 @@ static inline be_u64 u64_to_be(u64 val)
 	return bswap_64(val);
 }
 
-static inline void *encode16(void *attrs, unsigned val)
+static inline void *encode16(void *at, unsigned val)
 {
-	*(be_u16 *)attrs = u16_to_be(val);
-	return attrs + sizeof(u16);
+	*(be_u16 *)at = u16_to_be(val);
+	return at + sizeof(u16);
 }
 
-static inline void *encode32(void *attrs, unsigned val)
+static inline void *encode32(void *at, unsigned val)
 {
-	*(be_u32 *)attrs = u32_to_be(val);
-	return attrs + sizeof(u32);
+	*(be_u32 *)at = u32_to_be(val);
+	return at + sizeof(u32);
 }
 
-static inline void *encode64(void *attrs, u64 val)
+static inline void *encode64(void *at, u64 val)
 {
-	*(be_u64 *)attrs = u64_to_be(val);
-	return attrs + sizeof(u64);
+	*(be_u64 *)at = u64_to_be(val);
+	return at + sizeof(u64);
 }
 
-static inline void *encode48(void *attrs, u64 val)
+static inline void *encode48(void *at, u64 val)
 {
-	attrs = encode16(attrs, val >> 32);
-	return encode32(attrs, val);
+	at = encode16(at, val >> 32);
+	return encode32(at, val);
 }
 
-static inline void *decode16(void *attrs, unsigned *val)
+static inline void *decode16(void *at, unsigned *val)
 {
-	*val = be_to_u16(*(be_u16 *)attrs);
-	return attrs + sizeof(u16);
+	*val = be_to_u16(*(be_u16 *)at);
+	return at + sizeof(u16);
 }
 
-static inline void *decode32(void *attrs, unsigned *val)
+static inline void *decode32(void *at, unsigned *val)
 {
-	*val = be_to_u32(*(be_u32 *)attrs);
-	return attrs + sizeof(u32);
+	*val = be_to_u32(*(be_u32 *)at);
+	return at + sizeof(u32);
 }
 
-static inline void *decode64(void *attrs, u64 *val)
+static inline void *decode64(void *at, u64 *val)
 {
-	*val = be_to_u64(*(be_u64 *)attrs);
-	return attrs + sizeof(u64);
+	*val = be_to_u64(*(be_u64 *)at);
+	return at + sizeof(u64);
 }
 
-static inline void *decode48(void *attrs, u64 *val)
+static inline void *decode48(void *at, u64 *val)
 {
 	unsigned part1, part2;
-	attrs = decode16(attrs, &part1);
-	attrs = decode32(attrs, &part2);
+	at = decode16(at, &part1);
+	at = decode32(at, &part2);
 	*val = (u64)part1 << 32 | part2;
-	return attrs;
+	return at;
 }
 
 /* Tux3 disk format */
