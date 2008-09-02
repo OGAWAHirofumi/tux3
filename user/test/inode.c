@@ -418,7 +418,7 @@ int make_tux3(SB, int fd)
 	/* Always 8K regardless of blocksize */
 	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
 	for (int i = 0; i < reserve; i++)
-		printf("reserve %Lx\n", balloc_from_range(sb->bitmap, i, 1));
+		printf("reserve %Lx\n", (L)balloc_from_range(sb->bitmap, i, 1));
 
 	printf("---- create inode table ----\n");
 	sb->itree = new_btree(sb, &itree_ops);

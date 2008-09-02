@@ -135,7 +135,7 @@ int main(int argc, const char *argv[])
 #endif
 		if (seekarg) {
 			u64 seek = strtoull(seekarg, NULL, 0);
-			printf("seek to %Li\n", seek);
+			printf("seek to %Li\n", (L)seek);
 			tuxseek(file, seek);
 		}
 		char text[2 << 16];
@@ -171,7 +171,7 @@ int main(int argc, const char *argv[])
 		//tuxseek(file, (1LL << 60) - 12);
 		if (seekarg) {
 			u64 seek = strtoull(seekarg, NULL, 0);
-			printf("seek to %Li\n", seek);
+			printf("seek to %Li\n", (L)seek);
 			tuxseek(file, seek);
 		}
 		memset(buf, 0, sizeof(buf));
