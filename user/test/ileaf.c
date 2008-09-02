@@ -188,13 +188,18 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	return dest->ibase;
 }
 
+inline unsigned atdict(u16 *dict, unsigned at)
+{
+	return at ? *(dict - at) : 0;
+}
+
 void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 {
 	if (!from->count)
 		return;
-	u16 *dict = (void *)leaf + btree->sb->blocksize, *fromdict = (void *)from + btree->sb->blocksize;
-	unsigned at = leaf->count, free = at ? *(dict - at) : 0;
-	unsigned size = from->count ? *(fromdict - from->count) : 0;
+	u16 *dict = (void *)leaf + btree->sb->blocksize;
+	u16 *fromdict = (void *)from + btree->sb->blocksize;
+	unsigned at = leaf->count, free = atdict(dict, at), size = atdict(fromdict, from->count);
 	printf("copy in %i bytes\n", size);
 	memcpy(leaf->table + free, from->table, size);
 	veccopy(dict - (leaf->count += from->count), fromdict - from->count, from->count);
