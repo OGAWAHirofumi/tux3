@@ -168,8 +168,7 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	}
 #endif
 	/* should trim leading empty inodes on copy */
-	unsigned split = at ? *(dict - at) : 0;
-	unsigned free = *(dict - leaf->count);
+	unsigned split = atdict(dict, at), free = *(dict - leaf->count);
 	printf("split at %x of %x\n", at, leaf->count);
 	printf("copy out %x bytes at %x\n", free - split, split);
 	assert(free >= split);
@@ -258,7 +257,7 @@ int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf)
 		return -EINVAL;
 	u16 *dict = (void *)leaf + btree->sb->blocksize;
 	unsigned at = inum - leaf->ibase;
-	unsigned offset = at ? *(dict - at) : 0;
+	unsigned offset = atdict(dict, at);
 	unsigned size = *(dict - at - 1) - offset;
 	printf("delete inode %Lx from %p[%x/%x]\n", (L)inum, leaf, at, size);
 	if (!size)
