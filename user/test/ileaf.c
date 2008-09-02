@@ -124,11 +124,23 @@ void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 	return attrs;
 }
 
+int isinorder(BTREE, struct ileaf *leaf)
+{
+	u16 *dict = (void *)leaf + btree->sb->blocksize;
+	for (int i = 0, offset = 0, limit; i > -leaf->count; i--, offset = limit)
+		if ((limit = dict[i]) < offset)
+			return 0;
+	return 1;
+}
+
 int ileaf_check(BTREE, struct ileaf *leaf)
 {
 	char *why;
 	why = "not an inode table leaf";
 	if (leaf->magic != 0x90de);
+		goto eek;
+	why = "dict out of order";
+	if (!isinorder(btree, leaf))
 		goto eek;
 	return 0;
 eek:
@@ -335,6 +347,7 @@ int main(int argc, char *argv[])
 		printf("goal 0x%x => 0x%Lx\n", i, (L)find_empty_inode(btree, leaf, i));
 	ileaf_purge(btree, 0x14, leaf);
 	ileaf_purge(btree, 0x18, leaf);
+	ileaf_check(btree, leaf);
 	ileaf_dump(btree, leaf);
 	ileaf_destroy(btree, leaf);
 	ileaf_destroy(btree, dest);
