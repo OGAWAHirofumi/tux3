@@ -29,6 +29,11 @@ struct ileaf { u16 magic, count; inum_t ibase; char table[]; };
  * leaf->ibase, the base inum of the table block.
  */
 
+inline unsigned atdict(u16 *dict, unsigned at)
+{
+	return at ? *(dict - at) : 0;
+}
+
 static inline struct ileaf *to_ileaf(vleaf *leaf)
 {
 	return leaf;
@@ -62,8 +67,8 @@ void ileaf_destroy(BTREE, struct ileaf *leaf)
 unsigned ileaf_need(BTREE, vleaf *vleaf)
 {
 	struct ileaf *leaf = vleaf;
-	u16 *dict = vleaf + btree->sb->blocksize, *base = dict - leaf->count;
-	return (void *)dict - (void *)base + (base == dict ? 0 : *base);
+	u16 *dict = vleaf + btree->sb->blocksize, *last = dict - leaf->count;
+	return (void *)dict - (void *)last + (last == dict ? 0 : *last);
 }
 
 unsigned ileaf_free(BTREE, vleaf *leaf)
@@ -84,7 +89,7 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 		if (!size)
 			continue;
 		printf("  0x%Lx: ", (L)inum);
-		printf("[%x] ", offset);
+		//printf("[%x] ", offset);
 		if (size < 0)
 			printf("<corrupt>\n");
 		else if (!size)
@@ -106,15 +111,13 @@ void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= leaf->ibase);
 	assert(inum < leaf->ibase + btree->entries_per_leaf);
-	unsigned at = inum - leaf->ibase;
-	printf("lookup inode 0x%Lx, %Lx + %x\n", (L)inum, (L)leaf->ibase, at);
-	unsigned size = 0;
+	unsigned at = inum - leaf->ibase, size = 0;
 	void *attrs = NULL;
+	printf("lookup inode 0x%Lx, %Lx + %x\n", (L)inum, (L)leaf->ibase, at);
 	if (at < leaf->count) {
 		u16 *dict = (void *)leaf + btree->sb->blocksize;
-		unsigned offset = at ? *(dict - at) : 0;
-		size = *(dict - at - 1) - offset;
-		if (size)
+		unsigned offset = atdict(dict, at);
+		if ((size = *(dict - at - 1) - offset))
 			attrs = leaf->table + offset;
 	}
 	*result = size;
@@ -186,11 +189,6 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	memset(leaf->table + split, 0, (char *)(dict - leaf->count) - (leaf->table + split));
 	ileaf_trim(btree, leaf);
 	return dest->ibase;
-}
-
-inline unsigned atdict(u16 *dict, unsigned at)
-{
-	return at ? *(dict - at) : 0;
 }
 
 void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
@@ -331,11 +329,10 @@ int main(int argc, char *argv[])
 	ileaf_dump(btree, leaf);
 	test_remove(btree, leaf, 0x16, 5);
 	ileaf_dump(btree, leaf);
-return 0;
 	unsigned size = 0;
 	char *inode = ileaf_lookup(btree, 0x13, leaf, &size);
 	hexdump(inode, size);
-	for (int i = 0x11; i <= 0x23; i++)
+	for (int i = 0x11; i <= 0x20; i++)
 		printf("goal 0x%x => 0x%Lx\n", i, (L)find_empty_inode(btree, leaf, i));
 	ileaf_purge(btree, 0x14, leaf);
 	ileaf_purge(btree, 0x18, leaf);
