@@ -82,7 +82,6 @@ int main(int argc, const char *argv[])
 		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
 			.entries_per_leaf = 1 << (dev->bits - 6) } };
 
-//sb->itree.sb = sb;
 	sb->bitmap = new_inode(sb, 0);
 	if (!sb->bitmap)
 		goto eek;

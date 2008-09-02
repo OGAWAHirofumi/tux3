@@ -15,25 +15,25 @@
 #include "hexdump.c"
 #include "tux3.h"
 
-inline void *decode16(void *attrs, unsigned *val)
+static inline void *decode16(void *attrs, unsigned *val)
 {
 	*val = be_to_u16(*(be_u16 *)attrs);
 	return attrs + sizeof(u16);
 }
 
-inline void *decode32(void *attrs, unsigned *val)
+static inline void *decode32(void *attrs, unsigned *val)
 {
 	*val = be_to_u32(*(be_u32 *)attrs);
 	return attrs + sizeof(u32);
 }
 
-inline void *decode64(void *attrs, u64 *val)
+static inline void *decode64(void *attrs, u64 *val)
 {
 	*val = be_to_u64(*(be_u64 *)attrs);
 	return attrs + sizeof(u64);
 }
 
-inline void *decode48(void *attrs, u64 *val)
+static inline void *decode48(void *attrs, u64 *val)
 {
 	unsigned part1, part2;
 	attrs = decode16(attrs, &part1);
@@ -42,25 +42,25 @@ inline void *decode48(void *attrs, u64 *val)
 	return attrs;
 }
 
-inline void *encode16(void *attrs, unsigned val)
+static inline void *encode16(void *attrs, unsigned val)
 {
 	*(be_u16 *)attrs = u16_to_be(val);
 	return attrs + sizeof(u16);
 }
 
-inline void *encode32(void *attrs, unsigned val)
+static inline void *encode32(void *attrs, unsigned val)
 {
 	*(be_u32 *)attrs = u32_to_be(val);
 	return attrs + sizeof(u32);
 }
 
-inline void *encode64(void *attrs, u64 val)
+static inline void *encode64(void *attrs, u64 val)
 {
 	*(be_u64 *)attrs = u64_to_be(val);
 	return attrs + sizeof(u64);
 }
 
-inline void *encode48(void *attrs, u64 val)
+static inline void *encode48(void *attrs, u64 val)
 {
 	attrs = encode16(attrs, val >> 32);
 	return encode32(attrs, val);
