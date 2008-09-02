@@ -66,9 +66,9 @@ void ileaf_destroy(BTREE, struct ileaf *leaf)
 
 unsigned ileaf_need(BTREE, vleaf *vleaf)
 {
-	struct ileaf *leaf = vleaf;
-	u16 *dict = vleaf + btree->sb->blocksize, *last = dict - leaf->count;
-	return (void *)dict - (void *)last + (last == dict ? 0 : *last);
+	u16 *dict = vleaf + btree->sb->blocksize;
+	unsigned count = to_ileaf(vleaf)->count;
+	return atdict(dict, count) + count * sizeof(*dict);
 }
 
 unsigned ileaf_free(BTREE, vleaf *leaf)
