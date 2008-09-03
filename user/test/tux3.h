@@ -220,6 +220,7 @@ struct btree_ops {
 	unsigned (*leaf_free)(BTREE, vleaf *leaf);
 	void (*leaf_merge)(BTREE, vleaf *into, vleaf *from);
 	block_t (*balloc)(SB);
+	void (*bfree)(SB, block_t block);
 };
 
 struct iattr {
@@ -229,6 +230,7 @@ struct iattr {
 
 void hexdump(void *data, unsigned size);
 block_t balloc(SB);
+void bfree(SB, block_t block);
 
 enum atkind {
 	ATTR_MINIMUM = 6,

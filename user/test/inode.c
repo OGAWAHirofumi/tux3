@@ -57,7 +57,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	struct buffer *leafbuf = path[levels].buffer;
 	
 	unsigned count = 0;
-	struct extent *found = leaf_lookup(&inode->btree, buffer->index, leafbuf->data, &count);
+	struct extent *found = dleaf_lookup(&inode->btree, leafbuf->data, buffer->index, &count);
 	//dleaf_dump(&inode->btree, leafbuf->data);
 	block_t physical;
 
