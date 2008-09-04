@@ -192,7 +192,7 @@ int main(int argc, const char *argv[])
 			errno = -err;
 			goto eek;
 		}
-		btree_delete(&inode->btree, &(struct delete_info){ .key = inode->inum }, -1);
+		btree_delete(&inode->btree, &(struct delete_info){ .key = 0 }, -1);
 		if ((err = -ext2_delete_entry(buffer, entry)))
 			goto eek;
 		free_inode(inode);
