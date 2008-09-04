@@ -158,8 +158,9 @@ void dleaf_dump(BTREE, vleaf *vleaf)
  * But it does truncate so it is getting checked in just for now.
  */
 
-void dleaf_truncate(BTREE, struct dleaf *leaf, tuxkey_t high)
+int dleaf_chop(BTREE, tuxkey_t high, vleaf *vleaf)
 {
+	struct dleaf *leaf = vleaf;
 	struct group *group = (void *)leaf + btree->sb->blocksize, *top = group;
 	struct entry *entry = (void *)(--group - leaf->groups);
 	struct group *gstop = group - leaf->groups;
@@ -193,6 +194,7 @@ void dleaf_truncate(BTREE, struct dleaf *leaf, tuxkey_t high)
 	unsigned tail = (void *)(top - newgroups) - ((void *)entry + tamp);
 	memmove((void *)entry + tamp, entry, tail);
 	leaf->groups = newgroups;
+	return 0;
 }
 
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
@@ -465,6 +467,7 @@ struct btree_ops dtree_ops = {
 	.leaf_dump = dleaf_dump,
 	.leaf_split = dleaf_split,
 	.leaf_resize = dleaf_resize,
+	.leaf_chop = dleaf_chop,
 	.balloc = balloc,
 	.bfree = bfree,
 };
@@ -527,7 +530,7 @@ int main(int argc, char *argv[])
 	dleaf_dump(btree, dest);
 	dleaf_merge(btree, leaf, dest);
 	dleaf_dump(btree, leaf);
-	dleaf_truncate(btree, leaf, 0x14014LL);
+	dleaf_chop(btree, 0x14014LL, leaf);
 	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);

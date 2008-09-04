@@ -261,7 +261,7 @@ int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 	return 0;
 }
 
-int delete_tree_partial(BTREE, struct delete_info *info, millisecond_t deadline)
+int btree_delete(BTREE, struct delete_info *info, millisecond_t deadline)
 {
 	int levels = btree->root.depth, level = levels - 1, suspend = 0;
 	struct path path[levels + 1], prev[levels + 1];
@@ -352,9 +352,8 @@ keep_prev_node:
 				//save_sb(sb);
 				return suspend;
 			}
-
 			level--;
-			trace_on(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, path[level].buffer->index, path[level].next - path_node(path, level)->entries, path_node(path, level)->count););
+			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, path[level].buffer->index, path[level].next - path_node(path, level)->entries, path_node(path, level)->count););
 		}
 
 		/* push back down to leaf level */
@@ -367,7 +366,7 @@ keep_prev_node:
 			}
 			path[level].buffer = buffer;
 			path[level].next = ((struct bnode *)buffer->data)->entries;
-			trace_on(printf("push to level %i, block %Lx, %i nodes\n", level, buffer->index, path_node(path, level)->count););
+			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, buffer->index, path_node(path, level)->count););
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
@@ -657,7 +656,7 @@ int main(int argc, char *argv[])
 	}
 	show_tree_range(&btree, 0, -1);
 	show_buffers(sb->devmap);
-	delete_tree_partial(&btree, &(struct delete_info){ .key = 0x10 }, -1);
+	btree_delete(&btree, &(struct delete_info){ .key = 0x10 }, -1);
 	show_tree_range(&btree, 0, -1);
 	return 0;
 }

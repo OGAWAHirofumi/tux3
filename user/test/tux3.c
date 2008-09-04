@@ -182,6 +182,23 @@ int main(int argc, const char *argv[])
 		hexdump(buf, got);
 	}
 
+	if (!strcmp(command, "delete")) {
+		printf("---- delete file ----\n");
+		struct buffer *buffer;
+		ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
+		struct inode *inode = new_inode(sb, entry->inum);
+		int err = open_inode(inode);
+		if (err) {
+			errno = -err;
+			goto eek;
+		}
+		btree_delete(&inode->btree, &(struct delete_info){ .key = inode->inum }, -1);
+		if ((err = -ext2_delete_entry(buffer, entry)))
+			goto eek;
+		free_inode(inode);
+		ext2_dump_entries(bread(sb->rootdir->map, 0));
+	}
+
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->devmap);
