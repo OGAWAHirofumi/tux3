@@ -24,8 +24,6 @@
 #define trace trace_off
 #endif
 
-typedef struct dleaf leaf_t; // these need to be generic
-
 static millisecond_t gettime(void)
 {
 	struct timeval now;
@@ -255,41 +253,40 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count += node2->count;
 }
 
-typedef u32 tag_t;
+struct delete_info { tuxkey_t key; block_t blocks, freed; block_t resume; int create; };
 
-struct delete_info { tag_t victim, newtag; block_t blocks; block_t resume; int create; };
-
-int delete_from_leaf(SB, leaf_t *leaf, struct delete_info *info, int *freed)
+int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 {
-	return 0; // write me!!!
+	(btree->ops->leaf_chop)(btree, info->key, leaf);
+	return 0;
 }
 
-int delete_tree_partial(BTREE, struct delete_info *info, millisecond_t deadline, int maxblocks)
+int delete_tree_partial(BTREE, struct delete_info *info, millisecond_t deadline)
 {
-	int levels = btree->root.depth, level = levels - 1, suspend = 0, freed = 0;
+	int levels = btree->root.depth, level = levels - 1, suspend = 0;
 	struct path path[levels + 1], prev[levels + 1];
 	struct buffer *leafbuf, *leafprev = NULL;
 	struct btree_ops *ops = btree->ops;
 	struct sb *sb = btree->sb;
-	memset(path, 0, sizeof(path));
+	memset(prev, 0, sizeof(path));
 
 	probe(btree, info->resume, path);
 	leafbuf = path[levels].buffer;
 
 	/* leaf walk */
 	while (1) {
-		if (delete_from_leaf(sb, leafbuf->data, info, &freed))
+		if (delete_from_leaf(btree, leafbuf->data, info))
 			set_buffer_dirty(leafbuf);
 
 		/* try to merge this leaf with prev */
 		if (leafprev) {
-			leaf_t *this = leafbuf->data;
-			leaf_t *that = leafprev->data;
+			struct vleaf *this = leafbuf->data;
+			struct vleaf *that = leafprev->data;
 			trace_off(warn("check leaf %p against %p", leafbuf, leafprev););
 			trace_off(warn("need = %i, free = %i", (ops->leaf_need)(btree, this), leaf_free(sb, that)););
 			/* try to merge leaf with prev */
 			if ((ops->leaf_need)(btree, this) <= (ops->leaf_free)(btree, that)) {
-				trace_off(warn(">>> can merge leaf %p into leaf %p", leafbuf, leafprev););
+				trace (warn(">>> can merge leaf %p into leaf %p", leafbuf, leafprev););
 				(ops->leaf_merge)(btree, that, this);
 				remove_index(path, level);
 				set_buffer_dirty(leafprev);
@@ -303,10 +300,10 @@ int delete_tree_partial(BTREE, struct delete_info *info, millisecond_t deadline,
 keep_prev_leaf:
 
 		//nanosleep(&(struct timespec){ 0, 50 * 1000000 }, NULL);
-		//printf("time remaining: %Li\n", deadline - gettime());
-		if (deadline != -1 && gettime() > deadline)
+		//printf("time remaining: %Lx\n", deadline - gettime());
+		if (deadline && gettime() > deadline)
 			suspend = -1;
-		if (info->blocks != -1 && freed >= info->blocks)
+		if (info->blocks && info->freed >= info->blocks)
 			suspend = -1;
 
 		/* pop and try to merge finished nodes */
@@ -340,7 +337,7 @@ keep_prev_node:
 			}
 			if (!level) { /* remove levels if possible */
 				while (levels > 1 && path_node(prev, 0)->count == 1) {
-					trace_off(warn("drop btree level"););
+					trace(warn("drop btree level"););
 					btree->root.block = prev[1].buffer->index;
 					brelse_free(sb, prev[0].buffer);
 					//dirty_buffer_count_check(sb);
@@ -357,7 +354,7 @@ keep_prev_node:
 			}
 
 			level--;
-			trace_off(printf("pop to level %i, %i of %i nodes\n", level, path[level].next - path_node(path, level)->entries, path_node(path, level)->count););
+			trace_on(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, path[level].buffer->index, path[level].next - path_node(path, level)->entries, path_node(path, level)->count););
 		}
 
 		/* push back down to leaf level */
@@ -369,11 +366,10 @@ keep_prev_node:
 				return -ENOMEM;
 			}
 			path[level].buffer = buffer;
-			path[level].next = buffer->data;
-			trace_off(printf("push to level %i, %i nodes\n", level, path_node(path, level)->count););
+			path[level].next = ((struct bnode *)buffer->data)->entries;
+			trace_on(printf("push to level %i, block %Lx, %i nodes\n", level, buffer->index, path_node(path, level)->count););
 		};
 		//dirty_buffer_count_check(sb);
-
 		/* go to next leaf */
 		if (!(leafbuf = bread(sb->devmap, path[level].next++->block))) {
 			release_path(path, level);
@@ -569,15 +565,29 @@ tuxkey_t uleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
 }
 
+unsigned uleaf_seek(BTREE, tuxkey_t key, struct uleaf *leaf)
+{
+	unsigned at = 0;
+	while (at < leaf->count && leaf->entries[at].key < key)
+		at++;
+	return at;
+}
+
+int uleaf_chop(BTREE, tuxkey_t key, vleaf *vleaf)
+{
+	struct uleaf *leaf = vleaf;
+	unsigned at = uleaf_seek(btree, key, leaf);
+	leaf->count = at;
+	return 0;
+}
+
 void *uleaf_resize(BTREE, tuxkey_t key, vleaf *data, unsigned one)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;
 	if (uleaf_free(btree, leaf) < one)
 		return NULL;
-	unsigned at = 0;
-	while (at < leaf->count && leaf->entries[at].key < key)
-		at++;
+	unsigned at = uleaf_seek(btree, key, leaf);
 	printf("expand leaf at 0x%x by %i\n", at, one);
 	vecmove(leaf->entries + at + one, leaf->entries + at, leaf->count++ - at);
 	return leaf->entries + at;
@@ -596,11 +606,13 @@ struct btree_ops ops = {
 	.leaf_need = uleaf_need,
 	.leaf_free = uleaf_free,
 	.leaf_merge = uleaf_merge,
+	.leaf_chop = uleaf_chop,
 	.balloc = balloc,
 };
 
 block_t balloc(SB)
 {
+	printf("-> %Lx\n", sb->nextalloc);
 	return sb->nextalloc++;
 }
 
@@ -643,6 +655,9 @@ int main(int argc, char *argv[])
 		*entry = (struct entry){ .key = key, .val = key + 0x100 };
 		release_path(path, btree.root.depth + 1);
 	}
+	show_tree_range(&btree, 0, -1);
+	show_buffers(sb->devmap);
+	delete_tree_partial(&btree, &(struct delete_info){ .key = 0x10 }, -1);
 	show_tree_range(&btree, 0, -1);
 	return 0;
 }

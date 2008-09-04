@@ -156,7 +156,7 @@ void set_buffer_empty(struct buffer *buffer)
 
 void brelse(struct buffer *buffer)
 {
-	buftrace(warn("Release buffer %Lx, count = %i", buffer->index, buffer->count););
+	buftrace(warn("Release buffer %Lx, count = %i, state = %i", buffer->index, buffer->count, buffer->state););
 	assert(buffer->count);
 	if (!--buffer->count)
 		trace_off(warn("Free buffer %Lx", buffer->index));
@@ -314,7 +314,7 @@ struct buffer *getblk(struct map *map, sector_t block)
 
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
 		if (buffer->index == block) {
-			buftrace(warn("Found buffer for %Lx", block););
+			buftrace(warn("Found buffer for %Lx, state %i", block, buffer->state););
 			buffer->count++;
 			list_del(&buffer->lrulink);
 			list_add_tail(&buffer->lrulink, &lru_buffers);

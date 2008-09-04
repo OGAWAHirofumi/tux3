@@ -218,6 +218,7 @@ struct btree_ops {
 	void (*leaf_dump)(BTREE, vleaf *leaf);
 	unsigned (*leaf_need)(BTREE, vleaf *leaf);
 	unsigned (*leaf_free)(BTREE, vleaf *leaf);
+	int (*leaf_chop)(BTREE, tuxkey_t key, vleaf *leaf);
 	void (*leaf_merge)(BTREE, vleaf *into, vleaf *from);
 	block_t (*balloc)(SB);
 	void (*bfree)(SB, block_t block);
