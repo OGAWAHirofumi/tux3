@@ -261,7 +261,7 @@ int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 	return 0;
 }
 
-int btree_delete(BTREE, struct delete_info *info, millisecond_t deadline)
+int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 {
 	int levels = btree->root.depth, level = levels - 1, suspend = 0;
 	struct path path[levels + 1], prev[levels + 1];
@@ -656,7 +656,7 @@ int main(int argc, char *argv[])
 	}
 	show_tree_range(&btree, 0, -1);
 	show_buffers(sb->devmap);
-	btree_delete(&btree, &(struct delete_info){ .key = 0x10 }, -1);
+	tree_chop(&btree, &(struct delete_info){ .key = 0x10 }, -1);
 	show_tree_range(&btree, 0, -1);
 	return 0;
 }
