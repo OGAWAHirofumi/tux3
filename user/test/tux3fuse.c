@@ -252,14 +252,17 @@ static int tux3_unlink(const char *path)
 	struct buffer *buffer;
 	char *filename = path;
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-	struct inode *inode = new_inode(sb, entry->inum);
-	int err = open_inode(inode);
-	if (err) {
-		errno = -err;
+	if (!entry) {
+		errno = ENOENT;
 		goto eek;
 	}
-	tree_chop(&inode->btree, &(struct delete_info){ .key = inode->inum }, -1);
-	if ((err = -ext2_delete_entry(buffer, entry)))
+	struct inode *inode = mapped_inode(sb, entry->inum, NULL);
+	if ((errno = -open_inode(inode)))
+		goto eek;
+
+	if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
+		goto eek;
+	if ((errno = -ext2_delete_entry(buffer, entry)))
 		goto eek;
 	free_inode(inode);
 eek:
