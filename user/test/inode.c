@@ -9,8 +9,6 @@
  * the right to distribute those changes under any license.
  */
 
-#define trace trace_on
-
 #define main notmain0
 #include "balloc.c"
 #undef main
@@ -64,7 +62,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	if (write) {
 		if (count) {
 			physical = found->block;
-			trace(warn("found block [%Lx]", (L)physical);)
+			trace("found block [%Lx]", (L)physical);
 		} else {
 			physical = balloc(sb);
 			if (physical == -1) {
@@ -84,7 +82,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 	if (!count)
 		goto unmapped;
 	physical = found->block;
-	trace(warn("found physical block %Lx", (long long)physical);)
+	trace("found physical block %Lx", (long long)physical);
 	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 eek:
 	warn("cannot add extent to tree: %s", strerror(-err));
@@ -92,7 +90,7 @@ eek:
 	return -EIO;
 unmapped:
 	/* found a hole */
-	trace(warn("unmapped block %Lx", buffer->index);)
+	trace("unmapped block %Lx", buffer->index);
 	memset(buffer->data, 0, sb->blocksize);
 	return 0;
 }
@@ -153,7 +151,7 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	struct buffer *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
 
-	trace(warn("create inode 0x%Lx", (L)inode->inum);)
+	trace("create inode 0x%Lx", (L)inode->inum);
 	assert(!inode->btree.root.depth);
 	inum_t inum = inode->inum;
 	assert(inum < next_key(path, levels));
@@ -205,7 +203,7 @@ int open_inode(struct inode *inode)
 		err = -ENOENT;
 		goto eek;
 	}
-	trace(warn("found inode 0x%Lx", (L)inode->inum);)
+	trace("found inode 0x%Lx", (L)inode->inum);
 	//ileaf_dump(&sb->itree, path[levels].buffer->data);
 	//hexdump(attrs, size);
 	decode_attrs(sb, attrs, size, inode);
@@ -218,7 +216,7 @@ eek:
 
 int save_inode(struct inode *inode)
 {
-	trace(warn("save inode 0x%Lx", (L)inode->inum);)
+	trace("save inode 0x%Lx", (L)inode->inum);
 	SB = inode->sb;
 	int err, levels = sb->itree.root.depth;
 	struct path path[levels + 1];

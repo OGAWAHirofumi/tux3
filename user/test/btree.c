@@ -282,11 +282,11 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 		if (leafprev) {
 			struct vleaf *this = leafbuf->data;
 			struct vleaf *that = leafprev->data;
-			trace_off(warn("check leaf %p against %p", leafbuf, leafprev););
-			trace_off(warn("need = %i, free = %i", (ops->leaf_need)(btree, this), leaf_free(sb, that)););
+			trace_off("check leaf %p against %p", leafbuf, leafprev);
+			trace_off("need = %i, free = %i", (ops->leaf_need)(btree, this), leaf_free(sb, that));
 			/* try to merge leaf with prev */
 			if ((ops->leaf_need)(btree, this) <= (ops->leaf_free)(btree, that)) {
-				trace (warn(">>> can merge leaf %p into leaf %p", leafbuf, leafprev););
+				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
 				(ops->leaf_merge)(btree, that, this);
 				remove_index(path, level);
 				set_buffer_dirty(leafprev);
@@ -313,11 +313,11 @@ keep_prev_leaf:
 				assert(level); /* node has no prev */
 				struct bnode *this = path_node(path, level);
 				struct bnode *that = path_node(prev, level);
-				trace_off(warn("check node %p against %p", this, that););
-				trace_off(warn("this count = %i prev count = %i", this->count, that->count););
+				trace_off("check node %p against %p", this, that);
+				trace_off("this count = %i prev count = %i", this->count, that->count);
 				/* try to merge with node to left */
 				if (this->count <= sb->entries_per_node - that->count) {
-					trace(warn(">>> can merge node %p into node %p", this, that););
+					trace(">>> can merge node %p into node %p", this, that);
 					merge_nodes(that, this);
 					remove_index(path, level - 1);
 					set_buffer_dirty(prev[level].buffer);
@@ -337,7 +337,7 @@ keep_prev_node:
 			}
 			if (!level) { /* remove levels if possible */
 				while (levels > 1 && path_node(prev, 0)->count == 1) {
-					trace(warn("drop btree level"););
+					trace("drop btree level");
 					btree->root.block = prev[1].buffer->index;
 					brelse_free(sb, prev[0].buffer);
 					//dirty_buffer_count_check(sb);
@@ -389,7 +389,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 
 int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct path path[])
 {
-	trace(printf("insert node 0x%Lx key 0x%Lx into node 0x%Lx\n", (L)childblock, (L)childkey, (L)btree->root.block);)
+	trace("insert node 0x%Lx key 0x%Lx into node 0x%Lx", (L)childblock, (L)childkey, (L)btree->root.block);
 	int levels = btree->root.depth;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
@@ -427,7 +427,7 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct pa
 		childblock = newbuf->index;
 		brelse(newbuf);
 	}
-	trace(printf("add tree level\n");)
+	trace("add tree level");
 	struct buffer *newbuf = new_node(btree);
 	if (!newbuf)
 		goto eek;
@@ -455,7 +455,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct pa
 	void *space = (ops->leaf_resize)(btree, key, leafbuf->data, newsize);
 	if (space)
 		return space;
-	trace(warn("split leaf");)
+	trace("split leaf");
 	struct buffer *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release path at point of error */
@@ -464,7 +464,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct pa
 	}
 	u64 newkey = (ops->leaf_split)(btree, key, leafbuf->data, newbuf->data);
 	block_t childblock = newbuf->index;
-	trace_off(warn("use upper? %Li %Li", key, newkey);)
+	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
 		struct buffer *swap = leafbuf;
 		leafbuf = path[btree->root.depth].buffer = newbuf;

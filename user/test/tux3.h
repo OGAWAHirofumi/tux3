@@ -1,6 +1,8 @@
 #ifndef TUX3_H
 #define TUX3_H
 
+#include <string.h>
+#include <stdio.h>
 #include <inttypes.h>
 #include <byteswap.h>
 #include "err.h"
