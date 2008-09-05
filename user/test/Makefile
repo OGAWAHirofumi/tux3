@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS += -std=gnu99 -Wall
+CFLAGS += -std=gnu99 -Wall -D_FILE_OFFSET_BITS=64
 VG=valgrind
 VGFLAGS=--error-exitcode=200
 binaries = dleaf ileaf iattr btree dir inode tux3fuse
@@ -38,7 +38,7 @@ inodetest: inode
 	$(VG) $(VGFLAGS) ./inode foodev
 
 tux3fuse: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c hexdump.c tux3fuse.c
-	$(CC) $(CFLAGS) buffer.c diskio.c tux3fuse.c -D_FILE_OFFSET_BITS=64 -lfuse -otux3fuse
+	$(CC) $(CFLAGS) buffer.c diskio.c tux3fuse.c -lfuse -otux3fuse
 
 clean:
 	rm -f $(binaries) *.o a.out foodev
