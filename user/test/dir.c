@@ -142,7 +142,7 @@ void ext2_dump_entries(struct buffer *buffer)
 	brelse(buffer);
 }
 
-int ext2_create_entry(struct inode *inode, char *name, int len, unsigned inum, unsigned mode)
+int ext2_create_entry(struct inode *inode, const char *name, int len, unsigned inum, unsigned mode)
 {
 	ext2_dirent *dirent;
 	struct buffer *buffer;
@@ -193,7 +193,7 @@ create:
 	return 0;
 }
 
-ext2_dirent *ext2_find_entry(struct inode *dir, char *name, int len, struct buffer **result)
+ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer **result)
 {
 	unsigned reclen = EXT2_REC_LEN(len);
 	unsigned blocksize = 1 << dir->map->dev->bits;

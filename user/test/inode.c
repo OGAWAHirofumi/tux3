@@ -285,9 +285,9 @@ int tuxread(struct file *file, char *data, unsigned len)
 	return tuxio(file, data, len, 0);
 }
 
-int tuxwrite(struct file *file, char *data, unsigned len)
+int tuxwrite(struct file *file, const char *data, unsigned len)
 {
-	return tuxio(file, data, len, 1);
+	return tuxio(file, (void *)data, len, 1);
 }
 
 void tuxseek(struct file *file, loff_t pos)
@@ -307,7 +307,7 @@ int purge_inum(BTREE, inum_t inum)
 	return err;
 }
 
-struct inode *tuxopen(struct inode *dir, char *name, int len)
+struct inode *tuxopen(struct inode *dir, const char *name, int len)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
@@ -319,7 +319,7 @@ struct inode *tuxopen(struct inode *dir, char *name, int len)
 	return open_inode(inode) ? NULL : inode;
 }
 
-struct inode *tuxcreate(struct inode *dir, char *name, int len, struct iattr *iattr)
+struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct iattr *iattr)
 {
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);

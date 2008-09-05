@@ -48,79 +48,11 @@
 #define include_inode_c
 #include "inode.c"
 
-static int tux3_open(const char *path, struct fuse_file_info *fi);
-static int tux3_read(const char *path, char *buf, 
-		size_t size, off_t offset, struct fuse_file_info *fi);
-static int tux3_write(const char *path, const char *buf, 
-		size_t size, off_t offset, struct fuse_file_info *fi);
-static int tux3_readdir(const char *path, void *buf,
-		fuse_fill_dir_t filler, off_t offset,
-		struct fuse_file_info *fi);
-static int tux3_getattr(const char *path, struct stat *stbuf);
-static int tux3_unlink(const char *path);
-static int tux3_create(const char *path, mode_t mode,
-		struct fuse_file_info *fi);
-
-static struct fuse_operations tux3_oper =
-{
-	.read = tux3_read,
-	.open = tux3_open,
-	.write = tux3_write,
-	.readdir = tux3_readdir,
-	.getattr = tux3_getattr,
-	.unlink = tux3_unlink,
-	.create = tux3_create,
-};
-
 static fd_t fd;
 static u64 volsize;
 static const char *volname = "__fuse__tux3fs";
 static struct sb *sb;
 static struct dev *dev;
-static const char *fp = "/hello";
-
-int main(int argc, char **argv)
-{
-	fd = open(volname, O_RDWR, S_IRWXU);
-	volsize = 0;
-	if (fdsize64(fd, &volsize))
-		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
-	dev = &(struct dev){ fd, .bits = 12 };
-	init_buffers(dev, 1<<20);
-	sb = &(struct sb){ };
-	*sb = (struct sb){
-		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
-		.blockbits = dev->bits,
-		.blocksize = 1 << dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
-		.volblocks = volsize >> dev->bits,
-		.freeblocks = volsize >> dev->bits,
-		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
-			.entries_per_leaf = 1 << (dev->bits - 6) } };
-
-	sb->bitmap = new_inode(sb, 0);
-	if (!sb->bitmap)
-		goto eek;
-	if ((errno = -load_sb(sb)))
-		goto eek;
-	if (!(sb->rootdir = new_inode(sb, 0xd)))
-		goto eek;
-	if ((errno = -open_inode(sb->rootdir)))
-		goto eek;
-	if ((errno = -open_inode(sb->bitmap)))
-		goto eek;
-	struct inode *inode = tuxcreate(sb->rootdir, fp, strlen(fp),
-		&(struct iattr){ .mode = S_IFREG | S_IRWXU | S_IROTH |
-			S_IRGRP });
-
-	return fuse_main(argc, argv, &tux3_oper);
-
-eek:
-	fprintf(stderr, "Eek! %s\n", strerror(errno));
-	return 1;
-}
 
 static int tux3_open(const char *path, struct fuse_file_info *fi)
 {
@@ -134,7 +66,7 @@ static int tux3_read(const char *path, char *buf,
 		size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	printf("---- read file ----\n");
-	char *filename = path;
+	const char *filename = path;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	struct file *file = &(struct file){ .f_inode = inode };
 	printf("userspace tries to seek to %Li\n", (L)offset);
@@ -162,7 +94,7 @@ eek:
 static int tux3_create(const char *path, mode_t mode,
 		struct fuse_file_info *fi)
 {
-	char *filename = path;
+	const char *filename = path;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode) {
 		printf("---- create file ----\n");
@@ -177,7 +109,7 @@ static int tux3_write(const char *path, const char *buf, size_t size,
 		off_t offset, struct fuse_file_info *fi)
 {
 	printf("---- write file ----\n");
-	char *filename = path;
+	const char *filename = path;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode) {
 		printf("---- create file ----\n");
@@ -212,7 +144,7 @@ static int tux3_readdir(const char *path, void *buf,
 		struct fuse_file_info *fi)
 {
 	// this is completely wrong
-	char *filename = path;
+	const char *filename = path;
 	fprintf(stderr, "--- readdir --- '%s'\n", filename);
 	filler(buf, ".", NULL, 0);
 	filler(buf, "..", NULL, 0);
@@ -230,7 +162,7 @@ static int tux3_getattr(const char *path, struct stat *stbuf)
 		stbuf->st_nlink = 2;
 		return 0;
 	}
-	char *filename = path;
+	const char *filename = path;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode)
 		return -ENOENT;
@@ -250,7 +182,7 @@ static int tux3_unlink(const char *path)
 {
 	printf("---- delete file ----\n");
 	struct buffer *buffer;
-	char *filename = path;
+	const char *filename = path;
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
 	if (!entry) {
 		errno = ENOENT;
@@ -268,4 +200,57 @@ static int tux3_unlink(const char *path)
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	return -errno;
+}
+
+static struct fuse_operations tux3_oper = {
+	.read = tux3_read,
+	.open = tux3_open,
+	.write = tux3_write,
+	.readdir = tux3_readdir,
+	.getattr = tux3_getattr,
+	.unlink = tux3_unlink,
+	.create = tux3_create,
+};
+
+int main(int argc, char **argv)
+{
+	fd = open(volname, O_RDWR, S_IRWXU);
+	volsize = 0;
+	if (fdsize64(fd, &volsize))
+		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
+	dev = &(struct dev){ fd, .bits = 12 };
+	init_buffers(dev, 1<<20);
+	sb = &(struct sb){ };
+	*sb = (struct sb){
+		.max_inodes_per_block = 64,
+		.entries_per_node = 20,
+		.devmap = new_map(dev, NULL),
+		.blockbits = dev->bits,
+		.blocksize = 1 << dev->bits,
+		.blockmask = (1 << dev->bits) - 1,
+		.volblocks = volsize >> dev->bits,
+		.freeblocks = volsize >> dev->bits,
+		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
+			.entries_per_leaf = 1 << (dev->bits - 6) } };
+
+	sb->bitmap = new_inode(sb, 0);
+	if (!sb->bitmap)
+		goto eek;
+	if ((errno = -load_sb(sb)))
+		goto eek;
+	if (!(sb->rootdir = new_inode(sb, 0xd)))
+		goto eek;
+	if ((errno = -open_inode(sb->rootdir)))
+		goto eek;
+	if ((errno = -open_inode(sb->bitmap)))
+		goto eek;
+//	struct inode *inode = tuxcreate(sb->rootdir, fp, strlen(fp),
+//		&(struct iattr){ .mode = S_IFREG | S_IRWXU | S_IROTH |
+//			S_IRGRP });
+
+	return fuse_main(argc, argv, &tux3_oper);
+
+eek:
+	fprintf(stderr, "Eek! %s\n", strerror(errno));
+	return 1;
 }
