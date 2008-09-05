@@ -99,18 +99,24 @@ unmapped:
 
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
 
-struct inode *new_inode(SB, inum_t inum)
+struct inode *mapped_inode(SB, inum_t inum, struct map *map)
 {
-	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
 	struct inode *inode = malloc(sizeof(*inode));
 	*inode = (struct inode){ .sb = sb, .map = map, .inum = inum };
-	map->inode = inode;
 	return inode;
+}
+
+struct inode *new_inode(SB, inum_t inum)
+{
+	struct inode *inode = mapped_inode(sb, inum, new_map(sb->devmap->dev, &filemap_ops));
+	return inode->map->inode = inode;
 }
 
 void free_inode(struct inode *inode)
 {
-	free_map(inode->map); // invalidate dirty buffers!!!
+	
+	if (inode->map)
+		free_map(inode->map); // invalidate dirty buffers!!!
 	free(inode);
 }
 

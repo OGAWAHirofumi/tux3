@@ -186,14 +186,16 @@ int main(int argc, const char *argv[])
 		printf("---- delete file ----\n");
 		struct buffer *buffer;
 		ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-		struct inode *inode = new_inode(sb, entry->inum);
-		int err = open_inode(inode);
-		if (err) {
-			errno = -err;
+		if (!entry) {
+			errno = ENOENT;
 			goto eek;
 		}
-		tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1);
-		if ((err = -ext2_delete_entry(buffer, entry)))
+		struct inode *inode = mapped_inode(sb, entry->inum, NULL);
+		if ((errno = -open_inode(inode)))
+			goto eek;
+		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
+			goto eek;
+		if ((errno = -ext2_delete_entry(buffer, entry)))
 			goto eek;
 		free_inode(inode);
 		ext2_dump_entries(bread(sb->rootdir->map, 0));
@@ -205,7 +207,7 @@ int main(int argc, const char *argv[])
 	poptFreeContext(popt);
 	return 0;
 eek:
-	fprintf(stderr, "Eek! %s\n", strerror(errno));
+	fprintf(stderr, "%s!\n", strerror(errno));
 	return 1;
 usage:
 	poptPrintUsage(popt, stderr, 0);

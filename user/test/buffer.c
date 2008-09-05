@@ -437,7 +437,7 @@ int devmap_blockio(struct buffer *buffer, int write)
 
 struct map_ops devmap_ops = { .blockio = devmap_blockio };
 
-struct map *new_map(struct dev *dev, struct map_ops *ops)
+struct map *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
 	struct map *map = malloc(sizeof(*map)); // error???
 	*map = (struct map){ .dev = dev, .ops = ops ? ops : &devmap_ops };
