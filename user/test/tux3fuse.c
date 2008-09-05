@@ -21,6 +21,11 @@
  *              -D_FILE_OFFSET_BITS=64 -lfuse -o fuse-tux3
  * (-D_FILE_OFFSET_BITS=64 might be only on 64 bit platforms, not sure.)
  * Run:
+ * 0. sudo mknod -m 666 /dev/fuse c 10 229
+ *    Install libfuse and headers: sudo apt-get install libfuse-dev
+ *    Install fuse-utils: sudo apt-get install fuse-utils
+ *    build fuse kernel module: cd linux && make ;-)
+ *    insert fuse kernel module: sudo insmod fs/fuse/fuse.ko
  * 1. Create a tux3 fs on __fuse__tux3fs using some combination of dd
  *    and ./tux3 make __fuse__tux3fs.
  * 2. Mount on foo/ like: ./fuse-tux3 -f foo/     (-f for foreground)
