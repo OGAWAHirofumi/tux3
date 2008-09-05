@@ -235,19 +235,18 @@ static unsigned char filetype[EXT2_TYPES] = {
 
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
 
-static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
+static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 {
-	loff_t pos = filp->f_pos;
-	struct inode *inode = filp->f_inode;
-	int revalidate = filp->f_version != inode->i_version;
+	loff_t pos = file->f_pos;
+	struct inode *inode = file->f_inode;
+	int revalidate = file->f_version != inode->i_version;
 	unsigned blockbits = inode->map->dev->bits;
 	unsigned blocksize = 1 << blockbits;
 	unsigned blockmask = blocksize - 1;
 	unsigned blocks = inode->i_size >> blockbits;
 	unsigned offset = pos & blockmask;
-
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
-		struct buffer *buffer = getblk(inode->map, block);
+		struct buffer *buffer = bread(inode->map, block);
 		void *base = buffer->data;
 		if (!buffer)
 			return -EIO;
@@ -258,9 +257,9 @@ static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
 				while (p < entry && p->rec_len)
 					p = next_entry(p);
 				offset = (void *)p - base;
-				filp->f_pos = (block << blockbits) + offset;
+				file->f_pos = (block << blockbits) + offset;
 			}
-			filp->f_version = inode->i_version;
+			file->f_version = inode->i_version;
 			revalidate = 0;
 		}
 		unsigned size = inode->i_size - (block << blockbits);
@@ -273,16 +272,16 @@ static int ext2_readdir(struct file *filp, void *dirents, filldir_t filldir)
 			}
 			if (entry->inum) {
 				unsigned type = (entry->type < EXT2_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
-				int full = filldir(
-					dirents, entry->name, entry->name_len,
+				int lame = filldir(
+					state, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
 					le32_to_cpu(entry->inum), type);
-				if (full) {
+				if (lame) {
 					brelse(buffer);
 					return 0;
 				}
 			}
-			filp->f_pos += ext2_rec_len_from_disk(entry->rec_len);
+			file->f_pos += ext2_rec_len_from_disk(entry->rec_len);
 		}
 		brelse(buffer);
 		offset = 0;

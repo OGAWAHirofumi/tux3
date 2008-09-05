@@ -7,17 +7,18 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Compile: gcc -std=gnu99 buffer.c diskio.c fuse-tux3.c \
+/*
+ * Compile: gcc -std=gnu99 buffer.c diskio.c fuse-tux3.c \
  *              -D_FILE_OFFSET_BITS=64 -lfuse -o fuse-tux3
  * (-D_FILE_OFFSET_BITS=64 might be only on 64 bit platforms, not sure.)
  * Run:
@@ -28,7 +29,7 @@
  *    insert fuse kernel module: sudo insmod fs/fuse/fuse.ko
  * 1. Create a tux3 fs on __fuse__tux3fs using some combination of dd
  *    and ./tux3 make __fuse__tux3fs.
- * 2. Mount on foo/ like: ./fuse-tux3 -f foo/     (-f for foreground)
+ * 2. Mount on foo/ like: ./tux3fuse -f foo/     (-f for foreground)
  */
 
 #define FUSE_USE_VERSION 26
@@ -63,7 +64,7 @@ static int tux3_open(const char *path, struct fuse_file_info *fi)
 }
 
 static int tux3_read(const char *path, char *buf, 
-		size_t size, off_t offset, struct fuse_file_info *fi)
+	size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	printf("---- read file ----\n");
 	const char *filename = path;
@@ -91,8 +92,7 @@ eek:
 	return -errno;
 }
 
-static int tux3_create(const char *path, mode_t mode,
-		struct fuse_file_info *fi)
+static int tux3_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	const char *filename = path;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
@@ -106,7 +106,7 @@ static int tux3_create(const char *path, mode_t mode,
 }
 
 static int tux3_write(const char *path, const char *buf, size_t size,
-		off_t offset, struct fuse_file_info *fi)
+	off_t offset, struct fuse_file_info *fi)
 {
 	printf("---- write file ----\n");
 	const char *filename = path;
@@ -139,16 +139,36 @@ eek:
 	return -errno;
 }
 
-static int tux3_readdir(const char *path, void *buf,
-		fuse_fill_dir_t filler, off_t offset,
-		struct fuse_file_info *fi)
+struct fillstate { char *dirent; int done; };
+
+int tux3_filldir(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
 {
-	// this is completely wrong
-	const char *filename = path;
-	fprintf(stderr, "--- readdir --- '%s'\n", filename);
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
-	filler(buf, "hello", NULL, 0);
+	struct fillstate *state = info;
+	if (state->done || namelen > EXT2_NAME_LEN)
+		return -EINVAL;
+	printf("\"%.*s\"\n", namelen, name);
+	memcpy(state->dirent, name, namelen);
+	(state->dirent)[namelen] = 0;
+	state->done = 1;
+	return 0;
+}
+
+static int tux3_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
+{
+	printf("--- readdir --- '%s' at %Lx\n", path, (L)offset);
+	struct file *dirfile = &(struct file){ .f_inode = sb->rootdir, .f_pos = offset };
+	//filler(buf, ".", NULL, 0);
+	//filler(buf, "..", NULL, 0);
+	char dirent[EXT2_NAME_LEN + 1];
+	while (dirfile->f_pos < dirfile->f_inode->i_size) {
+		if ((errno = -ext2_readdir(dirfile, &(struct fillstate){ .dirent = dirent }, tux3_filldir)))
+			return -errno;
+		//warn(">>> pos = %Lx", (L)dirfile->f_pos);
+		if (filler(buf, dirent, NULL, dirfile->f_pos)) {
+			warn("fuse buffer full");
+			return 0;
+		}
+	}
 	return 0;
 }
 
