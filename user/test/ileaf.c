@@ -100,7 +100,7 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 #else
 			struct inode inode = { };
 			decode_attrs(sb, leaf->table + offset, size, &inode);
-			dump_attrs(sb, &inode);
+			dump_attrs(&inode);
 #endif
 		}
 		offset = limit;

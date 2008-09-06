@@ -42,14 +42,25 @@ tux3: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c i
 
 tux3fs: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c tux3fs.c
 	$(CC) $(CFLAGS) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
-testfs: tux3fs
+
+makefs: tux3 tux3fs
 	dd if=/dev/zero of=testdev bs=1 count=1 seek=1M
-	./tux3 make testdev
-	mkdir tuxtest || true
-	sudo ./tux3fs testdev tuxtest
-	sudo ls -ld tuxtest
-testdone:
-	sudo umount tuxtest
+	./tux3 mkfs testdev
+	mkdir test || true
+
+testfs: makefs
+	sudo ./tux3fs testdev test
+	sudo ls -ld test
+
+fstest: tux3fs
+	sudo ./tux3fs testdev test -f
+
+untest:
+	sudo umount test || true
+	rmdir test
+
+unbork:
+	sudo umount -l test
 
 clean:
 	rm -f $(binaries) *.o a.out foodev

@@ -97,24 +97,26 @@ unmapped:
 
 struct map_ops filemap_ops = { .blockio = filemap_blockio };
 
-struct inode *mapped_inode(SB, inum_t inum, struct map *map)
-{
-	struct inode *inode = malloc(sizeof(*inode));
-	*inode = (struct inode){ .sb = sb, .map = map, .inum = inum };
-	return inode;
-}
-
 struct inode *new_inode(SB, inum_t inum)
 {
-	struct inode *inode = mapped_inode(sb, inum, new_map(sb->devmap->dev, &filemap_ops));
+	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
+	if (!map)
+		goto eek;
+	struct inode *inode = malloc(sizeof(*inode));
+	if (!inode)
+		goto eek;
+	*inode = (struct inode){ .sb = sb, .map = map, .inum = inum };
 	return inode->map->inode = inode;
+eek:
+	if (map)
+		free_map(map);
+	return NULL;
 }
 
 void free_inode(struct inode *inode)
 {
-	
-	if (inode->map)
-		free_map(inode->map); // invalidate dirty buffers!!!
+	assert(inode->map); /* some inodes are not malloced */
+	free_map(inode->map); // invalidate dirty buffers!!!
 	free(inode);
 }
 
@@ -207,7 +209,7 @@ int open_inode(struct inode *inode)
 	//ileaf_dump(&sb->itree, path[levels].buffer->data);
 	//hexdump(attrs, size);
 	decode_attrs(sb, attrs, size, inode);
-	dump_attrs(sb, inode);
+	dump_attrs(inode);
 	err = 0;
 eek:
 	release_path(path, levels + 1);
@@ -233,7 +235,7 @@ int save_inode(struct inode *inode)
 	void *attrs = encode_attrs(sb, base, size, inode);
 	assert(attrs == base + size);
 	release_path(path, levels + 1);
-	dump_attrs(sb, inode);
+	dump_attrs(inode);
 	return 0;
 }
 

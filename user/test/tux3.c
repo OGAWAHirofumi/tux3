@@ -192,11 +192,10 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = entry->inum;
 		brelse(buffer);
-		struct inode *inode = mapped_inode(sb, inum, NULL);
+		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
 			goto eek;
-		dump_attrs(sb, inode);
-		free_inode(inode);
+		dump_attrs(inode);
 	}
 
 	if (!strcmp(command, "delete")) {
@@ -209,14 +208,13 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = entry->inum;
 		brelse(buffer);
-		struct inode *inode = mapped_inode(sb, inum, NULL);
+		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
 			goto eek;
 		if ((errno = -ext2_delete_entry(buffer, entry)))
 			goto eek;
-		free_inode(inode);
 		ext2_dump_entries(bread(sb->rootdir->map, 0));
 	}
 
