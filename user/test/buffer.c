@@ -125,7 +125,7 @@ static void remove_buffer_journaled(struct buffer *buffer)
 
 void set_buffer_dirty(struct buffer *buffer)
 {
-	buftrace(warn("set_buffer_dirty %Lx state=%u", buffer->index, buffer->state););
+	buftrace("set_buffer_dirty %Lx state=%u", buffer->index, buffer->state);
 	if (buffer_dirty(buffer))
 		return;
 	if (buffer_journaled(buffer))
@@ -156,15 +156,15 @@ void set_buffer_empty(struct buffer *buffer)
 
 void brelse(struct buffer *buffer)
 {
-	buftrace(warn("Release buffer %Lx, count = %i", buffer->index, buffer->count););
+	buftrace("Release buffer %Lx, count = %i, state = %i", buffer->index, buffer->count, buffer->state);
 	assert(buffer->count);
 	if (!--buffer->count)
-		trace_off(warn("Free buffer %Lx", buffer->index));
+		trace_off("Free buffer %Lx", buffer->index);
 }
 
 void brelse_dirty(struct buffer *buffer)
 {
-	buftrace(warn("Release dirty buffer %Lx", buffer->index););
+	buftrace("Release dirty buffer %Lx", buffer->index);
 	set_buffer_dirty(buffer);
 	brelse(buffer);
 }
@@ -176,7 +176,7 @@ int write_buffer_to(struct buffer *buffer, sector_t block)
 
 int write_buffer(struct buffer *buffer)
 {
-	buftrace(warn("write buffer %Lx", buffer->index););
+	buftrace("write buffer %Lx", buffer->index);
 	set_buffer_uptodate(buffer);
 	int err = write_buffer_to(buffer, buffer->index);
 	if (err)
@@ -269,7 +269,7 @@ struct buffer *new_buffer(struct map *map, sector_t block)
 		goto have_buffer;
 
 alloc_buffer:
-	buftrace(warn("expand buffer pool");)
+	buftrace("expand buffer pool");
 	if (buffer_count == max_buffers) {
 		warn("Maximum buffer count exceeded (%i)", buffer_count);
 		return NULL;
@@ -302,7 +302,7 @@ int count_buffers(void)
                 struct buffer *buffer = list_entry(list, struct buffer, lrulink);	
 		if (!buffer->count)
 			continue;
-		trace_off(warn("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count););
+		trace_off("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count);
 		count++;
 	}
 	return count;
@@ -314,7 +314,7 @@ struct buffer *getblk(struct map *map, sector_t block)
 
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
 		if (buffer->index == block) {
-			buftrace(warn("Found buffer for %Lx", block););
+			buftrace("Found buffer for %Lx, state %i", block, buffer->state);
 			buffer->count++;
 			list_del(&buffer->lrulink);
 			list_add_tail(&buffer->lrulink, &lru_buffers);
@@ -329,20 +329,17 @@ struct buffer *getblk(struct map *map, sector_t block)
 
 struct buffer *bread(struct map *map, sector_t block)
 {
-	int err = 0;
-	struct buffer *buffer;
-
-	if (!(buffer = getblk(map, block)))
-		return NULL;
-	if (!buffer_empty(buffer))
-		return buffer;
-	buftrace(warn("read buffer %Lx, state %i", buffer->index, buffer->state););
-	if ((err = (buffer->map->ops->blockio)(buffer, 0))) {
-		warn("failed to read block %Lx (%s)", block, strerror(-err));
-		brelse(buffer);
-		return NULL;
+	struct buffer *buffer = getblk(map, block);
+	if (buffer && buffer_empty(buffer)) {
+		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
+		int err = buffer->map->ops->blockio(buffer, 0);
+		if (err) {
+			warn("failed to read block %Lx (%s)", block, strerror(-err));
+			brelse(buffer);
+			return NULL;
+		}
+		set_buffer_uptodate(buffer);
 	}
-	set_buffer_uptodate(buffer);
 	return buffer;
 }
 
@@ -351,7 +348,7 @@ void evict_buffer(struct buffer *buffer)
 	remove_buffer_lru(buffer);
         if (!remove_buffer_hash(buffer))
 		warn("buffer not found in hashlist");
-	buftrace(warn("Evicted buffer for %Lx", buffer->index););
+	buftrace("Evicted buffer for %Lx", buffer->index);
 	add_buffer_free(buffer);
 }
 
@@ -392,10 +389,10 @@ int preallocate_buffers(unsigned bufsize) {
 	unsigned char *data_pool = NULL;
 	int i, err = -ENOMEM; /* if malloc fails */
 
-	buftrace(warn("Pre-allocating buffers..."););
+	buftrace("Pre-allocating buffers...");
 	if (!buffers)
 		goto buffers_allocation_failure;
-	buftrace(warn("Pre-allocating data for buffers..."););
+	buftrace("Pre-allocating data for buffers...");
 	if ((err = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
 		goto data_allocation_failure;
 
@@ -433,14 +430,14 @@ int devmap_blockio(struct buffer *buffer, int write)
 {
 	warn("%s [%Lx]", write ? "write" : "read", (long long)buffer->index);
 	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 9 && dev->fd);
+	assert(dev->bits >= 8 && dev->fd);
 	return (write ? diskwrite : diskread)
 		(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
 struct map_ops devmap_ops = { .blockio = devmap_blockio };
 
-struct map *new_map(struct dev *dev, struct map_ops *ops)
+struct map *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
 	struct map *map = malloc(sizeof(*map)); // error???
 	*map = (struct map){ .dev = dev, .ops = ops ? ops : &devmap_ops };

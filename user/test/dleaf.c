@@ -110,8 +110,9 @@ unsigned leaf_need(BTREE, struct dleaf *leaf)
 	return btree->sb->blocksize - leaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
-void dleaf_dump(BTREE, struct dleaf *leaf)
+void dleaf_dump(BTREE, vleaf *vleaf)
 {
+	struct dleaf *leaf = vleaf;
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
 	struct extent *extents = leaf->table;
@@ -139,26 +140,82 @@ void dleaf_dump(BTREE, struct dleaf *leaf)
 	}
 }
 
-void *leaf_lookup(BTREE, block_t target, struct dleaf *leaf, unsigned *count)
+/*
+ * Reasons this dleaf truncater sucks:
+ *
+ * * Does not check for integrity at all so a corrupted leaf can cause overflow
+ *   and system corruption.
+ *
+ * * Assumes all block pointers after the truncation point will be deleted,
+ *   which does not hold when versions arrive.
+ *
+ * * Modifies a group count in the middle of the traversal knowing that it has
+ *   already loaded the changed field and will not load it again, fragile.
+ *
+ * * Does not provide a generic mechanism that can be adapted to other
+ *   truncation tasks.
+ *
+ * But it does truncate so it is getting checked in just for now.
+ */
+
+int dleaf_chop(BTREE, tuxkey_t high, vleaf *vleaf)
+{
+	struct dleaf *leaf = vleaf;
+	struct group *group = (void *)leaf + btree->sb->blocksize, *top = group;
+	struct entry *entry = (void *)(--group - leaf->groups);
+	struct group *gstop = group - leaf->groups;
+	struct entry *estop = entry - group->count;
+	unsigned extents = 0, start = 0, trunc = 0;
+	unsigned newgroups = leaf->groups;
+
+	while (1) {
+		unsigned count = entry->limit - start;
+		tuxkey_t key = ((tuxkey_t)group->loghi << 24) | entry->loglo;
+		if (key >= high) {
+			if (!trunc) {
+				unsigned newcount = group->count - (entry - estop);
+				newgroups = top - group - !newcount;
+				group->count = newcount;
+				trunc = 1;
+			}
+			for (int i = 0; i < count; i++)
+				(btree->ops->bfree)(btree->sb, leaf->table[extents + i].block);
+		}
+		start = entry->limit;
+		extents += count;
+		if (--entry != estop)
+			continue;
+		if (--group == gstop)
+			break;
+		estop = entry - group->count;
+		start = 0;
+	}
+	unsigned tamp = (leaf->groups - newgroups) * sizeof(*group);
+	unsigned tail = (void *)(top - newgroups) - ((void *)entry + tamp);
+	memmove((void *)entry + tamp, entry, tail);
+	leaf->groups = newgroups;
+	return 0;
+}
+
+void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	struct extent *extents = leaf->table;
-	unsigned loglo = target & 0xffffff, loghi = target >> 24;
+	unsigned loglo = key & 0xffffff, loghi = key >> 24;
 
 	for (struct group *group = groups - 1; group >= grbase; group--) {
 		struct entry *enbase = entries - group->count;
-		if (loghi == group->loghi) {
+		if (loghi == group->loghi)
 			for (struct entry *entry = entries; entry > enbase;)
 				if ((--entry)->loglo == loglo) {
 					unsigned offset = entry - enbase == group->count - 1 ? 0 : (entry + 1)->limit;
 					*count = entry->limit - offset;
 					return extents + offset;
 				}
-		}
-		/* can fail out early here */
-		entries -= group->count;
+		/* could fail out early here */
 		extents += enbase->limit;
+		entries -= group->count;
 	}
 	*count = 0;
 	return NULL;
@@ -191,7 +248,13 @@ eek:
 	return -1;
 }
 
-void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, unsigned size)
+/*
+ * Note that dleaf_resize, unlike other resize methods, always makes space for
+ * a new entry and returns a pointer to the new entry, not the base of a group
+ * of entries with the same key.  Is this a bug or a feature?  The high level
+ * btree resize method does not know or care about this detail.
+ */
+void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 {
 	//key = key & 0xffffffffffffLL;
 	assert(dleaf_sniff(btree, base));
@@ -204,7 +267,7 @@ void *dleaf_expand(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	const int grouplim = 7;
 
 	/* need room for one extent + maybe one group + maybe one entry */
-	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) +  size)
+	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) + size)
 		return NULL;
 
 	/* find group position */
@@ -401,22 +464,30 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 struct btree_ops dtree_ops = {
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
+	.leaf_dump = dleaf_dump,
 	.leaf_split = dleaf_split,
-	.leaf_expand = dleaf_expand,
+	.leaf_resize = dleaf_resize,
+	.leaf_chop = dleaf_chop,
 	.balloc = balloc,
+	.bfree = bfree,
 };
 
 #ifndef main
 void dleaf_insert(BTREE, block_t key, struct dleaf *leaf, struct extent extent)
 {
 	printf("insert 0x%Lx -> 0x%Lx\n", (L)key, (L)extent.block);
-	struct extent *store = dleaf_expand(btree, key, leaf, sizeof(extent));
+	struct extent *store = dleaf_resize(btree, key, leaf, sizeof(extent));
 	*store = extent;
 }
 
 block_t balloc(SB)
 {
 	return sb->nextalloc++;
+}
+
+void bfree(SB, block_t block)
+{
+	printf(" free %Lx\n", (L)block);
 }
 
 int main(int argc, char *argv[])
@@ -444,7 +515,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
 		unsigned count;
-		void *found = leaf_lookup(btree, key, leaf, &count);
+		void *found = dleaf_lookup(btree, leaf, key, &count);
 		if (count) {
 			printf("lookup 0x%x, found [%i] ", key, count );
 			hexdump(found, count);
@@ -457,10 +528,9 @@ int main(int argc, char *argv[])
 	printf("split key 0x%Lx\n", (L)key);
 	dleaf_dump(btree, leaf);
 	dleaf_dump(btree, dest);
-	dleaf_check(btree, leaf);
-	dleaf_check(btree, dest);
 	dleaf_merge(btree, leaf, dest);
-	dleaf_check(btree, leaf);
+	dleaf_dump(btree, leaf);
+	dleaf_chop(btree, 0x14014LL, leaf);
 	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
