@@ -2,17 +2,17 @@ CC=gcc
 CFLAGS += -std=gnu99 -Wall -D_FILE_OFFSET_BITS=64
 VG=valgrind
 VGFLAGS=--error-exitcode=200
-binaries = dleaf ileaf iattr btree dir inode tux3fs
+binaries = dleaf ileaf iattr btree dir inode tux3 tux3fs
 
 all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest
 
-dleaf: dleaf.c tux3.h hexdump.c
+dleaf: dleaf.c tux3.h
 	$(CC) $(CFLAGS) dleaf.c -o dleaf
 dleaftest: dleaf
 	$(VG) $(VGFLAGS) ./dleaf
 
-ileaf: ileaf.c tux3.h hexdump.c
+ileaf: ileaf.c tux3.h
 	$(CC) $(CFLAGS) ileaf.c -o ileaf
 ileaftest: ileaf
 	$(VG) $(VGFLAGS) ./ileaf
@@ -27,17 +27,20 @@ dir: dir.c diskio.c buffer.c dleaf.c buffer.h tux3.h
 dirtest: dir
 	$(VG) $(VGFLAGS) ./dir
 
-iattr: iattr.c tux3.h hexdump.c
+iattr: iattr.c tux3.h
 	$(CC) $(CFLAGS) iattr.c -o iattr
 iattrtest: iattr
 	$(VG) $(VGFLAGS) ./iattr
 
-inode: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c hexdump.c
+inode: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c
 	$(CC) $(CFLAGS) inode.c buffer.c diskio.c -o inode
 inodetest: inode
 	$(VG) $(VGFLAGS) ./inode foodev
 
-tux3fs: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c hexdump.c tux3fs.c
+tux3: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c tux3.c
+	$(CC) $(CFLAGS) buffer.c diskio.c tux3fs.c -lfuse -otux3
+
+tux3fs: inode.c buffer.h tux3.h buffer.c buffer.h diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c tux3fs.c
 	$(CC) $(CFLAGS) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
 
 clean:
