@@ -124,16 +124,13 @@ static int tux3_write(const char *path, const char *buf, size_t size,
 	}
 
 	int written = 0;
-	warn(">>> write");
 	if ((written = tuxwrite(file, buf, size)) < 0)
 	{
 		errno = -written;
 		goto eek;
 	}
 
-	warn(">>> sync");
 	tuxsync(inode);
-	warn(">>> sync super");
 	if ((errno = -sync_super(sb)))
 		goto eek;
 	return written;
@@ -149,7 +146,7 @@ int tux3_filldir(void *info, char *name, unsigned namelen, loff_t offset, unsign
 	struct fillstate *state = info;
 	if (state->done || namelen > EXT2_NAME_LEN)
 		return -EINVAL;
-	printf("\"%.*s\"\n", namelen, name);
+	printf("'%.*s'\n", namelen, name);
 	memcpy(state->dirent, name, namelen);
 	(state->dirent)[namelen] = 0;
 	state->done = 1;
@@ -182,7 +179,7 @@ static int tux3_getattr(const char *path, struct stat *stbuf)
 	memset(stbuf, 0, sizeof(struct stat));
 	if (strcmp(path, "/") == 0)
 	{
-		stbuf->st_mode = S_IFDIR | 0755;
+		stbuf->st_mode = sb->rootdir->i_mode;
 		stbuf->st_nlink = 2;
 		return 0;
 	}
@@ -190,8 +187,7 @@ static int tux3_getattr(const char *path, struct stat *stbuf)
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode)
 		return -ENOENT;
-	//stbuf->st_mode  = inode->i_mode;
-	stbuf->st_mode = S_IFREG | 0666;
+	stbuf->st_mode  = inode->i_mode;
 	stbuf->st_atime = inode->i_atime;
 	stbuf->st_mtime = inode->i_mtime;
 	stbuf->st_ctime = inode->i_ctime;
@@ -268,9 +264,6 @@ int main(int argc, char **argv)
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
-//	struct inode *inode = tuxcreate(sb->rootdir, fp, strlen(fp),
-//		&(struct iattr){ .mode = S_IFREG | S_IRWXU | S_IROTH |
-//			S_IRGRP });
 	return fuse_main(argc, argv, &tux3_oper, NULL);
 
 eek:
