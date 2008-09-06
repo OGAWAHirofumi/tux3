@@ -611,7 +611,7 @@ struct btree_ops ops = {
 
 block_t balloc(SB)
 {
-	printf("-> %Lx\n", sb->nextalloc);
+	printf("-> %Lx\n", (L)sb->nextalloc);
 	return sb->nextalloc++;
 }
 
