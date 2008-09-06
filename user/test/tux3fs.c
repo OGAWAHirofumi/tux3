@@ -108,7 +108,7 @@ static int tux3_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 static int tux3_write(const char *path, const char *buf, size_t size,
 	off_t offset, struct fuse_file_info *fi)
 {
-	printf("---- write file ----\n");
+	warn("---- write file ----");
 	const char *filename = path;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode) {
@@ -124,13 +124,16 @@ static int tux3_write(const char *path, const char *buf, size_t size,
 	}
 
 	int written = 0;
+	warn(">>> write");
 	if ((written = tuxwrite(file, buf, size)) < 0)
 	{
 		errno = -written;
 		goto eek;
 	}
 
+	warn(">>> sync");
 	tuxsync(inode);
+	warn(">>> sync super");
 	if ((errno = -sync_super(sb)))
 		goto eek;
 	return written;
@@ -174,6 +177,7 @@ static int tux3_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off
 
 static int tux3_getattr(const char *path, struct stat *stbuf)
 {
+	printf("---- get attr for '%s' ----\n", path);
 	// this is probably mostly wrong as well
 	memset(stbuf, 0, sizeof(struct stat));
 	if (strcmp(path, "/") == 0)
@@ -211,12 +215,12 @@ static int tux3_unlink(const char *path)
 	struct inode *inode = mapped_inode(sb, entry->inum, NULL);
 	if ((errno = -open_inode(inode)))
 		goto eek;
-
 	if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
 		goto eek;
 	if ((errno = -ext2_delete_entry(buffer, entry)))
 		goto eek;
 	free_inode(inode);
+	return 0;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	return -errno;

@@ -435,7 +435,7 @@ int make_tux3(SB, int fd)
 	printf("---- create root ----\n");
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
-	make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFREG | S_IRWXU }); // error???
+	make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFDIR | 0755 }); // error???
 
 	if (sync_super(sb))
 		goto eek;

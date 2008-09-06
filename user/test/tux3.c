@@ -99,12 +99,12 @@ int main(int argc, const char *argv[])
 	}
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	show_tree_range(&sb->itree, 0, -1);
+	//show_tree_range(&sb->itree, 0, -1);
+	if ((errno = -open_inode(sb->bitmap)))
+		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
-		goto eek;
-	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
