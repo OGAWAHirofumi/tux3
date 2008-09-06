@@ -51,7 +51,6 @@
 
 static fd_t fd;
 static u64 volsize;
-static const char *volname = "__fuse__tux3fs";
 static struct sb *sb;
 static struct dev *dev;
 
@@ -232,9 +231,13 @@ static struct fuse_operations tux3_oper = {
 	.create = tux3_create,
 };
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
-	fd = open(volname, O_RDWR, S_IRWXU);
+	if (argc < 2)
+		error("usage: %s <volname>", argv[0]);
+	const char *volname = argv[1];
+	if (!(fd = open(volname, O_RDWR, S_IRWXU)))
+		error("volume %s not found", argv[1]);
 	volsize = 0;
 	if (fdsize64(fd, &volsize))
 		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
@@ -264,7 +267,7 @@ int main(int argc, char **argv)
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
-	return fuse_main(argc, argv, &tux3_oper, NULL);
+	return fuse_main(argc - 1, argv + 1, &tux3_oper, NULL);
 
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
