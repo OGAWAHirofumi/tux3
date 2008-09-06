@@ -239,6 +239,7 @@ int save_inode(struct inode *inode)
 
 int tuxio(struct file *file, char *data, unsigned len, int write)
 {
+	int err = 0;
 	struct inode *inode = file->f_inode;
 	printf("%s %u bytes, isize = 0x%Lx\n", write ? "write" : "read", len, (L)inode->i_size);
 	loff_t pos = file->f_pos;
@@ -259,7 +260,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 		int full = write && some == bsize;
 		struct buffer *buffer = (full ? getblk : bread)(inode->map, pos >> bbits);
 		if (!buffer) {
-			errno = EIO;
+			err = -EIO;
 			break;
 		}
 		if (write)
@@ -277,7 +278,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 	file->f_pos = pos;
 	if (write && inode->i_size < pos)
 		inode->i_size = pos;
-	return errno ? -errno : len - tail;
+	return err ? err : len - tail;
 }
 
 int tuxread(struct file *file, char *data, unsigned len)

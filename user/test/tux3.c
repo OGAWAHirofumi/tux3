@@ -124,7 +124,7 @@ int main(int argc, const char *argv[])
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 		//tuxseek(file, (1LL << 60) - 12);
-#if 0
+#if 1
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			goto eek;
@@ -141,7 +141,7 @@ int main(int argc, const char *argv[])
 		char text[2 << 16];
 		unsigned len;
 
-#if 1
+#if 0
 		memcpy(text, "hello", 5);
 		len = 5;
 #else
@@ -159,8 +159,8 @@ int main(int argc, const char *argv[])
 
 	if (!strcmp(command, "read")) {
 		printf("---- read file ----\n");
-		show_tree_range(&sb->itree, 0, -1);
-		ext2_dump_entries(bread(sb->rootdir->map, 0));
+		//show_tree_range(&sb->itree, 0, -1);
+		//ext2_dump_entries(bread(sb->rootdir->map, 0));
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (!inode) {
 			errno = ENOENT;
@@ -182,6 +182,23 @@ int main(int argc, const char *argv[])
 		hexdump(buf, got);
 	}
 
+	if (!strcmp(command, "stat")) {
+		printf("---- stat file ----\n");
+		struct buffer *buffer;
+		ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
+		if (!entry) {
+			errno = ENOENT;
+			goto eek;
+		}
+		inum_t inum = entry->inum;
+		brelse(buffer);
+		struct inode *inode = mapped_inode(sb, inum, NULL);
+		if ((errno = -open_inode(inode)))
+			goto eek;
+		dump_attrs(sb, inode);
+		free_inode(inode);
+	}
+
 	if (!strcmp(command, "delete")) {
 		printf("---- delete file ----\n");
 		struct buffer *buffer;
@@ -190,7 +207,9 @@ int main(int argc, const char *argv[])
 			errno = ENOENT;
 			goto eek;
 		}
-		struct inode *inode = mapped_inode(sb, entry->inum, NULL);
+		inum_t inum = entry->inum;
+		brelse(buffer);
+		struct inode *inode = mapped_inode(sb, inum, NULL);
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))

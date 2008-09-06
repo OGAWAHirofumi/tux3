@@ -127,16 +127,20 @@ void ext2_dump_entries(struct buffer *buffer)
 {
 	unsigned blocksize = 1 << buffer->map->dev->bits;
 	printf("dirents <%Lx:%Lx>: ", (L)buffer->map->inode->inum, buffer->index);
-	ext2_dirent *dirent = (ext2_dirent *)buffer->data;
+	ext2_dirent *entry = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;
-	while (dirent < limit) {
-		if (dirent->inum)
+	while (entry < limit) {
+		if (!entry->rec_len) {
+			warn("Zero length entry");
+			break;
+		}
+		if (entry->inum)
 			printf("%.*s (%x:%i) ",
-				dirent->name_len,
-				dirent->name,
-				dirent->inum,
-				dirent->type);
-		dirent = next_entry(dirent);
+				entry->name_len,
+				entry->name,
+				entry->inum,
+				entry->type);
+		entry = next_entry(entry);
 	}
 	printf("\n");
 	brelse(buffer);
