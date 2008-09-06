@@ -86,7 +86,7 @@ int main(int argc, const char *argv[])
 	if (!sb->bitmap)
 		goto eek;
 
-	if (!strcmp(command, "make")) {
+	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (poptPeekArg(popt))
 			goto usage;
 		sb->super = (struct disksuper){ .magic = SB_MAGIC,
