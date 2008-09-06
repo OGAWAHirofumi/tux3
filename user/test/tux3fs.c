@@ -262,8 +262,8 @@ int main(int argc, char *argv[])
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
-	return fuse_main(argc - 1, argv + 1, &tux3_ops, NULL);
-
+	if (!fuse_main(argc - 1, argv + 1, &tux3_ops, NULL))
+		return 0;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	return 1;
