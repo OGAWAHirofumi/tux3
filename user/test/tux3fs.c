@@ -66,7 +66,7 @@ static int tux3_read(const char *path, char *buf,
 	size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	printf("---- read file ----\n");
-	const char *filename = path;
+	const char *filename = path + 1;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	struct file *file = &(struct file){ .f_inode = inode };
 	printf("userspace tries to seek to %Li\n", (L)offset);
@@ -93,7 +93,7 @@ eek:
 
 static int tux3_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-	const char *filename = path;
+	const char *filename = path + 1;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode) {
 		printf("---- create file ----\n");
@@ -108,7 +108,7 @@ static int tux3_write(const char *path, const char *buf, size_t size,
 	off_t offset, struct fuse_file_info *fi)
 {
 	warn("---- write file ----");
-	const char *filename = path;
+	const char *filename = path + 1;
 	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode) {
 		printf("---- create file ----\n");
@@ -140,9 +140,10 @@ eek:
 
 static int tux3_getattr(const char *path, struct stat *stat)
 {
+	const char *filename = path + 1;
 	printf("---- get attr for '%s' ----\n", path);
 	struct inode *inode = !strcmp(path, "/") ? sb->rootdir :
-		tuxopen(sb->rootdir, path, strlen(path));
+		tuxopen(sb->rootdir, filename, strlen(filename));
 	if (!inode)
 		return -ENOENT;
 	*stat = (struct stat){
@@ -197,7 +198,7 @@ static int tux3_unlink(const char *path)
 {
 	printf("---- delete file ----\n");
 	struct buffer *buffer;
-	const char *filename = path;
+	const char *filename = path + 1;
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
 	if (!entry)
 		goto noent;
