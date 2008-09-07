@@ -375,6 +375,10 @@ int load_sb(SB)
 	if (err)
 		return err;
 	struct disksuper *disk = &sb->super;
+	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
+		warn("invalid superblock [%Lx]", (L)be_to_u64(*(u64 *)disk->magic));
+		return -ENOENT;
+	}
 	int blockbits = be_to_u16(disk->blockbits);
 	sb->volblocks = be_to_u64(disk->volblocks);
 	sb->nextalloc = be_to_u64(disk->nextalloc);

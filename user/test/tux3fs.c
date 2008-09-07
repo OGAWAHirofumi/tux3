@@ -32,9 +32,6 @@
  * 2. Mount on foo/ like: ./tux3fuse -f foo/     (-f for foreground)
  */
 
-#define FUSE_USE_VERSION 25
-
-#include <fuse.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -45,6 +42,9 @@
 #include "tux3.h"
 #include "buffer.h"
 #include "diskio.h"
+
+#define FUSE_USE_VERSION 27
+#include <fuse.h>
 
 #define include_inode_c
 #include "inode.c"

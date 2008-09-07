@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS += -std=gnu99 -Wall -D_FILE_OFFSET_BITS=64
+CFLAGS += -std=gnu99 -Wall
 VG=valgrind
 VGFLAGS=--error-exitcode=200
 binaries = dleaf ileaf iattr btree dir inode tux3 tux3fs
@@ -43,9 +43,9 @@ tux3: $(fsdeps) tux3.c
 	$(CC) $(CFLAGS) buffer.c diskio.c tux3.c -lpopt -otux3
 
 tux3fs: $(fsdeps) tux3fs.c
-	$(CC) $(CFLAGS) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
 
-makefs: tux3 tux3fs
+makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs /tmp/testdev
 	mkdir /tmp/test || true
