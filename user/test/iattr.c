@@ -129,7 +129,7 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 	return 0;
 }
 
-void dump_attrs(SB, struct inode *inode)
+void dump_attrs(struct inode *inode)
 {
 	//printf("present = %x\n", inode->present);
 	for (int which = 0; which < 32; which++) {
@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 	char *attrs = attrbase;
 	printf("decode %ti attr bytes\n", attrs - attrbase);
 	decode_attrs(sb, attrbase, attrs - attrbase, &inode);
-	dump_attrs(sb, &inode);
+	dump_attrs(&inode);
 	return 0;
 }
 #endif

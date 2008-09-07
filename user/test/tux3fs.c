@@ -32,9 +32,6 @@
  * 2. Mount on foo/ like: ./tux3fuse -f foo/     (-f for foreground)
  */
 
-#define FUSE_USE_VERSION 25
-
-#include <fuse.h>
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -46,12 +43,14 @@
 #include "buffer.h"
 #include "diskio.h"
 
+#define FUSE_USE_VERSION 27
+#include <fuse.h>
+
 #define include_inode_c
 #include "inode.c"
 
 static fd_t fd;
 static u64 volsize;
-static const char *volname = "__fuse__tux3fs";
 static struct sb *sb;
 static struct dev *dev;
 
@@ -139,9 +138,29 @@ eek:
 	return -errno;
 }
 
+static int tux3_getattr(const char *path, struct stat *stat)
+{
+	printf("---- get attr for '%s' ----\n", path);
+	struct inode *inode = !strcmp(path, "/") ? sb->rootdir :
+		tuxopen(sb->rootdir, path, strlen(path));
+	if (!inode)
+		return -ENOENT;
+	*stat = (struct stat){
+		.st_mode  = inode->i_mode,
+		.st_atime = inode->i_atime,
+		.st_mtime = inode->i_mtime,
+		.st_ctime = inode->i_ctime,
+		.st_size  = inode->i_size,
+		.st_uid   = inode->i_uid,
+		.st_gid   = inode->i_gid,
+		.st_nlink = inode->i_links,
+	};
+	return 0;
+}
+
 struct fillstate { char *dirent; int done; };
 
-int tux3_filldir(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
+int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
 {
 	struct fillstate *state = info;
 	if (state->done || namelen > EXT2_NAME_LEN)
@@ -153,48 +172,24 @@ int tux3_filldir(void *info, char *name, unsigned namelen, loff_t offset, unsign
 	return 0;
 }
 
-static int tux3_readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi)
+static int tux3_readdir(const char *path, void *buf, fuse_fill_dir_t fuse_filler,
+	off_t offset, struct fuse_file_info *fi)
 {
-	printf("--- readdir --- '%s' at %Lx\n", path, (L)offset);
+	printf("---- readdir '%s' at %Lx ----\n", path, (L)offset);
 	struct file *dirfile = &(struct file){ .f_inode = sb->rootdir, .f_pos = offset };
 	//filler(buf, ".", NULL, 0);
 	//filler(buf, "..", NULL, 0);
 	char dirent[EXT2_NAME_LEN + 1];
 	while (dirfile->f_pos < dirfile->f_inode->i_size) {
-		if ((errno = -ext2_readdir(dirfile, &(struct fillstate){ .dirent = dirent }, tux3_filldir)))
+		struct stat stat;
+		if ((errno = -ext2_readdir(dirfile, &(struct fillstate){ .dirent = dirent }, tux3_filler)))
 			return -errno;
-		//warn(">>> pos = %Lx", (L)dirfile->f_pos);
-		if (filler(buf, dirent, NULL, dirfile->f_pos)) {
+		tux3_getattr(dirent, &stat);
+		if (fuse_filler(buf, dirent, &stat, dirfile->f_pos)) {
 			warn("fuse buffer full");
 			return 0;
 		}
 	}
-	return 0;
-}
-
-static int tux3_getattr(const char *path, struct stat *stbuf)
-{
-	printf("---- get attr for '%s' ----\n", path);
-	// this is probably mostly wrong as well
-	memset(stbuf, 0, sizeof(struct stat));
-	if (strcmp(path, "/") == 0)
-	{
-		stbuf->st_mode = sb->rootdir->i_mode;
-		stbuf->st_nlink = 2;
-		return 0;
-	}
-	const char *filename = path;
-	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-	if (!inode)
-		return -ENOENT;
-	stbuf->st_mode  = inode->i_mode;
-	stbuf->st_atime = inode->i_atime;
-	stbuf->st_mtime = inode->i_mtime;
-	stbuf->st_ctime = inode->i_ctime;
-	stbuf->st_size  = inode->i_size;
-	stbuf->st_uid   = inode->i_uid;
-	stbuf->st_gid   = inode->i_gid;
-	stbuf->st_nlink = inode->i_links;
 	return 0;
 }
 
@@ -204,37 +199,40 @@ static int tux3_unlink(const char *path)
 	struct buffer *buffer;
 	const char *filename = path;
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-	if (!entry) {
-		errno = ENOENT;
+	if (!entry)
+		goto noent;
+	struct inode inode = { .sb = sb, .inum = entry->inum };
+	if ((errno = -open_inode(&inode)))
 		goto eek;
-	}
-	struct inode *inode = mapped_inode(sb, entry->inum, NULL);
-	if ((errno = -open_inode(inode)))
-		goto eek;
-	if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
+	if ((errno = -tree_chop(&inode.btree, &(struct delete_info){ .key = 0 }, -1)))
 		goto eek;
 	if ((errno = -ext2_delete_entry(buffer, entry)))
 		goto eek;
-	free_inode(inode);
 	return 0;
+noent:
+	errno = ENOENT;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	return -errno;
 }
 
-static struct fuse_operations tux3_oper = {
-	.read = tux3_read,
+static struct fuse_operations tux3_ops = {
 	.open = tux3_open,
-	.write = tux3_write,
-	.readdir = tux3_readdir,
-	.getattr = tux3_getattr,
-	.unlink = tux3_unlink,
 	.create = tux3_create,
+	.read = tux3_read,
+	.write = tux3_write,
+	.unlink = tux3_unlink,
+	.getattr = tux3_getattr,
+	.readdir = tux3_readdir,
 };
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
-	fd = open(volname, O_RDWR, S_IRWXU);
+	if (argc < 2)
+		error("usage: %s <volname>", argv[0]);
+	const char *volname = argv[1];
+	if (!(fd = open(volname, O_RDWR, S_IRWXU)))
+		error("volume %s not found", argv[1]);
 	volsize = 0;
 	if (fdsize64(fd, &volsize))
 		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
@@ -250,22 +248,21 @@ int main(int argc, char **argv)
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
-		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
+		.itable = (struct btree){ .sb = sb, .ops = &itable_ops,
 			.entries_per_leaf = 1 << (dev->bits - 6) } };
 
-	sb->bitmap = new_inode(sb, 0);
-	if (!sb->bitmap)
-		goto eek;
 	if ((errno = -load_sb(sb)))
+		goto eek;
+	if (!(sb->bitmap = new_inode(sb, 0)))
 		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
-	if ((errno = -open_inode(sb->rootdir)))
-		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
-	return fuse_main(argc, argv, &tux3_oper, NULL);
-
+	if ((errno = -open_inode(sb->rootdir)))
+		goto eek;
+	if (!fuse_main(argc - 1, argv + 1, &tux3_ops, NULL))
+		return 0;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	return 1;

@@ -138,12 +138,13 @@ static inline void *decode48(void *at, u64 *val)
 /* Tux3 disk format */
 
 #define SB struct sb *sb
-#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x08, 0x06 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x09, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
  *
  * 2008-08-06: Beginning of time
+ * 2008-09-06: Actual checking starts
  */
 
 
@@ -180,12 +181,11 @@ struct btree {
 struct sb
 {
 	struct disksuper super;
-	struct btree itree;
-	struct btree atree;
+	struct btree itable;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	struct map *devmap;
 	struct buffer *rootbuf;
-	struct inode *bitmap, *rootdir;
+	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;

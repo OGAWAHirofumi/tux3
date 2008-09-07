@@ -79,14 +79,10 @@ int main(int argc, const char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
-		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
+		.itable = (struct btree){ .sb = sb, .ops = &itable_ops,
 			.entries_per_leaf = 1 << (dev->bits - 6) } };
 
-	sb->bitmap = new_inode(sb, 0);
-	if (!sb->bitmap)
-		goto eek;
-
-	if (!strcmp(command, "make")) {
+	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (poptPeekArg(popt))
 			goto usage;
 		sb->super = (struct disksuper){ .magic = SB_MAGIC,
@@ -94,15 +90,16 @@ int main(int argc, const char *argv[])
 		printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
 		if ((errno = -make_tux3(sb, fd)))
 			goto eek;
-		show_tree_range(&sb->itree, 0, -1);
+		show_tree_range(&sb->itable, 0, -1);
 		return 0;
 	}
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	//show_tree_range(&sb->itree, 0, -1);
-	if ((errno = -open_inode(sb->bitmap)))
+	if (!(sb->bitmap = new_inode(sb, 0)))
 		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
+		goto eek;
+	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
 		goto eek;
@@ -124,7 +121,7 @@ int main(int argc, const char *argv[])
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 		//tuxseek(file, (1LL << 60) - 12);
-#if 1
+#if 0
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			goto eek;
@@ -141,7 +138,7 @@ int main(int argc, const char *argv[])
 		char text[2 << 16];
 		unsigned len;
 
-#if 0
+#if 1
 		memcpy(text, "hello", 5);
 		len = 5;
 #else
@@ -154,12 +151,12 @@ int main(int argc, const char *argv[])
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		ext2_dump_entries(getblk(sb->rootdir->map, 0));
-		//show_tree_range(&sb->itree, 0, -1);
+		//show_tree_range(&sb->itable, 0, -1);
 	}
 
 	if (!strcmp(command, "read")) {
 		printf("---- read file ----\n");
-		//show_tree_range(&sb->itree, 0, -1);
+		//show_tree_range(&sb->itable, 0, -1);
 		//ext2_dump_entries(bread(sb->rootdir->map, 0));
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (!inode) {
@@ -192,11 +189,10 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = entry->inum;
 		brelse(buffer);
-		struct inode *inode = mapped_inode(sb, inum, NULL);
+		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
 			goto eek;
-		dump_attrs(sb, inode);
-		free_inode(inode);
+		dump_attrs(inode);
 	}
 
 	if (!strcmp(command, "delete")) {
@@ -209,14 +205,13 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = entry->inum;
 		brelse(buffer);
-		struct inode *inode = mapped_inode(sb, inum, NULL);
+		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
 			goto eek;
 		if ((errno = -ext2_delete_entry(buffer, entry)))
 			goto eek;
-		free_inode(inode);
 		ext2_dump_entries(bread(sb->rootdir->map, 0));
 	}
 
