@@ -21,6 +21,7 @@ unsigned atsize[16] = {
 	[DATA_BTREE_ATTR] = 8,
 	[LINK_COUNT_ATTR] = 4,
 	[MTIME_ATTR] = 6,
+	[XATTR_ATTR] = 2,
 };
 
 unsigned howbig(unsigned bits)
@@ -40,7 +41,7 @@ int attr_check(void *attrs, unsigned size)
 	{
 		attrs = decode16(attrs, &head);
 		unsigned kind = head >> 12;
-		if (kind < ATTR_MINIMUM || kind > ATTR_MAXIMUM)
+		if (kind < MIN_ATTR || kind >= MAX_ATTRS)
 			return 0;
 		if (attrs + atsize[kind] > limit)
 			return 0;
@@ -53,7 +54,7 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 {
 	//printf("encode %u attr bytes\n", size);
 	void *limit = attrs + size - 3;
-	for (int kind = ATTR_MINIMUM; kind < ATTR_MAXIMUM; kind++) {
+	for (int kind = MIN_ATTR; kind < MAX_ATTRS; kind++) {
 		if (!(inode->present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
@@ -78,6 +79,9 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			break;
 		case LINK_COUNT_ATTR:
 			attrs = encode32(attrs, inode->i_links);
+			break;
+		case XATTR_ATTR:
+//			attrs = encode16(attrs, ???);
 			break;
 		}
 	}
@@ -121,6 +125,9 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		case LINK_COUNT_ATTR:
 			attrs = decode32(attrs, &inode->i_links);
 			break;
+		case XATTR_ATTR:
+//			attrs = decode16(attrs, &???);
+			break;
 		default:
 			return -EINVAL;
 		}
@@ -163,6 +170,7 @@ void dump_attrs(struct inode *inode)
 #ifndef iattr_included_from_ileaf
 int main(int argc, char *argv[])
 {
+	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
 	SB = &(struct sb){ .version = 0 };
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	printf("need %i attr bytes\n", howbig(abits));

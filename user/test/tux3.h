@@ -236,13 +236,14 @@ block_t balloc(SB);
 void bfree(SB, block_t block);
 
 enum atkind {
-	ATTR_MINIMUM = 6,
+	MIN_ATTR = 6,
 	MODE_OWNER_ATTR = 6,
 	DATA_BTREE_ATTR = 7,
 	CTIME_SIZE_ATTR = 8,
 	LINK_COUNT_ATTR = 9,
 	MTIME_ATTR = 10,
-	ATTR_MAXIMUM = 10,
+	XATTR_ATTR = 11,
+	MAX_ATTRS
 };
 
 enum atbit {
@@ -251,6 +252,7 @@ enum atbit {
 	DATA_BTREE_BIT = 1 << DATA_BTREE_ATTR,
 	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
 	MTIME_BIT = 1 << MTIME_ATTR,
+	XATTR_BIT = 1 << XATTR_ATTR,
 };
 
 #endif
