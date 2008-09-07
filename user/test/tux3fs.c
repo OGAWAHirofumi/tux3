@@ -54,6 +54,29 @@ static u64 volsize;
 static struct sb *sb;
 static struct dev *dev;
 
+int resolve_path(const char *path, struct inode **dir, char **filename)
+{
+	*dir = sb->rootdir; // !!! subdirectories not supported
+	*filename = (char *)path + 1;
+	warn("resolved '%s': dir inode 0x%Lx, file: '%s'", path, (*dir)->inum, *filename);
+	return 0;
+}
+	
+struct inode *get_inode(const char *path, int create)
+{
+	if (!strcmp(path, "/"))
+		return sb->rootdir;
+	struct inode *inode = tuxopen(sb->rootdir, path + 1, strlen(path + 1));
+	if (inode || !create)
+		return inode;
+	printf("---- create file ----\n");
+	char *filename;
+	resolve_path(path, &inode, &filename);
+	return tuxcreate(sb->rootdir, filename, strlen(filename),
+		&(struct iattr){ .mode = S_IFREG | 0666 });
+	
+}
+
 static int tux3_open(const char *path, struct fuse_file_info *fi)
 {
 	printf("---- open file ----\n");
@@ -66,8 +89,7 @@ static int tux3_read(const char *path, char *buf,
 	size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	printf("---- read file ----\n");
-	const char *filename = path + 1;
-	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+	struct inode *inode = get_inode(path, 0);
 	struct file *file = &(struct file){ .f_inode = inode };
 	printf("userspace tries to seek to %Li\n", (L)offset);
 	if (offset >= inode->i_size)
@@ -93,28 +115,15 @@ eek:
 
 static int tux3_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
-	const char *filename = path + 1;
-	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-	if (!inode) {
-		printf("---- create file ----\n");
-		inode = tuxcreate(sb->rootdir, filename, strlen(filename),
-			&(struct iattr){ .mode = S_IFREG | 0666 });
-		if (!inode) return -1;
-	}
-	return 0;
+	struct inode *inode = get_inode(path, 1);
+	return inode ? 0 : -1;
 }
 
 static int tux3_write(const char *path, const char *buf, size_t size,
 	off_t offset, struct fuse_file_info *fi)
 {
 	warn("---- write file ----");
-	const char *filename = path + 1;
-	struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-	if (!inode) {
-		printf("---- create file ----\n");
-		inode = tuxcreate(sb->rootdir, filename, strlen(filename),
-			&(struct iattr){ .mode = S_IFREG | S_IRWXU });
-	}
+	struct inode *inode = get_inode(path, 1);
 	struct file *file = &(struct file){ .f_inode = inode };
 	if (offset) {
 		u64 seek = offset;
@@ -140,10 +149,8 @@ eek:
 
 static int tux3_getattr(const char *path, struct stat *stat)
 {
-	const char *filename = path + 1;
 	printf("---- get attr for '%s' ----\n", path);
-	struct inode *inode = !strcmp(path, "/") ? sb->rootdir :
-		tuxopen(sb->rootdir, filename, strlen(filename));
+	struct inode *inode = get_inode(path, 0);
 	if (!inode)
 		return -ENOENT;
 	*stat = (struct stat){
