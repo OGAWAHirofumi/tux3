@@ -242,6 +242,7 @@ enum atkind {
 	CTIME_SIZE_ATTR = 8,
 	LINK_COUNT_ATTR = 9,
 	MTIME_ATTR = 10,
+	XATTR_ATTR = 11,
 	MAX_ATTRS
 };
 
@@ -251,6 +252,7 @@ enum atbit {
 	DATA_BTREE_BIT = 1 << DATA_BTREE_ATTR,
 	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
 	MTIME_BIT = 1 << MTIME_ATTR,
+	XATTR_BIT = 1 << XATTR_ATTR,
 };
 
 #endif
