@@ -40,7 +40,7 @@ int attr_check(void *attrs, unsigned size)
 	{
 		attrs = decode16(attrs, &head);
 		unsigned kind = head >> 12;
-		if (kind < ATTR_MINIMUM || kind > ATTR_MAXIMUM)
+		if (kind < MIN_ATTR || kind >= MAX_ATTRS)
 			return 0;
 		if (attrs + atsize[kind] > limit)
 			return 0;
@@ -53,7 +53,7 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 {
 	//printf("encode %u attr bytes\n", size);
 	void *limit = attrs + size - 3;
-	for (int kind = ATTR_MINIMUM; kind < ATTR_MAXIMUM; kind++) {
+	for (int kind = MIN_ATTR; kind < MAX_ATTRS; kind++) {
 		if (!(inode->present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
