@@ -168,7 +168,7 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 		return -EINVAL;
 	printf("'%.*s'\n", namelen, name);
 	memcpy(state->dirent, name, namelen);
-	(state->dirent)[namelen] = 0;
+	state->dirent[namelen] = 0;
 	state->done = 1;
 	return 0;
 }
