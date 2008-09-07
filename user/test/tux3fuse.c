@@ -341,14 +341,16 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	if (!(sb->bitmap = new_inode(sb, 0)))
-		goto eek;
+		goto nomem;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
-		goto eek;
+		goto nomem;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
 		goto eek;
 	return;
+nomem:
+	errno = ENOMEM;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	exit(1);

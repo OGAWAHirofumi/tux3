@@ -255,15 +255,17 @@ int main(int argc, char *argv[])
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	if (!(sb->bitmap = new_inode(sb, 0)))
-		goto eek;
+		goto nomem;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
-		goto eek;
+		goto nomem;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
 		goto eek;
 	if (!fuse_main(argc - 1, argv + 1, &tux3_ops, NULL))
 		return 0;
+nomem:
+	errno = ENOMEM;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	return 1;
