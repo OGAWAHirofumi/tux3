@@ -45,7 +45,7 @@ tux3: $(fsdeps) tux3.c
 tux3fs: $(fsdeps) tux3fs.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
 
-tux3fs: $(fsdeps) tux3fuse.c
+tux3fuse: $(fsdeps) tux3fuse.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fuse.c -lfuse -otux3fuse
 
 makefs mkfs: tux3 tux3fs

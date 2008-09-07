@@ -1,5 +1,5 @@
 /*
- * FUSE-Tux3: Mount tux3 in userspace.
+ * tux3fs: Mount tux3 in userspace.
  * Copyright (C) 2008 Conrad Meyer <konrad@tylerc.org>
  * Large portions completely stolen from Daniel Phillip's tux3.c.
  *
@@ -18,8 +18,7 @@
  */
 
 /*
- * Compile: gcc -std=gnu99 buffer.c diskio.c fuse-tux3.c \
- *              -D_FILE_OFFSET_BITS=64 -lfuse -o fuse-tux3
+ * Compile: gcc -std=gnu99 buffer.c diskio.c fuse-tux3.c -D_FILE_OFFSET_BITS=64 -lfuse -o fuse-tux3
  * (-D_FILE_OFFSET_BITS=64 might be only on 64 bit platforms, not sure.)
  * Run:
  * 0. sudo mknod -m 666 /dev/fuse c 10 229
@@ -29,8 +28,9 @@
  *    insert fuse kernel module: sudo insmod fs/fuse/fuse.ko
  * 1. Create a tux3 fs on __fuse__tux3fs using some combination of dd
  *    and ./tux3 make __fuse__tux3fs.
- * 2. Mount on foo/ like: ./tux3fuse -f foo/     (-f for foreground)
+ * 2. Mount on foo/ like: ./fuse-tux3 __fuse__tux3fs -f foo/ (-f for foreground)
  */
+
 
 #include <stdio.h>
 #include <string.h>
