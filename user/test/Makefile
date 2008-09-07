@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS += -std=gnu99 -Wall
+CFLAGS += -std=gnu99 -Wall -g
 VG=valgrind
 VGFLAGS=--error-exitcode=200
 binaries = dleaf ileaf iattr btree dir inode tux3 tux3fs

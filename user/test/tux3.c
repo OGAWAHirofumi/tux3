@@ -95,10 +95,11 @@ int main(int argc, const char *argv[])
 	}
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	//show_tree_range(&sb->itable, 0, -1);
-	if ((errno = -open_inode(sb->bitmap)))
+	if (!(sb->bitmap = new_inode(sb, 0)))
 		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
+		goto eek;
+	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
 		goto eek;
@@ -120,7 +121,7 @@ int main(int argc, const char *argv[])
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 		//tuxseek(file, (1LL << 60) - 12);
-#if 1
+#if 0
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			goto eek;
@@ -137,7 +138,7 @@ int main(int argc, const char *argv[])
 		char text[2 << 16];
 		unsigned len;
 
-#if 0
+#if 1
 		memcpy(text, "hello", 5);
 		len = 5;
 #else
