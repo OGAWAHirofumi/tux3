@@ -1,5 +1,5 @@
 /*
- * FUSE-Tux3: Mount tux3 in userspace.
+ * tux3fuse: Mount tux3 in userspace.
  * Copyright (C) 2008 Conrad Meyer <konrad@tylerc.org>
  * Large portions completely stolen from Daniel Phillip's tux3.c.
  *
@@ -18,8 +18,11 @@
  */
 
 /*
- * Compile: gcc -std=gnu99 buffer.c diskio.c fuse-tux3.c \
- *              -D_FILE_OFFSET_BITS=64 -lfuse -o fuse-tux3
+ * Rewrite to fuse low level API by Tero Roponen <tero.roponen@gmail.com>
+ */
+
+/*
+ * Compile: gcc -std=gnu99 buffer.c diskio.c fuse-tux3.c -D_FILE_OFFSET_BITS=64 -lfuse -o fuse-tux3
  * (-D_FILE_OFFSET_BITS=64 might be only on 64 bit platforms, not sure.)
  * Run:
  * 0. sudo mknod -m 666 /dev/fuse c 10 229
@@ -29,7 +32,7 @@
  *    insert fuse kernel module: sudo insmod fs/fuse/fuse.ko
  * 1. Create a tux3 fs on __fuse__tux3fs using some combination of dd
  *    and ./tux3 make __fuse__tux3fs.
- * 2. Mount on foo/ like: ./tux3fuse -f foo/     (-f for foreground)
+ * 2. Mount on foo/ like: ./fuse-tux3 __fuse__tux3fs -f foo/ (-f for foreground)
  */
 
 #include <stdio.h>
@@ -248,12 +251,12 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 		return -EINVAL;
 	printf("'%.*s'\n", namelen, name);
 	memcpy(state->dirent, name, namelen);
-	(state->dirent)[namelen] = 0;
+	state->dirent[namelen] = 0;
 	state->done = 1;
 	return 0;
 }
 
-/* FIXME: this needs to be implemented properly. */
+/* FIXME: this should return more than one dirent per ext2_readdir */
 static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	struct fuse_file_info *fi)
 {
@@ -338,14 +341,16 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	if (!(sb->bitmap = new_inode(sb, 0)))
-		goto eek;
+		goto nomem;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
-		goto eek;
+		goto nomem;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
 		goto eek;
 	return;
+nomem:
+	errno = ENOMEM;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	exit(1);
