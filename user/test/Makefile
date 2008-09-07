@@ -45,6 +45,9 @@ tux3: $(fsdeps) tux3.c
 tux3fs: $(fsdeps) tux3fs.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
 
+tux3fs: $(fsdeps) tux3fuse.c
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fuse.c -lfuse -otux3fuse
+
 makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs /tmp/testdev
@@ -55,6 +58,14 @@ testfs: makefs
 	sudo ls -ld /tmp/test
 
 debug: tux3fs
+	mkdir -p /tmp/test
+	sudo ./tux3fs /tmp/testdev /tmp/test -f
+
+testfuse: makefs
+	sudo ./tux3fs /tmp/testdev /tmp/test
+	sudo ls -ld /tmp/test
+
+defuse: tux3fs
 	mkdir -p /tmp/test
 	sudo ./tux3fs /tmp/testdev /tmp/test -f
 
