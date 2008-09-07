@@ -181,12 +181,11 @@ struct btree {
 struct sb
 {
 	struct disksuper super;
-	struct btree itree;
-	struct btree atree;
+	struct btree itable;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	struct map *devmap;
 	struct buffer *rootbuf;
-	struct inode *bitmap, *rootdir;
+	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;

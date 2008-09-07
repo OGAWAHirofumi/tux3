@@ -283,7 +283,7 @@ int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf)
 	return 0;
 }
 
-struct btree_ops itree_ops = {
+struct btree_ops itable_ops = {
 	.leaf_dump = ileaf_dump,
 	.leaf_sniff = ileaf_sniff,
 	.leaf_init = ileaf_init,
@@ -319,7 +319,7 @@ int main(int argc, char *argv[])
 {
 	printf("--- test inode table leaf methods ---\n");
 	SB = &(struct sb){ .blocksize = 4096 };
-	struct btree *btree = &(struct btree){ .sb = sb, .ops = &itree_ops };
+	struct btree *btree = &(struct btree){ .sb = sb, .ops = &itable_ops };
 	btree->entries_per_leaf = 64; // !!! should depend on blocksize
 	struct ileaf *leaf = ileaf_create(btree);
 	struct ileaf *dest = ileaf_create(btree);

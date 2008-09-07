@@ -138,20 +138,6 @@ eek:
 	return -errno;
 }
 
-struct fillstate { char *dirent; int done; };
-
-int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
-{
-	struct fillstate *state = info;
-	if (state->done || namelen > EXT2_NAME_LEN)
-		return -EINVAL;
-	printf("'%.*s'\n", namelen, name);
-	memcpy(state->dirent, name, namelen);
-	(state->dirent)[namelen] = 0;
-	state->done = 1;
-	return 0;
-}
-
 static int tux3_getattr(const char *path, struct stat *stat)
 {
 	printf("---- get attr for '%s' ----\n", path);
@@ -172,6 +158,20 @@ static int tux3_getattr(const char *path, struct stat *stat)
 	return 0;
 }
 
+struct fillstate { char *dirent; int done; };
+
+int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
+{
+	struct fillstate *state = info;
+	if (state->done || namelen > EXT2_NAME_LEN)
+		return -EINVAL;
+	printf("'%.*s'\n", namelen, name);
+	memcpy(state->dirent, name, namelen);
+	(state->dirent)[namelen] = 0;
+	state->done = 1;
+	return 0;
+}
+
 static int tux3_readdir(const char *path, void *buf, fuse_fill_dir_t fuse_filler,
 	off_t offset, struct fuse_file_info *fi)
 {
@@ -184,7 +184,7 @@ static int tux3_readdir(const char *path, void *buf, fuse_fill_dir_t fuse_filler
 		struct stat stat;
 		if ((errno = -ext2_readdir(dirfile, &(struct fillstate){ .dirent = dirent }, tux3_filler)))
 			return -errno;
-		tux3_getattr(path, &stat);
+		tux3_getattr(dirent, &stat);
 		if (fuse_filler(buf, dirent, &stat, dirfile->f_pos)) {
 			warn("fuse buffer full");
 			return 0;
@@ -248,19 +248,18 @@ int main(int argc, char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
-		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
+		.itable = (struct btree){ .sb = sb, .ops = &itable_ops,
 			.entries_per_leaf = 1 << (dev->bits - 6) } };
 
-	sb->bitmap = new_inode(sb, 0);
-	if (!sb->bitmap)
-		goto eek;
 	if ((errno = -load_sb(sb)))
+		goto eek;
+	if (!(sb->bitmap = new_inode(sb, 0)))
 		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
-	if ((errno = -open_inode(sb->rootdir)))
-		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
+		goto eek;
+	if ((errno = -open_inode(sb->rootdir)))
 		goto eek;
 	if (!fuse_main(argc - 1, argv + 1, &tux3_ops, NULL))
 		return 0;

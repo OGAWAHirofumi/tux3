@@ -79,12 +79,8 @@ int main(int argc, const char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
-		.itree = (struct btree){ .sb = sb, .ops = &itree_ops,
+		.itable = (struct btree){ .sb = sb, .ops = &itable_ops,
 			.entries_per_leaf = 1 << (dev->bits - 6) } };
-
-	sb->bitmap = new_inode(sb, 0);
-	if (!sb->bitmap)
-		goto eek;
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (poptPeekArg(popt))
@@ -94,12 +90,12 @@ int main(int argc, const char *argv[])
 		printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
 		if ((errno = -make_tux3(sb, fd)))
 			goto eek;
-		show_tree_range(&sb->itree, 0, -1);
+		show_tree_range(&sb->itable, 0, -1);
 		return 0;
 	}
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	//show_tree_range(&sb->itree, 0, -1);
+	//show_tree_range(&sb->itable, 0, -1);
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
@@ -154,12 +150,12 @@ int main(int argc, const char *argv[])
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		ext2_dump_entries(getblk(sb->rootdir->map, 0));
-		//show_tree_range(&sb->itree, 0, -1);
+		//show_tree_range(&sb->itable, 0, -1);
 	}
 
 	if (!strcmp(command, "read")) {
 		printf("---- read file ----\n");
-		//show_tree_range(&sb->itree, 0, -1);
+		//show_tree_range(&sb->itable, 0, -1);
 		//ext2_dump_entries(bread(sb->rootdir->map, 0));
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (!inode) {
