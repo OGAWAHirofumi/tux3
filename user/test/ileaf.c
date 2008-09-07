@@ -29,7 +29,7 @@ struct ileaf { u16 magic, count; inum_t ibase; char table[]; };
  * leaf->ibase, the base inum of the table block.
  */
 
-inline unsigned atdict(u16 *dict, unsigned at)
+static inline unsigned atdict(u16 *dict, unsigned at)
 {
 	return at ? *(dict - at) : 0;
 }
