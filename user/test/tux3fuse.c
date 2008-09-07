@@ -256,7 +256,7 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 	return 0;
 }
 
-/* FIXME: this needs to be implemented properly. */
+/* FIXME: this should return more than one dirent per ext2_readdir */
 static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	struct fuse_file_info *fi)
 {
