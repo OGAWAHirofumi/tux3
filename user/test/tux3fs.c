@@ -72,7 +72,7 @@ struct inode *get_inode(const char *path, int create)
 	printf("---- create file ----\n");
 	char *filename;
 	resolve_path(path, &inode, &filename);
-	return tuxcreate(sb->rootdir, filename, strlen(filename),
+	return tuxcreate(inode, filename, strlen(filename),
 		&(struct iattr){ .mode = S_IFREG | 0666 });
 	
 }
