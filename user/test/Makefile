@@ -48,14 +48,14 @@ tux3fs: $(fsdeps) tux3fs.c
 makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs /tmp/testdev
-	mkdir /tmp/test || true
+	mkdir -p /tmp/test
 
 testfs: makefs
 	sudo ./tux3fs /tmp/testdev /tmp/test
 	sudo ls -ld /tmp/test
 
 debug: tux3fs
-	mkdir /tmp/test || true
+	mkdir -p /tmp/test
 	sudo ./tux3fs /tmp/testdev /tmp/test -f
 
 untest:

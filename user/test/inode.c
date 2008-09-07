@@ -9,6 +9,10 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef trace
+#define trace trace_on
+#endif
+
 #define main notmain0
 #include "balloc.c"
 #undef main
@@ -28,10 +32,6 @@
 #define main notmain4
 #include "btree.c"
 #undef main
-
-#ifndef trace
-#define trace trace_on
-#endif
 
 /* High level operations */
 
@@ -429,34 +429,40 @@ int sync_super(SB)
 
 int make_tux3(SB, int fd)
 {
-	trace("---- create bitmap ----");
+	trace("create bitmap");
 	if (!(sb->bitmap = new_inode(sb, 0)))
 		goto eek;
 
-	trace("---- reserve superblock ----");
+	trace("reserve superblock");
 	/* Always 8K regardless of blocksize */
 	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
 	for (int i = 0; i < reserve; i++)
 		trace("reserve %Lx", (L)balloc_from_range(sb->bitmap, i, 1));
 
-	trace("---- create inode table ----");
+	trace("create inode table");
 	sb->itable = new_btree(sb, &itable_ops);
 	if (!sb->itable.ops)
 		goto eek;
 	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
 	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
-	trace("---- create bitmap inode ----");
+	trace("create bitmap inode");
 	if (make_inode(sb->bitmap, &(struct iattr){ }))
 		goto eek;
-	trace("---- create version table ----");
+	trace("create version table");
 	if (!(sb->vtable = new_inode(sb, 0x2)))
 		goto eek;
-	make_inode(sb->vtable, &(struct iattr){ }); // error???
-	trace("---- create root ----");
+	if (make_inode(sb->vtable, &(struct iattr){ }))
+		goto eek;
+	trace("create root directory");
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
-	make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFDIR | 0755 }); // error???
-
+	if (make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFDIR | 0755 }))
+		goto eek;
+	trace("create atom table");
+	if (!(sb->vtable = new_inode(sb, 0xc)))
+		goto eek;
+	if (make_inode(sb->vtable, &(struct iattr){ }))
+		goto eek;
 	if (sync_super(sb))
 		goto eek;
 
@@ -499,13 +505,13 @@ int main(int argc, char *argv[])
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb, fd)))
 		goto eek;
-	trace("---- create file ----");
+	trace("create file");
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
 	ext2_dump_entries(getblk(sb->rootdir->map, 0));
 
-	trace("---- write file ----");
+	trace("write file");
 	char buf[100] = { };
 	struct file *file = &(struct file){ .f_inode = inode };
 	tuxseek(file, (1LL << 60) - 12);
@@ -517,14 +523,14 @@ int main(int argc, char *argv[])
 	flush_buffers(sb->devmap);
 #endif
 #if 1
-	trace("---- close file ----");
+	trace("close file");
 	save_inode(inode);
 	tuxclose(inode);
-	trace("---- open file ----");
+	trace("open file");
 	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
 #endif
 
-	trace("---- read file ----");
+	trace("read file");
 	tuxseek(file, (1LL << 60) - 12);
 	tuxseek(file, 4092);
 	memset(buf, 0, sizeof(buf));
@@ -533,7 +539,7 @@ int main(int argc, char *argv[])
 	if (got < 0)
 		return 1;
 	hexdump(buf, got);
-	trace("---- show state ----");
+	trace("show state");
 	show_buffers(file->f_inode->map);
 	show_buffers(sb->rootdir->map);
 	show_buffers(sb->devmap);

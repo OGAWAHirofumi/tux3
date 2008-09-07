@@ -24,6 +24,6 @@ static inline void logline(const char *caller, const char *fmt, ...)
 #define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"\n", #expr); } while (0)
 #define warn(string, args...) do { logline(__func__, string, ##args); } while (0)
 #define trace_off(...)
-#define trace_on
+#define trace_on warn
 
 #endif
