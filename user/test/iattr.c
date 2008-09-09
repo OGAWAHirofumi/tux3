@@ -393,6 +393,7 @@ int main(int argc, char *argv[])
 	warn("predicted size = %x, xcache size = %x", count_xattrs(inode, attrs, top - attrs), inode->xcache->size);
 	assert(top == newtop);
 	xcache_dump(inode);
+	free(inode->xcache);
 return 0;
 
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
