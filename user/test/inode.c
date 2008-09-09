@@ -124,6 +124,17 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
+int store_attrs(SB, struct path *path, struct inode *inode)
+{
+	unsigned size = howbig(inode->present) + howmuch(inode);
+	void *base = tree_expand(&sb->itable, inode->inum, size, path);
+	if (!base)
+		return -ENOMEM; // what was the actual error???
+	void *attrs = encode_attrs(sb, base, size, inode);
+	assert(attrs == base + size);
+	return 0;
+}
+
 /*
  * Inode table expansion algorithm
  *
@@ -172,6 +183,7 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 		if (!more)
 			goto errout;
 	}
+
 	inode->inum = inum;
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
@@ -180,16 +192,11 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	inode->i_links = 1;
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->present = MODE_OWNER_BIT|DATA_BTREE_BIT;
-	unsigned size = howbig(MODE_OWNER_BIT|DATA_BTREE_BIT);
-	void *base = tree_expand(&sb->itable, inum, size, path);
-	if (!base)
-		goto errmem; // what was the error???
-	void *attrs = encode_attrs(sb, base, size, inode);
-	assert(attrs == base + size);
+	if ((err = store_attrs(sb, path, inode)))
+		goto eek;
 	release_path(path, levels + 1);
 	return 0;
-errmem:
-	err = -ENOMEM;
+eek:
 	release_path(path, levels + 1);
 errout:
 	warn("make_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
@@ -229,18 +236,13 @@ int save_inode(struct inode *inode)
 	if ((err = probe(&sb->itable, inode->inum, path)))
 		return err;
 	unsigned size;
-	void *base = ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size);
-	if (!size)
+	if (!(ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size)))
 		return -EINVAL;
 	if (inode->i_size)
 		inode->present |= CTIME_SIZE_BIT;
-	size = howbig(inode->present);
-	base = tree_expand(&sb->itable, inode->inum, size, path); // error???
-	void *attrs = encode_attrs(sb, base, size, inode);
-	assert(attrs == base + size);
+	err = store_attrs(sb, path, inode);
 	release_path(path, levels + 1);
-	dump_attrs(inode);
-	return 0;
+	return err;
 }
 
 int tuxio(struct file *file, char *data, unsigned len, int write)
@@ -511,7 +513,7 @@ int main(int argc, char *argv[])
 		return 1;
 	ext2_dump_entries(getblk(sb->rootdir->map, 0));
 
-	trace("write file");
+	trace(">>> write file");
 	char buf[100] = { };
 	struct file *file = &(struct file){ .f_inode = inode };
 	tuxseek(file, (1LL << 60) - 12);
@@ -523,14 +525,14 @@ int main(int argc, char *argv[])
 	flush_buffers(sb->devmap);
 #endif
 #if 1
-	trace("close file");
+	trace(">>> close file");
 	save_inode(inode);
 	tuxclose(inode);
-	trace("open file");
+	trace(">>> open file");
 	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
 #endif
 
-	trace("read file");
+	trace(">>> read file");
 	tuxseek(file, (1LL << 60) - 12);
 	tuxseek(file, 4092);
 	memset(buf, 0, sizeof(buf));
@@ -539,7 +541,7 @@ int main(int argc, char *argv[])
 	if (got < 0)
 		return 1;
 	hexdump(buf, got);
-	trace("show state");
+	trace(">>> show state");
 	show_buffers(file->f_inode->map);
 	show_buffers(sb->rootdir->map);
 	show_buffers(sb->devmap);

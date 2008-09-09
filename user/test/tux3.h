@@ -17,6 +17,7 @@ typedef uint32_t le_u32;
 typedef uint64_t le_u64;
 typedef long long L; // widen for printf on 64 bit systems
 
+#define PACKED __attribute__ ((packed))
 #define fieldtype(structure, field) typeof(((struct structure *)NULL)->field)
 #define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
@@ -200,6 +201,7 @@ struct inode {
 	unsigned i_version, present;
 	u64 i_size, i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_links;
+	struct xcache *xcache;
 };
 
 struct file {
@@ -242,8 +244,10 @@ enum atkind {
 	CTIME_SIZE_ATTR = 8,
 	LINK_COUNT_ATTR = 9,
 	MTIME_ATTR = 10,
-	XATTR_ATTR = 11,
-	MAX_ATTRS
+	IDATA_ATTR = 11,
+	IATTR_ATTR = 12,
+	MAX_ATTRS,
+	VAR_ATTRS = IDATA_ATTR
 };
 
 enum atbit {
@@ -252,7 +256,8 @@ enum atbit {
 	DATA_BTREE_BIT = 1 << DATA_BTREE_ATTR,
 	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
 	MTIME_BIT = 1 << MTIME_ATTR,
-	XATTR_BIT = 1 << XATTR_ATTR,
+	IDATA_BIT = 1 << IDATA_ATTR,
+	IATTR_BIT = 1 << IATTR_ATTR,
 };
 
 #endif

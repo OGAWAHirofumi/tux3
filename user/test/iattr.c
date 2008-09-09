@@ -15,22 +15,35 @@
 #include "hexdump.c"
 #include "tux3.h"
 
-unsigned atsize[16] = {
+/*
+ * Variable size attribute format:
+ *
+ *    immediate data: kind+version:16, bytes:16, data[bytes]
+ *    immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
+ */
+
+static unsigned atsize[MAX_ATTRS] = {
 	[MODE_OWNER_ATTR] = 12,
 	[CTIME_SIZE_ATTR] = 14,
 	[DATA_BTREE_ATTR] = 8,
 	[LINK_COUNT_ATTR] = 4,
 	[MTIME_ATTR] = 6,
-	[XATTR_ATTR] = 2,
+	[IDATA_ATTR] = 2,
+	[IATTR_ATTR] = 2,
 };
 
 unsigned howbig(unsigned bits)
 {
 	unsigned need = 0;
-	for (int bit = 0; bit < 32; bit++)
-		if ((bits & (1 << bit)))
-			need += atsize[bit] + 2;
+	for (int kind = MIN_ATTR; kind < MAX_ATTRS; kind++)
+		if ((bits & (1 << kind)))
+			need += atsize[kind] + 2;
 	return need;
+}
+
+unsigned howmuch(struct inode *inode)
+{
+	return 0;
 }
 
 int attr_check(void *attrs, unsigned size)
@@ -80,7 +93,7 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		case LINK_COUNT_ATTR:
 			attrs = encode32(attrs, inode->i_links);
 			break;
-		case XATTR_ATTR:
+		case IATTR_ATTR:
 //			attrs = encode16(attrs, ???);
 			break;
 		}
@@ -125,7 +138,7 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		case LINK_COUNT_ATTR:
 			attrs = decode32(attrs, &inode->i_links);
 			break;
-		case XATTR_ATTR:
+		case IATTR_ATTR:
 //			attrs = decode16(attrs, &???);
 			break;
 		default:
@@ -166,23 +179,149 @@ void dump_attrs(struct inode *inode)
 	printf("\n");
 }
 
+typedef u16 atom_t;
+struct xattr { atom_t atom, len; char data[]; } PACKED;
+struct xcache { u16 size, maxsize; struct xattr xattrs[]; } PACKED;
+
+struct xattr *xcache_next(struct xattr *xattr)
+{
+	return (void *)xattr->data + xattr->len;
+}
+
+struct xattr *xcache_limit(struct xcache *xcache)
+{
+	return (void *)xcache + xcache->size;
+}
+
+int xcache_dump(struct inode *inode)
+{
+	if (!inode->xcache)
+		return 0;
+	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
+	struct xattr *xattr = inode->xcache->xattrs;
+	struct xattr *limit = xcache_limit(inode->xcache);
+	while (xattr < limit) {
+		if (!xattr->len)
+			goto zero;
+		if (xattr->len > inode->sb->blocksize)
+			goto barf;
+		printf("xattr %x: ", xattr->atom);
+		hexdump(xattr->data, xattr->len);
+		struct xattr *xnext = xcache_next(xattr);
+		if (xnext > limit)
+			goto over;
+		xattr = xnext;
+	}
+	assert(xattr == limit);
+	return 0;
+zero:
+	error("zero length xattr");
+over:
+	error("corrupt xattrs");
+barf:
+	error("xattr too big");
+	return -1;
+}
+
+struct xattr *xcache_lookup(struct inode *inode, unsigned atom, int *err)
+{
+	struct xattr *xattr = inode->xcache->xattrs;
+	struct xattr *limit = xcache_limit(inode->xcache);
+	while (xattr < limit) {
+		if (!xattr->len)
+			goto zero;
+		if (xattr->atom == atom)
+			return xattr;
+		struct xattr *xnext = xcache_next(xattr);
+		if (xnext > limit)
+			goto over;
+		xattr = xnext;
+	}
+	assert(xattr == limit);
+null:
+	return NULL;
+zero:
+	*err = EINVAL;
+	error("zero length xattr");
+	goto null;
+over:
+	*err = EINVAL;
+	error("corrupt xattrs");
+	goto null;
+}
+
+int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, int *err)
+{
+	struct xattr *xattr = inode->xcache ? xcache_lookup(inode, atom, err) : NULL;
+	if (xattr) {
+		hexdump(xattr, 16);
+		unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
+		warn("size = %i\n", size);
+		memmove(xattr, xcache_next(xattr), inode->xcache->size -= size);
+	}
+	if (len) {
+		unsigned more = sizeof(*xattr) + len;
+		struct xcache *xcache = inode->xcache;
+		if (!xcache || xcache->size + more > xcache->maxsize) {
+			unsigned oldsize = xcache ? xcache->size : offsetof(struct xcache, xattrs);
+			unsigned maxsize = xcache ? xcache->maxsize : (1 << 3);
+			unsigned newsize = oldsize + (more < maxsize ? maxsize : more);
+			struct xcache *newcache = malloc(newsize);
+			if (!newcache)
+				return -ENOMEM;
+			*newcache = (struct xcache){ .size = oldsize, .maxsize = newsize };
+			//warn("realoc to %i\n", newsize);
+			if (xcache) {
+				memcpy(newcache, xcache, oldsize);
+				free(xcache);
+			}
+			inode->xcache = newcache;
+		}
+		xattr = xcache_limit(inode->xcache);
+		//warn("exand = %i\n", more);
+		inode->xcache->size += more;
+		memcpy(xattr->data, data, (xattr->len = len));
+		xattr->atom = atom;
+	}
+	return 0;
+}
+
 #ifndef main
 #ifndef iattr_included_from_ileaf
+
+#if 0
+static struct xcache foo = { .size = 25, .maxsize = 25, .xattrs = {
+	{ .atom = 0x666, .len = 6, .data = "hello" },
+	{ .atom = 0x777, .len = 7, .data = "world!" },
+} };
+#endif
+
 int main(int argc, char *argv[])
 {
-	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
-	SB = &(struct sb){ .version = 0 };
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	printf("need %i attr bytes\n", howbig(abits));
-	struct inode inode = {
+	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
+	struct inode *inode = &(struct inode){ .sb = sb,
 		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
 		.i_size = 0x123456789, .i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
+
+	int err = 0;
+	xcache_update(inode, 0x666, "hello", 5, &err);
+	xcache_update(inode, 0x777, "world!", 6, &err);
+	xcache_dump(inode);
+	struct xattr *xattr = xcache_lookup(inode, 0x666, &err);
+	if (xattr)
+		printf("%x => %.*s\n", xattr->atom, xattr->len, xattr->data);
+return 0;
+
+	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
+	printf("need %i attr bytes\n", howbig(abits));
+
 	char attrbase[1000] = { };
 	char *attrs = attrbase;
 	printf("decode %ti attr bytes\n", attrs - attrbase);
-	decode_attrs(sb, attrbase, attrs - attrbase, &inode);
-	dump_attrs(&inode);
+	decode_attrs(sb, attrbase, attrs - attrbase, inode);
+	dump_attrs(inode);
 	return 0;
 }
 #endif
