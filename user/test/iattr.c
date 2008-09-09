@@ -250,13 +250,23 @@ over:
 	goto null;
 }
 
+/*
+ * Things to improve about xcache_update:
+ *
+ *  * It always allocates the new attribute at the end of the list because it
+ *    is lazy and works by always deleting the attribute first then putting
+ *    the new one at the end
+ *
+ *  * If the size of the attribute did not change, does unecessary work
+ *
+ *  * Should expand by binary factor
+ */
 int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, int *err)
 {
 	struct xattr *xattr = inode->xcache ? xcache_lookup(inode, atom, err) : NULL;
 	if (xattr) {
-		hexdump(xattr, 16);
 		unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
-		warn("size = %i\n", size);
+		//warn("size = %i\n", size);
 		memmove(xattr, xcache_next(xattr), inode->xcache->size -= size);
 	}
 	if (len) {
@@ -264,13 +274,13 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, 
 		struct xcache *xcache = inode->xcache;
 		if (!xcache || xcache->size + more > xcache->maxsize) {
 			unsigned oldsize = xcache ? xcache->size : offsetof(struct xcache, xattrs);
-			unsigned maxsize = xcache ? xcache->maxsize : (1 << 3);
+			unsigned maxsize = xcache ? xcache->maxsize : (1 << 7);
 			unsigned newsize = oldsize + (more < maxsize ? maxsize : more);
 			struct xcache *newcache = malloc(newsize);
 			if (!newcache)
 				return -ENOMEM;
 			*newcache = (struct xcache){ .size = oldsize, .maxsize = newsize };
-			//warn("realoc to %i\n", newsize);
+			//warn("realloc to %i\n", newsize);
 			if (xcache) {
 				memcpy(newcache, xcache, oldsize);
 				free(xcache);
@@ -278,7 +288,7 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, 
 			inode->xcache = newcache;
 		}
 		xattr = xcache_limit(inode->xcache);
-		//warn("exand = %i\n", more);
+		//warn("expand by %i\n", more);
 		inode->xcache->size += more;
 		memcpy(xattr->data, data, (xattr->len = len));
 		xattr->atom = atom;
@@ -309,9 +319,12 @@ int main(int argc, char *argv[])
 	xcache_update(inode, 0x666, "hello", 5, &err);
 	xcache_update(inode, 0x777, "world!", 6, &err);
 	xcache_dump(inode);
-	struct xattr *xattr = xcache_lookup(inode, 0x666, &err);
+	struct xattr *xattr = xcache_lookup(inode, 0x777, &err);
 	if (xattr)
 		printf("%x => %.*s\n", xattr->atom, xattr->len, xattr->data);
+	xcache_update(inode, 0x111, "class", 5, &err);
+	xcache_update(inode, 0x666, NULL, 0, &err);
+	xcache_dump(inode);
 return 0;
 
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
