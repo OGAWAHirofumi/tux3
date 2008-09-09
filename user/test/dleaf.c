@@ -496,6 +496,7 @@ int main(int argc, char *argv[])
 	SB = &(struct sb){ .blocksize = 4096 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = leaf_create(btree);
+	dleaf_chop(btree, 0x14014LL, leaf);
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned keys[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;

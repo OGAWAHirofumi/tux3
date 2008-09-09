@@ -38,6 +38,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <sys/types.h>
+#include <time.h>
 #include "trace.h"
 #include "tux3.h"
 #include "buffer.h"
@@ -224,6 +225,30 @@ eek:
 	return -errno;
 }
 
+static int tux3_truncate(const char *path, off_t offset)
+{
+	printf("---- truncate ----\n");
+	struct inode *inode = get_inode(path, 0);
+	struct file *file = &(struct file){ .f_inode = inode };
+	printf("truncate to %Li\n", (L)offset);
+	// !!! implement me!
+	return 0;
+}
+
+static int tux3_utime(const char *path, struct utimbuf *utime)
+{
+	printf("---- utime ----\n");
+	struct inode *inode = get_inode(path, 0);
+	inode->i_mtime = utime->modtime;
+	inode->present |= MTIME_ATTR;
+	inode->i_atime = utime->actime; // !! no persistent atime support yet
+	if (save_inode(inode))
+		printf("save_inode error\n");
+	printf("set mtime to %Lu, atime to %Lu\n", (L)utime->modtime, (L)utime->actime);
+	return 0;
+}
+
+
 static struct fuse_operations tux3_ops = {
 	.open = tux3_open,
 	.create = tux3_create,
@@ -232,6 +257,8 @@ static struct fuse_operations tux3_ops = {
 	.unlink = tux3_unlink,
 	.getattr = tux3_getattr,
 	.readdir = tux3_readdir,
+	.truncate = tux3_truncate,
+	.utime = tux3_utime,
 };
 
 int main(int argc, char *argv[])
