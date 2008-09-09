@@ -21,8 +21,13 @@
 #include "dleaf.c"
 #undef main
 
+#define iattr_notmain_from_inode
 #define main iattr_notmain_from_inode
 #include "ileaf.c"
+#undef main
+
+#define main notmain2
+#include "xattr.c"
 #undef main
 
 #define main notmain3

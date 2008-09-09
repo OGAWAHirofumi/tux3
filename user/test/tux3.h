@@ -260,4 +260,17 @@ enum atbit {
 	IATTR_BIT = 1 << IATTR_ATTR,
 };
 
+struct xattr { u16 atom, len; char data[]; } PACKED;
+struct xcache { u16 size, maxsize; struct xattr xattrs[]; } PACKED;
+
+static inline struct xattr *xcache_next(struct xattr *xattr)
+{
+	return (void *)xattr->data + xattr->len;
+}
+
+static inline struct xattr *xcache_limit(struct xcache *xcache)
+{
+	return (void *)xcache + xcache->size;
+}
+
 #endif
