@@ -141,7 +141,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 }
 
 /*
- * Reasons this dleaf truncater sucks:
+ * Reasons this dleaf truncator sucks:
  *
  * * Does not check for integrity at all so a corrupted leaf can cause overflow
  *   and system corruption.
