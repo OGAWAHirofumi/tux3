@@ -98,18 +98,29 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		case LINK_COUNT_ATTR:
 			attrs = encode32(attrs, inode->i_links);
 			break;
-		case IATTR_ATTR:
-//			attrs = encode16(attrs, ???);
-			break;
 		}
 	}
 	return attrs;
 }
 
-int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
+struct xattr { u16 atom, len; char data[]; } PACKED;
+struct xcache { u16 size, maxsize; struct xattr xattrs[]; } PACKED;
+
+struct xattr *xcache_next(struct xattr *xattr)
+{
+	return (void *)xattr->data + xattr->len;
+}
+
+struct xattr *xcache_limit(struct xcache *xcache)
+{
+	return (void *)xcache + xcache->size;
+}
+
+void *decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 {
 	//printf("decode %u attr bytes\n", size);
 	u64 v64;
+	struct xattr *xattr = inode->xcache ? inode->xcache->xattrs : NULL;
 	void *limit = attrs + size;
 	while (attrs < limit - 1) {
 		unsigned head;
@@ -143,15 +154,25 @@ int decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		case LINK_COUNT_ATTR:
 			attrs = decode32(attrs, &inode->i_links);
 			break;
-		case IATTR_ATTR:
-//			attrs = decode16(attrs, &???);
+		case IATTR_ATTR:;
+			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
+			unsigned size, atom;
+			attrs = decode16(attrs, &size);
+			attrs = decode16(attrs, &atom);
+			*xattr = (struct xattr){ .atom = atom, .len = size - 2 };
+			unsigned xsize = sizeof(*xattr) + xattr->len;
+			assert((void *)xattr + xsize < (void *)inode->xcache + inode->xcache->maxsize);
+			memcpy(xattr->data, attrs, xattr->len);
+			attrs += xattr->len;
+			inode->xcache->size += xsize;
+			xattr = xcache_next(xattr);
 			break;
 		default:
-			return -EINVAL;
+			return NULL;
 		}
 		inode->present |= 1 << kind;
 	}
-	return 0;
+	return attrs;
 }
 
 void dump_attrs(struct inode *inode)
@@ -182,19 +203,6 @@ void dump_attrs(struct inode *inode)
 		}
 	}
 	printf("\n");
-}
-
-struct xattr { u16 atom, len; char data[]; } PACKED;
-struct xcache { u16 size, maxsize; struct xattr xattrs[]; } PACKED;
-
-struct xattr *xcache_next(struct xattr *xattr)
-{
-	return (void *)xattr->data + xattr->len;
-}
-
-struct xattr *xcache_limit(struct xcache *xcache)
-{
-	return (void *)xcache + xcache->size;
 }
 
 int xcache_dump(struct inode *inode)
@@ -341,9 +349,15 @@ int main(int argc, char *argv[])
 	xcache_update(inode, 0x111, "class", 5, &err);
 	xcache_update(inode, 0x666, NULL, 0, &err);
 	xcache_dump(inode);
+	warn("xsize = %x\n", inode->xcache->size);
 	char attrs[1000] = { };
 	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
 	hexdump(attrs, top - attrs);
+	inode->xcache->size = offsetof(struct xcache, xattrs);
+	char *newtop = decode_attrs(sb, attrs, top - attrs, inode);
+	assert(top == newtop);
+	warn("xsize = %x\n", inode->xcache->size);
+	xcache_dump(inode);
 return 0;
 
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
