@@ -21,7 +21,7 @@
 #include "dleaf.c"
 #undef main
 
-#define main notmain2
+#define main iattr_notmain_from_inode
 #include "ileaf.c"
 #undef main
 

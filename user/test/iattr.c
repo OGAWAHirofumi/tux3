@@ -141,7 +141,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
 			inode->btree = (struct btree){ .sb = inode->sb, .entries_per_leaf = 64, // !!! should depend on blocksize
-#ifdef main
+#ifdef iattr_notmain_from_inode
 				.ops = &dtree_ops,
 #endif
 				.root = { .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 } };
@@ -373,33 +373,11 @@ int main(int argc, char *argv[])
 		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
 		.i_size = 0x123456789, .i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
 
-	int err = 0;
-	xcache_update(inode, 0x666, "hello", 5, &err);
-	xcache_update(inode, 0x777, "world!", 6, &err);
-	xcache_dump(inode);
-	struct xattr *xattr = xcache_lookup(inode, 0x777, &err);
-	if (xattr)
-		printf("%x => %.*s\n", xattr->atom, xattr->len, xattr->data);
-	xcache_update(inode, 0x111, "class", 5, &err);
-	xcache_update(inode, 0x666, NULL, 0, &err);
-	xcache_update(inode, 0x222, "boooooyah", 9, &err);
-	xcache_dump(inode);
 	char attrs[1000] = { };
-	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
-	hexdump(attrs, top - attrs);
-	warn("predicted size = %x, encoded size = %x", howmuch(inode), top - attrs);
-	inode->xcache->size = offsetof(struct xcache, xattrs);
-	char *newtop = decode_attrs(inode, attrs, top - attrs);
-	warn("predicted size = %x, xcache size = %x", count_xattrs(inode, attrs, top - attrs), inode->xcache->size);
-	assert(top == newtop);
-	xcache_dump(inode);
-	free(inode->xcache);
-return 0;
-
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
 	printf("need %i attr bytes\n", howbig(abits));
-//	printf("decode %ti attr bytes\n", attrs - attrbase);
-//	decode_attrs(inode, attrbase, attrs - attrbase);
+	printf("decode %ti attr bytes\n", sizeof(attrs));
+	decode_attrs(inode, attrs, sizeof(attrs));
 	dump_attrs(inode);
 	return 0;
 }
