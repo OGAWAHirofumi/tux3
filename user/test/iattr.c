@@ -63,6 +63,11 @@ int attr_check(void *attrs, unsigned size)
 	return 1;
 }
 
+void *encode_kind(void *attrs, unsigned kind, unsigned version)
+{
+	return encode16(attrs, (kind << 12) | version);
+}
+
 void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 {
 	//printf("encode %u attr bytes\n", size);
@@ -72,7 +77,7 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			continue;
 		if (attrs >= limit)
 			break;
-		attrs = encode16(attrs, (kind << 12) | sb->version);
+		attrs = encode_kind(attrs, kind, sb->version);
 		switch (kind) {
 		case MODE_OWNER_ATTR:
 			attrs = encode32(attrs, inode->i_mode);
@@ -179,8 +184,7 @@ void dump_attrs(struct inode *inode)
 	printf("\n");
 }
 
-typedef u16 atom_t;
-struct xattr { atom_t atom, len; char data[]; } PACKED;
+struct xattr { u16 atom, len; char data[]; } PACKED;
 struct xcache { u16 size, maxsize; struct xattr xattrs[]; } PACKED;
 
 struct xattr *xcache_next(struct xattr *xattr)
@@ -296,16 +300,28 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, 
 	return 0;
 }
 
+void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
+{
+	struct xattr *xattr = inode->xcache->xattrs;
+	struct xattr *xtop = xcache_limit(inode->xcache);
+	void *limit = attrs + size - 3;
+	while (xattr < xtop) {
+		if (attrs >= limit)
+			break;
+		//immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
+		//printf("xattr %x/%x ", xattr->atom, xattr->len);
+		attrs = encode_kind(attrs, IATTR_ATTR, inode->sb->version);
+		attrs = encode16(attrs, xattr->len + 2);
+		attrs = encode16(attrs, xattr->atom);
+		memcpy(attrs, xattr->data, xattr->len);
+		attrs += xattr->len;
+		xattr = xcache_next(xattr);
+	}
+	return attrs;
+}
+
 #ifndef main
 #ifndef iattr_included_from_ileaf
-
-#if 0
-static struct xcache foo = { .size = 25, .maxsize = 25, .xattrs = {
-	{ .atom = 0x666, .len = 6, .data = "hello" },
-	{ .atom = 0x777, .len = 7, .data = "world!" },
-} };
-#endif
-
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
@@ -325,15 +341,15 @@ int main(int argc, char *argv[])
 	xcache_update(inode, 0x111, "class", 5, &err);
 	xcache_update(inode, 0x666, NULL, 0, &err);
 	xcache_dump(inode);
+	char attrs[1000] = { };
+	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
+	hexdump(attrs, top - attrs);
 return 0;
 
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
 	printf("need %i attr bytes\n", howbig(abits));
-
-	char attrbase[1000] = { };
-	char *attrs = attrbase;
-	printf("decode %ti attr bytes\n", attrs - attrbase);
-	decode_attrs(sb, attrbase, attrs - attrbase, inode);
+//	printf("decode %ti attr bytes\n", attrs - attrbase);
+//	decode_attrs(sb, attrbase, attrs - attrbase, inode);
 	dump_attrs(inode);
 	return 0;
 }
