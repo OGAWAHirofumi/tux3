@@ -130,7 +130,7 @@ int store_attrs(SB, struct path *path, struct inode *inode)
 	void *base = tree_expand(&sb->itable, inode->inum, size, path);
 	if (!base)
 		return -ENOMEM; // what was the actual error???
-	void *attrs = encode_attrs(sb, base, size, inode);
+	void *attrs = encode_attrs(inode, base, size);
 	assert(attrs == base + size);
 	return 0;
 }
@@ -219,7 +219,7 @@ int open_inode(struct inode *inode)
 	trace("found inode 0x%Lx", (L)inode->inum);
 	//ileaf_dump(&sb->itable, path[levels].buffer->data);
 	//hexdump(attrs, size);
-	decode_attrs(sb, attrs, size, inode);
+	decode_attrs(inode, attrs, size); // error???
 	dump_attrs(inode);
 	err = 0;
 eek:

@@ -98,8 +98,8 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 #ifndef main
 			hexdump(leaf->table + offset, size);
 #else
-			struct inode inode = { };
-			decode_attrs(sb, leaf->table + offset, size, &inode);
+			struct inode inode = { .sb = btree->sb };
+			decode_attrs(&inode, leaf->table + offset, size);
 			dump_attrs(&inode);
 #endif
 		}

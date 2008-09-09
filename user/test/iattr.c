@@ -63,7 +63,7 @@ void *encode_kind(void *attrs, unsigned kind, unsigned version)
 	return encode16(attrs, (kind << 12) | version);
 }
 
-void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
+void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	//printf("encode %u attr bytes\n", size);
 	void *limit = attrs + size - 3;
@@ -72,7 +72,7 @@ void *encode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			continue;
 		if (attrs >= limit)
 			break;
-		attrs = encode_kind(attrs, kind, sb->version);
+		attrs = encode_kind(attrs, kind, inode->sb->version);
 		switch (kind) {
 		case MODE_OWNER_ATTR:
 			attrs = encode32(attrs, inode->i_mode);
@@ -111,7 +111,7 @@ struct xattr *xcache_limit(struct xcache *xcache)
 	return (void *)xcache + xcache->size;
 }
 
-void *decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
+void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	//printf("decode %u attr bytes\n", size);
 	u64 v64;
@@ -121,7 +121,7 @@ void *decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 		unsigned head;
 		attrs = decode16(attrs, &head);
 		unsigned version = head & 0xfff, kind = head >> 12;
-		if (version != sb->version) {
+		if (version != inode->sb->version) {
 			attrs += atsize[kind];
 			continue;
 		}
@@ -140,7 +140,7 @@ void *decode_attrs(SB, void *attrs, unsigned size, struct inode *inode)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->btree = (struct btree){ .sb = sb, .entries_per_leaf = 64, // !!! should depend on blocksize
+			inode->btree = (struct btree){ .sb = inode->sb, .entries_per_leaf = 64, // !!! should depend on blocksize
 #ifdef main
 				.ops = &dtree_ops,
 #endif
@@ -389,7 +389,7 @@ int main(int argc, char *argv[])
 	hexdump(attrs, top - attrs);
 	warn("predicted size = %x, encoded size = %x", howmuch(inode), top - attrs);
 	inode->xcache->size = offsetof(struct xcache, xattrs);
-	char *newtop = decode_attrs(sb, attrs, top - attrs, inode);
+	char *newtop = decode_attrs(inode, attrs, top - attrs);
 	warn("predicted size = %x, xcache size = %x", count_xattrs(inode, attrs, top - attrs), inode->xcache->size);
 	assert(top == newtop);
 	xcache_dump(inode);
@@ -398,7 +398,7 @@ return 0;
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
 	printf("need %i attr bytes\n", howbig(abits));
 //	printf("decode %ti attr bytes\n", attrs - attrbase);
-//	decode_attrs(sb, attrbase, attrs - attrbase, inode);
+//	decode_attrs(inode, attrbase, attrs - attrbase);
 	dump_attrs(inode);
 	return 0;
 }
