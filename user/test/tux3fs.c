@@ -230,7 +230,7 @@ static int tux3_truncate(const char *path, off_t offset)
 	printf("---- truncate ----\n");
 	struct inode *inode = get_inode(path, 0);
 	struct file *file = &(struct file){ .f_inode = inode };
-	printf("truncate to %Li\n", (L)offset);
+	printf("truncate %Lx to %Li\n", (L)file->f_inode->inum, (L)offset);
 	// !!! implement me!
 	return 0;
 }

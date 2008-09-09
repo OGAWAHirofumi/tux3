@@ -2,7 +2,13 @@ CC=gcc
 CFLAGS += -std=gnu99 -Wall -g
 VG=valgrind
 VGFLAGS=--error-exitcode=200
-binaries = dleaf ileaf iattr btree dir inode tux3 tux3fs tux3fuse
+
+binaries = dleaf ileaf iattr btree dir inode tux3
+
+ifeq ($(shell pkg-config fuse && echo found), found)
+	binaries += tux3fs tux3fuse
+endif
+
 basedeps = Makefile tux3.h buffer.h trace.h
 fsdeps = $(basedeps) buffer.c diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c inode.c
 
