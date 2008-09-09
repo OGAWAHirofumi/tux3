@@ -168,6 +168,9 @@ int dleaf_chop(BTREE, tuxkey_t high, vleaf *vleaf)
 	unsigned extents = 0, start = 0, trunc = 0;
 	unsigned newgroups = leaf->groups;
 
+	if (!newgroups)
+		return 0;
+
 	while (1) {
 		unsigned count = entry->limit - start;
 		tuxkey_t key = ((tuxkey_t)group->loghi << 24) | entry->loglo;
