@@ -26,12 +26,12 @@
 #include "ileaf.c"
 #undef main
 
-#define main notmain2
-#include "xattr.c"
-#undef main
-
 #define main notmain3
 #include "dir.c"
+#undef main
+
+#define main notmain2
+#include "xattr.c"
 #undef main
 
 #define main notmain4
@@ -387,15 +387,15 @@ int load_sb(SB)
 		return err;
 	struct disksuper *disk = &sb->super;
 	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
-		warn("invalid superblock [%Lx]", (L)be_to_u64(*(u64 *)disk->magic));
+		warn("invalid superblock [%Lx]", (L)from_u64be(*(u64 *)disk->magic));
 		return -ENOENT;
 	}
-	int blockbits = be_to_u16(disk->blockbits);
-	sb->volblocks = be_to_u64(disk->volblocks);
-	sb->nextalloc = be_to_u64(disk->nextalloc);
-	sb->atomgen = be_to_u32(disk->atomgen);
-	sb->freeblocks = be_to_u64(disk->freeblocks);
-	u64 iroot = be_to_u64(disk->iroot);
+	int blockbits = from_u16be(disk->blockbits);
+	sb->volblocks = from_u64be(disk->volblocks);
+	sb->nextalloc = from_u64be(disk->nextalloc);
+	sb->atomgen = from_u32be(disk->atomgen);
+	sb->freeblocks = from_u64be(disk->freeblocks);
+	u64 iroot = from_u64be(disk->iroot);
 	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
 	sb->blockbits = blockbits,
 	sb->blocksize = 1 << blockbits,
@@ -408,12 +408,12 @@ int load_sb(SB)
 int save_sb(SB)
 {
 	struct disksuper *disk = &sb->super;
-	disk->blockbits = u16_to_be(sb->devmap->dev->bits);
-	disk->volblocks = u64_to_be(sb->volblocks);
-	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
-	disk->atomgen = u32_to_be(sb->atomgen); // probably does not belong here
-	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
-	disk->iroot = u64_to_be((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
+	disk->blockbits = to_u16be(sb->devmap->dev->bits);
+	disk->volblocks = to_u64be(sb->volblocks);
+	disk->nextalloc = to_u64be(sb->nextalloc); // probably does not belong here
+	disk->atomgen = to_u32be(sb->atomgen); // probably does not belong here
+	disk->freeblocks = to_u64be(sb->freeblocks); // probably does not belong here
+	disk->iroot = to_u64be((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
 	//hexdump(&sb->super, sizeof(sb->super));
 	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 }
