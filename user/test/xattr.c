@@ -197,7 +197,6 @@ xattr_t get_xattr(struct inode *dir, char *name, unsigned len)
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
-		warn("found entry");
 		xattr = entry->inum;
 		brelse(buffer);
 		return xattr;
@@ -223,9 +222,12 @@ int main(int argc, char *argv[])
 		.i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
 	map->inode = inode;
 
+	inode->sb->xattrgen = 1;
 	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
 	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
+	printf("xattr = %Lx\n", (L)get_xattr(inode, "bar", 3));
 	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
+	printf("xattr = %Lx\n", (L)get_xattr(inode, "bar", 3));
 return 0;
 	int err = 0;
 	xcache_update(inode, 0x666, "hello", 5, &err);

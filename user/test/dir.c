@@ -147,13 +147,12 @@ void ext2_dump_entries(struct buffer *buffer)
 				entry->type);
 		entry = next_entry(entry);
 	}
+	brelse(buffer);
 	printf("\n");
-//	brelse(buffer);
 }
 
 int ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
 {
-warn("create entry '%.*s'", len, name);
 	ext2_dirent *entry;
 	struct buffer *buffer;
 	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len;
