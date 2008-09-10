@@ -189,15 +189,47 @@ unsigned howmuch(struct inode *inode)
 }
 
 #ifndef main
+typedef fieldtype(ext2_dirent, inum) xattr_t; // just for now
+
+xattr_t get_xattr(struct inode *dir, char *name, unsigned len)
+{
+	xattr_t xattr;
+	struct buffer *buffer;
+	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
+	if (entry) {
+		warn("found entry");
+		xattr = entry->inum;
+		brelse(buffer);
+		return xattr;
+	}
+	xattr = dir->sb->xattrgen++;
+	if (!ext2_create_entry(dir, name, len, xattr, 0))
+{
+ext2_dump_entries(getblk(dir->map, 0));
+		return xattr;
+}
+	return -1;
+}
+
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
-	struct inode *inode = &(struct inode){ .sb = sb,
-		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
-		.i_size = 0x123456789, .i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
 
+	struct dev *dev = &(struct dev){ .bits = 8 };
+	struct map *map = new_map(dev, NULL);
+	init_buffers(dev, 1 << 20);
+	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, .atable = map->inode };
+	struct inode *inode = &(struct inode){ .sb = sb,
+		.map = map, .i_mode = S_IFDIR | 0x666,
+		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
+		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
+		.i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
+	map->inode = inode;
+
+	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
+	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
+	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
+return 0;
 	int err = 0;
 	xcache_update(inode, 0x666, "hello", 5, &err);
 	xcache_update(inode, 0x777, "world!", 6, &err);
@@ -207,7 +239,7 @@ int main(int argc, char *argv[])
 		printf("%x => %.*s\n", xattr->atom, xattr->len, xattr->data);
 	xcache_update(inode, 0x111, "class", 5, &err);
 	xcache_update(inode, 0x666, NULL, 0, &err);
-	xcache_update(inode, 0x222, "boooooyah", 9, &err);
+	xcache_update(inode, 0x222, "boooyah", 7, &err);
 	xcache_dump(inode);
 	char attrs[1000] = { };
 	char *top = encode_xattrs(inode, attrs, sizeof(attrs));

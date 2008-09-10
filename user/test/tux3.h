@@ -18,7 +18,7 @@ typedef uint64_t le_u64;
 typedef long long L; // widen for printf on 64 bit systems
 
 #define PACKED __attribute__ ((packed))
-#define fieldtype(structure, field) typeof(((struct structure *)NULL)->field)
+#define fieldtype(compound, field) typeof(((compound *)NULL)->field)
 #define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
@@ -168,6 +168,7 @@ struct disksuper
 	be_u16 unused1;
 	be_u32 unused2;
 	be_u64 volblocks, freeblocks, nextalloc;
+	be_u32 xattrgen;
 };
 
 struct root { u64 depth:16, block:48; };
@@ -190,7 +191,7 @@ struct sb
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
-	unsigned version;
+	unsigned version, xattrgen;
 };
 
 struct inode {

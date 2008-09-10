@@ -393,6 +393,7 @@ int load_sb(SB)
 	int blockbits = be_to_u16(disk->blockbits);
 	sb->volblocks = be_to_u64(disk->volblocks);
 	sb->nextalloc = be_to_u64(disk->nextalloc);
+	sb->xattrgen = be_to_u32(disk->xattrgen);
 	sb->freeblocks = be_to_u64(disk->freeblocks);
 	u64 iroot = be_to_u64(disk->iroot);
 	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
@@ -410,6 +411,7 @@ int save_sb(SB)
 	disk->blockbits = u16_to_be(sb->devmap->dev->bits);
 	disk->volblocks = u64_to_be(sb->volblocks);
 	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
+	disk->xattrgen = u32_to_be(sb->xattrgen); // probably does not belong here
 	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
 	disk->iroot = u64_to_be((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
 	//hexdump(&sb->super, sizeof(sb->super));
@@ -465,10 +467,10 @@ int make_tux3(SB, int fd)
 		goto eek;
 	if (make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFDIR | 0755 }))
 		goto eek;
-	trace("create atom table");
-	if (!(sb->vtable = new_inode(sb, 0xc)))
+	trace("create atom dictionary");
+	if (!(sb->atable = new_inode(sb, 0xa)))
 		goto eek;
-	if (make_inode(sb->vtable, &(struct iattr){ }))
+	if (make_inode(sb->atable, &(struct iattr){ }))
 		goto eek;
 	if (sync_super(sb))
 		goto eek;
