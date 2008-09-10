@@ -186,7 +186,6 @@ warn("create entry '%.*s'", len, name);
 	*entry = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
 	dir->i_size += blocksize;
 create:
-warn("add entry '%.*s' to %p", len, name, buffer);
 	if (!is_deleted(entry)) {
 		ext2_dirent *newent = (ext2_dirent *)((char *)entry + name_len);
 		newent->rec_len = ext2_rec_len_to_disk(rec_len - name_len);
@@ -194,14 +193,12 @@ warn("add entry '%.*s' to %p", len, name, buffer);
 		entry = newent;
 	}
 	entry->name_len = len;
-warn("copy '%.*s'", len, name, buffer);
 	memcpy(entry->name, name, len);
 	entry->inum = cpu_to_le32(inum);
 	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 	mark_inode_dirty(dir);
 	set_buffer_dirty(buffer);
-ext2_dump_entries(buffer);
 	brelse(buffer);
 	return 0;
 }
@@ -211,7 +208,6 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 	unsigned reclen = EXT2_REC_LEN(len);
 	unsigned blocksize = 1 << dir->map->dev->bits;
 	unsigned blocks = dir->i_size >> dir->map->dev->bits, block;
-warn("blocks = %i", blocks);
 	for (block = 0; block < blocks; block++) {
 		struct buffer *buffer = bread(dir->map, block);
 		ext2_dirent *entry = buffer->data;

@@ -204,10 +204,7 @@ xattr_t get_xattr(struct inode *dir, char *name, unsigned len)
 	}
 	xattr = dir->sb->xattrgen++;
 	if (!ext2_create_entry(dir, name, len, xattr, 0))
-{
-ext2_dump_entries(getblk(dir->map, 0));
 		return xattr;
-}
 	return -1;
 }
 
