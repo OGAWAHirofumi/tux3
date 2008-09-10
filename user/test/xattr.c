@@ -34,12 +34,12 @@ int xcache_dump(struct inode *inode)
 	struct xattr *xattr = inode->xcache->xattrs;
 	struct xattr *limit = xcache_limit(inode->xcache);
 	while (xattr < limit) {
-		if (!xattr->len)
+		if (!xattr->size)
 			goto zero;
-		if (xattr->len > inode->sb->blocksize)
+		if (xattr->size > inode->sb->blocksize)
 			goto barf;
-		printf("xattr %x: ", xattr->atom);
-		hexdump(xattr->data, xattr->len);
+		printf("{%x} => ", xattr->atom);
+		hexdump(xattr->data, xattr->size);
 		struct xattr *xnext = xcache_next(xattr);
 		if (xnext > limit)
 			goto over;
@@ -61,7 +61,7 @@ struct xattr *xcache_lookup(struct inode *inode, unsigned atom, int *err)
 	struct xattr *xattr = inode->xcache->xattrs;
 	struct xattr *limit = xcache_limit(inode->xcache);
 	while (xattr < limit) {
-		if (!xattr->len)
+		if (!xattr->size)
 			goto zero;
 		if (xattr->atom == atom)
 			return xattr;
@@ -94,9 +94,10 @@ over:
  *
  *  * Should expand by binary factor
  */
-int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, int *err)
+int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 {
-	struct xattr *xattr = inode->xcache ? xcache_lookup(inode, atom, err) : NULL;
+	int err = 0;
+	struct xattr *xattr = inode->xcache ? xcache_lookup(inode, atom, &err) : NULL;
 	if (xattr) {
 		unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
 		//warn("size = %i\n", size);
@@ -123,7 +124,7 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, 
 		xattr = xcache_limit(inode->xcache);
 		//warn("expand by %i\n", more);
 		inode->xcache->size += more;
-		memcpy(xattr->data, data, (xattr->len = len));
+		memcpy(xattr->data, data, (xattr->size = len));
 		xattr->atom = atom;
 	}
 	return 0;
@@ -138,12 +139,12 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 		if (attrs >= limit)
 			break;
 		//immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
-		//printf("xattr %x/%x ", xattr->atom, xattr->len);
+		//printf("xattr %x/%x ", xattr->atom, xattr->size);
 		attrs = encode_kind(attrs, IATTR_ATTR, inode->sb->version);
-		attrs = encode16(attrs, xattr->len + 2);
+		attrs = encode16(attrs, xattr->size + 2);
 		attrs = encode16(attrs, xattr->atom);
-		memcpy(attrs, xattr->data, xattr->len);
-		attrs += xattr->len;
+		memcpy(attrs, xattr->data, xattr->size);
+		attrs += xattr->size;
 		xattr = xcache_next(xattr);
 	}
 	return attrs;
@@ -181,14 +182,13 @@ unsigned howmuch(struct inode *inode)
 	struct xattr *xattr = inode->xcache->xattrs;
 	struct xattr *limit = xcache_limit(inode->xcache);
 	while (xattr < limit) {
-		size += 2 + xatsize + xattr->len;
+		size += 2 + xatsize + xattr->size;
 		xattr = xcache_next(xattr);
 	}
 	assert(xattr == limit);
 	return size;
 }
 
-#ifndef main
 typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
 
 atom_t get_atom(struct inode *dir, char *name, unsigned len)
@@ -207,9 +207,21 @@ atom_t get_atom(struct inode *dir, char *name, unsigned len)
 	return -1;
 }
 
+struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
+{
+	int err = 0;
+	atom_t atom = get_atom(inode->sb->atable, name, len);
+	struct xattr *xattr = xcache_lookup(inode, atom, &err);
+	return xattr;
+}
 
+int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
+{
+	atom_t atom = get_atom(inode->sb->atable, name, len);
+	return xcache_update(inode, atom, data, size);
+}
 
-
+#ifndef main
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
@@ -224,6 +236,7 @@ int main(int argc, char *argv[])
 		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
 		.i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
 	map->inode = inode;
+	sb->atable = inode;
 
 	/* test atom table */
 	inode->sb->atomgen = 1; /* inum zero means empty dirent in ext2?! */
@@ -235,15 +248,15 @@ int main(int argc, char *argv[])
 
 	/* test inode xattr cache */
 	int err = 0;
-	xcache_update(inode, 0x666, "hello", 5, &err);
-	xcache_update(inode, 0x777, "world!", 6, &err);
+	err = xcache_update(inode, 0x666, "hello", 5);
+	err = xcache_update(inode, 0x777, "world!", 6);
 	xcache_dump(inode);
 	struct xattr *xattr = xcache_lookup(inode, 0x777, &err);
 	if (xattr)
-		printf("%x => %.*s\n", xattr->atom, xattr->len, xattr->data);
-	xcache_update(inode, 0x111, "class", 5, &err);
-	xcache_update(inode, 0x666, NULL, 0, &err);
-	xcache_update(inode, 0x222, "boooyah", 7, &err);
+		printf("{%x} => %.*s\n", xattr->atom, xattr->size, xattr->data);
+	err = xcache_update(inode, 0x111, "class", 5);
+	err = xcache_update(inode, 0x666, NULL, 0);
+	err = xcache_update(inode, 0x222, "boooyah", 7);
 	xcache_dump(inode);
 
 	/* test xattr inode table encode and decode */
@@ -258,6 +271,14 @@ int main(int argc, char *argv[])
 	xcache_dump(inode);
 	free(inode->xcache);
 	inode->xcache = NULL;
+
+	/* test high level ops */
+	set_xattr(inode, "foo", 3, "bar", 3);
+	xcache_dump(inode);
+	xattr = get_xattr(inode, "foo", 3);
+	if (xattr)
+		printf("found xattr %.*s\n", xattr->size, xattr->data);
+
 	show_buffers(map);
 }
 #endif

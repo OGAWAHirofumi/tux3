@@ -171,11 +171,11 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			unsigned size, atom;
 			attrs = decode16(attrs, &size);
 			attrs = decode16(attrs, &atom);
-			*xattr = (struct xattr){ .atom = atom, .len = size - 2 };
-			unsigned xsize = sizeof(*xattr) + xattr->len;
+			*xattr = (struct xattr){ .atom = atom, .size = size - 2 };
+			unsigned xsize = sizeof(*xattr) + xattr->size;
 			assert((void *)xattr + xsize < (void *)inode->xcache + inode->xcache->maxsize);
-			memcpy(xattr->data, attrs, xattr->len);
-			attrs += xattr->len;
+			memcpy(xattr->data, attrs, xattr->size);
+			attrs += xattr->size;
 			inode->xcache->size += xsize;
 			xattr = xcache_next(xattr); // check limit!!!
 			break;
