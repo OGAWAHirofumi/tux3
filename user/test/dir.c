@@ -346,7 +346,6 @@ int main(int argc, char *argv[])
 	}
 
 	ext2_dump_entries(getblk(map, 0));
-	show_buffers(map);
 	struct file *file = &(struct file){ .f_inode = map->inode };
 	for (int i = 0; i < 10; i++) {
 		char name[100];
@@ -356,5 +355,6 @@ int main(int argc, char *argv[])
 	ext2_dump_entries(getblk(map, 0));
 	char dents[10000];
 	ext2_readdir(file, dents, filldir);
+	show_buffers(map);
 	return 0;
 }

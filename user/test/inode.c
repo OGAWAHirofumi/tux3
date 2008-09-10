@@ -393,7 +393,7 @@ int load_sb(SB)
 	int blockbits = be_to_u16(disk->blockbits);
 	sb->volblocks = be_to_u64(disk->volblocks);
 	sb->nextalloc = be_to_u64(disk->nextalloc);
-	sb->xattrgen = be_to_u32(disk->xattrgen);
+	sb->atomgen = be_to_u32(disk->atomgen);
 	sb->freeblocks = be_to_u64(disk->freeblocks);
 	u64 iroot = be_to_u64(disk->iroot);
 	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
@@ -411,7 +411,7 @@ int save_sb(SB)
 	disk->blockbits = u16_to_be(sb->devmap->dev->bits);
 	disk->volblocks = u64_to_be(sb->volblocks);
 	disk->nextalloc = u64_to_be(sb->nextalloc); // probably does not belong here
-	disk->xattrgen = u32_to_be(sb->xattrgen); // probably does not belong here
+	disk->atomgen = u32_to_be(sb->atomgen); // probably does not belong here
 	disk->freeblocks = u64_to_be(sb->freeblocks); // probably does not belong here
 	disk->iroot = u64_to_be((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
 	//hexdump(&sb->super, sizeof(sb->super));

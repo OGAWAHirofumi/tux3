@@ -168,7 +168,7 @@ struct disksuper
 	be_u16 unused1;
 	be_u32 unused2;
 	be_u64 volblocks, freeblocks, nextalloc;
-	be_u32 xattrgen;
+	be_u32 atomgen;
 };
 
 struct root { u64 depth:16, block:48; };
@@ -191,7 +191,7 @@ struct sb
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
-	unsigned version, xattrgen;
+	unsigned version, atomgen;
 };
 
 struct inode {

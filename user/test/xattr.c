@@ -189,23 +189,26 @@ unsigned howmuch(struct inode *inode)
 }
 
 #ifndef main
-typedef fieldtype(ext2_dirent, inum) xattr_t; // just for now
+typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
 
-xattr_t get_xattr(struct inode *dir, char *name, unsigned len)
+atom_t get_atom(struct inode *dir, char *name, unsigned len)
 {
-	xattr_t xattr;
+	atom_t atom;
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
-		xattr = entry->inum;
+		atom = entry->inum;
 		brelse(buffer);
-		return xattr;
+		return atom;
 	}
-	xattr = dir->sb->xattrgen++;
-	if (!ext2_create_entry(dir, name, len, xattr, 0))
-		return xattr;
+	atom = dir->sb->atomgen++; /* need refcounts and allocation */
+	if (!ext2_create_entry(dir, name, len, atom, 0))
+		return atom;
 	return -1;
 }
+
+
+
 
 int main(int argc, char *argv[])
 {
@@ -222,13 +225,15 @@ int main(int argc, char *argv[])
 		.i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
 	map->inode = inode;
 
-	inode->sb->xattrgen = 1;
-	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
-	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
-	printf("xattr = %Lx\n", (L)get_xattr(inode, "bar", 3));
-	printf("xattr = %Lx\n", (L)get_xattr(inode, "foo", 3));
-	printf("xattr = %Lx\n", (L)get_xattr(inode, "bar", 3));
-return 0;
+	/* test atom table */
+	inode->sb->atomgen = 1; /* inum zero means empty dirent in ext2?! */
+	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
+	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
+	printf("atom = %Lx\n", (L)get_atom(inode, "bar", 3));
+	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
+	printf("atom = %Lx\n", (L)get_atom(inode, "bar", 3));
+
+	/* test inode xattr cache */
 	int err = 0;
 	xcache_update(inode, 0x666, "hello", 5, &err);
 	xcache_update(inode, 0x777, "world!", 6, &err);
@@ -240,15 +245,19 @@ return 0;
 	xcache_update(inode, 0x666, NULL, 0, &err);
 	xcache_update(inode, 0x222, "boooyah", 7, &err);
 	xcache_dump(inode);
+
+	/* test xattr inode table encode and decode */
 	char attrs[1000] = { };
 	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
 	hexdump(attrs, top - attrs);
-	warn("predicted size = %x, encoded size = %x", howmuch(inode), top - attrs);
+	printf("predicted size = %x, encoded size = %x\n", howmuch(inode), top - attrs);
 	inode->xcache->size = offsetof(struct xcache, xattrs);
 	char *newtop = decode_attrs(inode, attrs, top - attrs);
-	warn("predicted size = %x, xcache size = %x", count_xattrs(inode, attrs, top - attrs), inode->xcache->size);
+	printf("predicted size = %x, xcache size = %x\n", count_xattrs(inode, attrs, top - attrs), inode->xcache->size);
 	assert(top == newtop);
 	xcache_dump(inode);
 	free(inode->xcache);
+	inode->xcache = NULL;
+	show_buffers(map);
 }
 #endif
