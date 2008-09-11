@@ -87,7 +87,7 @@ static inline le16 ext2_rec_len_to_disk(unsigned len)
 
 static inline int is_deleted(ext2_dirent *entry)
 {
-	return !entry->inum;
+	return !entry->name_len; /* ext2 uses !inum for this */
 }
 
 static inline int ext2_match(int len, const char *const name, ext2_dirent *entry)

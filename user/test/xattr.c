@@ -17,10 +17,6 @@
 #include "balloc.c"
 #undef main
 
-#define main notmain2
-#include "ileaf.c"
-#undef main
-
 #define main notmain3
 #include "dir.c"
 #undef main
@@ -92,6 +88,12 @@ struct xcache *new_xcache(unsigned maxsize)
 	*xcache = (struct xcache){ .size = offsetof(struct xcache, xattrs), .maxsize = maxsize };
 	return xcache;
 }
+
+#ifndef main
+#define main notmain2
+#include "ileaf.c"
+#undef main
+#endif
 
 /*
  * Things to improve about xcache_update:
@@ -248,7 +250,6 @@ int main(int argc, char *argv[])
 	sb->atable = inode;
 
 	/* test atom table */
-	inode->sb->atomgen = 1; /* inum zero means empty dirent in ext2?! */
 	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
 	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
 	printf("atom = %Lx\n", (L)get_atom(inode, "bar", 3));

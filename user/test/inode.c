@@ -516,7 +516,6 @@ int main(int argc, char *argv[])
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
-		.atomgen = 1, /* inum zero means empty dirent in ext2?! */
 	};
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
