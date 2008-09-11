@@ -273,12 +273,16 @@ int main(int argc, char *argv[])
 	inode->xcache = NULL;
 
 	/* test high level ops */
-	set_xattr(inode, "foo", 3, "bar", 3);
+	set_xattr(inode, "hello", 5, "world!", 6);
+	set_xattr(inode, "foo", 3, "foobar", 6);
 	xcache_dump(inode);
-	xattr = get_xattr(inode, "foo", 3);
-	if (xattr)
-		printf("found xattr %.*s\n", xattr->size, xattr->body);
-
+	for (int i = 0; i < 3; i++) {
+		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
+		if ((xattr = get_xattr(inode, name, strlen(name))))
+			printf("found xattr %.*s => %.*s\n", strlen(name), name, xattr->size, xattr->body);
+		else
+			printf("no xattr '%.*s'\n", strlen(name), name);
+	}
 	show_buffers(map);
 }
 #endif
