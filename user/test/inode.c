@@ -136,7 +136,6 @@ int store_attrs(SB, struct path *path, struct inode *inode)
 	if (!base)
 		return -ENOMEM; // what was the actual error???
 	void *attr = encode_attrs(inode, base, size);
-//warn("%p", inode->xcache);
 	if (inode->xcache)
 		attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
@@ -229,10 +228,12 @@ int open_inode(struct inode *inode)
 	//hexdump(attrs, size);
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;
-	if (!(inode->xcache = new_xcache(xsize)))
+	if (!(inode->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
 		goto eek;
 	decode_attrs(inode, attrs, size); // error???
 	dump_attrs(inode);
+	if (inode->xcache)
+		xcache_dump(inode);
 	err = 0;
 eek:
 	release_path(path, levels + 1);
@@ -433,6 +434,9 @@ int sync_super(SB)
 		return err;
 	printf("sync rootdir\n");
 	if ((err = tuxsync(sb->rootdir)))
+		return err;
+	printf("sync atom table\n");
+	if ((err = tuxsync(sb->atable)))
 		return err;
 	printf("sync devmap\n");
 	if ((err = flush_buffers(sb->devmap)))

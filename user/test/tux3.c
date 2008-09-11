@@ -98,9 +98,13 @@ int main(int argc, const char *argv[])
 		goto eek;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
+	if (!(sb->atable = new_inode(sb, 0xa)))
+		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
+		goto eek;
+	if ((errno = -open_inode(sb->atable)))
 		goto eek;
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
@@ -120,7 +124,7 @@ int main(int argc, const char *argv[])
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 		//tuxseek(file, (1LL << 60) - 12);
-#if 0
+#if 1
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			goto eek;
@@ -137,7 +141,7 @@ int main(int argc, const char *argv[])
 		char text[2 << 16];
 		unsigned len;
 
-#if 1
+#if 0
 		memcpy(text, "hello", 5);
 		len = 5;
 #else
@@ -176,6 +180,38 @@ int main(int argc, const char *argv[])
 		if (got < 0)
 			return 1;
 		hexdump(buf, got);
+	}
+
+	if (!strcmp(command, "get") || !strcmp(command, "set")) {
+		printf("---- read attribute ----\n");
+		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+		if (!inode) {
+			errno = ENOENT;
+			goto eek;
+		}
+		char *name = (void *)poptGetArg(popt);
+		if (!name)
+			goto usage;
+		if (!strcmp(command, "get")) {
+			printf("read xattr %.*s\n", strlen(name), name);
+			struct xattr *xattr = get_xattr(inode, name, strlen(name));
+			if (!xattr) {
+				errno = EINVAL;
+				goto eek;
+			}
+			hexdump(xattr->body, xattr->size);
+		}
+		if (!strcmp(command, "set")) {
+			char text[2 << 16];
+			unsigned len;
+			len = read(0, text, sizeof(text));
+			printf("got %i bytes\n", len);
+			if ((errno = -set_xattr(inode, "foo", 3, "foobar", 6)))
+				goto eek;
+			tuxsync(inode);
+			if ((errno = -sync_super(sb)))
+				goto eek;
+		}
 	}
 
 	if (!strcmp(command, "stat")) {

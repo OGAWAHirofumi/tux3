@@ -25,7 +25,7 @@
 unsigned encode_asize(unsigned bits)
 {
 	unsigned need = 0;
-	for (int kind = MIN_ATTR; kind < MAX_ATTRS; kind++)
+	for (int kind = MIN_ATTR; kind < VAR_ATTRS; kind++)
 		if ((bits & (1 << kind)))
 			need += atsize[kind] + 2;
 	return need;
@@ -85,7 +85,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	//printf("encode %u attr bytes\n", size);
 	void *limit = attrs + size - 3;
-	for (int kind = MIN_ATTR; kind < MAX_ATTRS; kind++) {
+	for (int kind = MIN_ATTR; kind < VAR_ATTRS; kind++) {
 		if (!(inode->present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
