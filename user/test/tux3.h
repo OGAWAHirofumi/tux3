@@ -246,7 +246,7 @@ enum atkind {
 	LINK_COUNT_ATTR = 9,
 	MTIME_ATTR = 10,
 	IDATA_ATTR = 11,
-	IATTR_ATTR = 12,
+	XATTR_ATTR = 12,
 	MAX_ATTRS,
 	VAR_ATTRS = IDATA_ATTR
 };
@@ -258,7 +258,17 @@ enum atbit {
 	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
 	MTIME_BIT = 1 << MTIME_ATTR,
 	IDATA_BIT = 1 << IDATA_ATTR,
-	IATTR_BIT = 1 << IATTR_ATTR,
+	XATTR_BIT = 1 << XATTR_ATTR,
+};
+
+unsigned atsize[MAX_ATTRS] = {
+	[MODE_OWNER_ATTR] = 12,
+	[CTIME_SIZE_ATTR] = 14,
+	[DATA_BTREE_ATTR] = 8,
+	[LINK_COUNT_ATTR] = 4,
+	[MTIME_ATTR] = 6,
+	[IDATA_ATTR] = 2,
+	[XATTR_ATTR] = 4,
 };
 
 struct xattr { u16 atom, size; char body[]; } PACKED;
@@ -272,6 +282,11 @@ static inline struct xattr *xcache_next(struct xattr *xattr)
 static inline struct xattr *xcache_limit(struct xcache *xcache)
 {
 	return (void *)xcache + xcache->size;
+}
+
+void *encode_kind(void *attrs, unsigned kind, unsigned version)
+{
+	return encode16(attrs, (kind << 12) | version);
 }
 
 #endif

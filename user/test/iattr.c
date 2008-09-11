@@ -22,17 +22,7 @@
  *    immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
  */
 
-static unsigned atsize[MAX_ATTRS] = {
-	[MODE_OWNER_ATTR] = 12,
-	[CTIME_SIZE_ATTR] = 14,
-	[DATA_BTREE_ATTR] = 8,
-	[LINK_COUNT_ATTR] = 4,
-	[MTIME_ATTR] = 6,
-	[IDATA_ATTR] = 2,
-	[IATTR_ATTR] = 4,
-};
-
-unsigned howbig(unsigned bits)
+unsigned encode_asize(unsigned bits)
 {
 	unsigned need = 0;
 	for (int kind = MIN_ATTR; kind < MAX_ATTRS; kind++)
@@ -58,18 +48,13 @@ int attr_check(void *attrs, unsigned size)
 	return 1;
 }
 
-void *encode_kind(void *attrs, unsigned kind, unsigned version)
-{
-	return encode16(attrs, (kind << 12) | version);
-}
-
 void dump_attrs(struct inode *inode)
 {
 	//printf("present = %x\n", inode->present);
-	for (int which = 0; which < 32; which++) {
-		if (!(inode->present & (1 << which)))
+	for (int kind = 0; kind < 32; kind++) {
+		if (!(inode->present & (1 << kind)))
 			continue;
-		switch (which) {
+		switch (kind) {
 		case MODE_OWNER_ATTR:
 			printf("mode 0%.6o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
@@ -85,8 +70,11 @@ void dump_attrs(struct inode *inode)
 		case LINK_COUNT_ATTR:
 			printf("links %u ", inode->i_links);
 			break;
+		case XATTR_ATTR:
+			printf("xattr(s) ");
+			break;
 		default:
-			printf("<%i>? ", which);
+			printf("<%i>? ", kind);
 			break;
 		}
 	}
@@ -166,14 +154,14 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case LINK_COUNT_ATTR:
 			attrs = decode32(attrs, &inode->i_links);
 			break;
-		case IATTR_ATTR:;
+		case XATTR_ATTR:;
 			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
 			unsigned size, atom;
 			attrs = decode16(attrs, &size);
 			attrs = decode16(attrs, &atom);
 			*xattr = (struct xattr){ .atom = atom, .size = size - 2 };
-			unsigned xsize = sizeof(*xattr) + xattr->size;
-			assert((void *)xattr + xsize < (void *)inode->xcache + inode->xcache->maxsize);
+			unsigned xsize = sizeof(struct xattr) + xattr->size;
+			assert((void *)xattr + xsize <= (void *)inode->xcache + inode->xcache->maxsize);
 			memcpy(xattr->body, attrs, xattr->size);
 			attrs += xattr->size;
 			inode->xcache->size += xsize;
@@ -199,7 +187,7 @@ int main(int argc, char *argv[])
 
 	char attrs[1000] = { };
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
-	printf("need %i attr bytes\n", howbig(abits));
+	printf("need %i attr bytes\n", encode_asize(abits));
 	printf("decode %ti attr bytes\n", sizeof(attrs));
 	decode_attrs(inode, attrs, sizeof(attrs));
 	dump_attrs(inode);

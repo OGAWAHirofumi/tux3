@@ -83,6 +83,16 @@ over:
 	goto null;
 }
 
+struct xcache *new_xcache(unsigned maxsize)
+{
+	warn("realloc xcache to %i", maxsize);
+	struct xcache *xcache = malloc(maxsize);
+	if (!xcache)
+		return NULL;
+	*xcache = (struct xcache){ .size = offsetof(struct xcache, xattrs), .maxsize = maxsize };
+	return xcache;
+}
+
 /*
  * Things to improve about xcache_update:
  *
@@ -110,13 +120,12 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 			unsigned oldsize = xcache ? xcache->size : offsetof(struct xcache, xattrs);
 			unsigned maxsize = xcache ? xcache->maxsize : (1 << 7);
 			unsigned newsize = oldsize + (more < maxsize ? maxsize : more);
-			struct xcache *newcache = malloc(newsize);
+			struct xcache *newcache = new_xcache(newsize);
 			if (!newcache)
 				return -ENOMEM;
-			*newcache = (struct xcache){ .size = oldsize, .maxsize = newsize };
-			//warn("realloc to %i\n", newsize);
 			if (xcache) {
-				memcpy(newcache, xcache, oldsize);
+				memcpy(newcache->xattrs, xcache->xattrs, oldsize - offsetof(struct xcache, xattrs));
+				newcache->size = oldsize;
 				free(xcache);
 			}
 			inode->xcache = newcache;
@@ -140,7 +149,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		//immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
 		//printf("xattr %x/%x ", xattr->atom, xattr->size);
-		attrs = encode_kind(attrs, IATTR_ATTR, inode->sb->version);
+		attrs = encode_kind(attrs, XATTR_ATTR, inode->sb->version);
 		attrs = encode16(attrs, xattr->size + 2);
 		attrs = encode16(attrs, xattr->atom);
 		memcpy(attrs, xattr->body, xattr->size);
@@ -150,7 +159,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 	return attrs;
 }
 
-unsigned count_xattrs(struct inode *inode, void *attrs, unsigned size)
+unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 {
 	SB = inode->sb;
 	unsigned total = 0, bytes;
@@ -159,7 +168,7 @@ unsigned count_xattrs(struct inode *inode, void *attrs, unsigned size)
 		unsigned head, kind;
 		attrs = decode16(attrs, &head);
 		switch ((kind = head >> 12)) {
-		case IATTR_ATTR:
+		case XATTR_ATTR:
 		case IDATA_ATTR:
 			// immediate data: kind+version:16, bytes:16, data[bytes]
 			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
@@ -174,11 +183,11 @@ unsigned count_xattrs(struct inode *inode, void *attrs, unsigned size)
 	return total + sizeof(struct xcache);
 }
 
-unsigned howmuch(struct inode *inode)
+unsigned encode_xsize(struct inode *inode)
 {
 	if (!inode->xcache)
 		return 0;
-	unsigned size = 0, xatsize = atsize[IATTR_ATTR];
+	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
 	struct xattr *xattr = inode->xcache->xattrs;
 	struct xattr *limit = xcache_limit(inode->xcache);
 	while (xattr < limit) {
@@ -263,10 +272,10 @@ int main(int argc, char *argv[])
 	char attrs[1000] = { };
 	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
 	hexdump(attrs, top - attrs);
-	printf("predicted size = %x, encoded size = %x\n", howmuch(inode), top - attrs);
+	printf("predicted size = %x, encoded size = %x\n", encode_xsize(inode), top - attrs);
 	inode->xcache->size = offsetof(struct xcache, xattrs);
 	char *newtop = decode_attrs(inode, attrs, top - attrs);
-	printf("predicted size = %x, xcache size = %x\n", count_xattrs(inode, attrs, top - attrs), inode->xcache->size);
+	printf("predicted size = %x, xcache size = %x\n", decode_xsize(inode, attrs, top - attrs), inode->xcache->size);
 	assert(top == newtop);
 	xcache_dump(inode);
 	free(inode->xcache);
@@ -281,7 +290,7 @@ int main(int argc, char *argv[])
 		if ((xattr = get_xattr(inode, name, strlen(name))))
 			printf("found xattr %.*s => %.*s\n", strlen(name), name, xattr->size, xattr->body);
 		else
-			printf("no xattr '%.*s'\n", strlen(name), name);
+			printf("xattr %.*s not found\n", strlen(name), name);
 	}
 	show_buffers(map);
 }

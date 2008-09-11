@@ -21,17 +21,17 @@
 #include "dleaf.c"
 #undef main
 
-#define iattr_notmain_from_inode
-#define main iattr_notmain_from_inode
-#include "ileaf.c"
-#undef main
-
 #define main notmain3
 #include "dir.c"
 #undef main
 
 #define main notmain2
 #include "xattr.c"
+#undef main
+
+#define iattr_notmain_from_inode
+#define main iattr_notmain_from_inode
+#include "ileaf.c"
 #undef main
 
 #define main notmain4
@@ -131,12 +131,15 @@ void free_inode(struct inode *inode)
 
 int store_attrs(SB, struct path *path, struct inode *inode)
 {
-	unsigned size = howbig(inode->present) + howmuch(inode);
+	unsigned size = encode_asize(inode->present) + encode_xsize(inode);
 	void *base = tree_expand(&sb->itable, inode->inum, size, path);
 	if (!base)
 		return -ENOMEM; // what was the actual error???
-	void *attrs = encode_attrs(inode, base, size);
-	assert(attrs == base + size);
+	void *attr = encode_attrs(inode, base, size);
+//warn("%p", inode->xcache);
+	if (inode->xcache)
+		attr = encode_xattrs(inode, attr, base + size - attr);
+	assert(attr == base + size);
 	return 0;
 }
 
@@ -224,6 +227,10 @@ int open_inode(struct inode *inode)
 	trace("found inode 0x%Lx", (L)inode->inum);
 	//ileaf_dump(&sb->itable, path[levels].buffer->data);
 	//hexdump(attrs, size);
+	unsigned xsize = decode_xsize(inode, attrs, size);
+	err = -ENOMEM;
+	if (!(inode->xcache = new_xcache(xsize)))
+		goto eek;
 	decode_attrs(inode, attrs, size); // error???
 	dump_attrs(inode);
 	err = 0;
@@ -509,6 +516,7 @@ int main(int argc, char *argv[])
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
+		.atomgen = 1, /* inum zero means empty dirent in ext2?! */
 	};
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
@@ -532,11 +540,13 @@ int main(int argc, char *argv[])
 	flush_buffers(sb->devmap);
 #endif
 #if 1
-	trace(">>> close file");
+	trace(">>> close file <<<");
+	set_xattr(inode, "foo", 5, "hello world!", 12);
 	save_inode(inode);
 	tuxclose(inode);
 	trace(">>> open file");
 	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
+	xcache_dump(inode);
 #endif
 
 	trace(">>> read file");

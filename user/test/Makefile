@@ -10,7 +10,7 @@ ifeq ($(shell pkg-config fuse && echo found), found)
 endif
 
 basedeps = Makefile tux3.h buffer.h trace.h
-fsdeps = $(basedeps) buffer.c diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c inode.c
+fsdeps = $(basedeps) buffer.c diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c inode.c
 
 all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest
