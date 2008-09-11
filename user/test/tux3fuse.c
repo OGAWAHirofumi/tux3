@@ -40,6 +40,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <sys/xattr.h>
 #include <sys/types.h>
 #include "trace.h"
 #include "tux3.h"
@@ -344,9 +345,13 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 		goto nomem;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto nomem;
+	if (!(sb->atable = new_inode(sb, 0xa)))
+		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
+		goto eek;
+	if ((errno = -open_inode(sb->atable)))
 		goto eek;
 	return;
 nomem:
@@ -369,7 +374,37 @@ static void tux3_forget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	int to_set, struct fuse_file_info *fi)
 {
-	fuse_reply_err(req, ENOSYS);
+	struct inode *inode = ino2inode(ino);
+
+	if (to_set & FUSE_SET_ATTR_MODE) {
+		printf("Setting mode\n");
+	}
+	if (to_set & FUSE_SET_ATTR_UID) {
+		printf("Setting uid\n");
+	}
+	if (to_set & FUSE_SET_ATTR_GID) {
+		printf("Setting gid\n");
+	}
+	if (to_set & FUSE_SET_ATTR_SIZE) {
+		printf("Setting size\n");
+	}
+	if (to_set & FUSE_SET_ATTR_ATIME) {
+		printf("Setting atime to %Lu\n", (L)attr->st_atime);
+		inode->i_atime = attr->st_atime;
+		// !! no persistent atime support yet
+	}
+	if (to_set & FUSE_SET_ATTR_MTIME) {
+		printf("Setting mtime to %Lu\n", (L)attr->st_mtime);
+		inode->i_mtime = attr->st_mtime;
+		inode->present |= MTIME_ATTR;
+	}
+
+	if (save_inode(inode))
+		printf("save_inode error\n");
+
+	struct stat st;
+	_tux3_getattr(inode, &st);
+	fuse_reply_attr(req, &st, 1.0);
 }
 
 static void tux3_readlink(fuse_req_t req, fuse_ino_t ino)
@@ -450,15 +485,42 @@ static void tux3_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 {
 	fuse_reply_err(req, ENOSYS);
 }
+
 static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	const char *value, size_t size, int flags)
 {
-	fuse_reply_err(req, ENOSYS);
+	struct inode *inode = ino2inode(ino);
+	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
+
+	if (flags == XATTR_CREATE && xattr) {
+		fuse_reply_err(req, EEXIST);
+	} else  if (flags == XATTR_REPLACE && !xattr) {
+		fuse_reply_err(req, ENOENT);
+	} else {
+		int err;
+		err = -set_xattr(inode, (char *)name, strlen(name), (void *)value, size);
+		if (!err)
+		{
+			tuxsync(inode);
+			sync_super(sb);
+		}
+		fuse_reply_err(req, err);
+	}
 }
 
 static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 {
-	fuse_reply_err(req, ENOSYS);
+	struct inode *inode = ino2inode(ino);
+	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
+	if (!xattr) {
+		fuse_reply_err(req, ENOENT);
+	} else if (size == 0) {
+		fuse_reply_xattr(req, xattr->size);
+	} else if (size < xattr->size) {
+		fuse_reply_err(req, ERANGE);
+	} else {
+		fuse_reply_buf(req, xattr->body, xattr->size);
+	}
 }
 
 static void tux3_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
