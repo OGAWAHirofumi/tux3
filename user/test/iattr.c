@@ -174,7 +174,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			*xattr = (struct xattr){ .atom = atom, .size = size - 2 };
 			unsigned xsize = sizeof(*xattr) + xattr->size;
 			assert((void *)xattr + xsize < (void *)inode->xcache + inode->xcache->maxsize);
-			memcpy(xattr->data, attrs, xattr->size);
+			memcpy(xattr->body, attrs, xattr->size);
 			attrs += xattr->size;
 			inode->xcache->size += xsize;
 			xattr = xcache_next(xattr); // check limit!!!
