@@ -549,6 +549,7 @@ int main(int argc, char *argv[])
 	tuxclose(inode);
 	trace(">>> open file");
 	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
+	inode = file->f_inode;
 	xcache_dump(inode);
 #endif
 
