@@ -1,4 +1,6 @@
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE 500 /* pwrite */
+#endif
 #include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>

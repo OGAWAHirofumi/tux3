@@ -3,56 +3,59 @@ CFLAGS += -std=gnu99 -Wall -g
 VG=valgrind
 VGFLAGS=--error-exitcode=200
 
-binaries = dleaf ileaf iattr btree dir inode tux3
+binaries = buffer.o dleaf ileaf iattr btree dir inode tux3
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fs tux3fuse
 endif
 
-basedeps = Makefile tux3.h buffer.h trace.h
-fsdeps = $(basedeps) buffer.c diskio.c iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c inode.c
+basedeps = Makefile buffer.o trace.h tux3.h
+fsdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c inode.c
 
 all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest
 
+buffer.o: Makefile buffer.h trace.h buffer.c
+	$(CC) $(CFLAGS) -Dmain=notmain buffer.c -c
+
 dleaf: $(basedeps) dleaf.c
-	$(CC) $(CFLAGS) dleaf.c -o dleaf
+	$(CC) $(CFLAGS) buffer.o dleaf.c -o dleaf
 dleaftest: dleaf
 	$(VG) $(VGFLAGS) ./dleaf
 
 ileaf: $(basedeps) ileaf.c
-	$(CC) $(CFLAGS) ileaf.c -o ileaf
+	$(CC) $(CFLAGS) buffer.o ileaf.c -o ileaf
 ileaftest: ileaf
 	$(VG) $(VGFLAGS) ./ileaf
 
-btree: $(basedeps) btree.c diskio.c buffer.c dleaf.c
-	$(CC) $(CFLAGS) btree.c buffer.c diskio.c -o btree
+btree: $(basedeps) btree.c dleaf.c
+	$(CC) $(CFLAGS) buffer.o btree.c -o btree
 btreetest: btree
 	$(VG) $(VGFLAGS) ./btree foodev
 
-dir: $(basedeps) dir.c diskio.c buffer.c dleaf.c
-	$(CC) $(CFLAGS) dir.c buffer.c diskio.c -o dir
+dir: $(basedeps) dir.c dleaf.c
+	$(CC) $(CFLAGS) buffer.o dir.c -o dir
 dirtest: dir
 	$(VG) $(VGFLAGS) ./dir
 
 iattr: $(basedeps) iattr.c
-	$(CC) $(CFLAGS) iattr.c -o iattr
+	$(CC) $(CFLAGS) buffer.o iattr.c -o iattr
 iattrtest: iattr
 	$(VG) $(VGFLAGS) ./iattr
 
 inode: $(fsdeps)
-	$(CC) $(CFLAGS) inode.c buffer.c diskio.c -o inode
+	$(CC) $(CFLAGS) buffer.o inode.c -o inode
 inodetest: inode
 	$(VG) $(VGFLAGS) ./inode foodev
 
 tux3: $(fsdeps) tux3.c
-	$(CC) $(CFLAGS) buffer.c diskio.c tux3.c -lpopt -otux3
+	$(CC) $(CFLAGS) buffer.o tux3.c -lpopt -otux3
 
 tux3fs: $(fsdeps) tux3fs.c
-	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fs.c -lfuse -otux3fs
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.o tux3fs.c -lfuse -otux3fs
 
 tux3fuse: $(fsdeps) tux3fuse.c
-	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.c diskio.c tux3fuse.c -lfuse -otux3fuse
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) buffer.o tux3fuse.c -lfuse -otux3fuse
 
 makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
