@@ -6,8 +6,6 @@
 #include "buffer.h"
 #include "trace.h"
 
-#include "diskio.c"
-
 #define buftrace trace_off
 
 /*

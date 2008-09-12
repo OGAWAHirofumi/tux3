@@ -1,59 +1,59 @@
 CC=gcc -std=gnu99 -Wall -g
 VG=valgrind --error-exitcode=200
 
-binaries = buffer.o dleaf ileaf iattr btree dir inode tux3
+binaries = vfs.o dleaf ileaf iattr btree dir inode tux3
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fs tux3fuse
 endif
 
-basedeps = Makefile buffer.o trace.h tux3.h
+basedeps = Makefile vfs.o trace.h tux3.h
 fsdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c inode.c
 
 all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest
 
-buffer.o: Makefile buffer.h trace.h buffer.c
-	$(CC) -Dmain=notmain buffer.c -c
+vfs.o: Makefile buffer.h trace.h buffer.c diskio.c
+	$(CC) -Dmain=notmain vfs.c -c
 
 dleaf: $(basedeps) dleaf.c
-	$(CC) buffer.o dleaf.c -o dleaf
+	$(CC) vfs.o dleaf.c -o dleaf
 dleaftest: dleaf
 	$(VG) ./dleaf
 
 ileaf: $(basedeps) ileaf.c
-	$(CC) buffer.o ileaf.c -o ileaf
+	$(CC) vfs.o ileaf.c -o ileaf
 ileaftest: ileaf
 	$(VG) ./ileaf
 
 btree: $(basedeps) btree.c dleaf.c
-	$(CC) buffer.o btree.c -o btree
+	$(CC) vfs.o btree.c -o btree
 btreetest: btree
 	$(VG) ./btree foodev
 
 dir: $(basedeps) dir.c dleaf.c
-	$(CC) buffer.o dir.c -o dir
+	$(CC) vfs.o dir.c -o dir
 dirtest: dir
 	$(VG) ./dir
 
 iattr: $(basedeps) iattr.c
-	$(CC) buffer.o iattr.c -o iattr
+	$(CC) vfs.o iattr.c -o iattr
 iattrtest: iattr
 	$(VG) ./iattr
 
 inode: $(fsdeps)
-	$(CC) buffer.o inode.c -o inode
+	$(CC) vfs.o inode.c -o inode
 inodetest: inode
 	$(VG) ./inode foodev
 
 tux3: $(fsdeps) tux3.c
-	$(CC) buffer.o tux3.c -lpopt -otux3
+	$(CC) vfs.o tux3.c -lpopt -otux3
 
 tux3fs: $(fsdeps) tux3fs.c
-	$(CC) $$(pkg-config --cflags fuse) buffer.o tux3fs.c -lfuse -otux3fs
+	$(CC) $$(pkg-config --cflags fuse) vfs.o tux3fs.c -lfuse -otux3fs
 
 tux3fuse: $(fsdeps) tux3fuse.c
-	$(CC) $$(pkg-config --cflags fuse) buffer.o tux3fuse.c -lfuse -otux3fuse
+	$(CC) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 
 makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
