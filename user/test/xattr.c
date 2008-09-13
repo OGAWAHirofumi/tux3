@@ -122,27 +122,26 @@ typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
 
 int use_atom(struct inode *inode, atom_t atom, int use)
 {
-#ifndef main
+#ifdef main
 	return 0; // not ready for prime time
 #endif
 	unsigned shift = inode->sb->blockbits - 1;
-	unsigned index = atom & ~(-1 << shift);
-	struct buffer *buffer = bread(inode->map, inode->sb->atomref_base + (atom >> shift));
+	unsigned block = inode->sb->atomref_base + 2 * (atom >> shift);
+	unsigned offset = atom & ~(-1 << shift);
+	struct buffer *buffer = bread(inode->map, block);
 	if (!buffer)
 		return -EIO;
-	trace("inc atom %x by %i, index %Lx[%x]", atom, use, (L)buffer->index, index);
-	int loval = from_be_u16(((u16 *)buffer->data)[index]) + use;
-	((u16 *)buffer->data)[index] = to_be_u16(loval);
-	trace("loval = %x %x", loval, (loval & (-1 << 16)));
-	if ((loval & (-1 << 16))) {
+	int low = from_be_u16(((u16 *)buffer->data)[offset]) + use;
+	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
+	((u16 *)buffer->data)[offset] = to_be_u16(low);
+	if ((low & (-1 << 16))) {
 		brelse_dirty(buffer);
-		trace("inc high %x by %i, index %Lx[%x]", atom, loval >> 16, (L)buffer->index, index);
-		buffer = bread(inode->map, inode->sb->highref_base + (atom >> shift));
+		buffer = bread(inode->map, block + 1);
 		if (!buffer)
 			return -EIO;
-		int hival = from_be_u16(((u16 *)buffer->data)[index]) + (loval >> 16);
-		((u16 *)buffer->data)[index] = to_be_u16(hival);
-		trace("high = %i", from_be_u16(((u16 *)buffer->data)[index]));
+		int high = from_be_u16(((u16 *)buffer->data)[offset]) + (low >> 16);
+		trace("inc high %x by %i, offset %x[%x], high = %i", atom, low >> 16, block, offset, high);
+		((u16 *)buffer->data)[offset] = to_be_u16(high);
 	}
 	brelse_dirty(buffer);
 	return 0;
@@ -312,7 +311,6 @@ int main(int argc, char *argv[])
 		.blockbits = dev->bits, 
 		.blocksize = 1 << dev->bits, 
 		.atomref_base = 1 << 10,
-		.highref_base = 1 << 11,
 		.atomrev_base = 1 << 12,
 	};
 	struct inode *inode = &(struct inode){ .sb = sb,
@@ -323,16 +321,17 @@ int main(int argc, char *argv[])
 	map->inode = inode;
 	sb->atable = inode;
 
-	struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
-	memset(buffer->data, 0, sb->blocksize);
-	brelse_dirty(buffer);
-
-	if (0) {
-		use_atom(inode, 0, 1 << 15);
-		use_atom(inode, 0, (1 << 15));
-		use_atom(inode, 0, -(1 << 15));
-		return 0;
+	for (int i = 0; i < 2; i++) {
+		struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base + i);
+		memset(buffer->data, 0, sb->blocksize);
+		brelse_dirty(buffer);
 	}
+
+	/* test positive and negative refcount carry */
+	use_atom(inode, 6, 1 << 15);
+	use_atom(inode, 6, (1 << 15));
+	use_atom(inode, 6, -(1 << 15));
+	use_atom(inode, 6, -(1 << 15));
 
 	/* test atom table */
 	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
@@ -380,7 +379,7 @@ int main(int argc, char *argv[])
 	}
 	show_buffers(map);
 
-	buffer = getblk(inode->map, inode->sb->atomref_base);
+	struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
 	hexdump(buffer->data, 32);
 	brelse(buffer);
 }
