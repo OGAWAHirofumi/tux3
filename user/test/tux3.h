@@ -55,51 +55,51 @@ typedef u16 be_u16;
 typedef u32 be_u32;
 typedef u64 be_u64;
 
-static inline u16 from_u16be(be_u16 val)
+static inline u16 from_be_u16(be_u16 val)
 {
 	return bswap_16(val);
 }
 
-static inline u32 from_u32be(be_u32 val)
+static inline u32 from_be_u32(be_u32 val)
 {
 	return bswap_32(val);
 }
 
-static inline u64 from_u64be(be_u64 val)
+static inline u64 from_be_u64(be_u64 val)
 {
 	return bswap_64(val);
 }
 
-static inline be_u16 to_u16be(u16 val)
+static inline be_u16 to_be_u16(u16 val)
 {
 	return bswap_16(val);
 }
 
-static inline be_u32 to_u32be(u32 val)
+static inline be_u32 to_be_u32(u32 val)
 {
 	return bswap_32(val);
 }
 
-static inline be_u64 to_u64be(u64 val)
+static inline be_u64 to_be_u64(u64 val)
 {
 	return bswap_64(val);
 }
 
 static inline void *encode16(void *at, unsigned val)
 {
-	*(be_u16 *)at = to_u16be(val);
+	*(be_u16 *)at = to_be_u16(val);
 	return at + sizeof(u16);
 }
 
 static inline void *encode32(void *at, unsigned val)
 {
-	*(be_u32 *)at = to_u32be(val);
+	*(be_u32 *)at = to_be_u32(val);
 	return at + sizeof(u32);
 }
 
 static inline void *encode64(void *at, u64 val)
 {
-	*(be_u64 *)at = to_u64be(val);
+	*(be_u64 *)at = to_be_u64(val);
 	return at + sizeof(u64);
 }
 
@@ -111,19 +111,19 @@ static inline void *encode48(void *at, u64 val)
 
 static inline void *decode16(void *at, unsigned *val)
 {
-	*val = from_u16be(*(be_u16 *)at);
+	*val = from_be_u16(*(be_u16 *)at);
 	return at + sizeof(u16);
 }
 
 static inline void *decode32(void *at, unsigned *val)
 {
-	*val = from_u32be(*(be_u32 *)at);
+	*val = from_be_u32(*(be_u32 *)at);
 	return at + sizeof(u32);
 }
 
 static inline void *decode64(void *at, u64 *val)
 {
-	*val = from_u64be(*(be_u64 *)at);
+	*val = from_be_u64(*(be_u64 *)at);
 	return at + sizeof(u64);
 }
 

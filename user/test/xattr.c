@@ -131,8 +131,8 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 	if (!buffer)
 		return -EIO;
 	trace("inc atom %x by %i, index %Lx[%x]", atom, use, (L)buffer->index, index);
-	int loval = from_u16be(((u16 *)buffer->data)[index]) + use;
-	((u16 *)buffer->data)[index] = to_u16be(loval);
+	int loval = from_be_u16(((u16 *)buffer->data)[index]) + use;
+	((u16 *)buffer->data)[index] = to_be_u16(loval);
 	trace("loval = %x %x", loval, (loval & (-1 << 16)));
 	if ((loval & (-1 << 16))) {
 		brelse_dirty(buffer);
@@ -140,9 +140,9 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 		buffer = bread(inode->map, inode->sb->highref_base + (atom >> shift));
 		if (!buffer)
 			return -EIO;
-		int hival = from_u16be(((u16 *)buffer->data)[index]) + (loval >> 16);
-		((u16 *)buffer->data)[index] = to_u16be(hival);
-		trace("high = %i", from_u16be(((u16 *)buffer->data)[index]));
+		int hival = from_be_u16(((u16 *)buffer->data)[index]) + (loval >> 16);
+		((u16 *)buffer->data)[index] = to_be_u16(hival);
+		trace("high = %i", from_be_u16(((u16 *)buffer->data)[index]));
 	}
 	brelse_dirty(buffer);
 	return 0;

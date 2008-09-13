@@ -395,15 +395,15 @@ int load_sb(SB)
 		return err;
 	struct disksuper *disk = &sb->super;
 	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
-		warn("invalid superblock [%Lx]", (L)from_u64be(*(u64 *)disk->magic));
+		warn("invalid superblock [%Lx]", (L)from_be_u64(*(u64 *)disk->magic));
 		return -ENOENT;
 	}
-	int blockbits = from_u16be(disk->blockbits);
-	sb->volblocks = from_u64be(disk->volblocks);
-	sb->nextalloc = from_u64be(disk->nextalloc);
-	sb->atomgen = from_u32be(disk->atomgen);
-	sb->freeblocks = from_u64be(disk->freeblocks);
-	u64 iroot = from_u64be(disk->iroot);
+	int blockbits = from_be_u16(disk->blockbits);
+	sb->volblocks = from_be_u64(disk->volblocks);
+	sb->nextalloc = from_be_u64(disk->nextalloc);
+	sb->atomgen = from_be_u32(disk->atomgen);
+	sb->freeblocks = from_be_u64(disk->freeblocks);
+	u64 iroot = from_be_u64(disk->iroot);
 	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
 	sb->blockbits = blockbits,
 	sb->blocksize = 1 << blockbits,
@@ -416,12 +416,12 @@ int load_sb(SB)
 int save_sb(SB)
 {
 	struct disksuper *disk = &sb->super;
-	disk->blockbits = to_u16be(sb->devmap->dev->bits);
-	disk->volblocks = to_u64be(sb->volblocks);
-	disk->nextalloc = to_u64be(sb->nextalloc); // probably does not belong here
-	disk->atomgen = to_u32be(sb->atomgen); // probably does not belong here
-	disk->freeblocks = to_u64be(sb->freeblocks); // probably does not belong here
-	disk->iroot = to_u64be((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
+	disk->blockbits = to_be_u16(sb->devmap->dev->bits);
+	disk->volblocks = to_be_u64(sb->volblocks);
+	disk->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
+	disk->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
+	disk->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
+	disk->iroot = to_be_u64((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
 	//hexdump(&sb->super, sizeof(sb->super));
 	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 }
