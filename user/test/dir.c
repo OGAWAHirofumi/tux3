@@ -247,15 +247,15 @@ typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offse
 static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 {
 	loff_t pos = file->f_pos;
-	struct inode *inode = file->f_inode;
-	int revalidate = file->f_version != inode->i_version;
-	unsigned blockbits = inode->map->dev->bits;
+	struct inode *dir = file->f_inode;
+	int revalidate = file->f_version != dir->i_version;
+	unsigned blockbits = dir->map->dev->bits;
 	unsigned blocksize = 1 << blockbits;
 	unsigned blockmask = blocksize - 1;
-	unsigned blocks = inode->i_size >> blockbits;
+	unsigned blocks = dir->i_size >> blockbits;
 	unsigned offset = pos & blockmask;
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
-		struct buffer *buffer = bread(inode->map, block);
+		struct buffer *buffer = bread(dir->map, block);
 		void *base = buffer->data;
 		if (!buffer)
 			return -EIO;
@@ -268,15 +268,15 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 				offset = (void *)p - base;
 				file->f_pos = (block << blockbits) + offset;
 			}
-			file->f_version = inode->i_version;
+			file->f_version = dir->i_version;
 			revalidate = 0;
 		}
-		unsigned size = inode->i_size - (block << blockbits);
+		unsigned size = dir->i_size - (block << blockbits);
 		ext2_dirent *limit = base + (size > blocksize ? blocksize : size) - EXT2_REC_LEN(1);
 		for (ext2_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length entry at <%Lx:%x>", (L)inode->inum, block);
+				warn("zero length entry at <%Lx:%x>", (L)dir->inum, block);
 				return -EIO;
 			}
 			if (!is_deleted(entry)) {
@@ -319,7 +319,7 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *entry)
 	return 0;
 }
 
-int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
+int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned inum, unsigned type)
 {
 	printf("\"%.*s\"\n", namelen, name);
 	return 0;

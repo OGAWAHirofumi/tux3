@@ -202,19 +202,66 @@ unsigned encode_xsize(struct inode *inode)
 
 typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
 
-atom_t get_atom(struct inode *dir, char *name, unsigned len)
+/*
+ * Atom refcount table and refcount high
+ *
+ * * Both tables are mapped into the atom table at a high logical offset.
+ *   Allowing 32 bits worth of atom numbers, and with at most 256 atom
+ *   entries per 4K dirent block, we need at most (32 << 8) = 1 TB dirent
+ *   bytes for the atom dictionary, so the count tables start at block
+ *   number 2^40 >> 12 = 2^28.
+ *
+ * * The low end count table needs 2^33 bytes at most, or 2^21 blocks, so
+ *   the high count table starts just above it at 2^28 + 2^21 blocks.
+ *
+ * Atom reverse map
+ *
+ * * When a new atom dirent is created we also set the reverse map for the
+ *   dirent's atom number to the file offset at which the dirent was created.
+ *   This will be 64 bits just to be lazy so that is 2^32 atoms * 8 bytes
+ *   = 2^35 revmap bytes = 2^35 >> 12 blocks = 2^23 blocks.  We locate this
+ *   just above the count table (low + high part) which puts it at logical
+ *   offset 2^28 + 2^23, since the refcount table is also (by coincidence)
+ *   2^23 bytes in size.
+ */
+
+#define ATOM_REFCOUNT_BLOCK (1ULL << 28)
+#define HIGH_REFCOUNT_BLOCK (ATOM_REFCOUNT_BLOCK + (1ULL << 21))
+#define ATOM_REVERSE_BLOCK (ATOM_REFCOUNT_BLOCK + (1ULL << 23))
+
+void atom_inc(struct inode *inode, atom_t atom)
+{
+		unsigned shift = inode->sb->blockbits - 1;
+		unsigned index = atom & ~(-1 << shift);
+		unsigned block = ATOM_REFCOUNT_BLOCK + (atom >> shift);
+		printf("inc atom %x, block %x + %x\n", atom, block, index);
+		struct buffer *buffer = bread(inode->map, block);
+		if (!++((u16 *)buffer->data)[index]) {
+			brelse_dirty(buffer);
+			block += HIGH_REFCOUNT_BLOCK - ATOM_REFCOUNT_BLOCK;
+			printf("inc high %x, block %x + %x\n", atom, block, index);
+			buffer = bread(inode->map, block);
+			++((u16 *)buffer->data)[index];
+		}
+		brelse_dirty(buffer);
+}
+
+atom_t get_atom(struct inode *inode, char *name, unsigned len)
 {
 	atom_t atom;
 	struct buffer *buffer;
-	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
+	ext2_dirent *entry = ext2_find_entry(inode, name, len, &buffer);
 	if (entry) {
 		atom = entry->inum;
 		brelse(buffer);
 		return atom;
 	}
-	atom = dir->sb->atomgen++; /* need refcounts and allocation */
-	if (!ext2_create_entry(dir, name, len, atom, 0))
+	/* Create Atom */
+	atom = inode->sb->atomgen++; /* use refcount for allocation */
+	if (!ext2_create_entry(inode, name, len, atom, 0)) {
+//		atom_inc(inode, atom);
 		return atom;
+	}
 	return -1;
 }
 

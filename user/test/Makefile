@@ -1,7 +1,7 @@
 CC=gcc -std=gnu99 -Wall -g
 VG=valgrind --error-exitcode=200
 
-binaries = vfs.o dleaf ileaf iattr btree dir inode tux3
+binaries = vfs.o dleaf ileaf iattr xattr btree dir inode tux3
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fs tux3fuse
@@ -40,6 +40,11 @@ iattr: $(basedeps) iattr.c
 	$(CC) vfs.o iattr.c -o iattr
 iattrtest: iattr
 	$(VG) ./iattr
+
+xattr: $(basedeps) xattr.c
+	$(CC) vfs.o xattr.c -o xattr
+xattrtest: xattr
+	$(VG) ./xattr
 
 inode: $(fsdeps)
 	$(CC) vfs.o inode.c -o inode

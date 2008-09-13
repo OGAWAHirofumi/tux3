@@ -6,7 +6,7 @@
 #include "buffer.h"
 #include "trace.h"
 
-#define buftrace trace_off
+#define buftrace trace_on
 
 /*
  * Emulate kernel buffers in userspace
@@ -237,7 +237,7 @@ static struct buffer *remove_buffer_free(void)
 
 struct buffer *new_buffer(struct map *map, sector_t block)
 {
-	buftrace(printf("Allocate buffer, block = %Lx\n", block);)
+	buftrace("Allocate buffer, block = %Lx", block);
 	struct buffer *buffer = NULL;
 	int min_buffers = 100, err;
 
@@ -251,7 +251,7 @@ struct buffer *new_buffer(struct map *map, sector_t block)
 	if (buffer_count < max_buffers)
 		goto alloc_buffer;
 
-	buftrace(printf("try to evict buffers\n");)
+	buftrace("try to evict buffers");
 	struct list_head *list, *safe;
 	int count = 0;
 
