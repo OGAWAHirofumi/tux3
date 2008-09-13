@@ -95,6 +95,59 @@ struct xcache *new_xcache(unsigned maxsize)
 #undef main
 #endif
 
+typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
+
+/*
+ * Atom refcount table and refcount high
+ *
+ * * Both tables are mapped into the atom table at a high logical offset.
+ *   Allowing 32 bits worth of atom numbers, and with at most 256 atom
+ *   entries per 4K dirent block, we need at most (32 << 8) = 1 TB dirent
+ *   bytes for the atom dictionary, so the count tables start at block
+ *   number 2^40 >> 12 = 2^28.
+ *
+ * * The low end count table needs 2^33 bytes at most, or 2^21 blocks, so
+ *   the high count table starts just above it at 2^28 + 2^21 blocks.
+ *
+ * Atom reverse map
+ *
+ * * When a new atom dirent is created we also set the reverse map for the
+ *   dirent's atom number to the file offset at which the dirent was created.
+ *   This will be 64 bits just to be lazy so that is 2^32 atoms * 8 bytes
+ *   = 2^35 revmap bytes = 2^35 >> 12 blocks = 2^23 blocks.  We locate this
+ *   just above the count table (low + high part) which puts it at logical
+ *   offset 2^28 + 2^23, since the refcount table is also (by coincidence)
+ *   2^23 bytes in size.
+ */
+
+int use_atom(struct inode *inode, atom_t atom, int use)
+{
+#ifndef main
+	return 0; // not ready for prime time
+#endif
+	unsigned shift = inode->sb->blockbits - 1;
+	unsigned index = atom & ~(-1 << shift);
+	struct buffer *buffer = bread(inode->map, inode->sb->atomref_base + (atom >> shift));
+	if (!buffer)
+		return -EIO;
+	trace("inc atom %x by %i, index %Lx[%x]", atom, use, (L)buffer->index, index);
+	int loval = from_u16be(((u16 *)buffer->data)[index]) + use;
+	((u16 *)buffer->data)[index] = to_u16be(loval);
+	trace("loval = %x %x", loval, (loval & (-1 << 16)));
+	if ((loval & (-1 << 16))) {
+		brelse_dirty(buffer);
+		trace("inc high %x by %i, index %Lx[%x]", atom, loval >> 16, (L)buffer->index, index);
+		buffer = bread(inode->map, inode->sb->highref_base + (atom >> shift));
+		if (!buffer)
+			return -EIO;
+		int hival = from_u16be(((u16 *)buffer->data)[index]) + (loval >> 16);
+		((u16 *)buffer->data)[index] = to_u16be(hival);
+		trace("high = %i", from_u16be(((u16 *)buffer->data)[index]));
+	}
+	brelse_dirty(buffer);
+	return 0;
+}
+
 /*
  * Things to improve about xcache_update:
  *
@@ -108,12 +161,13 @@ struct xcache *new_xcache(unsigned maxsize)
  */
 int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 {
-	int err = 0;
+	int err = 0, use = 0;
 	struct xattr *xattr = inode->xcache ? xcache_lookup(inode, atom, &err) : NULL;
 	if (xattr) {
 		unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
 		//warn("size = %i\n", size);
 		memmove(xattr, xcache_next(xattr), inode->xcache->size -= size);
+		use--;
 	}
 	if (len) {
 		unsigned more = sizeof(*xattr) + len;
@@ -137,7 +191,10 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 		inode->xcache->size += more;
 		memcpy(xattr->body, data, (xattr->size = len));
 		xattr->atom = atom;
+		use++;
 	}
+	if (use)
+		use_atom(inode, atom, use);
 	return 0;
 }
 
@@ -200,94 +257,64 @@ unsigned encode_xsize(struct inode *inode)
 	return size;
 }
 
-typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
-
-/*
- * Atom refcount table and refcount high
- *
- * * Both tables are mapped into the atom table at a high logical offset.
- *   Allowing 32 bits worth of atom numbers, and with at most 256 atom
- *   entries per 4K dirent block, we need at most (32 << 8) = 1 TB dirent
- *   bytes for the atom dictionary, so the count tables start at block
- *   number 2^40 >> 12 = 2^28.
- *
- * * The low end count table needs 2^33 bytes at most, or 2^21 blocks, so
- *   the high count table starts just above it at 2^28 + 2^21 blocks.
- *
- * Atom reverse map
- *
- * * When a new atom dirent is created we also set the reverse map for the
- *   dirent's atom number to the file offset at which the dirent was created.
- *   This will be 64 bits just to be lazy so that is 2^32 atoms * 8 bytes
- *   = 2^35 revmap bytes = 2^35 >> 12 blocks = 2^23 blocks.  We locate this
- *   just above the count table (low + high part) which puts it at logical
- *   offset 2^28 + 2^23, since the refcount table is also (by coincidence)
- *   2^23 bytes in size.
- */
-
-#define ATOM_REFCOUNT_BLOCK (1ULL << 28)
-#define HIGH_REFCOUNT_BLOCK (ATOM_REFCOUNT_BLOCK + (1ULL << 21))
-#define ATOM_REVERSE_BLOCK (ATOM_REFCOUNT_BLOCK + (1ULL << 23))
-
-void atom_inc(struct inode *inode, atom_t atom)
+atom_t find_atom(struct inode *inode, char *name, unsigned len)
 {
-		unsigned shift = inode->sb->blockbits - 1;
-		unsigned index = atom & ~(-1 << shift);
-		unsigned block = ATOM_REFCOUNT_BLOCK + (atom >> shift);
-		printf("inc atom %x, block %x + %x\n", atom, block, index);
-		struct buffer *buffer = bread(inode->map, block);
-		if (!++((u16 *)buffer->data)[index]) {
-			brelse_dirty(buffer);
-			block += HIGH_REFCOUNT_BLOCK - ATOM_REFCOUNT_BLOCK;
-			printf("inc high %x, block %x + %x\n", atom, block, index);
-			buffer = bread(inode->map, block);
-			++((u16 *)buffer->data)[index];
-		}
-		brelse_dirty(buffer);
-}
-
-atom_t get_atom(struct inode *inode, char *name, unsigned len)
-{
-	atom_t atom;
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(inode, name, len, &buffer);
-	if (entry) {
-		atom = entry->inum;
-		brelse(buffer);
+	if (!entry)
+		return -1;
+	atom_t atom = entry->inum;
+	brelse(buffer);
+	return atom;
+}
+
+atom_t make_atom(struct inode *inode, char *name, unsigned len)
+{
+	atom_t atom = find_atom(inode->sb->atable, name, len);
+	if (atom != -1)
 		return atom;
-	}
-	/* Create Atom */
 	atom = inode->sb->atomgen++; /* use refcount for allocation */
-	if (!ext2_create_entry(inode, name, len, atom, 0)) {
-//		atom_inc(inode, atom);
-		return atom;
-	}
-	return -1;
+	if (ext2_create_entry(inode, name, len, atom, 0))
+		return -1; // and what about the err???
+	use_atom(inode, atom, 1);
+	return atom;
 }
 
 struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
 {
 	int err = 0;
-	atom_t atom = get_atom(inode->sb->atable, name, len);
-	struct xattr *xattr = xcache_lookup(inode, atom, &err);
-	return xattr;
+	atom_t atom = find_atom(inode->sb->atable, name, len);
+	if (atom == -1)
+		return NULL;
+	return xcache_lookup(inode, atom, &err); // and what about the err???
 }
 
 int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
 {
-	atom_t atom = get_atom(inode->sb->atable, name, len);
+	atom_t atom = make_atom(inode->sb->atable, name, len);
+	if (atom == -1)
+		return -ENOENT;
 	return xcache_update(inode, atom, data, size);
 }
 
 #ifndef main
+#include <fcntl.h>
+
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-
-	struct dev *dev = &(struct dev){ .bits = 8 };
+	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRWXU) };
+	ftruncate(dev->fd, 1 << 24);
 	struct map *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
-	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, .atable = map->inode };
+	SB = &(struct sb){
+		.version = 0, .atable = map->inode,
+		.blockbits = dev->bits, 
+		.blocksize = 1 << dev->bits, 
+		.atomref_base = 1 << 10,
+		.highref_base = 1 << 11,
+		.atomrev_base = 1 << 12,
+	};
 	struct inode *inode = &(struct inode){ .sb = sb,
 		.map = map, .i_mode = S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
@@ -296,12 +323,23 @@ int main(int argc, char *argv[])
 	map->inode = inode;
 	sb->atable = inode;
 
+	struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
+	memset(buffer->data, 0, sb->blocksize);
+	brelse_dirty(buffer);
+
+	if (0) {
+		use_atom(inode, 0, 1 << 15);
+		use_atom(inode, 0, (1 << 15));
+		use_atom(inode, 0, -(1 << 15));
+		return 0;
+	}
+
 	/* test atom table */
-	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
-	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
-	printf("atom = %Lx\n", (L)get_atom(inode, "bar", 3));
-	printf("atom = %Lx\n", (L)get_atom(inode, "foo", 3));
-	printf("atom = %Lx\n", (L)get_atom(inode, "bar", 3));
+	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
+	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
+	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
+	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
+	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
 
 	/* test inode xattr cache */
 	int err = 0;
@@ -341,5 +379,9 @@ int main(int argc, char *argv[])
 			printf("xattr %.*s not found\n", strlen(name), name);
 	}
 	show_buffers(map);
+
+	buffer = getblk(inode->map, inode->sb->atomref_base);
+	hexdump(buffer->data, 32);
+	brelse(buffer);
 }
 #endif

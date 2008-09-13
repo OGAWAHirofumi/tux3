@@ -14,7 +14,7 @@ all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c
-	$(CC) -Dmain=notmain vfs.c -c
+	$(CC) -D_FILE_OFFSET_BITS=64 -Dmain=notmain vfs.c -c
 
 dleaf: $(basedeps) dleaf.c
 	$(CC) vfs.o dleaf.c -o dleaf

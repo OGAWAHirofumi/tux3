@@ -191,7 +191,7 @@ struct sb
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node, max_inodes_per_block;
-	unsigned version, atomgen;
+	unsigned version, atomgen, atomref_base, highref_base, atomrev_base;
 };
 
 struct inode {

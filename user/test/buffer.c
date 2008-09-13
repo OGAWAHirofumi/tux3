@@ -6,7 +6,7 @@
 #include "buffer.h"
 #include "trace.h"
 
-#define buftrace trace_on
+#define buftrace trace_off
 
 /*
  * Emulate kernel buffers in userspace
@@ -125,7 +125,7 @@ static void remove_buffer_journaled(struct buffer *buffer)
 
 void set_buffer_dirty(struct buffer *buffer)
 {
-	buftrace("set_buffer_dirty %Lx state=%u", buffer->index, buffer->state);
+	buftrace("set_buffer_dirty %Lx state = %u", buffer->index, buffer->state);
 	if (buffer_dirty(buffer))
 		return;
 	if (buffer_journaled(buffer))
@@ -314,7 +314,7 @@ struct buffer *getblk(struct map *map, sector_t block)
 
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
 		if (buffer->index == block) {
-			buftrace("Found buffer for %Lx, state %i", block, buffer->state);
+			buftrace("Found buffer for %Lx, state = %i", block, buffer->state);
 			buffer->count++;
 			list_del(&buffer->lrulink);
 			list_add_tail(&buffer->lrulink, &lru_buffers);
