@@ -151,13 +151,13 @@ void ext2_dump_entries(struct buffer *buffer)
 	printf("\n");
 }
 
-int ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
+loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
 {
 	ext2_dirent *entry;
 	struct buffer *buffer;
-	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len;
-	unsigned blocksize = 1 << dir->map->dev->bits;
-	unsigned blocks = dir->i_size >> dir->map->dev->bits, block;
+	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len, offset;
+	unsigned blockbits = dir->map->dev->bits, blocksize = 1 << blockbits;
+	unsigned blocks = dir->i_size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		buffer = getblk(dir->map, block);
 		entry = buffer->data;
@@ -166,7 +166,7 @@ int ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inu
 			if (entry->rec_len == 0) {
 				warn("zero-length directory entry");
 				brelse(buffer);
-				return -EIO;
+				return -1;
 			}
 			name_len = EXT2_REC_LEN(entry->name_len);
 			rec_len = ext2_rec_len_from_disk(entry->rec_len);
@@ -178,7 +178,7 @@ int ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inu
 		}
 		brelse(buffer);
 	}
-	buffer = getblk(dir->map, blocks);
+	buffer = getblk(dir->map, block = blocks);
 	entry = buffer->data;
 	name_len = 0;
 	rec_len = blocksize;
@@ -197,9 +197,9 @@ create:
 	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
 	mark_inode_dirty(dir);
-	set_buffer_dirty(buffer);
-	brelse(buffer);
-	return 0;
+	offset = (void *)entry - buffer->data;
+	brelse_dirty(buffer);
+	return (block << blockbits) + offset;
 }
 
 ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer **result)

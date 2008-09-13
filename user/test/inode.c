@@ -362,7 +362,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct iat
 	int err = make_inode(inode, iattr);
 	if (err)
 		return NULL; // err ???
-	if (!ext2_create_entry(dir, name, len, inode->inum, iattr->mode))
+	if (ext2_create_entry(dir, name, len, inode->inum, iattr->mode) >= 0)
 		return inode;
 	purge_inum(&dir->sb->itable, inode->inum); // test me!!!
 	free_inode(inode);

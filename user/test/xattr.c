@@ -34,7 +34,7 @@ int xcache_dump(struct inode *inode)
 			goto zero;
 		if (xattr->size > inode->sb->blocksize)
 			goto barf;
-		printf("{%x} => ", xattr->atom);
+		printf("atom %x => ", xattr->atom);
 		hexdump(xattr->body, xattr->size);
 		struct xattr *xnext = xcache_next(xattr);
 		if (xnext > limit)
@@ -128,20 +128,19 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 	unsigned shift = inode->sb->blockbits - 1;
 	unsigned block = inode->sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift);
-	struct buffer *buffer = bread(inode->map, block);
-	if (!buffer)
+	struct buffer *buffer;
+	if (!(buffer = bread(inode->map, block)))
 		return -EIO;
-	int low = from_be_u16(((u16 *)buffer->data)[offset]) + use;
+	int low = from_be_u16(((be_u16 *)buffer->data)[offset]) + use;
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
-	((u16 *)buffer->data)[offset] = to_be_u16(low);
+	((be_u16 *)buffer->data)[offset] = to_be_u16(low);
 	if ((low & (-1 << 16))) {
 		brelse_dirty(buffer);
-		buffer = bread(inode->map, block + 1);
-		if (!buffer)
+		if (!(buffer = bread(inode->map, block + 1)))
 			return -EIO;
-		int high = from_be_u16(((u16 *)buffer->data)[offset]) + (low >> 16);
-		trace("inc high %x by %i, offset %x[%x], high = %i", atom, low >> 16, block, offset, high);
-		((u16 *)buffer->data)[offset] = to_be_u16(high);
+		int high = from_be_u16(((be_u16 *)buffer->data)[offset]) + (low >> 16);
+		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
+		((be_u16 *)buffer->data)[offset] = to_be_u16(high);
 	}
 	brelse_dirty(buffer);
 	return 0;
@@ -267,15 +266,33 @@ atom_t find_atom(struct inode *inode, char *name, unsigned len)
 	return atom;
 }
 
+static inline unsigned unatom_shift(struct inode *inode)
+{
+	return inode->sb->blockbits - 3;
+}
+
+struct buffer *get_unatom_block(struct inode *inode, atom_t atom)
+{
+	return bread(inode->map, inode->sb->unatom_base + (atom >> unatom_shift(inode)));
+}
+
 atom_t make_atom(struct inode *inode, char *name, unsigned len)
 {
 	atom_t atom = find_atom(inode->sb->atable, name, len);
 	if (atom != -1)
 		return atom;
 	atom = inode->sb->atomgen++; /* use refcount for allocation */
-	if (ext2_create_entry(inode, name, len, atom, 0))
+	loff_t where = ext2_create_entry(inode, name, len, atom, 0);
+	if (where < 0)
 		return -1; // and what about the err???
 	use_atom(inode, atom, 1);
+
+	struct buffer *buffer = get_unatom_block(inode, atom);
+	if (!buffer)
+		return -1; // better set a flag that unatom broke!!!
+	((be_u64 *)buffer->data)[atom & ~(-1 << unatom_shift(inode))] = to_be_u64(where);
+	brelse_dirty(buffer);
+
 	return atom;
 }
 
@@ -310,8 +327,9 @@ int main(int argc, char *argv[])
 		.version = 0, .atable = map->inode,
 		.blockbits = dev->bits, 
 		.blocksize = 1 << dev->bits, 
+		.blockmask = (1 << dev->bits) - 1, 
 		.atomref_base = 1 << 10,
-		.atomrev_base = 1 << 12,
+		.unatom_base = 1 << 11,
 	};
 	struct inode *inode = &(struct inode){ .sb = sb,
 		.map = map, .i_mode = S_IFDIR | 0x666,
@@ -347,7 +365,7 @@ int main(int argc, char *argv[])
 	xcache_dump(inode);
 	struct xattr *xattr = xcache_lookup(inode, 0x777, &err);
 	if (xattr)
-		printf("{%x} => %.*s\n", xattr->atom, xattr->size, xattr->body);
+		printf("atom %x => %.*s\n", xattr->atom, xattr->size, xattr->body);
 	err = xcache_update(inode, 0x111, "class", 5);
 	err = xcache_update(inode, 0x666, NULL, 0);
 	err = xcache_update(inode, 0x222, "boooyah", 7);
@@ -379,8 +397,21 @@ int main(int argc, char *argv[])
 	}
 	show_buffers(map);
 
-	struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
-	hexdump(buffer->data, 32);
-	brelse(buffer);
+	for (int i = 0; i < 5; i++) {
+		unsigned atom = i;
+		struct buffer *buffer = get_unatom_block(inode, atom);
+		loff_t unatom = from_be_u64(((be_u64 *)buffer->data)[atom & ~(-1 << unatom_shift(inode))]);
+		brelse_dirty(buffer);
+		trace("atom %Lu => unatom %Lu", (L)atom, (L)unatom);
+		buffer = bread(inode->map, unatom >> sb->blockbits);
+		hexdump(buffer->data + (unatom & sb->blockmask), 16);
+		brelse(buffer);
+	}
+
+	if (0) {
+		struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
+		hexdump(buffer->data, 32);
+		brelse(buffer);
+	}
 }
 #endif
