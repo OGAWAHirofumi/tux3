@@ -120,29 +120,98 @@ typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
  *   2^23 bytes in size.
  */
 
+struct buffer *bread_unatom(struct inode *inode, atom_t atom, unsigned *offset)
+{
+	unsigned shift = inode->sb->blockbits - 3;
+	*offset = atom & ~(-1 << shift);
+	return bread(inode->map, inode->sb->unatom_base + (atom >> shift));
+}
+
+void show_freeatoms(SB)
+{
+	struct inode *inode = sb->atable;
+	atom_t atom = sb->freeatom;
+	while (atom) {
+		warn("free atom: %Lx", (L)atom);
+		unsigned offset;
+		struct buffer *buffer = bread_unatom(inode, atom, &offset);
+		if (!buffer)
+			goto eek;
+		u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
+		if ((next >> 48) != 0xdead)
+			goto eek;
+		atom = next & ~(-1LL << 48);
+		brelse(buffer);
+	}
+	return;
+eek:
+	warn("eek");
+}
+
+atom_t get_freeatom(struct inode *inode)
+{
+	SB = inode->sb;
+	atom_t atom = sb->freeatom;
+	if (!atom)
+		return sb->atomgen++;
+	unsigned offset;
+	struct buffer *buffer = bread_unatom(inode, atom, &offset);
+	if (!buffer)
+		goto eek;
+	u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
+	if ((next >> 48) != 0xdead)
+		goto eek;
+	sb->freeatom = next & ~(-1LL << 48);
+	return atom;
+eek:
+	warn("something horrible happened");
+	return -1;
+}
+
 int use_atom(struct inode *inode, atom_t atom, int use)
 {
 #ifdef main
 	return 0; // not ready for prime time
 #endif
-	unsigned shift = inode->sb->blockbits - 1;
-	unsigned block = inode->sb->atomref_base + 2 * (atom >> shift);
-	unsigned offset = atom & ~(-1 << shift);
+	SB = inode->sb;
+	unsigned shift = sb->blockbits - 1;
+	unsigned block = sb->atomref_base + 2 * (atom >> shift);
+	unsigned offset = atom & ~(-1 << shift), kill = 0;
 	struct buffer *buffer;
 	if (!(buffer = bread(inode->map, block)))
 		return -EIO;
 	int low = from_be_u16(((be_u16 *)buffer->data)[offset]) + use;
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
 	((be_u16 *)buffer->data)[offset] = to_be_u16(low);
-	if ((low & (-1 << 16))) {
+	if (!low || (low & (-1 << 16))) {
 		brelse_dirty(buffer);
 		if (!(buffer = bread(inode->map, block + 1)))
 			return -EIO;
 		int high = from_be_u16(((be_u16 *)buffer->data)[offset]) + (low >> 16);
 		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
 		((be_u16 *)buffer->data)[offset] = to_be_u16(high);
+		kill = !(low | high);
 	}
 	brelse_dirty(buffer);
+	if (kill) {
+		warn("delete atom %Lx", (L) atom);
+		struct buffer *buffer = bread_unatom(inode, atom, &offset);
+		if (!buffer)
+			return -1; // better set a flag that unatom broke or something!!!
+		u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
+
+		((be_u64 *)buffer->data)[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
+		sb->freeatom = atom;
+
+		buffer = bread(inode->map, where >> sb->blockbits);
+		ext2_dirent *entry = buffer->data + (where & sb->blockmask);
+		if (entry->inum == atom)
+			ext2_delete_entry(buffer, entry);
+		else {
+			warn("atom entry not found");
+			brelse(buffer);
+		}
+	}
 	return 0;
 }
 
@@ -266,31 +335,22 @@ atom_t find_atom(struct inode *inode, char *name, unsigned len)
 	return atom;
 }
 
-static inline unsigned unatom_shift(struct inode *inode)
-{
-	return inode->sb->blockbits - 3;
-}
-
-struct buffer *get_unatom_block(struct inode *inode, atom_t atom)
-{
-	return bread(inode->map, inode->sb->unatom_base + (atom >> unatom_shift(inode)));
-}
-
 atom_t make_atom(struct inode *inode, char *name, unsigned len)
 {
 	atom_t atom = find_atom(inode->sb->atable, name, len);
 	if (atom != -1)
 		return atom;
-	atom = inode->sb->atomgen++; /* use refcount for allocation */
+	atom = get_freeatom(inode);
 	loff_t where = ext2_create_entry(inode, name, len, atom, 0);
 	if (where < 0)
 		return -1; // and what about the err???
-	use_atom(inode, atom, 1);
 
-	struct buffer *buffer = get_unatom_block(inode, atom);
+	/* Enter into reverse map - maybe verify zero refs? */
+	unsigned offset;
+	struct buffer *buffer = bread_unatom(inode, atom, &offset);
 	if (!buffer)
-		return -1; // better set a flag that unatom broke!!!
-	((be_u64 *)buffer->data)[atom & ~(-1 << unatom_shift(inode))] = to_be_u64(where);
+		return -1; // better set a flag that unatom broke or something!!!
+	((be_u64 *)buffer->data)[offset] = to_be_u64(where);
 	brelse_dirty(buffer);
 
 	return atom;
@@ -330,6 +390,7 @@ int main(int argc, char *argv[])
 		.blockmask = (1 << dev->bits) - 1, 
 		.atomref_base = 1 << 10,
 		.unatom_base = 1 << 11,
+		.atomgen = 1,
 	};
 	struct inode *inode = &(struct inode){ .sb = sb,
 		.map = map, .i_mode = S_IFDIR | 0x666,
@@ -346,10 +407,12 @@ int main(int argc, char *argv[])
 	}
 
 	/* test positive and negative refcount carry */
-	use_atom(inode, 6, 1 << 15);
-	use_atom(inode, 6, (1 << 15));
-	use_atom(inode, 6, -(1 << 15));
-	use_atom(inode, 6, -(1 << 15));
+	if (0) {
+		use_atom(inode, 6, 1 << 15);
+		use_atom(inode, 6, (1 << 15));
+		use_atom(inode, 6, -(1 << 15));
+		use_atom(inode, 6, -(1 << 15));
+	}
 
 	/* test atom table */
 	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
@@ -383,7 +446,6 @@ int main(int argc, char *argv[])
 	xcache_dump(inode);
 	free(inode->xcache);
 	inode->xcache = NULL;
-
 	/* test high level ops */
 	set_xattr(inode, "hello", 5, "world!", 6);
 	set_xattr(inode, "foo", 3, "foobar", 6);
@@ -395,20 +457,25 @@ int main(int argc, char *argv[])
 		else
 			printf("xattr %.*s not found\n", strlen(name), name);
 	}
-	show_buffers(map);
 
 	for (int i = 0; i < 5; i++) {
-		unsigned atom = i;
-		struct buffer *buffer = get_unatom_block(inode, atom);
-		loff_t unatom = from_be_u64(((be_u64 *)buffer->data)[atom & ~(-1 << unatom_shift(inode))]);
+		unsigned atom = i, offset;
+		struct buffer *buffer = bread_unatom(inode, atom, &offset);
+		loff_t where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 		brelse_dirty(buffer);
-		trace("atom %Lu => unatom %Lu", (L)atom, (L)unatom);
-		buffer = bread(inode->map, unatom >> sb->blockbits);
-		hexdump(buffer->data + (unatom & sb->blockmask), 16);
+		buffer = bread(inode->map, where >> sb->blockbits);
+		printf("atom %Lx at dirent %.4Lx, ", (L)atom, (L)where);
+		hexdump(buffer->data + (where & sb->blockmask), 16);
 		brelse(buffer);
 	}
+	set_xattr(inode, "hello", 5, NULL, 0);
+	show_freeatoms(sb);
+	printf("got free atom %x\n", get_freeatom(inode));
+	printf("got free atom %x\n", get_freeatom(inode));
+	printf("got free atom %x\n", get_freeatom(inode));
 
 	if (0) {
+		show_buffers(map);
 		struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
 		hexdump(buffer->data, 32);
 		brelse(buffer);

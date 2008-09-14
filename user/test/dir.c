@@ -90,7 +90,7 @@ static inline int is_deleted(ext2_dirent *entry)
 	return !entry->name_len; /* ext2 uses !inum for this */
 }
 
-static inline int ext2_match(int len, const char *const name, ext2_dirent *entry)
+static inline int ext2_match(ext2_dirent *entry, const char *const name, int len)
 {
 	if (len != entry->name_len)
 		return 0;
@@ -217,7 +217,7 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 				warn("zero length entry at <%Lx:%x>", (L)dir->inum, block);
 				return NULL;
 			}
-			if (ext2_match(len, name, entry)) {
+			if (ext2_match(entry, name, len)) {
 				*result = buffer;
 				return entry;
 			}
