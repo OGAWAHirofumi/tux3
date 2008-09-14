@@ -34,7 +34,7 @@ int xcache_dump(struct inode *inode)
 			goto zero;
 		if (xattr->size > inode->sb->blocksize)
 			goto barf;
-		printf("atom %x => ", xattr->atom);
+		printf("atom %.3x => ", xattr->atom);
 		hexdump(xattr->body, xattr->size);
 		struct xattr *xnext = xcache_next(xattr);
 		if (xnext > limit)
@@ -127,6 +127,49 @@ struct buffer *bread_unatom(struct inode *inode, atom_t atom, unsigned *offset)
 	return bread(inode->map, inode->sb->unatom_base + (atom >> shift));
 }
 
+void dump_atoms(struct inode *inode)
+{
+	SB = inode->sb;
+	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
+	for (unsigned j = 0; j < blocks; j++) {
+		unsigned block = sb->atomref_base + 2 * j;
+		struct buffer *lobuf, *hibuf;
+		if (!(lobuf = bread(inode->map, block)))
+			goto eek;
+		if (!(hibuf = bread(inode->map, block)))
+			goto eek;
+		u16 *lorefs = lobuf->data, *hirefs = hibuf->data;
+		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
+			unsigned refs = (hirefs[i] << 16) + lorefs[i];
+			if (!refs)
+				continue;
+			atom_t atom = i;
+			unsigned offset;
+			struct buffer *buffer = bread_unatom(inode, atom, &offset);
+			if (!buffer)
+				goto eek;
+			u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
+			brelse(buffer);
+			buffer = bread(inode->map, where >> sb->blockbits);
+			if (!buffer)
+				goto eek;
+			ext2_dirent *entry = buffer->data + (where & sb->blockmask);
+			if (entry->inum != atom) {
+				warn("atom %x reverse entry broken", atom);
+				continue;
+			}
+			printf("{%.*s} = %x\n", entry->name_len, entry->name, atom);
+			brelse(buffer);
+		}
+		brelse(lobuf);
+		brelse(hibuf);
+	}
+	return;
+eek:
+	warn("something broke");
+	return;
+}
+
 void show_freeatoms(SB)
 {
 	struct inode *inode = sb->atable;
@@ -159,6 +202,7 @@ atom_t get_freeatom(struct inode *inode)
 	if (!buffer)
 		goto eek;
 	u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
+	brelse(buffer);
 	if ((next >> 48) != 0xdead)
 		goto eek;
 	sb->freeatom = next & ~(-1LL << 48);
@@ -199,10 +243,9 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 		if (!buffer)
 			return -1; // better set a flag that unatom broke or something!!!
 		u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
-
+		brelse(buffer);
 		((be_u64 *)buffer->data)[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
 		sb->freeatom = atom;
-
 		buffer = bread(inode->map, where >> sb->blockbits);
 		ext2_dirent *entry = buffer->data + (where & sb->blockmask);
 		if (entry->inum == atom)
@@ -406,22 +449,22 @@ int main(int argc, char *argv[])
 		brelse_dirty(buffer);
 	}
 
-	/* test positive and negative refcount carry */
 	if (0) {
+		warn("---- test positive and negative refcount carry ----");
 		use_atom(inode, 6, 1 << 15);
 		use_atom(inode, 6, (1 << 15));
 		use_atom(inode, 6, -(1 << 15));
 		use_atom(inode, 6, -(1 << 15));
 	}
 
-	/* test atom table */
+	warn("---- test atom table ----");
 	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
 	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
 	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
 	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
 	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
 
-	/* test inode xattr cache */
+	warn("---- test inode xattr cache ----");
 	int err = 0;
 	err = xcache_update(inode, 0x666, "hello", 5);
 	err = xcache_update(inode, 0x777, "world!", 6);
@@ -434,7 +477,7 @@ int main(int argc, char *argv[])
 	err = xcache_update(inode, 0x222, "boooyah", 7);
 	xcache_dump(inode);
 
-	/* test xattr inode table encode and decode */
+	warn("---- test xattr inode table encode and decode ----");
 	char attrs[1000] = { };
 	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
 	hexdump(attrs, top - attrs);
@@ -446,9 +489,10 @@ int main(int argc, char *argv[])
 	xcache_dump(inode);
 	free(inode->xcache);
 	inode->xcache = NULL;
-	/* test high level ops */
+	warn("---- test high level ops ----");
 	set_xattr(inode, "hello", 5, "world!", 6);
 	set_xattr(inode, "foo", 3, "foobar", 6);
+	set_xattr(inode, "bar", 3, "foobar", 6);
 	xcache_dump(inode);
 	for (int i = 0; i < 3; i++) {
 		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
@@ -457,28 +501,27 @@ int main(int argc, char *argv[])
 		else
 			printf("xattr %.*s not found\n", strlen(name), name);
 	}
-
+	warn("---- test atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
 		unsigned atom = i, offset;
 		struct buffer *buffer = bread_unatom(inode, atom, &offset);
 		loff_t where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 		brelse_dirty(buffer);
 		buffer = bread(inode->map, where >> sb->blockbits);
-		printf("atom %Lx at dirent %.4Lx, ", (L)atom, (L)where);
+		printf("atom %.3Lx at dirent %.4Lx, ", (L)atom, (L)where);
 		hexdump(buffer->data + (where & sb->blockmask), 16);
 		brelse(buffer);
 	}
+	warn("---- test atom recovery ----");
 	set_xattr(inode, "hello", 5, NULL, 0);
 	show_freeatoms(sb);
 	printf("got free atom %x\n", get_freeatom(inode));
 	printf("got free atom %x\n", get_freeatom(inode));
 	printf("got free atom %x\n", get_freeatom(inode));
 
-	if (0) {
+	if (1) {
+		dump_atoms(inode);
 		show_buffers(map);
-		struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base);
-		hexdump(buffer->data, 32);
-		brelse(buffer);
 	}
 }
 #endif
