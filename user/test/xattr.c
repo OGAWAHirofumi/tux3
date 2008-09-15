@@ -22,82 +22,7 @@
 #undef main
 #endif
 
-int xcache_dump(struct inode *inode)
-{
-	if (!inode->xcache)
-		return 0;
-	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
-	struct xattr *xattr = inode->xcache->xattrs;
-	struct xattr *limit = xcache_limit(inode->xcache);
-	while (xattr < limit) {
-		if (!xattr->size)
-			goto zero;
-		if (xattr->size > inode->sb->blocksize)
-			goto barf;
-		printf("atom %.3x => ", xattr->atom);
-		hexdump(xattr->body, xattr->size);
-		struct xattr *xnext = xcache_next(xattr);
-		if (xnext > limit)
-			goto over;
-		xattr = xnext;
-	}
-	assert(xattr == limit);
-	return 0;
-zero:
-	error("zero length xattr");
-over:
-	error("corrupt xattrs");
-barf:
-	error("xattr too big");
-	return -1;
-}
-
-struct xattr *xcache_lookup(struct inode *inode, unsigned atom, int *err)
-{
-	if (!inode->xcache)
-		return NULL;
-	struct xattr *xattr = inode->xcache->xattrs;
-	struct xattr *limit = xcache_limit(inode->xcache);
-	while (xattr < limit) {
-		if (!xattr->size)
-			goto zero;
-		if (xattr->atom == atom)
-			return xattr;
-		struct xattr *xnext = xcache_next(xattr);
-		if (xnext > limit)
-			goto over;
-		xattr = xnext;
-	}
-	assert(xattr == limit);
-null:
-	return NULL;
-zero:
-	*err = EINVAL;
-	error("zero length xattr");
-	goto null;
-over:
-	*err = EINVAL;
-	error("corrupt xattrs");
-	goto null;
-}
-
-struct xcache *new_xcache(unsigned maxsize)
-{
-	warn("realloc xcache to %i", maxsize);
-	struct xcache *xcache = malloc(maxsize);
-	if (!xcache)
-		return NULL;
-	*xcache = (struct xcache){ .size = offsetof(struct xcache, xattrs), .maxsize = maxsize };
-	return xcache;
-}
-
-#ifndef main
-#define main notmain2
-#include "ileaf.c"
-#undef main
-#endif
-
-typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
+/* Xattr Atoms */
 
 /*
  * Atom refcount table and refcount high
@@ -122,6 +47,8 @@ typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
  *   offset 2^28 + 2^23, which leaves a gap after the refcount table in case
  *   one day we decide that 32 bits of ref count is not enough.
  */
+
+typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
 
 struct buffer *bread_unatom(struct inode *inode, atom_t atom, unsigned *offset)
 {
@@ -258,6 +185,109 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 	return 0;
 }
 
+atom_t find_atom(struct inode *inode, char *name, unsigned len)
+{
+	struct buffer *buffer;
+	ext2_dirent *entry = ext2_find_entry(inode, name, len, &buffer);
+	if (!entry)
+		return -1;
+	atom_t atom = entry->inum;
+	brelse(buffer);
+	return atom;
+}
+
+atom_t make_atom(struct inode *inode, char *name, unsigned len)
+{
+	atom_t atom = find_atom(inode->sb->atable, name, len);
+	if (atom != -1)
+		return atom;
+	atom = get_freeatom(inode);
+	loff_t where = ext2_create_entry(inode, name, len, atom, 0);
+	if (where < 0)
+		return -1; // and what about the err???
+
+	/* Enter into reverse map - maybe verify zero refs? */
+	unsigned offset;
+	struct buffer *buffer = bread_unatom(inode, atom, &offset);
+	if (!buffer)
+		return -1; // better set a flag that unatom broke or something!!!
+	((be_u64 *)buffer->data)[offset] = to_be_u64(where);
+	brelse_dirty(buffer);
+
+	return atom;
+}
+
+/* Xattr cache */
+
+int xcache_dump(struct inode *inode)
+{
+	if (!inode->xcache)
+		return 0;
+	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
+	struct xattr *xattr = inode->xcache->xattrs;
+	struct xattr *limit = xcache_limit(inode->xcache);
+	while (xattr < limit) {
+		if (!xattr->size)
+			goto zero;
+		if (xattr->size > inode->sb->blocksize)
+			goto barf;
+		printf("atom %.3x => ", xattr->atom);
+		hexdump(xattr->body, xattr->size);
+		struct xattr *xnext = xcache_next(xattr);
+		if (xnext > limit)
+			goto over;
+		xattr = xnext;
+	}
+	assert(xattr == limit);
+	return 0;
+zero:
+	error("zero length xattr");
+over:
+	error("corrupt xattrs");
+barf:
+	error("xattr too big");
+	return -1;
+}
+
+struct xattr *xcache_lookup(struct inode *inode, unsigned atom, int *err)
+{
+	if (!inode->xcache)
+		return NULL;
+	struct xattr *xattr = inode->xcache->xattrs;
+	struct xattr *limit = xcache_limit(inode->xcache);
+	while (xattr < limit) {
+		if (!xattr->size)
+			goto zero;
+		if (xattr->atom == atom)
+			return xattr;
+		struct xattr *xnext = xcache_next(xattr);
+		if (xnext > limit)
+			goto over;
+		xattr = xnext;
+	}
+	assert(xattr == limit);
+null:
+	return NULL;
+zero:
+	*err = EINVAL;
+	error("zero length xattr");
+	goto null;
+over:
+	*err = EINVAL;
+	error("corrupt xattrs");
+	goto null;
+}
+
+struct xcache *new_xcache(unsigned maxsize)
+{
+	warn("realloc xcache to %i", maxsize);
+	struct xcache *xcache = malloc(maxsize);
+	if (!xcache)
+		return NULL;
+	*xcache = (struct xcache){ .size = offsetof(struct xcache, xattrs), .maxsize = maxsize };
+	return xcache;
+}
+
 /*
  * Things to improve about xcache_update:
  *
@@ -307,6 +337,31 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 		use_atom(inode, atom, use);
 	return 0;
 }
+
+struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
+{
+	int err = 0;
+	atom_t atom = find_atom(inode->sb->atable, name, len);
+	if (atom == -1)
+		return NULL;
+	return xcache_lookup(inode, atom, &err); // and what about the err???
+}
+
+int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
+{
+	atom_t atom = make_atom(inode->sb->atable, name, len);
+	if (atom == -1)
+		return -ENOENT;
+	return xcache_update(inode, atom, data, size);
+}
+
+/* Xattr encode/decode */
+
+#ifndef main
+#define main notmain2
+#include "ileaf.c"
+#undef main
+#endif
 
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 {
@@ -367,55 +422,6 @@ unsigned encode_xsize(struct inode *inode)
 	}
 	assert(xattr == limit);
 	return size;
-}
-
-atom_t find_atom(struct inode *inode, char *name, unsigned len)
-{
-	struct buffer *buffer;
-	ext2_dirent *entry = ext2_find_entry(inode, name, len, &buffer);
-	if (!entry)
-		return -1;
-	atom_t atom = entry->inum;
-	brelse(buffer);
-	return atom;
-}
-
-atom_t make_atom(struct inode *inode, char *name, unsigned len)
-{
-	atom_t atom = find_atom(inode->sb->atable, name, len);
-	if (atom != -1)
-		return atom;
-	atom = get_freeatom(inode);
-	loff_t where = ext2_create_entry(inode, name, len, atom, 0);
-	if (where < 0)
-		return -1; // and what about the err???
-
-	/* Enter into reverse map - maybe verify zero refs? */
-	unsigned offset;
-	struct buffer *buffer = bread_unatom(inode, atom, &offset);
-	if (!buffer)
-		return -1; // better set a flag that unatom broke or something!!!
-	((be_u64 *)buffer->data)[offset] = to_be_u64(where);
-	brelse_dirty(buffer);
-
-	return atom;
-}
-
-struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
-{
-	int err = 0;
-	atom_t atom = find_atom(inode->sb->atable, name, len);
-	if (atom == -1)
-		return NULL;
-	return xcache_lookup(inode, atom, &err); // and what about the err???
-}
-
-int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
-{
-	atom_t atom = make_atom(inode->sb->atable, name, len);
-	if (atom == -1)
-		return -ENOENT;
-	return xcache_update(inode, atom, data, size);
 }
 
 #ifndef main
