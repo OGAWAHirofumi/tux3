@@ -193,7 +193,7 @@ int main(int argc, const char *argv[])
 		if (!name)
 			goto usage;
 		if (!strcmp(command, "get")) {
-			printf("read xattr %.*s\n", strlen(name), name);
+			printf("read xattr %.*s\n", (int)strlen(name), name);
 			struct xattr *xattr = get_xattr(inode, name, strlen(name));
 			if (!xattr) {
 				errno = EINVAL;

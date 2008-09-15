@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
 	char attrs[1000] = { };
 	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
 	hexdump(attrs, top - attrs);
-	printf("predicted size = %x, encoded size = %x\n", encode_xsize(inode), top - attrs);
+	printf("predicted size = %x, encoded size = %Lx\n", encode_xsize(inode), (L)(top - attrs));
 	inode->xcache->size = offsetof(struct xcache, xattrs);
 	char *newtop = decode_attrs(inode, attrs, top - attrs);
 	printf("predicted size = %x, xcache size = %x\n", decode_xsize(inode, attrs, top - attrs), inode->xcache->size);
@@ -497,9 +497,9 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 3; i++) {
 		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
 		if ((xattr = get_xattr(inode, name, strlen(name))))
-			printf("found xattr %.*s => %.*s\n", strlen(name), name, xattr->size, xattr->body);
+			printf("found xattr %.*s => %.*s\n", (int)strlen(name), name, xattr->size, xattr->body);
 		else
-			printf("xattr %.*s not found\n", strlen(name), name);
+			printf("xattr %.*s not found\n", (int)strlen(name), name);
 	}
 	warn("---- test atom reverse map ----");
 	for (int i = 0; i < 5; i++) {

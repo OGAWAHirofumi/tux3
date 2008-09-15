@@ -1,5 +1,5 @@
 CC=gcc -std=gnu99 -Wall -g
-VG=valgrind --error-exitcode=200
+VG=valgrind --error-exitcode=200 --leak-check=full
 
 binaries = vfs.o dleaf ileaf iattr xattr btree dir inode tux3
 
@@ -11,7 +11,7 @@ basedeps = Makefile vfs.o trace.h tux3.h
 fsdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c inode.c
 
 all: $(binaries)
-tests: dleaftest ileaftest dirtest iattrtest inodetest
+tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c
 	$(CC) -D_FILE_OFFSET_BITS=64 -Dmain=notmain vfs.c -c
@@ -44,7 +44,7 @@ iattrtest: iattr
 xattr: $(basedeps) xattr.c
 	$(CC) vfs.o xattr.c -o xattr
 xattrtest: xattr
-	$(VG) ./xattr
+	$(VG) ./xattr foodev
 
 inode: $(fsdeps)
 	$(CC) vfs.o inode.c -o inode

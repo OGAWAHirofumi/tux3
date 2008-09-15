@@ -126,6 +126,8 @@ void free_inode(struct inode *inode)
 {
 	assert(inode->map); /* some inodes are not malloced */
 	free_map(inode->map); // invalidate dirty buffers!!!
+	if (inode->xcache)
+		free(inode->xcache);
 	free(inode);
 }
 
