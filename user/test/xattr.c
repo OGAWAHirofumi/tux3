@@ -494,12 +494,12 @@ int main(int argc, char *argv[])
 	set_xattr(inode, "foo", 3, "foobar", 6);
 	set_xattr(inode, "bar", 3, "foobar", 6);
 	xcache_dump(inode);
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0, len; i < 3; i++) {
 		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
-		if ((xattr = get_xattr(inode, name, strlen(name))))
-			printf("found xattr %.*s => %.*s\n", (int)strlen(name), name, xattr->size, xattr->body);
+		if ((xattr = get_xattr(inode, name, len = strlen(name))))
+			printf("found xattr %.*s => %.*s\n", len, name, xattr->size, xattr->body);
 		else
-			printf("xattr %.*s not found\n", (int)strlen(name), name);
+			printf("xattr %.*s not found\n", len, name);
 	}
 	warn("---- test atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
