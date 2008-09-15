@@ -54,6 +54,8 @@ barf:
 
 struct xattr *xcache_lookup(struct inode *inode, unsigned atom, int *err)
 {
+	if (!inode->xcache)
+		return NULL;
 	struct xattr *xattr = inode->xcache->xattrs;
 	struct xattr *limit = xcache_limit(inode->xcache);
 	while (xattr < limit) {
@@ -270,7 +272,7 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 {
 	int err = 0, use = 0;
-	struct xattr *xattr = inode->xcache ? xcache_lookup(inode, atom, &err) : NULL;
+	struct xattr *xattr = xcache_lookup(inode, atom, &err);
 	if (xattr) {
 		unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
 		//warn("size = %i\n", size);
@@ -308,6 +310,8 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 {
+	if (!inode->xcache)
+		return attrs;
 	struct xattr *xattr = inode->xcache->xattrs;
 	struct xattr *xtop = xcache_limit(inode->xcache);
 	void *limit = attrs + size - 3;
@@ -521,5 +525,7 @@ int main(int argc, char *argv[])
 		dump_atoms(inode);
 		show_buffers(map);
 	}
+	free(inode->xcache); // happy valgrind
+	return 0;
 }
 #endif

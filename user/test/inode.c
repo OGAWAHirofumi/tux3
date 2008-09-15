@@ -138,8 +138,7 @@ int store_attrs(SB, struct path *path, struct inode *inode)
 	if (!base)
 		return -ENOMEM; // what was the actual error???
 	void *attr = encode_attrs(inode, base, size);
-	if (inode->xcache)
-		attr = encode_xattrs(inode, attr, base + size - attr);
+	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
 	return 0;
 }
