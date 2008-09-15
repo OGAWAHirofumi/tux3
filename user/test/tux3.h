@@ -138,7 +138,6 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Tux3 disk format */
 
-#define SB struct sb *sb
 #define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x09, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
@@ -148,12 +147,12 @@ static inline void *decode48(void *at, u64 *val)
  * 2008-09-06: Actual checking starts
  */
 
-
 #define MAX_INODES_BITS 48
 #define MAX_BLOCKS_BITS 48
 #define MAX_FILESIZE_BITS 60
 #define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
 #define SB_LOC (1 << 12)
+#define SB struct sb *sb
 
 struct disktree { be_u64 depth:16, block:48; };
 

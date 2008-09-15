@@ -106,18 +106,19 @@ typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
  *   bytes for the atom dictionary, so the count tables start at block
  *   number 2^40 >> 12 = 2^28.
  *
- * * The low end count table needs 2^33 bytes at most, or 2^21 blocks, so
- *   the high count table starts just above it at 2^28 + 2^21 blocks.
+ * * The count table consists of pairs of blocks, even blocks with the low
+ *   16 bits of refcount and odd blocks with the high 16 bits.  For 2^32 atoms
+ *   that is 2^34 bytes at most, or 2^22 4K blocks.  
  *
  * Atom reverse map
  *
  * * When a new atom dirent is created we also set the reverse map for the
  *   dirent's atom number to the file offset at which the dirent was created.
  *   This will be 64 bits just to be lazy so that is 2^32 atoms * 8 bytes
- *   = 2^35 revmap bytes = 2^35 >> 12 blocks = 2^23 blocks.  We locate this
+ *   = 2^35 revmap bytes = 2^35 >> 12 blocks = 2^23 4K blocks.  We locate this
  *   just above the count table (low + high part) which puts it at logical
- *   offset 2^28 + 2^23, since the refcount table is also (by coincidence)
- *   2^23 bytes in size.
+ *   offset 2^28 + 2^23, which leaves a gap after the refcount table in case
+ *   one day we decide that 32 bits of ref count is not enough.
  */
 
 struct buffer *bread_unatom(struct inode *inode, atom_t atom, unsigned *offset)
@@ -214,9 +215,6 @@ eek:
 
 int use_atom(struct inode *inode, atom_t atom, int use)
 {
-#ifdef main
-	return 0; // not ready for prime time
-#endif
 	SB = inode->sb;
 	unsigned shift = sb->blockbits - 1;
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);

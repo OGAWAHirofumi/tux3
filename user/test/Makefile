@@ -1,4 +1,4 @@
-CC=gcc -std=gnu99 -Wall -g
+CC=gcc -std=gnu99 -Wall -g -D_FILE_OFFSET_BITS=64
 VG=valgrind --error-exitcode=200 --leak-check=full
 
 binaries = vfs.o dleaf ileaf iattr xattr btree dir inode tux3
@@ -14,7 +14,7 @@ all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c
-	$(CC) -D_FILE_OFFSET_BITS=64 -Dmain=notmain vfs.c -c
+	$(CC) -Dmain=notmain vfs.c -c
 
 dleaf: $(basedeps) dleaf.c
 	$(CC) vfs.o dleaf.c -o dleaf

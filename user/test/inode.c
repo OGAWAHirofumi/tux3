@@ -445,7 +445,7 @@ int sync_super(SB)
 	printf("sync devmap\n");
 	if ((err = flush_buffers(sb->devmap)))
 		return err;
-	printf("sync sb\n");
+	printf("sync super\n");
 	if ((err = save_sb(sb)))
 		return err;
 	return 0;
@@ -453,6 +453,7 @@ int sync_super(SB)
 
 int make_tux3(SB, int fd)
 {
+	int err = 0;
 	trace("create bitmap");
 	if (!(sb->bitmap = new_inode(sb, 0)))
 		goto eek;
@@ -485,9 +486,12 @@ int make_tux3(SB, int fd)
 	trace("create atom dictionary");
 	if (!(sb->atable = new_inode(sb, 0xa)))
 		goto eek;
+	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
+	sb->unatom_base = sb->unatom_base + (1 << (34 - sb->blockbits));
+	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
 	if (make_inode(sb->atable, &(struct iattr){ }))
 		goto eek;
-	if (sync_super(sb))
+	if ((err = sync_super(sb)))
 		goto eek;
 
 	show_buffers(sb->bitmap->map);
@@ -499,6 +503,10 @@ eek:
 	free_inode(sb->bitmap);
 	sb->bitmap = NULL;
 	sb->itable = (struct btree){ };
+	if (err) {
+		warn("eek, %s", strerror(-err));
+		return err;
+	}
 	return -ENOSPC; // just guess
 }
 
@@ -556,7 +564,6 @@ int main(int argc, char *argv[])
 	inode = file->f_inode;
 	xcache_dump(inode);
 #endif
-
 	trace(">>> read file");
 	tuxseek(file, (1LL << 60) - 12);
 	tuxseek(file, 4092);
