@@ -25,27 +25,25 @@
 /* Xattr Atoms */
 
 /*
- * Atom refcount table and refcount high
+ * Atom count table:
  *
  * * Both tables are mapped into the atom table at a high logical offset.
- *   Allowing 32 bits worth of atom numbers, and with at most 256 atom
- *   entries per 4K dirent block, we need at most (32 << 8) = 1 TB dirent
- *   bytes for the atom dictionary, so the count tables start at block
- *   number 2^40 >> 12 = 2^28.
+ *   Allowing 32 bits worth of atom numbers, and with at most 256 atom entries
+ *   per 4K dirent block, we need about (32 << 8) = 1 TB dirent bytes for the
+ *   atom dictionary, so the refcount tables start at block 2^40 >> 12 = 2^28.
  *
- * * The count table consists of pairs of blocks, even blocks with the low
+ * * The refcount table consists of pairs of blocks: even blocks with the low
  *   16 bits of refcount and odd blocks with the high 16 bits.  For 2^32 atoms
- *   that is 2^34 bytes at most, or 2^22 4K blocks.  
+ *   that is 2^34 bytes at most, or 2^22 4K blocks.
  *
- * Atom reverse map
+ * Atom reverse map:
  *
  * * When a new atom dirent is created we also set the reverse map for the
  *   dirent's atom number to the file offset at which the dirent was created.
  *   This will be 64 bits just to be lazy so that is 2^32 atoms * 8 bytes
- *   = 2^35 revmap bytes = 2^35 >> 12 blocks = 2^23 4K blocks.  We locate this
- *   just above the count table (low + high part) which puts it at logical
- *   offset 2^28 + 2^23, which leaves a gap after the refcount table in case
- *   one day we decide that 32 bits of ref count is not enough.
+ *   = 2^35 revmap bytes = 2^23 4K blocks.  This starts just above the count
+ *   table, which puts it at logical offset 2^28 + 2^23, leaving a gap after
+ *   the count table in case we decide 32 bits of ref count is not enough.
  */
 
 typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
@@ -457,7 +455,7 @@ int main(int argc, char *argv[])
 		brelse_dirty(buffer);
 	}
 
-	if (0) {
+	if (1) {
 		warn("---- test positive and negative refcount carry ----");
 		use_atom(inode, 6, 1 << 15);
 		use_atom(inode, 6, (1 << 15));
