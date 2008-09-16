@@ -38,7 +38,7 @@ void set_bits(u8 *bitmap, unsigned start, unsigned count)
 	bitmap[roff] |= rmask;
 }
 
-void reset_bits(u8 *bitmap, unsigned start, unsigned count)
+void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -51,6 +51,23 @@ void reset_bits(u8 *bitmap, unsigned start, unsigned count)
 	bitmap[loff] &= ~lmask;
 	memset(bitmap + loff + 1, 0, roff - loff - 1);
 	bitmap[roff] &= ~rmask;
+}
+
+int all_set(u8 *bitmap, unsigned start, unsigned count)
+{
+	unsigned limit = start + count;
+	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
+	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
+	unsigned loff = start >> 3, roff = limit >> 3;
+	if (loff == roff) {
+		unsigned mask = lmask & rmask;
+		return (bitmap[loff] & mask) == mask;
+	}
+	for (unsigned i = loff + 1; i < roff; i++)
+		if (bitmap[i] != 0xff)
+			return 0;
+	return	(bitmap[loff] & lmask) == lmask &&
+		(bitmap[roff] & rmask) == rmask;
 }
 
 static int bytebits(unsigned char c)
@@ -252,7 +269,7 @@ eek:
 #ifndef main
 int main(int argc, char *argv[])
 {
-	if (0) {
+	if (1) {
 		warn("---- test bitops ----");
 		unsigned char bits[16];
 		memset(bits, 0, sizeof(bits));
@@ -260,11 +277,18 @@ int main(int argc, char *argv[])
 		set_bits(bits, 49, 16);
 		set_bits(bits, 0x51, 2);
 		hexdump(bits, sizeof(bits));
-		reset_bits(bits, 6, 20);
-		reset_bits(bits, 49, 16);
-		reset_bits(bits, 0x51, 2);
+		/* should return true */
+		printf("ones = %i\n", all_set(bits, 6, 20));
+		printf("ones = %i\n", all_set(bits, 49, 16));
+		printf("ones = %i\n", all_set(bits, 0x51, 2));
+		/* should return false */
+		printf("ones = %i\n", all_set(bits, 5, 20));
+		printf("ones = %i\n", all_set(bits, 49, 17));
+		printf("ones = %i\n", all_set(bits, 0x51, 3));
+		clear_bits(bits, 6, 20);
+		clear_bits(bits, 49, 16);
+		clear_bits(bits, 0x51, 2);
 		hexdump(bits, sizeof(bits)); // all zero now
-		return 0;
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
