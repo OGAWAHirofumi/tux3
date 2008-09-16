@@ -23,6 +23,36 @@
 #include "buffer.h"
 #include "tux3.h"
 
+void set_bits(u8 *bitmap, unsigned start, unsigned count)
+{
+	unsigned limit = start + count;
+	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
+	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
+	unsigned loff = start >> 3, roff = limit >> 3;
+	if (loff == roff) {
+		bitmap[loff] |= lmask & rmask;
+		return;
+	}
+	bitmap[loff] |= lmask;
+	memset(bitmap + loff + 1, -1, roff - loff - 1);
+	bitmap[roff] |= rmask;
+}
+
+void reset_bits(u8 *bitmap, unsigned start, unsigned count)
+{
+	unsigned limit = start + count;
+	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
+	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
+	unsigned loff = start >> 3, roff = limit >> 3;
+	if (loff == roff) {
+		bitmap[loff] &= ~lmask | ~rmask;
+		return;
+	}
+	bitmap[loff] &= ~lmask;
+	memset(bitmap + loff + 1, 0, roff - loff - 1);
+	bitmap[roff] &= ~rmask;
+}
+
 static int bytebits(unsigned char c)
 {
 	unsigned count = 0;
@@ -211,12 +241,26 @@ eek:
 #ifndef main
 int main(int argc, char *argv[])
 {
+	if (1) {
+		warn("---- test bitops ----");
+		unsigned char bits[16];
+		memset(bits, 0, sizeof(bits));
+		set_bits(bits, 6, 20);
+		set_bits(bits, 49, 16);
+		set_bits(bits, 0x51, 2);
+		hexdump(bits, sizeof(bits));
+		reset_bits(bits, 6, 20);
+		reset_bits(bits, 49, 16);
+		reset_bits(bits, 0x51, 2);
+		hexdump(bits, sizeof(bits)); // all zero now
+		return 0;
+	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .super = { .blocks = 150 } };
+	struct sb *sb = &(struct sb){ .super = { .volblocks = 150 } };
 	struct inode *bitmap = &(struct inode){ .sb = sb, .map = map };
-	sb->freeblocks = sb->super.blocks;
-	sb->nextalloc = sb->super.blocks; // this should wrap around to zero
+	sb->freeblocks = sb->super.volblocks;
+	sb->nextalloc = sb->super.volblocks; // this should wrap around to zero
 	sb->bitmap = bitmap;
 
 	init_buffers(dev, 1 << 20);
@@ -246,11 +290,11 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
 
-	bitmap_dump(bitmap, 0, sb->super.blocks);
-	printf("%Li used, %Li free\n", count_range(bitmap, 0, sb->super.blocks), sb->freeblocks);
+	bitmap_dump(bitmap, 0, sb->super.volblocks);
+	printf("%Li used, %Li free\n", count_range(bitmap, 0, sb->super.volblocks), sb->freeblocks);
 	bfree(sb, 0x7e);
 	bfree(sb, 0x80);
-	bitmap_dump(bitmap, 0, sb->super.blocks);
+	bitmap_dump(bitmap, 0, sb->super.volblocks);
 	return 0;
 }
 #endif

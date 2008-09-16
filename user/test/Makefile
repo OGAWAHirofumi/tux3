@@ -1,7 +1,7 @@
 CC=gcc -std=gnu99 -Wall -g -D_FILE_OFFSET_BITS=64
 VG=valgrind --error-exitcode=200 --leak-check=full
 
-binaries = vfs.o dleaf ileaf iattr xattr btree dir inode tux3
+binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir inode tux3
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fs tux3fuse
@@ -15,6 +15,11 @@ tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c
 	$(CC) -Dmain=notmain vfs.c -c
+
+balloc: $(basedeps) balloc.c
+	$(CC) vfs.o balloc.c -o balloc
+balloctest: balloc
+	$(VG) ./balloc
 
 dleaf: $(basedeps) dleaf.c
 	$(CC) vfs.o dleaf.c -o dleaf
