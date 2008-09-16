@@ -153,7 +153,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
+block_t balloc_extent_from_range(struct inode *inode, block_t start, block_t count, unsigned size)
 {
 	block_t limit = start + count;
 	unsigned blocksize = 1 << inode->map->dev->bits;
@@ -163,34 +163,40 @@ block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
 	unsigned offset = (start & mapmask) >> 3;
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
-
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		//printf("search block %x/%x\n", block, blocks);
 		struct buffer *buffer = bread(inode->map, block);
 		if (!buffer)
 			return -1;
-		unsigned bytes = blocksize - offset;
+		unsigned bytes = blocksize - offset, run = 0;
 		if (bytes > tail)
 			bytes = tail;
 		unsigned char *p = buffer->data + offset, *top = p + bytes, c;
 		for (; p < top; p++, startbit = 0) {
-			if ((c = *p) == 0xff)
+			if ((c = *p) == 0xff) {
+				run = 0;
 				continue;
+			}
 			for (int i = startbit, mask = 1 << startbit; i < 8; i++, mask <<= 1) {
-				if ((c & mask))
+				if ((c & mask)) {
+					run = 0;
 					continue;
+				}
+				if (++run < size)
+					continue;
+				assert(run == size);
 				block_t found = i + (((void *)p - buffer->data) << 3) + (block << mapshift);
 				if (found >= limit) {
 					assert(block == blocks - 1);
 					goto final_partial_byte;
 				}
-				set_bit(buffer->data, found & mapmask);
+				set_bits(buffer->data, found & mapmask, run);
 				set_buffer_dirty(buffer);
 				brelse(buffer);
 				inode->sb->nextalloc = found + 1;
 				inode->sb->freeblocks--;
 				//set_sb_dirty(sb);
-				return found;
+				return found - run + 1;
 			}
 		}
 final_partial_byte:
@@ -199,6 +205,11 @@ final_partial_byte:
 		offset = 0;
 	}
 	return -1;
+}
+
+block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
+{
+	return balloc_extent_from_range(inode, start, count, 1);
 }
 
 block_t balloc(SB)
@@ -241,7 +252,7 @@ eek:
 #ifndef main
 int main(int argc, char *argv[])
 {
-	if (1) {
+	if (0) {
 		warn("---- test bitops ----");
 		unsigned char bits[16];
 		memset(bits, 0, sizeof(bits));
