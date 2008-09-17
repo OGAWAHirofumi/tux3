@@ -292,6 +292,8 @@ int main(int argc, char *argv[])
 		goto nomem;
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto nomem;
+	if (!(sb->atable = new_inode(sb, 0xa)))
+		goto nomem;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
 	if ((errno = -open_inode(sb->rootdir)))
