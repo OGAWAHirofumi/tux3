@@ -81,7 +81,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 				brelse(nextbuf);
 				if (!dirty)
 					break;
-				ends[up] = next;
+				ends[up] = next; /* what happens to the beer you send */
 			}
 		}
 		if (ends[1] - ends[0])
