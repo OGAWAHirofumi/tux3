@@ -69,6 +69,10 @@ int filemap_blockio(struct buffer *buffer, int write)
 	block_t physical;
 
 	if (write) {
+		if (!buffer_dirty(buffer))
+			warn("egad, writing a clean buffer");
+//		if ((buffer = findblk(map, buffer->index + 1)))
+//			...
 		if (count) {
 			physical = found->block;
 			trace("found block [%Lx]", (L)physical);

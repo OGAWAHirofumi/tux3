@@ -308,22 +308,32 @@ int count_buffers(void)
 	return count;
 }
 
+struct buffer *findblk(struct map *map, sector_t block)
+{
+	struct buffer **bucket = map->hash + buffer_hash(block);
+	for (struct buffer *buffer = *bucket; buffer; buffer = buffer->hashlink)
+		if (buffer->index == block) {
+			buffer->count++;
+			return buffer;
+		}
+	return NULL;
+}
+
 struct buffer *getblk(struct map *map, sector_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block), *buffer;
-
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
 		if (buffer->index == block) {
-			buftrace("Found buffer for %Lx, state = %i", block, buffer->state);
-			buffer->count++;
+			buftrace("found buffer for %Lx, state = %i", block, buffer->state);
 			list_del(&buffer->lrulink);
 			list_add_tail(&buffer->lrulink, &lru_buffers);
+			buffer->count++;
 			return buffer;
 		}
-	if (!(buffer = new_buffer(map, block)))
-		return NULL;
-	buffer->hashlink = *bucket;
-	*bucket = buffer;
+	if ((buffer = new_buffer(map, block))) {
+		buffer->hashlink = *bucket;
+		*bucket = buffer;
+	}
 	return buffer;
 }
 
