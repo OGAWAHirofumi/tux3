@@ -85,10 +85,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 			}
 		}
 		if (ends[1] - ends[0])
-{
 			printf("extent from %x to %x\n", ends[0], ends[1]);
-exit(1);
-}
 		if (count) {
 			physical = found->block;
 			trace("found block [%Lx]", (L)physical);
