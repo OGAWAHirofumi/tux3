@@ -48,6 +48,7 @@ extern unsigned dirty_buffer_count;
 struct list_head journaled_buffers;
 extern unsigned journaled_count;
 
+void show_buffer(struct buffer *buffer);
 void show_buffers(struct map *map);
 void set_buffer_dirty(struct buffer *buffer);
 void set_buffer_uptodate(struct buffer *buffer);
@@ -58,6 +59,7 @@ int write_buffer_to(struct buffer *buffer, offset_t pos);
 int write_buffer(struct buffer *buffer);
 int read_buffer(struct buffer *buffer);
 unsigned buffer_hash(sector_t block);
+struct buffer *findblk(struct map *map, sector_t block);
 struct buffer *getblk(struct map *map, sector_t block);
 struct buffer *bread(struct map *map, sector_t block);
 void add_buffer_journaled(struct buffer *buffer);

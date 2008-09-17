@@ -62,17 +62,33 @@ int filemap_blockio(struct buffer *buffer, int write)
 	if ((err = probe(&inode->btree, buffer->index, path)))
 		return err;
 	struct buffer *leafbuf = path[levels].buffer;
-	
+
 	unsigned count = 0;
 	struct extent *found = dleaf_lookup(&inode->btree, leafbuf->data, buffer->index, &count);
 	//dleaf_dump(&inode->btree, leafbuf->data);
 	block_t physical;
 
 	if (write) {
-		if (!buffer_dirty(buffer))
-			warn("egad, writing a clean buffer");
-//		if ((buffer = findblk(map, buffer->index + 1)))
-//			...
+		if (buffer_empty(buffer))
+			warn("egad, wrote an invalid buffer");
+		unsigned ends[2] = { buffer->index, buffer->index};
+		for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
+			while (1) {
+				struct buffer *nextbuf = findblk(buffer->map, ends[up] + sign);
+				if (!nextbuf)
+					break;
+				unsigned next = nextbuf->index, dirty = buffer_dirty(nextbuf);
+				brelse(nextbuf);
+				if (!dirty)
+					break;
+				ends[up] = next;
+			}
+		}
+		if (ends[1] - ends[0])
+{
+			printf("extent from %x to %x\n", ends[0], ends[1]);
+exit(1);
+}
 		if (count) {
 			physical = found->block;
 			trace("found block [%Lx]", (L)physical);
