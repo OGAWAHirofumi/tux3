@@ -151,6 +151,7 @@ static inline void *decode48(void *at, u64 *val)
 #define MAX_BLOCKS_BITS 48
 #define MAX_FILESIZE_BITS 60
 #define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
+#define MAX_EXTENT (1 << 6)
 #define SB_LOC (1 << 12)
 #define SB struct sb *sb
 

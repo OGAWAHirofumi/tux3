@@ -73,7 +73,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 			warn("egad, wrote an invalid buffer");
 		unsigned ends[2] = { buffer->index, buffer->index};
 		for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
-			while (1) {
+			while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
 				struct buffer *nextbuf = findblk(buffer->map, ends[up] + sign);
 				if (!nextbuf)
 					break;
