@@ -211,7 +211,7 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, block_t cou
 				set_buffer_dirty(buffer);
 				brelse(buffer);
 				inode->sb->nextalloc = found + 1;
-				inode->sb->freeblocks--;
+				inode->sb->freeblocks -= run;
 				//set_sb_dirty(sb);
 				return found - run + 1;
 			}
@@ -242,28 +242,33 @@ found:
 	return block;
 }
 
-void bfree(SB, block_t block)
+void bfree_extent(SB, block_t start, unsigned count)
 {
 	unsigned mapshift = sb->bitmap->map->dev->bits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned mapblock = block >> mapshift;
-	char *why = "free failed";
+	unsigned mapblock = start >> mapshift;
+	char *why = "could not read bitmap buffer";
 	struct buffer *buffer = bread(sb->bitmap->map, mapblock);
-	printf("free <- [%Lx]\n", (L)block);
+	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
 		goto eek;
-	if (!get_bit(buffer->data, block & mapmask))
-		goto eek2;
-	reset_bit(buffer->data, block & mapmask);
+	if (!all_set(buffer->data, start &= mapmask, count))
+		goto eeek;
+	clear_bits(buffer->data, start, count);
 	brelse_dirty(buffer);
-	sb->freeblocks++;
+	sb->freeblocks += count;
 	//set_sb_dirty(sb);
 	return;
-eek2:
-	why = "already free";
+eeek:
+	why = "blocks already free";
 	brelse(buffer);
 eek:
-	warn("block 0x%Lx %s!\n", (L)block, why);
+	warn("extent 0x%Lx %s!\n", (L)start, why);
+}
+
+void bfree(SB, block_t block)
+{
+	bfree_extent(sb, block, 1);
 }
 
 #ifndef main
