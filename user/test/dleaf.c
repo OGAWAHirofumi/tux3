@@ -16,8 +16,8 @@
 #include "tux3.h"
 
 struct extent { block_t block:48, count:6, version:10; };
-struct group { u32 count:8, loghi:24; };
-struct entry { u32 limit:8, loglo:24; };
+struct group { u32 count:8, keyhi:24; };
+struct entry { u32 limit:8, keylo:24; };
 struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
 
 /*
@@ -126,7 +126,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 			--entry;
 			unsigned offset = entry == entries - 1 ? 0 : (entry + 1)->limit;
 			int count = entry->limit - offset;
-			printf(" %Lx ->", ((L)group->loghi << 24) + entry->loglo);
+			printf(" %Lx ->", ((L)group->keyhi << 24) + entry->keylo);
 			if (count < 0)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++)
@@ -173,7 +173,7 @@ int dleaf_chop(BTREE, tuxkey_t high, vleaf *vleaf)
 
 	while (1) {
 		unsigned count = entry->limit - start;
-		tuxkey_t key = ((tuxkey_t)group->loghi << 24) | entry->loglo;
+		tuxkey_t key = ((tuxkey_t)group->keyhi << 24) | entry->keylo;
 		if (key >= high) {
 			if (!trunc) {
 				unsigned newcount = group->count - (entry - estop);
@@ -200,18 +200,71 @@ int dleaf_chop(BTREE, tuxkey_t high, vleaf *vleaf)
 	return 0;
 }
 
+struct dwalk {
+	struct dleaf *leaf;
+	struct group *group, *gstop;
+	struct entry *entry, *estop;
+	struct extent *xtent, *xstop;
+	unsigned extents, start;
+};
+
+int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
+{
+	struct group *group, *gdict = (void *)leaf + sb->blocksize;
+	struct group *gstop = gdict - leaf->groups;
+	struct entry *entry, *estop, *edict = (void *)gstop;
+	struct extent *xtent = leaf->table;
+	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
+	/* find first entry greater or equal key */
+	/* this will be a group of extents starting at the same place */
+	for (group = gdict - 1; group >= gstop; group--) {
+		estop = edict - group->count;
+		if (group->keyhi >= keyhi)
+			break;
+	}
+	if (group->keyhi == keyhi)
+		for (entry = edict; entry > estop;) {
+			if ((--entry)->keylo >= keylo)
+				break;
+			xtent += estop->limit;
+			edict -= group->count;
+		}
+	*walk = (struct dwalk){
+		.leaf = leaf,
+		.group = group,
+		.entry = entry,
+		.xtent = xtent,
+		.gstop = gstop,
+		.estop = estop,
+		.xstop = xtent + estop->limit };
+	return 0;
+}
+
+struct extent *dwalk_advance(struct dwalk *walk)
+{
+	if (++walk->xtent == walk->xstop) {
+		if (--walk->entry == walk->estop) {
+			if (--walk->group == walk->gstop)
+				return NULL;
+			walk->estop = walk->entry - walk->group->count;
+		}
+		walk->xstop += walk->entry->limit - walk->start;
+	}
+	return walk->xtent;
+}
+
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	struct extent *extents = leaf->table;
-	unsigned loglo = key & 0xffffff, loghi = key >> 24;
+	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 
 	for (struct group *group = groups - 1; group >= grbase; group--) {
 		struct entry *enbase = entries - group->count;
-		if (loghi == group->loghi)
+		if (keyhi == group->keyhi)
 			for (struct entry *entry = entries; entry > enbase;)
-				if ((--entry)->loglo == loglo) {
+				if ((--entry)->keylo == keylo) {
 					unsigned offset = entry - enbase == group->count - 1 ? 0 : (entry + 1)->limit;
 					*count = entry->limit - offset;
 					return extents + offset;
@@ -265,7 +318,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	struct group *groups = base + btree->sb->blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1);
 	struct extent *extents = leaf->table;
-	unsigned loglo = key & 0xffffff, loghi = key >> 24;
+	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 	void *used = leaf->used + base;
 	const int grouplim = 7;
 
@@ -276,17 +329,17 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	/* find group position */
 	struct group *group;
 	for (group = groups; group > grbase; group--) {
-		if (loghi <= group->loghi) {
-			if (loghi < group->loghi)
+		if (keyhi <= group->keyhi) {
+			if (keyhi < group->keyhi)
 				break;
 			//printf("is key in this group?\n");
-			if (loglo <= (entries - group->count)->loglo)
+			if (keylo <= (entries - group->count)->keylo)
 				break;
 			//printf("is there another group?\n");
 			if (group - 1 == grbase)
 				break;
-			//printf("that has the same loghi?\n");
-			if (loghi != (group - 1)->loghi)
+			//printf("that has the same keyhi?\n");
+			if (keyhi != (group - 1)->keyhi)
 				break;
 		}
 		entries -= group->count;
@@ -294,11 +347,11 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	}
 
 	/* insert new group if no match  */
-	if (group == grbase || loghi < group->loghi || (entries - group->count)->limit == grouplim) {
-		int split = group != grbase && loghi == group->loghi;
+	if (group == grbase || keyhi < group->keyhi || (entries - group->count)->limit == grouplim) {
+		int split = group != grbase && keyhi == group->keyhi;
 		printf("new group at %ti\n", group - grbase);
 		memmove(used - sizeof(*group), used, (void *)(group + 1) - used);
-		*group = (struct group){ .loghi = loghi, .count = 0 };
+		*group = (struct group){ .keyhi = keyhi, .count = 0 };
 		used -= sizeof(*group);
 		grbase--;
 		entries--;
@@ -310,7 +363,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 			/* decrease entry limits for successor group */
 			for (int i = group->count + 1; i <= count; i++)
 				(entries - i)->limit -= (entries - group->count)->limit;
-			if (loglo > (entries - group->count - 1)->loglo) {
+			if (keylo > (entries - group->count - 1)->keylo) {
 				printf("insert into successor group\n");
 				entries -= group->count;
 				extents += entries->limit;
@@ -322,15 +375,15 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	/* find entry position */
 	struct entry *enbase = --entries - group->count, *entry;
 	for (entry = entries; entry > enbase; entry--)
-		if (loglo <= entry->loglo)
+		if (keylo <= entry->keylo)
 			break;
 
 	/* insert new entry if no match  */
-	if (entry == enbase || loglo < entry->loglo) {
+	if (entry == enbase || keylo < entry->keylo) {
 		printf("insert 0x%Lx at %ti in group %ti\n", (L)key, entries - entry, groups - group);
 		memmove(used - sizeof(*entry), used, (void *)(entry + 1) - used);
 		unsigned limit = !group->count || entry == entries ? 0 : (entry + 1)->limit;
-		*entry = (struct entry){ .loglo = loglo, .limit = limit };
+		*entry = (struct entry){ .keylo = keylo, .limit = limit };
 		used -= sizeof(*entry);
 		enbase--;
 		group->count++;
@@ -355,7 +408,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 /*
  * Fast path insert
  *
- * If loghi same as last group and loglo greater than last entry:
+ * If keyhi same as last group and keylo greater than last entry:
  *
  *  - append extent
  *  - append entry
@@ -422,7 +475,7 @@ tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	leaf->used = (void *)(grbase - split) - from;
 	dest->used = (void *)(groups - dest->groups - encount + split) - from;
 	memset(from + leaf->free, 0, leaf->used - leaf->free);
-	return ((destgroups - 1)->loghi << 24) | (destentries - 1)->loglo;
+	return ((destgroups - 1)->keyhi << 24) | (destentries - 1)->keylo;
 }
 
 void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
@@ -439,7 +492,7 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 
 	/* merge last group (lowest) with first of from (highest)? */
 	struct group *fromgroups = (void *)from + btree->sb->blocksize;
-	int uncut = leaf->groups && from->groups && ((fromgroups - 1)->loghi == grbase->loghi);
+	int uncut = leaf->groups && from->groups && ((fromgroups - 1)->keyhi == grbase->keyhi);
 
 	/* make space and append groups except for possibly merged group */
 	unsigned addgroups = from->groups - uncut;

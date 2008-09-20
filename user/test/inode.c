@@ -86,6 +86,8 @@ int filemap_blockio(struct buffer *buffer, int write)
 		}
 		if (ends[1] - ends[0])
 			printf("extent from %x to %x\n", ends[0], ends[1]);
+#if 0
+#else
 		if (count) {
 			physical = found->block;
 			trace("found block [%Lx]", (L)physical);
@@ -102,6 +104,7 @@ int filemap_blockio(struct buffer *buffer, int write)
 		}
 		release_path(path, levels + 1);
 		return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
+#endif
 	}
 	/* read */
 	release_path(path, levels + 1);
