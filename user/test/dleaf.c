@@ -293,6 +293,11 @@ struct extent *dwalk_advance(struct dwalk *walk)
 	return walk->extent++; // also return key
 }
 
+tuxkey_t dwalk_key(struct dwalk *walk)
+{
+	return (walk->group->keyhi << 24) | walk->entry->keylo;
+}
+
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf->groups;
@@ -596,7 +601,7 @@ int main(int argc, char *argv[])
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi;
 	unsigned keys[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
-	for (int i = 0; i < 32; i++)
+	for (int i = 1; i < 32; i++)
 		dleaf_insert(btree, (i << 12) + i, leaf, (struct extent){ .block = i });
 	dleaf_dump(btree, leaf);
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x111 });
@@ -610,13 +615,9 @@ int main(int argc, char *argv[])
 	dleaf_insert(btree, keys[next], leaf, (struct extent){ .block = 0x999 });
 	dleaf_dump(btree, leaf);
 	struct dwalk *walk = &(struct dwalk){ };
-	dwalk_probe(sb, leaf, walk, 0x4000056);
-	for (int i = 1; i < 50; i++) {
-		struct extent *extent = dwalk_advance(walk);
-		if (!extent)
-			break;
-		printf("next extent => %Lx\n", (L)extent->block);
-	}
+	dwalk_probe(sb, leaf, walk, 0xf00f);
+	for (struct extent *extent; extent = dwalk_advance(walk);)
+		printf("%Lx => %Lx\n", (L)dwalk_key(walk), (L)extent->block);
 return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
