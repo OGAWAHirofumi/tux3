@@ -126,7 +126,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 			--entry;
 			unsigned offset = entry == entries - 1 ? 0 : (entry + 1)->limit;
 			int count = entry->limit - offset;
-			printf(" %Lx ->", ((L)group->keyhi << 24) + entry->keylo);
+			printf(" %Lx =>", ((L)group->keyhi << 24) + entry->keylo);
 			if (count < 0)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++)
@@ -204,53 +204,92 @@ struct dwalk {
 	struct dleaf *leaf;
 	struct group *group, *gstop;
 	struct entry *entry, *estop;
-	struct extent *xtent, *xstop;
-	unsigned extents, start;
+	struct extent *exbase, *extent, *exstop;
 };
 
 int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 {
-	struct group *group, *gdict = (void *)leaf + sb->blocksize;
-	struct group *gstop = gdict - leaf->groups;
-	struct entry *entry, *estop, *edict = (void *)gstop;
-	struct extent *xtent = leaf->table;
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
-	/* find first entry greater or equal key */
-	/* this will be a group of extents starting at the same place */
-	for (group = gdict - 1; group >= gstop; group--) {
-		estop = edict - group->count;
-		if (group->keyhi >= keyhi)
+	struct group *gdict = (void *)leaf + sb->blocksize;
+	struct entry *edict = (struct entry *)(gdict - leaf->groups);
+	struct group *gstop = gdict - leaf->groups, *group = gdict - 1;
+	struct entry *estop = edict - group->count, *entry;
+	struct extent *exbase = leaf->table;
+
+	while (1) {
+		//printf("group check %x, %x\n", keyhi, group->keyhi);
+		if (group->keyhi > keyhi)
 			break;
-	}
-	if (group->keyhi == keyhi)
-		for (entry = edict; entry > estop;) {
-			if ((--entry)->keylo >= keylo)
+		//printf("next group keylow = %x\n", (estop - 1)->keylo);
+		if (group->keyhi == keyhi) {
+			if (group == gstop)
 				break;
-			xtent += estop->limit;
-			edict -= group->count;
+			if ((group - 1)->keyhi != keyhi)
+				break;
+			if ((estop - 1)->keylo > keylo)
+				break;
 		}
+		exbase += estop->limit;
+		if (--group == gstop)
+			break;
+		estop -= group->count;
+	}
+	struct extent *extent = exbase, *exstop = exbase;
+	if (group >= gstop) {
+		assert(group->keyhi >= keyhi);
+		entry = estop + group->count - 1;
+		//printf("entry %x, estop %x\n", entry->keylo, estop->keylo);
+		if (group->keyhi == keyhi) {
+			for (; entry >= estop; entry--) { /* see note */
+				//printf("entry check %x, %x\n", keylo, (entry - 1)->keylo);
+				exstop = exbase + entry->limit;
+				if (entry->keylo >= keylo)
+					break;
+				extent = exstop;
+			}
+		}
+	}
+
+	//printf("group %i entry %i of %i\n", gdict - 1 - group, estop + group->count - 1 - entry, group->count);
 	*walk = (struct dwalk){
 		.leaf = leaf,
 		.group = group,
 		.entry = entry,
-		.xtent = xtent,
 		.gstop = gstop,
 		.estop = estop,
-		.xstop = xtent + estop->limit };
+		.exbase = exbase,
+		.extent = extent,
+		.exstop = exstop };
+	printf("%x:%x => %Lx\n", group->keyhi, entry->keylo, (L)extent->block);
 	return 0;
 }
 
+/*
+ * Note!
+ *
+ * The dwalk probe is designed to handle not just a walk, but insert as well,
+ * so it must be able to repesent an entry position past the last entry of a
+ * group in case an entry with a higher key than any other in the group needs
+ * to be inserted.  In this case, the entry is already past the estop, so the
+ * advance needs to handle that with an inequality test.  Testing for equal
+ * to estop is not quite good enough.
+ */
+
 struct extent *dwalk_advance(struct dwalk *walk)
 {
-	if (++walk->xtent == walk->xstop) {
-		if (--walk->entry == walk->estop) {
-			if (--walk->group == walk->gstop)
+	//printf("walk extent = %Lx, exstop = %Lx\n", (L)walk->extent->block, (L)walk->exstop->block);
+	if (walk->extent >= walk->exstop) {
+		//printf("next entry, entry = %x, estop = %x, \n", walk->entry->keylo, walk->estop->keylo);
+		if (walk->entry-- <= walk->estop) {
+			//printf("next group\n");
+			if (walk->group <= walk->gstop)
 				return NULL;
-			walk->estop = walk->entry - walk->group->count;
+			walk->exbase += walk->estop->limit;
+			walk->estop -= (--walk->group)->count;
 		}
-		walk->xstop += walk->entry->limit - walk->start;
+		walk->exstop = walk->exbase + walk->entry->limit;
 	}
-	return walk->xtent;
+	return walk->extent++; // also return key
 }
 
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
@@ -320,7 +359,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	struct extent *extents = leaf->table;
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 	void *used = leaf->used + base;
-	const int grouplim = 7;
+	const int grouplim = 7; /// !!! just for testing !!! ///
 
 	/* need room for one extent + maybe one group + maybe one entry */
 	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) + size)
@@ -549,7 +588,7 @@ void bfree(SB, block_t block)
 int main(int argc, char *argv[])
 {
 	printf("--- leaf test ---\n");
-	SB = &(struct sb){ .blocksize = 4096 };
+	SB = &(struct sb){ .blocksize = 1 << 10 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = leaf_create(btree);
 	dleaf_chop(btree, 0x14014LL, leaf);
@@ -569,6 +608,15 @@ int main(int argc, char *argv[])
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x888 });
 	dleaf_insert(btree, keys[next], leaf, (struct extent){ .block = 0x999 });
 	dleaf_dump(btree, leaf);
+	struct dwalk *walk = &(struct dwalk){ };
+	dwalk_probe(sb, leaf, walk, 0x12013);
+	for (int i = 1; i < 50; i++) {
+		struct extent *extent = dwalk_advance(walk);
+		if (!extent)
+			break;
+		printf("next extent => %Lx\n", (L)extent->block);
+	}
+return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
 		unsigned count;
