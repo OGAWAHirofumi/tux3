@@ -276,7 +276,7 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
  * to estop is not quite good enough.
  */
 
-struct extent *dwalk_advance(struct dwalk *walk)
+struct extent *dwalk_next(struct dwalk *walk)
 {
 	//printf("walk extent = %Lx, exstop = %Lx\n", (L)walk->extent->block, (L)walk->exstop->block);
 	if (walk->extent >= walk->exstop) {
@@ -296,6 +296,27 @@ struct extent *dwalk_advance(struct dwalk *walk)
 tuxkey_t dwalk_key(struct dwalk *walk)
 {
 	return (walk->group->keyhi << 24) | walk->entry->keylo;
+}
+
+#ifndef main
+#define MAX_GROUP_ENTRIES 7
+#else
+#define MAX_GROUP_ENTRIES 255
+#endif
+
+int dwalk_pack(struct dwalk *walk, tuxkey_t key, struct extent extent)
+{
+	if (dwalk_key(walk) != key) {
+		unsigned keylo = key & 0xffffff, keyhi = key >> 24;
+		walk->entry->limit++;
+		if (walk->group->keyhi != keyhi || walk->group->count >= MAX_GROUP_ENTRIES)
+			*--walk->group = (struct group){ .keyhi = keyhi };
+		/* add new entry */
+		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase };
+		walk->group->count++;
+	}
+	*walk->extent++ = extent;
+	return 0; // extent out of order??? leaf full???
 }
 
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
@@ -365,7 +386,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	struct extent *extents = leaf->table;
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 	void *used = leaf->used + base;
-	const int grouplim = 7; /// !!! just for testing !!! ///
+	const int grouplim = MAX_GROUP_ENTRIES; /// !!! just for testing !!! ///
 
 	/* need room for one extent + maybe one group + maybe one entry */
 	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) + size)
@@ -616,7 +637,7 @@ int main(int argc, char *argv[])
 	dleaf_dump(btree, leaf);
 	struct dwalk *walk = &(struct dwalk){ };
 	dwalk_probe(sb, leaf, walk, 0xf00f);
-	for (struct extent *extent; extent = dwalk_advance(walk);)
+	for (struct extent *extent; (extent = dwalk_next(walk));)
 		printf("%Lx => %Lx\n", (L)dwalk_key(walk), (L)extent->block);
 return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
