@@ -13,7 +13,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include "hexdump.c"
+#include "trace.h"
 #include "tux3.h"
+
+#ifndef trace
+#define trace trace_on
+#endif
 
 struct extent { block_t block:48, count:6, version:10; };
 struct group { u32 count:8, keyhi:24; };
@@ -307,15 +312,34 @@ tuxkey_t dwalk_key(struct dwalk *walk)
 int dwalk_pack(struct dwalk *walk, tuxkey_t key, struct extent extent)
 {
 	if (dwalk_key(walk) != key) {
+		trace("add entry key 0x%Lx after 0x%Lx", (L)key, (L)dwalk_key(walk));
 		unsigned keylo = key & 0xffffff, keyhi = key >> 24;
-		walk->entry->limit++;
-		if (walk->group->keyhi != keyhi || walk->group->count >= MAX_GROUP_ENTRIES)
+		if (walk->group->keyhi != keyhi || walk->group->count >= MAX_GROUP_ENTRIES) {
+			trace("add group %i", walk->leaf->groups);
+			/* will it fit? */
+			assert(sizeof(struct entry) == sizeof(struct group));
+			assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
+			walk->leaf->used -= sizeof(*walk->entry);
+			/* move entries down, adjust walk state */
+			/* should preplan this to avoid move, need additional pack state */
+			vecmove(walk->entry - 1, walk->entry, (struct entry *)walk->group - walk->entry);
+			walk->leaf->used -= sizeof(struct group);
+			walk->entry--;
+			/* add the group */
+			walk->exbase += walk->entry->limit;
 			*--walk->group = (struct group){ .keyhi = keyhi };
-		/* add new entry */
-		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase };
+			walk->leaf->groups++;
+		}
+		assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
+		walk->leaf->used -= sizeof(*walk->entry);
+		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
 		walk->group->count++;
 	}
-	*walk->extent++ = extent;
+	trace("add extent");
+	assert(walk->leaf->free + sizeof(*walk->extent) <= walk->leaf->used);
+	walk->leaf->free += sizeof(*walk->extent);
+	*++walk->extent = extent;
+	walk->entry->limit++;
 	return 0; // extent out of order??? leaf full???
 }
 
@@ -637,8 +661,16 @@ int main(int argc, char *argv[])
 	dleaf_dump(btree, leaf);
 	struct dwalk *walk = &(struct dwalk){ };
 	dwalk_probe(sb, leaf, walk, 0xf00f);
-	for (struct extent *extent; (extent = dwalk_next(walk));)
-		printf("%Lx => %Lx\n", (L)dwalk_key(walk), (L)extent->block);
+//	for (struct extent *extent; (extent = dwalk_next(walk));)
+//		printf("0x%Lx => 0x%Lx\n", (L)dwalk_key(walk), (L)extent->block);
+	dwalk_probe(sb, leaf, walk, 0x3000055);
+	dwalk_pack(walk, 0x3001001, (struct extent){ .block = 0x1 });
+	dwalk_pack(walk, 0x3001002, (struct extent){ .block = 0x1 });
+	dwalk_pack(walk, 0x3001003, (struct extent){ .block = 0x1 });
+	dwalk_pack(walk, 0x3001004, (struct extent){ .block = 0x1 });
+	dwalk_pack(walk, 0x3001005, (struct extent){ .block = 0x1 });
+	dwalk_pack(walk, 0x3001006, (struct extent){ .block = 0x1 });
+	dleaf_dump(btree, leaf);
 return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
