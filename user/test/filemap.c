@@ -1,3 +1,7 @@
+#ifndef trace
+#define trace trace_on
+#endif
+
 #define main notmain0
 #include "balloc.c"
 #undef main
@@ -137,8 +141,8 @@ int main(int argc, char *argv[])
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
-		.bitmap = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) },
 	};
+	sb->bitmap = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) },
 	sb->bitmap->map->inode = sb->bitmap;
 	init_buffers(dev, 1 << 20);
 	struct inode *inode = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) };
@@ -146,8 +150,8 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 	brelse_dirty(getblk(inode->map, 0));
-	show_buffers(inode->map);
 	printf("flush result: %s\n", strerror(-flush_buffers(inode->map)));
+	show_buffers(inode->map);
 	return 0;
 }
 #endif
