@@ -23,6 +23,38 @@
 #include "btree.c"
 #undef main
 
+int filemap_read(struct buffer *buffer)
+{
+	struct inode *inode = buffer->map->inode;
+	struct sb *sb = inode->sb;
+	struct dev *dev = sb->devmap->dev;
+	warn("block read <%Lx:%Lx>", (L)inode->inum, buffer->index);
+	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
+		return -EIO;
+	assert(dev->bits >= 8 && dev->fd);
+	int err, levels = inode->btree.root.depth;
+	struct path path[levels + 1];
+	if (!levels)
+		goto hole;
+	if ((err = probe(&inode->btree, buffer->index, path)))
+		return err;
+	unsigned count = 0;
+	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
+	//dleaf_dump(&inode->btree, path[levels].buffer->data);
+
+	release_path(path, levels + 1);
+	if (count)
+		goto hole;
+
+	block_t physical = found->block;
+	trace("found physical block %Lx", (L)physical);
+	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
+hole:
+	trace("unmapped block %Lx", (L)buffer->index);
+	memset(buffer->data, 0, sb->blocksize);
+	return 0;
+}
+
 int filemap_write(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
@@ -84,40 +116,6 @@ eek:
 	warn("cannot add extent to tree: %s", strerror(-err));
 	free_block(sb, physical);
 	return -EIO;
-}
-
-int filemap_read(struct buffer *buffer)
-{
-	struct inode *inode = buffer->map->inode;
-	struct sb *sb = inode->sb;
-	struct dev *dev = sb->devmap->dev;
-	warn("block read <%Lx:%Lx>", (L)inode->inum, buffer->index);
-	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
-		return -EIO;
-	assert(dev->bits >= 8 && dev->fd);
-	int err, levels = inode->btree.root.depth;
-	struct path path[levels + 1];
-	if (!levels)
-		goto unmapped;
-	if ((err = probe(&inode->btree, buffer->index, path)))
-		return err;
-	unsigned count = 0;
-	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
-	//dleaf_dump(&inode->btree, path[levels].buffer->data);
-
-	block_t physical;
-
-	release_path(path, levels + 1);
-	if (!count)
-		goto unmapped;
-	physical = found->block;
-	trace("found physical block %Lx", (long long)physical);
-	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
-unmapped:
-	/* found a hole */
-	trace("unmapped block %Lx", buffer->index);
-	memset(buffer->data, 0, sb->blocksize);
-	return 0;
 }
 
 struct map_ops filemap_ops = { .bread = filemap_read, .bwrite = filemap_write };
