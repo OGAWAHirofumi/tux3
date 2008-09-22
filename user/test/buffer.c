@@ -438,15 +438,7 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 	preallocate_buffers(bufsize);
 }
 
-int devmap_write(struct buffer *buffer)
-{
-	warn("write [%Lx]", (L)buffer->index);
-	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 8 && dev->fd);
-	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
-}
-
-int devmap_read(struct buffer *buffer)
+int dev_bread(struct buffer *buffer)
 {
 	warn("read [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
@@ -454,7 +446,15 @@ int devmap_read(struct buffer *buffer)
 	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
-struct map_ops devmap_ops = { .bread = devmap_read, .bwrite = devmap_write };
+int dev_bwrite(struct buffer *buffer)
+{
+	warn("write [%Lx]", (L)buffer->index);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 8 && dev->fd);
+	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+}
+
+struct map_ops devmap_ops = { .bread = dev_bread, .bwrite = dev_bwrite };
 
 struct map *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {

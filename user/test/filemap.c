@@ -23,15 +23,13 @@
 #include "btree.c"
 #undef main
 
-int filemap_read(struct buffer *buffer)
+int file_bread(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
-	struct dev *dev = sb->devmap->dev;
 	warn("block read <%Lx:%Lx>", (L)inode->inum, buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	assert(dev->bits >= 8 && dev->fd);
 	int err, levels = inode->btree.root.depth;
 	struct path path[levels + 1];
 	if (!levels)
@@ -43,11 +41,13 @@ int filemap_read(struct buffer *buffer)
 	//dleaf_dump(&inode->btree, path[levels].buffer->data);
 
 	release_path(path, levels + 1);
-	if (count)
+	if (!count)
 		goto hole;
 
 	block_t physical = found->block;
 	trace("found physical block %Lx", (L)physical);
+	struct dev *dev = sb->devmap->dev;
+	assert(dev->bits >= 8 && dev->fd);
 	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 hole:
 	trace("unmapped block %Lx", (L)buffer->index);
@@ -55,15 +55,13 @@ hole:
 	return 0;
 }
 
-int filemap_write(struct buffer *buffer)
+int file_bwrite(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
-	struct dev *dev = sb->devmap->dev;
 	warn("block write <%Lx:%Lx>", (L)inode->inum, buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	assert(dev->bits >= 8 && dev->fd);
 	int err, levels = inode->btree.root.depth;
 	struct path path[levels + 1];
 	if (!levels)
@@ -93,6 +91,8 @@ int filemap_write(struct buffer *buffer)
 	}
 	if (ends[1] - ends[0])
 		printf("extent from %x to %x\n", ends[0], ends[1]);
+	struct dev *dev = sb->devmap->dev;
+	assert(dev->bits >= 8 && dev->fd);
 #if 0
 #else
 	if (count) {
@@ -118,14 +118,13 @@ eek:
 	return -EIO;
 }
 
-struct map_ops filemap_ops = { .bread = filemap_read, .bwrite = filemap_write };
+struct map_ops filemap_ops = { .bread = file_bread, .bwrite = file_bwrite };
 
 #ifndef filemap_included
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
 		error("usage: %s <volname>", argv[0]);
-//	int err = 0;
 	char *name = argv[1];
 	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
 	ftruncate(fd, 1 << 24);
@@ -133,7 +132,6 @@ int main(int argc, char *argv[])
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
-	init_buffers(dev, 1 << 20);
 	SB = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
@@ -142,9 +140,12 @@ int main(int argc, char *argv[])
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
+		.bitmap = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) },
 	};
-
+	struct inode *inode = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) };
+	init_buffers(dev, 1 << 20);
 	sb = sb;
+	inode = inode;
 	return 0;
 }
 #endif
