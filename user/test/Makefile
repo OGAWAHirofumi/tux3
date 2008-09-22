@@ -8,7 +8,8 @@ ifeq ($(shell pkg-config fuse && echo found), found)
 endif
 
 basedeps = Makefile vfs.o trace.h tux3.h
-fsdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c inode.c
+lowdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c filemap.c
+fsdeps = $(lowdeps) inode.c
 
 all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
@@ -46,10 +47,15 @@ iattr: $(basedeps) iattr.c
 iattrtest: iattr
 	$(VG) ./iattr
 
-xattr: $(basedeps) xattr.c
+xattr: $(lowdeps) xattr.c
 	$(CC) vfs.o xattr.c -o xattr
 xattrtest: xattr
 	$(VG) ./xattr foodev
+
+filemap: $(lowdeps)
+	$(CC) vfs.o filemap.c -o filemap
+filemaptest: filemap
+	$(VG) ./filemap foodev
 
 inode: $(fsdeps)
 	$(CC) vfs.o inode.c -o inode
