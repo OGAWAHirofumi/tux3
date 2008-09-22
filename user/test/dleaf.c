@@ -17,7 +17,7 @@
 #include "tux3.h"
 
 #ifndef trace
-#define trace trace_on
+#define trace trace_off
 #endif
 
 struct extent { block_t block:48, count:6, version:10; };
@@ -210,6 +210,10 @@ struct dwalk {
 	struct group *group, *gstop;
 	struct entry *entry, *estop;
 	struct extent *exbase, *extent, *exstop;
+	/* mock state */
+	struct group mock_group;
+	struct entry mock_entry;
+	int used, free, groups;
 };
 
 int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
@@ -319,7 +323,6 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t key, struct extent extent)
 			/* will it fit? */
 			assert(sizeof(struct entry) == sizeof(struct group));
 			assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
-			walk->leaf->used -= sizeof(*walk->entry);
 			/* move entries down, adjust walk state */
 			/* should preplan this to avoid move, need additional pack state */
 			vecmove(walk->entry - 1, walk->entry, (struct entry *)walk->group - walk->entry);
@@ -331,7 +334,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t key, struct extent extent)
 			walk->leaf->groups++;
 		}
 		assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
-		walk->leaf->used -= sizeof(*walk->entry);
+		walk->leaf->used -= sizeof(struct entry);
 		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
 		walk->group->count++;
 	}
@@ -636,6 +639,29 @@ void bfree(SB, block_t block)
 	printf(" free %Lx\n", (L)block);
 }
 
+int dwalk_mock(struct dwalk *walk, tuxkey_t key, struct extent extent)
+{
+	if (dwalk_key(walk) != key) {
+		trace("add entry key 0x%Lx after 0x%Lx", (L)key, (L)dwalk_key(walk));
+		unsigned keylo = key & 0xffffff, keyhi = key >> 24;
+		if (walk->mock_group.keyhi != keyhi || walk->mock_group.count >= MAX_GROUP_ENTRIES) {
+			trace("add group %i", walk->groups);
+			walk->exbase += walk->mock_entry.limit;
+			walk->mock_group = (struct group){ .keyhi = keyhi };
+			walk->used -= sizeof(struct group);
+			walk->groups++;
+		}
+		walk->used -= sizeof(struct entry);
+		walk->mock_entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
+		walk->mock_group.count++;
+	}
+	trace("add extent");
+	walk->free += sizeof(*walk->extent);
+	walk->extent++;
+	walk->mock_entry.limit++;
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	printf("--- leaf test ---\n");
@@ -663,13 +689,20 @@ int main(int argc, char *argv[])
 	dwalk_probe(sb, leaf, walk, 0xf00f);
 //	for (struct extent *extent; (extent = dwalk_next(walk));)
 //		printf("0x%Lx => 0x%Lx\n", (L)dwalk_key(walk), (L)extent->block);
-	dwalk_probe(sb, leaf, walk, 0x3000055);
-	dwalk_pack(walk, 0x3001001, (struct extent){ .block = 0x1 });
-	dwalk_pack(walk, 0x3001002, (struct extent){ .block = 0x1 });
-	dwalk_pack(walk, 0x3001003, (struct extent){ .block = 0x1 });
-	dwalk_pack(walk, 0x3001004, (struct extent){ .block = 0x1 });
-	dwalk_pack(walk, 0x3001005, (struct extent){ .block = 0x1 });
-	dwalk_pack(walk, 0x3001006, (struct extent){ .block = 0x1 });
+	for (int i = 0; i < 2; i++) {
+		dwalk_probe(sb, leaf, walk, 0x3000055);
+		walk->mock_group = *walk->group;
+		walk->mock_entry = *walk->entry;
+		walk->groups = walk->leaf->groups;
+		int (*try)(struct dwalk *walk, tuxkey_t key, struct extent extent) = i ? dwalk_pack: dwalk_mock;
+		try(walk, 0x3001001, (struct extent){ .block = 0x1 });
+		try(walk, 0x3001002, (struct extent){ .block = 0x1 });
+		try(walk, 0x3001003, (struct extent){ .block = 0x1 });
+		try(walk, 0x3001004, (struct extent){ .block = 0x1 });
+		try(walk, 0x3001005, (struct extent){ .block = 0x1 });
+		try(walk, 0x3001006, (struct extent){ .block = 0x1 });
+		if (!i) printf("mock free = %i, used = %i\n", walk->free, walk->used);
+	}
 	dleaf_dump(btree, leaf);
 return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
