@@ -57,7 +57,7 @@ int file_bwrite(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
-	warn("block write <%Lx:%Lx>", (L)inode->inum, buffer->index);
+	warn("block write <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 	int err, levels = inode->btree.root.depth;
@@ -69,8 +69,6 @@ int file_bwrite(struct buffer *buffer)
 	unsigned count = 0;
 	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
 	//dleaf_dump(&inode->btree, path[levels].buffer->data);
-
-	block_t physical;
 
 	if (buffer_empty(buffer))
 		warn("egad, wrote an invalid buffer");
@@ -93,6 +91,7 @@ int file_bwrite(struct buffer *buffer)
 	assert(dev->bits >= 8 && dev->fd);
 #if 0
 #else
+	block_t physical;
 	if (count) {
 		physical = found->block;
 		trace("found block [%Lx]", (L)physical);
@@ -140,10 +139,15 @@ int main(int argc, char *argv[])
 		.volblocks = size >> dev->bits,
 		.bitmap = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) },
 	};
-	struct inode *inode = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) };
+	sb->bitmap->map->inode = sb->bitmap;
 	init_buffers(dev, 1 << 20);
-	sb = sb;
+	struct inode *inode = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) };
+	inode->btree = new_btree(sb, &dtree_ops); // error???
+	inode->map->inode = inode;
 	inode = inode;
+	brelse_dirty(getblk(inode->map, 0));
+	show_buffers(inode->map);
+	printf("flush result: %s\n", strerror(-flush_buffers(inode->map)));
 	return 0;
 }
 #endif
