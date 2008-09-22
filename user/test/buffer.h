@@ -19,6 +19,8 @@ struct buffer;
 struct map_ops
 {
 	int (*blockio)(struct buffer *buffer, int write);
+	int (*bwrite)(struct buffer *buffer);
+	int (*bread)(struct buffer *buffer);
 };
 
 struct map {

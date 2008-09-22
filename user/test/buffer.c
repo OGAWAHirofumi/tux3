@@ -27,6 +27,8 @@
  * add async IO.
  */
 
+typedef long long L; // widen for printf on 64 bit systems
+
 struct list_head free_buffers;
 struct list_head lru_buffers;
 unsigned buffer_count;
@@ -171,7 +173,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, sector_t block)
 {
-	return (buffer->map->ops->blockio)(buffer, 1);
+	return (buffer->map->ops->bwrite)(buffer);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -342,7 +344,7 @@ struct buffer *bread(struct map *map, sector_t block)
 	struct buffer *buffer = getblk(map, block);
 	if (buffer && buffer_empty(buffer)) {
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
-		int err = buffer->map->ops->blockio(buffer, 0);
+		int err = buffer->map->ops->bread(buffer);
 		if (err) {
 			warn("failed to read block %Lx (%s)", block, strerror(-err));
 			brelse(buffer);
@@ -436,16 +438,23 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 	preallocate_buffers(bufsize);
 }
 
-int devmap_blockio(struct buffer *buffer, int write)
+int devmap_write(struct buffer *buffer)
 {
-	warn("%s [%Lx]", write ? "write" : "read", (long long)buffer->index);
+	warn("write [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	return (write ? diskwrite : diskread)
-		(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
-struct map_ops devmap_ops = { .blockio = devmap_blockio };
+int devmap_read(struct buffer *buffer)
+{
+	warn("read [%Lx]", (L)buffer->index);
+	struct dev *dev = buffer->map->dev;
+	assert(dev->bits >= 8 && dev->fd);
+	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+}
+
+struct map_ops devmap_ops = { .bread = devmap_read, .bwrite = devmap_write };
 
 struct map *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
