@@ -43,12 +43,10 @@ int file_bread(struct buffer *buffer)
 	release_path(path, levels + 1);
 	if (!count)
 		goto hole;
-
-	block_t physical = found->block;
-	trace("found physical block %Lx", (L)physical);
+	trace("found physical block %Lx", (L)found->block);
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	return diskread(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
+	return diskread(dev->fd, buffer->data, sb->blocksize, found->block << dev->bits);
 hole:
 	trace("unmapped block %Lx", (L)buffer->index);
 	memset(buffer->data, 0, sb->blocksize);

@@ -40,7 +40,7 @@ static unsigned max_evict = 1000; /* free 10 percent of the buffers */
 
 void show_buffer(struct buffer *buffer)
 {
-	printf("%Lx/%i%s ", buffer->index, buffer->count,
+	printf("%Lx/%i%s ", (L)buffer->index, buffer->count,
 		buffer_dirty(buffer) ? "*" :
 		buffer_uptodate(buffer) ? "" :
 		buffer->state == BUFFER_STATE_EMPTY ? "-" :
