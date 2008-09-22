@@ -27,7 +27,7 @@ int file_bread(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
-	warn("block read <%Lx:%Lx>", (L)inode->inum, buffer->index);
+	warn("block read <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 	int err, levels = inode->btree.root.depth;
