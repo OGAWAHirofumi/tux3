@@ -9,8 +9,8 @@
 
 #include "list.h"
 
-typedef unsigned long long sector_t;
-typedef unsigned long long offset_t;
+typedef loff_t block_t; // disk io address range
+typedef block_t index_t; // block cache address range
 
 struct dev { unsigned fd, bits; };
 
@@ -38,10 +38,8 @@ struct buffer
 	struct buffer *hashlink;
 	struct list_head dirtylink;
 	struct list_head lrulink; /* used for LRU list and the free list */
-	unsigned count; // should be atomic_t
-	unsigned state;
-	unsigned size;
-	unsigned index;
+	unsigned count, state; // should be atomic_t
+	index_t index;
 	void *data;
 };
 
@@ -57,13 +55,13 @@ void set_buffer_uptodate(struct buffer *buffer);
 void set_buffer_empty(struct buffer *buffer);
 void brelse(struct buffer *buffer);
 void brelse_dirty(struct buffer *buffer);
-int write_buffer_to(struct buffer *buffer, offset_t pos);
+int write_buffer_to(struct buffer *buffer, block_t pos);
 int write_buffer(struct buffer *buffer);
 int read_buffer(struct buffer *buffer);
-unsigned buffer_hash(sector_t block);
-struct buffer *findblk(struct map *map, sector_t block);
-struct buffer *getblk(struct map *map, sector_t block);
-struct buffer *bread(struct map *map, sector_t block);
+unsigned buffer_hash(block_t block);
+struct buffer *findblk(struct map *map, block_t block);
+struct buffer *getblk(struct map *map, block_t block);
+struct buffer *bread(struct map *map, block_t block);
 void add_buffer_journaled(struct buffer *buffer);
 int flush_buffers(struct map *map);
 void evict_buffers(struct map *map);

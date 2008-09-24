@@ -170,19 +170,19 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-block_t balloc_extent_from_range(struct inode *inode, block_t start, block_t count, unsigned size)
+block_t balloc_extent_from_range(struct inode *inode, block_t start, block_t count, unsigned blocks)
 {
 	block_t limit = start + count;
 	unsigned blocksize = 1 << inode->map->dev->bits;
 	unsigned mapshift = inode->map->dev->bits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned blocks = (limit + mapmask) >> mapshift;
+	unsigned mapblocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
-	for (unsigned block = start >> mapshift; block < blocks; block++) {
-		//printf("search block %x/%x\n", block, blocks);
-		struct buffer *buffer = bread(inode->map, block);
+	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
+		//printf("search mapblock %x/%x\n", mapblock, mapblocks);
+		struct buffer *buffer = bread(inode->map, mapblock);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset, run = 0;
@@ -199,12 +199,12 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, block_t cou
 					run = 0;
 					continue;
 				}
-				if (++run < size)
+				if (++run < blocks)
 					continue;
-				assert(run == size);
-				block_t found = i + (((void *)p - buffer->data) << 3) + (block << mapshift);
+				assert(run == blocks);
+				block_t found = i + (((void *)p - buffer->data) << 3) + (mapblock << mapshift);
 				if (found >= limit) {
-					assert(block == blocks - 1);
+					assert(mapblock == mapblocks - 1);
 					goto final_partial_byte;
 				}
 				set_bits(buffer->data, found & mapmask, run);
@@ -239,6 +239,19 @@ block_t balloc(SB)
 	return -1;
 found:
 	printf("balloc -> [%Lx]\n", (L)block);
+	return block;
+}
+
+block_t balloc_extent(SB, unsigned blocks)
+{
+	block_t goal = sb->nextalloc, total = sb->volblocks, block;
+	if ((block = balloc_extent_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
+		goto found;
+	if ((block = balloc_extent_from_range(sb->bitmap, 0, goal, blocks)) >= 0)
+		goto found;
+	return -1;
+found:
+	printf("balloc extent -> [%Lx/%x]\n", (L)block, blocks);
 	return block;
 }
 

@@ -171,7 +171,7 @@ void brelse_dirty(struct buffer *buffer)
 	brelse(buffer);
 }
 
-int write_buffer_to(struct buffer *buffer, sector_t block)
+int write_buffer_to(struct buffer *buffer, block_t block)
 {
 	return (buffer->map->ops->bwrite)(buffer);
 }
@@ -186,9 +186,9 @@ int write_buffer(struct buffer *buffer)
 	return err;
 }
 
-unsigned buffer_hash(sector_t block)
+unsigned buffer_hash(block_t block)
 {
-	return (((block >> 32) ^ (sector_t)block) * 978317583) % BUFFER_BUCKETS;
+	return (((block >> 32) ^ (block_t)block) * 978317583) % BUFFER_BUCKETS;
 }
 
 static void add_buffer_lru(struct buffer *buffer)
@@ -237,7 +237,7 @@ static struct buffer *remove_buffer_free(void)
 #define SECTOR_BITS 9
 #define SECTOR_SIZE (1 << SECTOR_BITS)
 
-struct buffer *new_buffer(struct map *map, sector_t block)
+struct buffer *new_buffer(struct map *map, block_t block)
 {
 	buftrace("Allocate buffer, block = %Lx", block);
 	struct buffer *buffer = NULL;
@@ -310,7 +310,7 @@ int count_buffers(void)
 	return count;
 }
 
-struct buffer *findblk(struct map *map, sector_t block)
+struct buffer *findblk(struct map *map, block_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block);
 	for (struct buffer *buffer = *bucket; buffer; buffer = buffer->hashlink)
@@ -321,7 +321,7 @@ struct buffer *findblk(struct map *map, sector_t block)
 	return NULL;
 }
 
-struct buffer *getblk(struct map *map, sector_t block)
+struct buffer *getblk(struct map *map, block_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block), *buffer;
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
@@ -339,7 +339,7 @@ struct buffer *getblk(struct map *map, sector_t block)
 	return buffer;
 }
 
-struct buffer *bread(struct map *map, sector_t block)
+struct buffer *bread(struct map *map, block_t block)
 {
 	struct buffer *buffer = getblk(map, block);
 	if (buffer && buffer_empty(buffer)) {

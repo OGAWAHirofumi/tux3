@@ -24,7 +24,6 @@ typedef long long L; // widen for printf on 64 bit systems
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
 typedef u32 millisecond_t;
-typedef int64_t block_t;
 typedef int64_t inum_t;
 typedef u64 tuxkey_t;
 typedef int fd_t;

@@ -47,7 +47,7 @@ struct bnode
  * (Not done yet.)
  */
 
-static void free_block(SB, sector_t block)
+static void free_block(SB, block_t block)
 {
 }
 
