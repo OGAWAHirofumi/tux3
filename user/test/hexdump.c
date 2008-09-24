@@ -2,12 +2,7 @@
 
 #ifndef HEXDUMP
 #define HEXDUMP
-#include <stdlib.h>
-#include <stddef.h>
-#include <errno.h>
-#include "diskio.h"
-#include "buffer.h"
-#include "tux3.h"
+#include <stdio.h>
 
 void hexdump(void *data, unsigned size)
 {

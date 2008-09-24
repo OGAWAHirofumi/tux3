@@ -17,7 +17,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include "diskio.h"
-#include "buffer.h"
 #include "tux3.h"
 
 #ifndef trace

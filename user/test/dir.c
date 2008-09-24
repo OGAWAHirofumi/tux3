@@ -49,7 +49,6 @@
 #include <unistd.h>
 
 #include "hexdump.c"
-#include "buffer.h"
 #include "tux3.h"
 
 #define le16_to_cpu(x) x

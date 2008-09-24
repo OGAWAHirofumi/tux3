@@ -44,7 +44,6 @@
 #include <sys/types.h>
 #include "trace.h"
 #include "tux3.h"
-#include "buffer.h"
 #include "diskio.h"
 
 #define FUSE_USE_VERSION 27

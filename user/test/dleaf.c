@@ -302,7 +302,7 @@ struct extent *dwalk_next(struct dwalk *walk)
 	return walk->extent++; // also return key
 }
 
-tuxkey_t dwalk_key(struct dwalk *walk)
+tuxkey_t dwalk_index(struct dwalk *walk)
 {
 	return (walk->group->keyhi << 24) | walk->entry->keylo;
 }
@@ -313,11 +313,11 @@ tuxkey_t dwalk_key(struct dwalk *walk)
 #define MAX_GROUP_ENTRIES 255
 #endif
 
-int dwalk_pack(struct dwalk *walk, tuxkey_t key, struct extent extent)
+int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	if (dwalk_key(walk) != key) {
-		trace("add entry key 0x%Lx after 0x%Lx", (L)key, (L)dwalk_key(walk));
-		unsigned keylo = key & 0xffffff, keyhi = key >> 24;
+	if (dwalk_index(walk) != index) {
+		trace("add entry key 0x%Lx after 0x%Lx", (L)index, (L)dwalk_index(walk));
+		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 		if (walk->group->keyhi != keyhi || walk->group->count >= MAX_GROUP_ENTRIES) {
 			trace("add group %i", walk->leaf->groups);
 			/* will it fit? */
@@ -346,12 +346,12 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t key, struct extent extent)
 	return 0; // extent out of order??? leaf full???
 }
 
-void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t key, unsigned *count)
+void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	struct extent *extents = leaf->table;
-	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
+	unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 
 	for (struct group *group = groups - 1; group >= grbase; group--) {
 		struct entry *enbase = entries - group->count;
@@ -641,8 +641,8 @@ void bfree(SB, block_t block)
 
 int dwalk_mock(struct dwalk *walk, tuxkey_t key, struct extent extent)
 {
-	if (dwalk_key(walk) != key) {
-		trace("add entry key 0x%Lx after 0x%Lx", (L)key, (L)dwalk_key(walk));
+	if (dwalk_index(walk) != key) {
+		trace("add entry key 0x%Lx after 0x%Lx", (L)key, (L)dwalk_index(walk));
 		unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 		if (walk->mock_group.keyhi != keyhi || walk->mock_group.count >= MAX_GROUP_ENTRIES) {
 			trace("add group %i", walk->groups);
@@ -688,7 +688,7 @@ int main(int argc, char *argv[])
 	struct dwalk *walk = &(struct dwalk){ };
 	dwalk_probe(sb, leaf, walk, 0xf00f);
 //	for (struct extent *extent; (extent = dwalk_next(walk));)
-//		printf("0x%Lx => 0x%Lx\n", (L)dwalk_key(walk), (L)extent->block);
+//		printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent->block);
 	for (int i = 0; i < 2; i++) {
 		dwalk_probe(sb, leaf, walk, 0x3000055);
 		walk->mock_group = *walk->group;

@@ -20,7 +20,6 @@
 #include <unistd.h>
 
 #include "hexdump.c"
-#include "buffer.h"
 #include "tux3.h"
 
 void set_bits(u8 *bitmap, unsigned start, unsigned count)

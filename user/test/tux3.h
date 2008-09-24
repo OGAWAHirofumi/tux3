@@ -1,12 +1,15 @@
 #ifndef TUX3_H
 #define TUX3_H
 
-#include <string.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <inttypes.h>
 #include <byteswap.h>
 #include "err.h"
 #include "trace.h"
+#include "buffer.h"
 
 typedef uint8_t u8;
 typedef uint16_t u16;

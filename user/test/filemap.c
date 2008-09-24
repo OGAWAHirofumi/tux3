@@ -119,7 +119,7 @@ int file_bwrite(struct buffer *buffer)
 			last_index = next_index;
 			last_block = next_block;
 			last_count = next_count;
-			next_index = dwalk_key(walk);
+			next_index = dwalk_index(walk);
 			next_block = extent->block;
 			next_count = extent->count;
 		}
@@ -175,6 +175,7 @@ struct map_ops filemap_ops = { .bread = file_bread, .bwrite = file_bwrite };
 #ifndef filemap_included
 int main(int argc, char *argv[])
 {
+return 0;
 	if (argc < 2)
 		error("usage: %s <volname>", argv[0]);
 	char *name = argv[1];
