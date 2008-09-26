@@ -22,6 +22,10 @@
 #include "hexdump.c"
 #include "tux3.h"
 
+#ifndef trace
+#define trace trace_off
+#endif
+
 void set_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
@@ -169,8 +173,9 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-block_t balloc_extent_from_range(struct inode *inode, block_t start, block_t count, unsigned blocks)
+block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
 {
+	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	block_t limit = start + count;
 	unsigned blocksize = 1 << inode->map->dev->bits;
 	unsigned mapshift = inode->map->dev->bits + 3;
@@ -237,7 +242,7 @@ block_t balloc(SB)
 		goto found;
 	return -1;
 found:
-	printf("balloc -> [%Lx]\n", (L)block);
+	trace("balloc -> [%Lx]", (L)block);
 	return block;
 }
 

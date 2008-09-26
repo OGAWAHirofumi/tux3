@@ -334,8 +334,8 @@ int main(int argc, char *argv[])
 	ext2_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
 	ext2_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
 	ext2_dirent *entry = ext2_find_entry(map->inode, "hello", 5, &buffer);
-	if (buffer)
-		hexdump(entry, 16);
+	if (entry)
+		hexdump(entry, entry->name_len);
 	ext2_dump_entries(getblk(map, 0));
 
 	if (!ext2_delete_entry(buffer, entry)) {

@@ -81,57 +81,94 @@ int file_bwrite(struct buffer *buffer)
 			ends[up] = next; /* what happens to the beer you send */
 		}
 	}
-	if (ends[1] - ends[0])
-		printf("<<< extent from %x to %x >>>\n", ends[0], ends[1]);
-
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	int err, levels = inode->btree.root.depth;
 	struct path path[levels + 1];
 	if (!levels)
 		return -EIO;
-#if 0
-	index_t index = ends[0], limit = ends[0] + 1;
+#ifndef filemap_included
+	unsigned last_index, last_block, last_count;
+	unsigned next_index, next_block, next_count;
+	unsigned segs = 0;
+	index_t start = ends[0], limit = ends[1] + 1;
+
+	printf("<<< extent 0x%Lx/%Lx >>>\n", (L)start, (L)limit - start);
 	/* Probe max below extent start to include possible overlap */
-	if ((err = probe(&inode->btree, index - MAX_EXTENT, path)))
+	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
 		return err;
+
 	struct dwalk *walk = &(struct dwalk){ };
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct seg { block_t block; unsigned blocks; } seg[1000];
-	unsigned last_index, last_block, last_count; // !!! initialize me
-	unsigned next_index, next_block, next_count; // !!! initialize me
-	unsigned segs = 0;
-	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
-	while (index < limit) {
-		unsigned end = last_index + last_count, gap = next_index - end;
+	dleaf_dump(&inode->btree, leaf);
+	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf just for now
+	next_index = start;
+	next_block = -1;
+	next_count = 0;
+
+	/* skip extents below start */
+	for (struct extent *extent; (extent = dwalk_next(walk));) {
+		next_index = dwalk_index(walk);
+		next_block = extent->block;
+		next_count = extent->count;
+		if (next_index + next_count >= start)
+			break;
+	}
+
+	index_t offset = start;
+	last_index = next_index;
+	last_count = 0;
+	/* first extent goes in list only if it partially overlaps */
+	while (offset < limit) {
+		index_t end = last_index + last_count, gap = next_index - end;
 		if (gap) {
+			trace("fill gap at 0x%Lx/%i", end, gap);
 			sb->nextalloc = end;
 			block_t block = balloc_extent(sb, gap);
-			if (block == -1)
-				goto eek; // ENOSPC !!!
+			if (block == -1) {
+				err = -ENOSPC;
+				goto eek;
+			}
 			last_index = end;
 			last_block = block;
 			last_count = gap;
 		} else {
-			struct extent *extent = dwalk_next(walk);
-			if (!extent)
-				goto eek;
 			last_index = next_index;
 			last_block = next_block;
 			last_count = next_count;
-			next_index = dwalk_index(walk);
-			next_block = extent->block;
-			next_count = extent->count;
+			struct extent *extent = dwalk_next(walk);
+			if (extent) {
+				next_index = dwalk_index(walk);
+				next_block = extent->block;
+				next_count = extent->count;
+			} else {
+				next_index = limit;
+				next_block = -1;
+				next_count = 0;
+			}
 		}
-		seg[segs++] = (struct seg){ last_block, last_count };
-		index += last_count;
+		if (last_block != -1)
+			seg[segs++] = (struct seg){ last_block, last_count };
+		offset += last_count;
 	}
 
-	/* run mock to find out how much space we need */
+	printf("segs: ");
+	for (int i  = 0; i < segs; i++)
+		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
+	printf("(%i)\n", segs);
+
+	/* mock encode to know dleaf space */
+	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf just for now
+	offset = start;
 	for (int i = 0; i < segs; i++) {
-//		dwalk_mock(???);
+		dwalk_mock(walk, offset, (struct extent){ seg[i].block, seg[i].blocks });
+		offset += seg[i].blocks;
 	}
+	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
+
 	/* split leaf if necessary */
+
 	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
 	/* run pack to update page */
 	for (int i = 0; i < segs; i++) {
@@ -140,6 +177,7 @@ int file_bwrite(struct buffer *buffer)
 	/* assert we used exactly the expected space */
 //	assert(??? == ???);
 	/* check leaf */
+	return -EIO;
 #else
 	if ((err = probe(&inode->btree, buffer->index, path)))
 		return err;
@@ -175,7 +213,6 @@ struct map_ops filemap_ops = { .bread = file_bread, .bwrite = file_bwrite };
 #ifndef filemap_included
 int main(int argc, char *argv[])
 {
-return 0;
 	if (argc < 2)
 		error("usage: %s <volname>", argv[0]);
 	char *name = argv[1];

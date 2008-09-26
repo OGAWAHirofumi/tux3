@@ -408,9 +408,7 @@ int preallocate_buffers(unsigned bufsize) {
 	if ((err = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
 		goto data_allocation_failure;
 
-	/* let's clear out the buffer array and data and set to deadly data 0xdd */
-	memset(data_pool, 0xdd, max_buffers*bufsize);
-
+	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for(i = 0; i < max_buffers; i++) {
 		buffers[i] = (struct buffer){ .data = (data_pool + i*bufsize), .state = BUFFER_STATE_EMPTY };
 		add_buffer_free(&buffers[i]);

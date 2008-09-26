@@ -210,10 +210,11 @@ struct dwalk {
 	struct group *group, *gstop;
 	struct entry *entry, *estop;
 	struct extent *exbase, *extent, *exstop;
-	/* mock state */
-	struct group mock_group;
-	struct entry mock_entry;
-	int used, free, groups;
+	struct {
+		struct group group;
+		struct entry entry;
+		int used, free, groups;
+	} mock;
 };
 
 int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
@@ -287,11 +288,13 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 
 struct extent *dwalk_next(struct dwalk *walk)
 {
-	//printf("walk extent = %Lx, exstop = %Lx\n", (L)walk->extent->block, (L)walk->exstop->block);
+	if (!walk->leaf->groups)
+		return NULL;
+	trace("walk extent = %Lx, exstop = %Lx", (L)walk->extent->block, (L)walk->exstop->block);
 	if (walk->extent >= walk->exstop) {
-		//printf("next entry, entry = %x, estop = %x, \n", walk->entry->keylo, walk->estop->keylo);
+		trace("next entry, entry = %x, estop = %x", walk->entry->keylo, walk->estop->keylo);
 		if (walk->entry-- <= walk->estop) {
-			//printf("next group\n");
+			trace("next group");
 			if (walk->group <= walk->gstop)
 				return NULL;
 			walk->exbase += walk->estop->limit;
@@ -299,6 +302,7 @@ struct extent *dwalk_next(struct dwalk *walk)
 		}
 		walk->exstop = walk->exbase + walk->entry->limit;
 	}
+	trace("next => 0x%Lx/x", (L)walk->extent->block, walk->extent->count);
 	return walk->extent++; // also return key
 }
 
@@ -313,12 +317,35 @@ tuxkey_t dwalk_index(struct dwalk *walk)
 #define MAX_GROUP_ENTRIES 255
 #endif
 
+int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
+{
+	if (!walk->mock.groups || dwalk_index(walk) != index) {
+		trace("add entry 0x%Lx", (L)index);
+		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
+		if (!walk->mock.groups || walk->mock.group.keyhi != keyhi || walk->mock.group.count >= MAX_GROUP_ENTRIES) {
+			trace("add group %i", walk->mock.groups);
+			walk->exbase += walk->mock.entry.limit;
+			walk->mock.group = (struct group){ .keyhi = keyhi };
+			walk->mock.used -= sizeof(struct group);
+			walk->mock.groups++;
+		}
+		walk->mock.used -= sizeof(struct entry);
+		walk->mock.entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
+		walk->mock.group.count++;
+	}
+	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent.count);
+	walk->mock.free += sizeof(*walk->extent);
+	walk->extent++;
+	walk->mock.entry.limit++;
+	return 0;
+}
+
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	if (dwalk_index(walk) != index) {
-		trace("add entry key 0x%Lx after 0x%Lx", (L)index, (L)dwalk_index(walk));
+	if (!walk->leaf->groups || dwalk_index(walk) != index) {
+		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
-		if (walk->group->keyhi != keyhi || walk->group->count >= MAX_GROUP_ENTRIES) {
+		if (!walk->leaf->groups || walk->group->keyhi != keyhi || walk->group->count >= MAX_GROUP_ENTRIES) {
 			trace("add group %i", walk->leaf->groups);
 			/* will it fit? */
 			assert(sizeof(struct entry) == sizeof(struct group));
@@ -338,7 +365,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
 		walk->group->count++;
 	}
-	trace("add extent");
+	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent.count);
 	assert(walk->leaf->free + sizeof(*walk->extent) <= walk->leaf->used);
 	walk->leaf->free += sizeof(*walk->extent);
 	*++walk->extent = extent;
@@ -639,29 +666,6 @@ void bfree(SB, block_t block)
 	printf(" free %Lx\n", (L)block);
 }
 
-int dwalk_mock(struct dwalk *walk, tuxkey_t key, struct extent extent)
-{
-	if (dwalk_index(walk) != key) {
-		trace("add entry key 0x%Lx after 0x%Lx", (L)key, (L)dwalk_index(walk));
-		unsigned keylo = key & 0xffffff, keyhi = key >> 24;
-		if (walk->mock_group.keyhi != keyhi || walk->mock_group.count >= MAX_GROUP_ENTRIES) {
-			trace("add group %i", walk->groups);
-			walk->exbase += walk->mock_entry.limit;
-			walk->mock_group = (struct group){ .keyhi = keyhi };
-			walk->used -= sizeof(struct group);
-			walk->groups++;
-		}
-		walk->used -= sizeof(struct entry);
-		walk->mock_entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
-		walk->mock_group.count++;
-	}
-	trace("add extent");
-	walk->free += sizeof(*walk->extent);
-	walk->extent++;
-	walk->mock_entry.limit++;
-	return 0;
-}
-
 int main(int argc, char *argv[])
 {
 	printf("--- leaf test ---\n");
@@ -691,9 +695,9 @@ int main(int argc, char *argv[])
 //		printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent->block);
 	for (int i = 0; i < 2; i++) {
 		dwalk_probe(sb, leaf, walk, 0x3000055);
-		walk->mock_group = *walk->group;
-		walk->mock_entry = *walk->entry;
-		walk->groups = walk->leaf->groups;
+		walk->mock.group = *walk->group;
+		walk->mock.entry = *walk->entry;
+		walk->mock.groups = walk->leaf->groups;
 		int (*try)(struct dwalk *walk, tuxkey_t key, struct extent extent) = i ? dwalk_pack: dwalk_mock;
 		try(walk, 0x3001001, (struct extent){ .block = 0x1 });
 		try(walk, 0x3001002, (struct extent){ .block = 0x1 });
@@ -701,7 +705,7 @@ int main(int argc, char *argv[])
 		try(walk, 0x3001004, (struct extent){ .block = 0x1 });
 		try(walk, 0x3001005, (struct extent){ .block = 0x1 });
 		try(walk, 0x3001006, (struct extent){ .block = 0x1 });
-		if (!i) printf("mock free = %i, used = %i\n", walk->free, walk->used);
+		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
 	dleaf_dump(btree, leaf);
 return 0;
