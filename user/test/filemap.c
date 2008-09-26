@@ -158,7 +158,7 @@ int file_bwrite(struct buffer *buffer)
 		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
 	printf("(%i)\n", segs);
 
-	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf just for now
+	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
 	offset = start;
 	for (int i = 0; i < segs; i++) {
 		dwalk_mock(walk, offset, extent(seg[i].block, seg[i].blocks));
@@ -168,7 +168,6 @@ int file_bwrite(struct buffer *buffer)
 
 	/* split leaf if necessary */
 
-	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
 	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
 	offset = start;
 	for (int i = 0; i < segs; i++) {

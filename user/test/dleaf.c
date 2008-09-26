@@ -255,17 +255,16 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 			}
 			exbase += estop->limit;
 		}
+
 	struct extent *extent = exbase, *exstop = exbase;
-	if (!leaf->groups)
-		entry = estop;
-	else if (group < gstop)
+	if (!leaf->groups || group < gstop)
 		entry = estop;
 	else {
 		assert(group->keyhi >= keyhi);
-		entry = estop + group->count - 1;
+		entry = estop + group->count;
 		trace_off("entry %x, estop %x", entry->keylo, estop->keylo);
 		if (group->keyhi == keyhi) {
-			for (; entry >= estop; entry--) { /* see note */
+			while (--entry >= estop) {
 				trace_off("entry check %x, %x", keylo, (entry - 1)->keylo);
 				exstop = exbase + entry->limit + 1;
 				if (entry->keylo >= keylo)
@@ -287,17 +286,6 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 		.exstop = exstop };
 	return 0;
 }
-
-/*
- * Note!
- *
- * The dwalk probe is designed to handle not just a walk, but insert as well,
- * so it must be able to represent an entry position past the last entry of a
- * group in case an entry with a higher key than any other in the group needs
- * to be inserted.  In this case, the entry is already past the estop, so the
- * advance needs to handle that with an inequality test.  Testing for equal
- * to estop is not quite good enough.
- */
 
 struct extent *dwalk_next(struct dwalk *walk)
 {
