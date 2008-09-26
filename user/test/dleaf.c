@@ -20,10 +20,20 @@
 #define trace trace_off
 #endif
 
-struct extent { block_t block:48, count:6, version:10; };
+struct extent { u64 block:48, count:6, version:10; };
 struct group { u32 count:8, keyhi:24; };
 struct entry { u32 limit:8, keylo:24; };
 struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
+
+struct extent extent(block_t block, unsigned count)
+{
+	return (struct extent){ .block = block, .count = count - 1 };
+}
+
+static inline unsigned extent_count(struct extent extent)
+{
+	return extent.count + 1;
+}
 
 /*
  * Leaf index format
@@ -302,7 +312,7 @@ struct extent *dwalk_next(struct dwalk *walk)
 		}
 		walk->exstop = walk->exbase + walk->entry->limit;
 	}
-	trace("next => 0x%Lx/x", (L)walk->extent->block, walk->extent->count);
+	trace("next => 0x%Lx/x", (L)walk->extent->block, extent_count(*walk->extent));
 	return walk->extent++; // also return key
 }
 
@@ -333,7 +343,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		walk->mock.entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
 		walk->mock.group.count++;
 	}
-	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent.count);
+	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
 	walk->mock.free += sizeof(*walk->extent);
 	walk->extent++;
 	walk->mock.entry.limit++;
@@ -365,7 +375,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
 		walk->group->count++;
 	}
-	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent.count);
+	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
 	assert(walk->leaf->free + sizeof(*walk->extent) <= walk->leaf->used);
 	walk->leaf->free += sizeof(*walk->extent);
 	*++walk->extent = extent;

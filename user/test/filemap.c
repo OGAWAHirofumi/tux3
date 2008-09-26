@@ -111,7 +111,7 @@ int file_bwrite(struct buffer *buffer)
 	for (struct extent *extent; (extent = dwalk_next(walk));) {
 		next_index = dwalk_index(walk);
 		next_block = extent->block;
-		next_count = extent->count;
+		next_count = extent_count(*extent);
 		if (next_index + next_count >= start)
 			break;
 	}
@@ -141,7 +141,7 @@ int file_bwrite(struct buffer *buffer)
 			if (extent) {
 				next_index = dwalk_index(walk);
 				next_block = extent->block;
-				next_count = extent->count;
+				next_count = extent_count(*extent);
 			} else {
 				next_index = limit;
 				next_block = -1;
