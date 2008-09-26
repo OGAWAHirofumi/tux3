@@ -17,7 +17,7 @@
 #include "tux3.h"
 
 #ifndef trace
-#define trace trace_off
+#define trace trace_on
 #endif
 
 struct extent { u64 block:48, count:6, version:10; };
@@ -125,10 +125,10 @@ unsigned leaf_need(BTREE, struct dleaf *leaf)
 	return btree->sb->blocksize - leaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
-void dleaf_dump(BTREE, vleaf *vleaf)
+void dleaf_dump(unsigned blocksize, vleaf *vleaf)
 {
 	struct dleaf *leaf = vleaf;
-	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = --groups - leaf->groups;
+	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
 	struct extent *extents = leaf->table;
 
@@ -142,6 +142,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 			unsigned offset = entry == entries - 1 ? 0 : (entry + 1)->limit;
 			int count = entry->limit - offset;
 			printf(" %Lx =>", ((L)group->keyhi << 24) + entry->keylo);
+			//printf(" %p (%i)", entry, entry->limit);
 			if (count < 0)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++)
@@ -229,42 +230,44 @@ struct dwalk {
 
 int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 {
+	trace("probe for 0x%Lx", (L)key);
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 	struct group *gdict = (void *)leaf + sb->blocksize;
 	struct entry *edict = (struct entry *)(gdict - leaf->groups);
-	struct group *gstop = gdict - leaf->groups, *group = gdict - 1;
-	struct entry *estop = edict - group->count, *entry;
+	struct group *gstop = gdict - leaf->groups, *group = gdict;
+	struct entry *estop = edict, *entry;
 	struct extent *exbase = leaf->table;
 
-	while (1) {
-		//printf("group check %x, %x\n", keyhi, group->keyhi);
-		if (group->keyhi > keyhi)
-			break;
-		//printf("next group keylow = %x\n", (estop - 1)->keylo);
-		if (group->keyhi == keyhi) {
-			if (group == gstop)
+	if (leaf->groups)
+		while (--group >= gstop) {
+			trace_off("group %i check %x = %x", gdict - group - 1, keyhi, group->keyhi);
+			estop -= group->count;
+			if (group->keyhi > keyhi)
 				break;
-			if ((group - 1)->keyhi != keyhi)
-				break;
-			if ((estop - 1)->keylo > keylo)
-				break;
+			trace_off("next group keylow = %x", (estop - 1)->keylo);
+			if (group->keyhi == keyhi) {
+				if (group == gstop)
+					break;
+				if ((group - 1)->keyhi != keyhi)
+					break;
+				if ((estop - 1)->keylo > keylo)
+					break;
+			}
+			exbase += estop->limit;
 		}
-		exbase += estop->limit;
-		if (--group < gstop)
-			break;
-		estop -= group->count;
-	}
 	struct extent *extent = exbase, *exstop = exbase;
-	if (group < gstop)
-		entry = estop - 1;
+	if (!leaf->groups)
+		entry = estop;
+	else if (group < gstop)
+		entry = estop;
 	else {
 		assert(group->keyhi >= keyhi);
 		entry = estop + group->count - 1;
-		//printf("entry %x, estop %x\n", entry->keylo, estop->keylo);
+		trace_off("entry %x, estop %x", entry->keylo, estop->keylo);
 		if (group->keyhi == keyhi) {
 			for (; entry >= estop; entry--) { /* see note */
-				//printf("entry check %x, %x\n", keylo, (entry - 1)->keylo);
-				exstop = exbase + entry->limit;
+				trace_off("entry check %x, %x", keylo, (entry - 1)->keylo);
+				exstop = exbase + entry->limit + 1;
 				if (entry->keylo >= keylo)
 					break;
 				extent = exstop;
@@ -272,7 +275,7 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 		}
 	}
 
-	//printf("group %i entry %i of %i\n", gdict - 1 - group, estop + group->count - 1 - entry, group->count);
+	trace_off("group %i entry %i of %i", gdict - 1 - group, estop + group->count - 1 - entry, group->count);
 	*walk = (struct dwalk){
 		.leaf = leaf,
 		.group = group,
@@ -352,6 +355,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
+	printf("group %p entry %p\n", walk->group, walk->entry);
 	if (!walk->leaf->groups || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
@@ -372,13 +376,13 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		}
 		assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
 		walk->leaf->used -= sizeof(struct entry);
-		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
+		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase };
 		walk->group->count++;
 	}
 	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
 	assert(walk->leaf->free + sizeof(*walk->extent) <= walk->leaf->used);
 	walk->leaf->free += sizeof(*walk->extent);
-	*++walk->extent = extent;
+	*walk->extent++ = extent;
 	walk->entry->limit++;
 	return 0; // extent out of order??? leaf full???
 }
@@ -650,7 +654,7 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 struct btree_ops dtree_ops = {
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
-	.leaf_dump = dleaf_dump,
+//	.leaf_dump = dleaf_dump,
 	.leaf_split = dleaf_split,
 	.leaf_resize = dleaf_resize,
 	.leaf_chop = dleaf_chop,
@@ -688,7 +692,7 @@ int main(int argc, char *argv[])
 	unsigned keys[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 }, next = 0;
 	for (int i = 1; i < 32; i++)
 		dleaf_insert(btree, (i << 12) + i, leaf, (struct extent){ .block = i });
-	dleaf_dump(btree, leaf);
+	dleaf_dump(sb->blocksize, leaf);
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x111 });
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x222 });
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x333 });
@@ -698,26 +702,29 @@ int main(int argc, char *argv[])
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x777 });
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x888 });
 	dleaf_insert(btree, keys[next], leaf, (struct extent){ .block = 0x999 });
-	dleaf_dump(btree, leaf);
+	dleaf_dump(sb->blocksize, leaf);
 	struct dwalk *walk = &(struct dwalk){ };
-	dwalk_probe(sb, leaf, walk, 0xf00f);
-//	for (struct extent *extent; (extent = dwalk_next(walk));)
-//		printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent->block);
-	for (int i = 0; i < 2; i++) {
+	if (0) {
+		dwalk_probe(sb, leaf, walk, 0x1000044);
+		for (struct extent *extent; (extent = dwalk_next(walk));)
+			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent->block);
+		return 0;
+	}
+	for (int i = 1; i < 2; i++) {
 		dwalk_probe(sb, leaf, walk, 0x3000055);
 		walk->mock.group = *walk->group;
 		walk->mock.entry = *walk->entry;
 		walk->mock.groups = walk->leaf->groups;
 		int (*try)(struct dwalk *walk, tuxkey_t key, struct extent extent) = i ? dwalk_pack: dwalk_mock;
 		try(walk, 0x3001001, (struct extent){ .block = 0x1 });
-		try(walk, 0x3001002, (struct extent){ .block = 0x1 });
-		try(walk, 0x3001003, (struct extent){ .block = 0x1 });
-		try(walk, 0x3001004, (struct extent){ .block = 0x1 });
-		try(walk, 0x3001005, (struct extent){ .block = 0x1 });
-		try(walk, 0x3001006, (struct extent){ .block = 0x1 });
+		try(walk, 0x3001002, (struct extent){ .block = 0x2 });
+		try(walk, 0x3001003, (struct extent){ .block = 0x3 });
+		try(walk, 0x3001004, (struct extent){ .block = 0x4 });
+		try(walk, 0x3001005, (struct extent){ .block = 0x5 });
+		try(walk, 0x3001006, (struct extent){ .block = 0x6 });
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
-	dleaf_dump(btree, leaf);
+	dleaf_dump(sb->blocksize, leaf);
 return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
@@ -733,12 +740,12 @@ return 0;
 	struct dleaf *dest = leaf_create(btree);
 	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
 	printf("split key 0x%Lx\n", (L)key);
-	dleaf_dump(btree, leaf);
-	dleaf_dump(btree, dest);
+	dleaf_dump(sb->blocksize, leaf);
+	dleaf_dump(sb->blocksize, dest);
 	dleaf_merge(btree, leaf, dest);
-	dleaf_dump(btree, leaf);
+	dleaf_dump(sb->blocksize, leaf);
 	dleaf_chop(btree, 0x14014LL, leaf);
-	dleaf_dump(btree, leaf);
+	dleaf_dump(sb->blocksize, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
 	return 0;

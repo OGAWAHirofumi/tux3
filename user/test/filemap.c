@@ -101,7 +101,7 @@ int file_bwrite(struct buffer *buffer)
 	struct dwalk *walk = &(struct dwalk){ };
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct seg { block_t block; unsigned blocks; } seg[1000];
-	dleaf_dump(&inode->btree, leaf);
+	dleaf_dump(sb->blocksize, leaf);
 	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf just for now
 	next_index = start;
 	next_block = -1;
@@ -158,11 +158,10 @@ int file_bwrite(struct buffer *buffer)
 		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
 	printf("(%i)\n", segs);
 
-	/* mock encode to know dleaf space */
 	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf just for now
 	offset = start;
 	for (int i = 0; i < segs; i++) {
-		dwalk_mock(walk, offset, (struct extent){ seg[i].block, seg[i].blocks });
+		dwalk_mock(walk, offset, extent(seg[i].block, seg[i].blocks));
 		offset += seg[i].blocks;
 	}
 	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
@@ -170,10 +169,13 @@ int file_bwrite(struct buffer *buffer)
 	/* split leaf if necessary */
 
 	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
-	/* run pack to update page */
+	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
+	offset = start;
 	for (int i = 0; i < segs; i++) {
-//		dwalk_pack(???);
+		dwalk_pack(walk, offset + 9, (struct extent){ seg[i].block, seg[i].blocks });
+		offset += seg[i].blocks;
 	}
+	dleaf_dump(sb->blocksize, leaf);
 	/* assert we used exactly the expected space */
 //	assert(??? == ???);
 	/* check leaf */
@@ -183,7 +185,6 @@ int file_bwrite(struct buffer *buffer)
 		return err;
 	unsigned count = 0;
 	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
-	//dleaf_dump(&inode->btree, path[levels].buffer->data);
 	block_t physical;
 	if (count) {
 		physical = found->block;
