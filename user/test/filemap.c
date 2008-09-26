@@ -98,18 +98,18 @@ int file_bwrite(struct buffer *buffer)
 	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
 		return err;
 
-	struct dwalk *walk = &(struct dwalk){ };
+	struct dwalk walk = { };
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct seg { block_t block; unsigned blocks; } seg[1000];
-	dleaf_dump(sb->blocksize, leaf);
-	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf just for now
+	dwalk_probe(sb, leaf, &walk, 0); // start at beginning of leaf just for now
+	struct dwalk rewalk = walk;
 	next_index = start;
 	next_block = -1;
 	next_count = 0;
 
 	/* skip extents below start */
-	for (struct extent *extent; (extent = dwalk_next(walk));) {
-		next_index = dwalk_index(walk);
+	for (struct extent *extent; (extent = dwalk_next(&walk));) {
+		next_index = dwalk_index(&walk);
 		next_block = extent->block;
 		next_count = extent_count(*extent);
 		if (next_index + next_count >= start)
@@ -137,9 +137,9 @@ int file_bwrite(struct buffer *buffer)
 			last_index = next_index;
 			last_block = next_block;
 			last_count = next_count;
-			struct extent *extent = dwalk_next(walk);
+			struct extent *extent = dwalk_next(&walk);
 			if (extent) {
-				next_index = dwalk_index(walk);
+				next_index = dwalk_index(&walk);
 				next_block = extent->block;
 				next_count = extent_count(*extent);
 			} else {
@@ -158,20 +158,20 @@ int file_bwrite(struct buffer *buffer)
 		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
 	printf("(%i)\n", segs);
 
-	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
+	walk = rewalk;
 	offset = start;
 	for (int i = 0; i < segs; i++) {
-		dwalk_mock(walk, offset, extent(seg[i].block, seg[i].blocks));
+		dwalk_mock(&walk, offset, extent(seg[i].block, seg[i].blocks));
 		offset += seg[i].blocks;
 	}
-	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
+	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
 
 	/* split leaf if necessary */
 
-	dwalk_probe(sb, leaf, walk, 0); // start at beginning of leaf for now
+	walk = rewalk;
 	offset = start;
 	for (int i = 0; i < segs; i++) {
-		dwalk_pack(walk, offset + 9, (struct extent){ seg[i].block, seg[i].blocks });
+		dwalk_pack(&walk, offset + 9, (struct extent){ seg[i].block, seg[i].blocks });
 		offset += seg[i].blocks;
 	}
 	dleaf_dump(sb->blocksize, leaf);
