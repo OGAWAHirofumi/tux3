@@ -331,7 +331,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 			walk->mock.groups++;
 		}
 		walk->mock.used -= sizeof(struct entry);
-		walk->mock.entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase + 1 };
+		walk->mock.entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase };
 		walk->mock.group.count++;
 	}
 	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));

@@ -50,9 +50,9 @@ extern unsigned journaled_count;
 
 void show_buffer(struct buffer *buffer);
 void show_buffers(struct map *map);
-void set_buffer_dirty(struct buffer *buffer);
-void set_buffer_uptodate(struct buffer *buffer);
-void set_buffer_empty(struct buffer *buffer);
+struct buffer *set_buffer_dirty(struct buffer *buffer);
+struct buffer *set_buffer_uptodate(struct buffer *buffer);
+struct buffer *set_buffer_empty(struct buffer *buffer);
 void brelse(struct buffer *buffer);
 void brelse_dirty(struct buffer *buffer);
 int write_buffer_to(struct buffer *buffer, block_t pos);

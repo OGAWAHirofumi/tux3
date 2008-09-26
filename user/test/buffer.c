@@ -125,21 +125,22 @@ static void remove_buffer_journaled(struct buffer *buffer)
 	journaled_count --;
 }
 
-void set_buffer_dirty(struct buffer *buffer)
+struct buffer *set_buffer_dirty(struct buffer *buffer)
 {
 	buftrace("set_buffer_dirty %Lx state = %u", buffer->index, buffer->state);
-	if (buffer_dirty(buffer))
-		return;
-	if (buffer_journaled(buffer))
-		remove_buffer_journaled(buffer);
-	assert(!buffer->dirtylink.next);
-	assert(!buffer->dirtylink.prev);
-	list_add_tail(&buffer->dirtylink, &buffer->map->dirty);
-	buffer->state = BUFFER_STATE_DIRTY;
-	buffer->map->dirty_count++;
+	if (!buffer_dirty(buffer)) {
+		if (buffer_journaled(buffer))
+			remove_buffer_journaled(buffer);
+		assert(!buffer->dirtylink.next);
+		assert(!buffer->dirtylink.prev);
+		list_add_tail(&buffer->dirtylink, &buffer->map->dirty);
+		buffer->state = BUFFER_STATE_DIRTY;
+		buffer->map->dirty_count++;
+	}
+	return buffer;
 }
 
-void set_buffer_uptodate(struct buffer *buffer)
+struct buffer *set_buffer_uptodate(struct buffer *buffer)
 {
 	if (buffer_dirty(buffer)) {
 		list_del(&buffer->dirtylink);
@@ -148,12 +149,14 @@ void set_buffer_uptodate(struct buffer *buffer)
 	if (buffer_journaled(buffer))
 		remove_buffer_journaled(buffer);
 	buffer->state = BUFFER_STATE_CLEAN;
+	return buffer;
 }
 
-void set_buffer_empty(struct buffer *buffer)
+struct buffer *set_buffer_empty(struct buffer *buffer)
 {
 	set_buffer_uptodate(buffer); // to remove from dirty list
 	buffer->state = BUFFER_STATE_EMPTY;
+	return buffer;
 }
 
 void brelse(struct buffer *buffer)

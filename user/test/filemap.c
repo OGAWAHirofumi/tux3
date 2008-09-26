@@ -90,7 +90,7 @@ int file_bwrite(struct buffer *buffer)
 #ifndef filemap_included
 	unsigned last_index, last_block, last_count;
 	unsigned next_index, next_block, next_count;
-	unsigned segs = 0;
+	unsigned segs = 0, i;
 	index_t start = ends[0], limit = ends[1] + 1;
 
 	printf("<<< extent 0x%Lx/%Lx >>>\n", (L)start, (L)limit - start);
@@ -116,22 +116,24 @@ int file_bwrite(struct buffer *buffer)
 			break;
 	}
 
-	index_t offset = start;
+	// !!!<handle overlapping extent>!!! //
+
+	index_t block = start;
 	last_index = next_index;
 	last_count = 0;
 	/* first extent goes in list only if it partially overlaps */
-	while (offset < limit) {
+	while (block < limit) {
 		index_t end = last_index + last_count, gap = next_index - end;
 		if (gap) {
 			trace("fill gap at 0x%Lx/%i", end, gap);
 			sb->nextalloc = end;
-			block_t block = balloc_extent(sb, gap);
-			if (block == -1) {
+			block_t newblock = balloc_extent(sb, gap);
+			if (newblock == -1) {
 				err = -ENOSPC;
 				goto eek;
 			}
 			last_index = end;
-			last_block = block;
+			last_block = newblock;
 			last_count = gap;
 		} else {
 			last_index = next_index;
@@ -150,7 +152,7 @@ int file_bwrite(struct buffer *buffer)
 		}
 		if (last_block != -1)
 			seg[segs++] = (struct seg){ last_block, last_count };
-		offset += last_count;
+		block += last_count;
 	}
 
 	printf("segs: ");
@@ -158,27 +160,33 @@ int file_bwrite(struct buffer *buffer)
 		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
 	printf("(%i)\n", segs);
 
-	walk = rewalk;
-	offset = start;
-	for (int i = 0; i < segs; i++) {
-		dwalk_mock(&walk, offset, extent(seg[i].block, seg[i].blocks));
-		offset += seg[i].blocks;
+	for (walk = rewalk, block = start, i = 0; i < segs; i++) {
+		dwalk_mock(&walk, block, extent(seg[i].block, seg[i].blocks));
+		block += seg[i].blocks;
 	}
 	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
 
 	/* split leaf if necessary */
 
-	walk = rewalk;
-	offset = start;
-	for (int i = 0; i < segs; i++) {
-		dwalk_pack(&walk, offset + 9, (struct extent){ seg[i].block, seg[i].blocks });
-		offset += seg[i].blocks;
+	for (walk = rewalk, block = start, i = 0; i < segs; i++) {
+		dwalk_pack(&walk, block, extent(seg[i].block, seg[i].blocks));
+		block += seg[i].blocks;
 	}
 	dleaf_dump(sb->blocksize, leaf);
+
+	/* copy in leaf tail */
+
+	// !!!<handle overlapping extent>!!! //
+
 	/* assert we used exactly the expected space */
 //	assert(??? == ???);
 	/* check leaf */
-	return -EIO;
+
+	/* fake the actual write for now */
+	for (block = start; block < limit; block++)
+		brelse(set_buffer_uptodate(getblk(inode->map, block)));
+
+	return 0;
 #else
 	if ((err = probe(&inode->btree, buffer->index, path)))
 		return err;
@@ -242,6 +250,7 @@ int main(int argc, char *argv[])
 	brelse_dirty(getblk(inode->map, 1));
 	brelse_dirty(getblk(inode->map, 2));
 	brelse_dirty(getblk(inode->map, 3));
+	brelse_dirty(getblk(inode->map, 5));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 	show_buffers(inode->map);
 	return 0;
