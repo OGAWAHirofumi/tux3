@@ -93,7 +93,7 @@ int file_bwrite(struct buffer *buffer)
 	unsigned segs = 0, i;
 	index_t start = ends[0], limit = ends[1] + 1;
 
-	printf("<<< extent 0x%Lx/%Lx >>>\n", (L)start, (L)limit - start);
+	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	/* Probe max below extent start to include possible overlap */
 	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
 		return err;
@@ -102,7 +102,6 @@ int file_bwrite(struct buffer *buffer)
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct seg { block_t block; unsigned blocks; } seg[1000];
 	dwalk_probe(sb, leaf, &walk, 0); // start at beginning of leaf just for now
-	struct dwalk rewalk = walk;
 	next_index = start;
 	next_block = -1;
 	next_count = 0;
@@ -115,17 +114,21 @@ int file_bwrite(struct buffer *buffer)
 		if (next_index + next_count >= start)
 			break;
 	}
+	struct dwalk rewind = walk;
+	printf("---- rewind ----\n");
 
 	// !!!<handle overlapping extent>!!! //
 
 	index_t block = start;
-	last_index = next_index;
-	last_count = 0;
+	last_index = next_index = start;
+	last_block = next_block = -1;
+	last_count = next_count = 0;
 	/* first extent goes in list only if it partially overlaps */
 	while (block < limit) {
 		index_t end = last_index + last_count, gap = next_index - end;
+		trace("at index %Lx/%Lx, segs = %i", (L)block, (L)limit, segs);
 		if (gap) {
-			trace("fill gap at 0x%Lx/%i", end, gap);
+			trace("fill gap at %Lx/%i", end, gap);
 			sb->nextalloc = end;
 			block_t newblock = balloc_extent(sb, gap);
 			if (newblock == -1) {
@@ -141,10 +144,12 @@ int file_bwrite(struct buffer *buffer)
 			last_count = next_count;
 			struct extent *extent = dwalk_next(&walk);
 			if (extent) {
+				trace("copy existing extent");
 				next_index = dwalk_index(&walk);
 				next_block = extent->block;
 				next_count = extent_count(*extent);
 			} else {
+				trace("fill to limit");
 				next_index = limit;
 				next_block = -1;
 				next_count = 0;
@@ -153,6 +158,7 @@ int file_bwrite(struct buffer *buffer)
 		if (last_block != -1)
 			seg[segs++] = (struct seg){ last_block, last_count };
 		block += last_count;
+		trace("at index %Lx/%Lx, segs = %i", (L)block, (L)limit, segs);
 	}
 
 	printf("segs: ");
@@ -160,15 +166,17 @@ int file_bwrite(struct buffer *buffer)
 		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
 	printf("(%i)\n", segs);
 
-	for (walk = rewalk, block = start, i = 0; i < segs; i++) {
+if (0) {
+	for (walk = rewind, block = start, i = 0; i < segs; i++) {
 		dwalk_mock(&walk, block, extent(seg[i].block, seg[i].blocks));
 		block += seg[i].blocks;
 	}
 	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
+}
 
 	/* split leaf if necessary */
 
-	for (walk = rewalk, block = start, i = 0; i < segs; i++) {
+	for (walk = rewind, block = start, i = 0; i < segs; i++) {
 		dwalk_pack(&walk, block, extent(seg[i].block, seg[i].blocks));
 		block += seg[i].blocks;
 	}

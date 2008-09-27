@@ -257,16 +257,19 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 		}
 
 	struct extent *extent = exbase, *exstop = exbase;
+	trace("extent = %tx, exstop = %tx", extent - leaf->table, exstop - leaf->table);
+	//trace("group %i entry %i of %i", gdict - 1 - group, estop + group->count - 1 - entry, group->count);
 	if (!leaf->groups || group < gstop)
 		entry = estop;
 	else {
 		assert(group->keyhi >= keyhi);
 		entry = estop + group->count;
-		trace_off("entry %x, estop %x", entry->keylo, estop->keylo);
+		//trace("entry %x, estop %x", entry->keylo, estop->keylo);
 		if (group->keyhi == keyhi) {
-			while (--entry >= estop) {
+			while (entry > estop) {
+				--entry;
 				trace_off("entry check %x, %x", keylo, (entry - 1)->keylo);
-				exstop = exbase + entry->limit + 1;
+				exstop = exbase + entry->limit;
 				if (entry->keylo >= keylo)
 					break;
 				extent = exstop;
@@ -275,6 +278,7 @@ int dwalk_probe(SB, struct dleaf *leaf, struct dwalk *walk, tuxkey_t key)
 	}
 
 	trace_off("group %i entry %i of %i", gdict - 1 - group, estop + group->count - 1 - entry, group->count);
+	trace("extent = %tx, exstop = %tx", extent - leaf->table, exstop - leaf->table);
 	*walk = (struct dwalk){
 		.leaf = leaf,
 		.group = group,
@@ -291,19 +295,19 @@ struct extent *dwalk_next(struct dwalk *walk)
 {
 	if (!walk->leaf->groups)
 		return NULL;
-	trace("walk extent = %Lx, exstop = %Lx", (L)walk->extent->block, (L)walk->exstop->block);
+	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
 	if (walk->extent >= walk->exstop) {
-		trace("next entry, entry = %x, estop = %x", walk->entry->keylo, walk->estop->keylo);
-		if (walk->entry-- <= walk->estop) {
-			trace("next group");
+		trace("at entry %i/%i", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
+		if (walk->entry <= walk->estop) {
+			trace("next group, end = %i", walk->group <= walk->gstop);
 			if (walk->group <= walk->gstop)
 				return NULL;
 			walk->exbase += walk->estop->limit;
 			walk->estop -= (--walk->group)->count;
 		}
-		walk->exstop = walk->exbase + walk->entry->limit;
+		walk->exstop = walk->exbase + (walk->entry--)->limit;
 	}
-	trace("next => 0x%Lx/x", (L)walk->extent->block, extent_count(*walk->extent));
+	trace("next extent => 0x%Lx/x", (L)walk->extent->block, extent_count(*walk->extent));
 	return walk->extent++; // also return key
 }
 
@@ -343,7 +347,8 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	printf("group %p entry %p\n", walk->group, walk->entry);
+	printf("group %i/%i ", walk->gstop + walk->leaf->groups - 1 - walk->group, walk->leaf->groups);
+	printf("at entry %i/%i\n", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
 	if (!walk->leaf->groups || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
@@ -367,7 +372,8 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		*--walk->entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase };
 		walk->group->count++;
 	}
-	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
+	trace("add extent %i", walk->extent - walk->leaf->table);
+	//trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
 	assert(walk->leaf->free + sizeof(*walk->extent) <= walk->leaf->used);
 	walk->leaf->free += sizeof(*walk->extent);
 	*walk->extent++ = extent;
