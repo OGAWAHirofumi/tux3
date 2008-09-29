@@ -168,16 +168,15 @@ int filemap_blockwrite(struct buffer *buffer)
 		index += last_count;
 	}
 
-	printf("segs: ");
-	for (int i  = 0; i < segs; i++)
-		printf("0x%Lx/%x ", seg[i].block, seg[i].count);
-	printf("(%i)\n", segs);
+	printf("segs:");
+	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
+		printf(" %Lx => %Lx/%x;", (L)index, seg[i].block, seg[i].count);
+	printf(" (%i)\n", segs);
 
 if (0) {
-	for (walk = rewind, index = start, i = 0; i < segs; i++) {
+	walk = rewind;
+	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
 		dwalk_mock(&walk, index, extent(seg[i].block, seg[i].count));
-		index += seg[i].count;
-	}
 	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
 }
 	/* split leaf if necessary */
@@ -185,10 +184,9 @@ if (0) {
 	walk = rewind;
 	dwalk_chop_after(&walk);
 	dleaf_dump(sb->blocksize, leaf);
-	for (index = start, i = 0; i < segs; i++) {
+	for (i = 0, index = start; i < segs; i++, index += seg[i].count) {
 		trace("pack 0x%Lx => %Lx/%x", index, seg[i].block, seg[i].count);
 		dwalk_pack(&walk, index, extent(seg[i].block, seg[i].count));
-		index += seg[i].count;
 	}
 	dleaf_dump(sb->blocksize, leaf);
 
@@ -267,12 +265,13 @@ int main(int argc, char *argv[])
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->map->inode = inode;
 	inode = inode;
+	brelse_dirty(getblk(inode->map, 5));
+	brelse_dirty(getblk(inode->map, 6));
+
 	brelse_dirty(getblk(inode->map, 0));
 	brelse_dirty(getblk(inode->map, 1));
 	brelse_dirty(getblk(inode->map, 2));
 	brelse_dirty(getblk(inode->map, 3));
-	brelse_dirty(getblk(inode->map, 5));
-	brelse_dirty(getblk(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
 	brelse_dirty(getblk(inode->map, 0));
