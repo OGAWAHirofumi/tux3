@@ -385,7 +385,7 @@ void dwalk_chop(struct dwalk *walk) // do we ever need this?
 
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	if (!walk->mock.groups || dwalk_index(walk) != index) {
+	if (!walk->leaf->groups || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 		if (!walk->mock.groups || walk->mock.group.keyhi != keyhi || walk->mock.group.count >= MAX_GROUP_ENTRIES) {
@@ -419,13 +419,12 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 			assert(sizeof(struct entry) == sizeof(struct group));
 			assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
 			/* move entries down, adjust walk state */
-			/* should preplan this to avoid move, need additional pack state */
+			/* could preplan this to avoid move: need additional pack state */
 			vecmove(walk->entry - 1, walk->entry, (struct entry *)walk->group - walk->entry);
-			walk->leaf->used -= sizeof(struct group);
-			walk->entry--;
-			/* add the group */
+			walk->entry--; /* adjust to moved position */
 			walk->exbase += walk->entry->limit;
 			*--walk->group = (struct group){ .keyhi = keyhi };
+			walk->leaf->used -= sizeof(struct group);
 			walk->leaf->groups++;
 		}
 		assert(walk->leaf->free <= walk->leaf->used - sizeof(*walk->entry));
