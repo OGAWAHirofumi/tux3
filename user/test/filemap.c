@@ -27,7 +27,7 @@
 #include "btree.c"
 #undef main
 
-int file_bread(struct buffer *buffer)
+int filemap_blockread(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
@@ -57,7 +57,7 @@ hole:
 	return 0;
 }
 
-int file_bwrite(struct buffer *buffer)
+int filemap_blockwrite(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
@@ -100,7 +100,7 @@ int file_bwrite(struct buffer *buffer)
 
 	struct dwalk walk = { };
 	struct dleaf *leaf = path[levels].buffer->data;
-	struct seg { block_t block; unsigned blocks; } seg[1000];
+	struct seg { block_t block; unsigned count; } seg[1000];
 	dwalk_probe(leaf, sb->blocksize, &walk, 0); // start at beginning of leaf just for now
 	next_index = start;
 	next_block = -1;
@@ -127,14 +127,14 @@ int file_bwrite(struct buffer *buffer)
 
 	// !!!<handle overlapping extent>!!! //
 
-	index_t block = start;
+	index_t index = start;
 	last_index = next_index = start;
 	last_block = next_block = -1;
 	last_count = next_count = 0;
 	/* first extent goes in list only if it partially overlaps */
-	while (block < limit) {
+	while (index < limit) {
 		index_t end = last_index + last_count, gap = next_index - end;
-		trace("at index %Lx/%Lx, segs = %i", (L)block, (L)limit, segs);
+		trace("at index %Lx/%Lx, segs = %i", (L)index, (L)limit, segs);
 		if (gap) {
 			trace("fill gap at %Lx/%i", end, gap);
 			//sb->nextalloc = end; // !!! balloc should take a goal parameter
@@ -165,18 +165,18 @@ int file_bwrite(struct buffer *buffer)
 		}
 		if (last_block != -1)
 			seg[segs++] = (struct seg){ last_block, last_count };
-		block += last_count;
+		index += last_count;
 	}
 
 	printf("segs: ");
 	for (int i  = 0; i < segs; i++)
-		printf("0x%Lx/%x ", seg[i].block, seg[i].blocks);
+		printf("0x%Lx/%x ", seg[i].block, seg[i].count);
 	printf("(%i)\n", segs);
 
 if (0) {
-	for (walk = rewind, block = start, i = 0; i < segs; i++) {
-		dwalk_mock(&walk, block, extent(seg[i].block, seg[i].blocks));
-		block += seg[i].blocks;
+	for (walk = rewind, index = start, i = 0; i < segs; i++) {
+		dwalk_mock(&walk, index, extent(seg[i].block, seg[i].count));
+		index += seg[i].count;
 	}
 	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
 }
@@ -185,10 +185,10 @@ if (0) {
 	walk = rewind;
 	dwalk_chop_after(&walk);
 	dleaf_dump(sb->blocksize, leaf);
-	for (block = start, i = 0; i < segs; i++) {
-		trace("pack 0x%Lx => %Lx/%x", block, seg[i].block, seg[i].blocks);
-		dwalk_pack(&walk, block, extent(seg[i].block, seg[i].blocks));
-		block += seg[i].blocks;
+	for (index = start, i = 0; i < segs; i++) {
+		trace("pack 0x%Lx => %Lx/%x", index, seg[i].block, seg[i].count);
+		dwalk_pack(&walk, index, extent(seg[i].block, seg[i].count));
+		index += seg[i].count;
 	}
 	dleaf_dump(sb->blocksize, leaf);
 
@@ -201,8 +201,8 @@ if (0) {
 	/* check leaf */
 
 	/* fake the actual write for now */
-	for (block = start; block < limit; block++)
-		brelse(set_buffer_uptodate(getblk(inode->map, block)));
+	for (index = start; index < limit; index++)
+		brelse(set_buffer_uptodate(getblk(inode->map, index)));
 
 	return 0;
 #else
@@ -234,7 +234,10 @@ eek:
 	return -EIO;
 }
 
-struct map_ops filemap_ops = { .bread = file_bread, .bwrite = file_bwrite };
+struct map_ops filemap_ops = {
+	.bread = filemap_blockread,
+	.bwrite = filemap_blockwrite,
+};
 
 #ifndef filemap_included
 int main(int argc, char *argv[])
