@@ -94,36 +94,36 @@ int filemap_blockwrite(struct buffer *buffer)
 	index_t start = ends[0], limit = ends[1] + 1;
 
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
-	/* Probe max below extent start to include possible overlap */
+	/* Probe below extent start to include possible overlap */
 	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
 		return err;
 
-	struct dwalk walk = { };
+	struct dwalk *walk = &(struct dwalk){ };
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct extent seg[1000];
-	dwalk_probe(leaf, sb->blocksize, &walk, 0); // start at beginning of leaf just for now
+	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 	next_index = start;
 	next_block = -1;
 	next_count = 0;
 
 	/* skip extents below start */
-	for (struct extent *extent; (extent = dwalk_next(&walk));) {
-		next_index = dwalk_index(&walk);
+	for (struct extent *extent; (extent = dwalk_next(walk));) {
+		next_index = dwalk_index(walk);
 		next_block = extent->block;
 		next_count = extent_count(*extent);
 		if (next_index + next_count >= start) {
-			dwalk_back(&walk);
+			dwalk_back(walk);
 			break;
 		}
 	}
-	struct dwalk rewind = walk;
+	struct dwalk rewind = *walk;
 	printf("existing extents:");
-	for (struct extent *extent; (extent = dwalk_next(&walk));)
-		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(&walk), (L)extent->block, extent_count(*extent));
+	for (struct extent *extent; (extent = dwalk_next(walk));)
+		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
 	printf("\n");
 
 	printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
-	walk = rewind;
+	*walk = rewind;
 
 	// !!!<handle overlapping extent>!!! //
 
@@ -150,10 +150,10 @@ int filemap_blockwrite(struct buffer *buffer)
 			last_index = next_index;
 			last_block = next_block;
 			last_count = next_count;
-			struct extent *extent = dwalk_next(&walk);
+			struct extent *extent = dwalk_next(walk);
 			if (extent) {
 				trace("copy existing extent 0x%Lx/%x", (L)extent->block, extent_count(*extent));
-				next_index = dwalk_index(&walk);
+				next_index = dwalk_index(walk);
 				next_block = extent->block;
 				next_count = extent_count(*extent);
 			} else {
@@ -174,19 +174,19 @@ int filemap_blockwrite(struct buffer *buffer)
 	printf(" (%i)\n", segs);
 
 if (0) {
-	walk = rewind;
+	*walk = rewind;
 	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
-		dwalk_mock(&walk, index, extent(seg[i].block, extent_count(seg[i])));
-	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
+		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
+	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
 }
 	/* split leaf if necessary */
 
-	walk = rewind;
-	dwalk_chop_after(&walk);
+	*walk = rewind;
+	dwalk_chop_after(walk);
 	dleaf_dump(sb->blocksize, leaf);
 	for (i = 0, index = start; i < segs; i++, index += seg[i].count) {
 		trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
-		dwalk_pack(&walk, index, extent(seg[i].block, extent_count(seg[i])));
+		dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
 	}
 	dleaf_dump(sb->blocksize, leaf);
 
