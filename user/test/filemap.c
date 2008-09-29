@@ -1,5 +1,5 @@
 #ifndef trace
-#define trace trace_off
+#define trace trace_on
 #endif
 
 #define main notmain0
@@ -100,7 +100,7 @@ int filemap_blockwrite(struct buffer *buffer)
 
 	struct dwalk walk = { };
 	struct dleaf *leaf = path[levels].buffer->data;
-	struct seg { block_t block; unsigned count; } seg[1000];
+	struct extent seg[1000];
 	dwalk_probe(leaf, sb->blocksize, &walk, 0); // start at beginning of leaf just for now
 	next_index = start;
 	next_block = -1;
@@ -164,19 +164,19 @@ int filemap_blockwrite(struct buffer *buffer)
 			}
 		}
 		if (last_block != -1)
-			seg[segs++] = (struct seg){ last_block, last_count };
+			seg[segs++] = extent(last_block, last_count);
 		index += last_count;
 	}
 
 	printf("segs:");
 	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
-		printf(" %Lx => %Lx/%x;", (L)index, seg[i].block, seg[i].count);
+		printf(" %Lx => %Lx/%x;", (L)index, (L)seg[i].block, extent_count(seg[i]));
 	printf(" (%i)\n", segs);
 
 if (0) {
 	walk = rewind;
 	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
-		dwalk_mock(&walk, index, extent(seg[i].block, seg[i].count));
+		dwalk_mock(&walk, index, extent(seg[i].block, extent_count(seg[i])));
 	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
 }
 	/* split leaf if necessary */
@@ -185,8 +185,8 @@ if (0) {
 	dwalk_chop_after(&walk);
 	dleaf_dump(sb->blocksize, leaf);
 	for (i = 0, index = start; i < segs; i++, index += seg[i].count) {
-		trace("pack 0x%Lx => %Lx/%x", index, seg[i].block, seg[i].count);
-		dwalk_pack(&walk, index, extent(seg[i].block, seg[i].count));
+		trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
+		dwalk_pack(&walk, index, extent(seg[i].block, extent_count(seg[i])));
 	}
 	dleaf_dump(sb->blocksize, leaf);
 
