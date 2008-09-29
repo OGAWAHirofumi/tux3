@@ -1,5 +1,5 @@
 #ifndef trace
-#define trace trace_on
+#define trace trace_off
 #endif
 
 #define main notmain0
@@ -101,7 +101,7 @@ int file_bwrite(struct buffer *buffer)
 	struct dwalk walk = { };
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct seg { block_t block; unsigned blocks; } seg[1000];
-	dwalk_probe(sb, leaf, &walk, 0); // start at beginning of leaf just for now
+	dwalk_probe(leaf, sb->blocksize, &walk, 0); // start at beginning of leaf just for now
 	next_index = start;
 	next_block = -1;
 	next_count = 0;
@@ -111,11 +111,19 @@ int file_bwrite(struct buffer *buffer)
 		next_index = dwalk_index(&walk);
 		next_block = extent->block;
 		next_count = extent_count(*extent);
-		if (next_index + next_count >= start)
+		if (next_index + next_count >= start) {
+			dwalk_back(&walk);
 			break;
+		}
 	}
 	struct dwalk rewind = walk;
-	printf("---- rewind ----\n");
+	printf("existing extents:");
+	for (struct extent *extent; (extent = dwalk_next(&walk));)
+		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(&walk), (L)extent->block, extent_count(*extent));
+	printf("\n");
+
+	printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
+	walk = rewind;
 
 	// !!!<handle overlapping extent>!!! //
 
@@ -129,7 +137,7 @@ int file_bwrite(struct buffer *buffer)
 		trace("at index %Lx/%Lx, segs = %i", (L)block, (L)limit, segs);
 		if (gap) {
 			trace("fill gap at %Lx/%i", end, gap);
-			sb->nextalloc = end;
+			//sb->nextalloc = end; // !!! balloc should take a goal parameter
 			block_t newblock = balloc_extent(sb, gap);
 			if (newblock == -1) {
 				err = -ENOSPC;
@@ -144,7 +152,7 @@ int file_bwrite(struct buffer *buffer)
 			last_count = next_count;
 			struct extent *extent = dwalk_next(&walk);
 			if (extent) {
-				trace("copy existing extent");
+				trace("copy existing extent 0x%Lx/%x", (L)extent->block, extent_count(*extent));
 				next_index = dwalk_index(&walk);
 				next_block = extent->block;
 				next_count = extent_count(*extent);
@@ -158,7 +166,6 @@ int file_bwrite(struct buffer *buffer)
 		if (last_block != -1)
 			seg[segs++] = (struct seg){ last_block, last_count };
 		block += last_count;
-		trace("at index %Lx/%Lx, segs = %i", (L)block, (L)limit, segs);
 	}
 
 	printf("segs: ");
@@ -173,10 +180,13 @@ if (0) {
 	}
 	printf("need %i data and %i index bytes\n", walk.mock.free, -walk.mock.used);
 }
-
 	/* split leaf if necessary */
 
-	for (walk = rewind, block = start, i = 0; i < segs; i++) {
+	walk = rewind;
+	dwalk_chop_after(&walk);
+	dleaf_dump(sb->blocksize, leaf);
+	for (block = start, i = 0; i < segs; i++) {
+		trace("pack 0x%Lx => %Lx/%x", block, seg[i].block, seg[i].blocks);
 		dwalk_pack(&walk, block, extent(seg[i].block, seg[i].blocks));
 		block += seg[i].blocks;
 	}
@@ -259,8 +269,19 @@ int main(int argc, char *argv[])
 	brelse_dirty(getblk(inode->map, 2));
 	brelse_dirty(getblk(inode->map, 3));
 	brelse_dirty(getblk(inode->map, 5));
+	brelse_dirty(getblk(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
-	show_buffers(inode->map);
+
+	brelse_dirty(getblk(inode->map, 0));
+	brelse_dirty(getblk(inode->map, 1));
+	brelse_dirty(getblk(inode->map, 2));
+	brelse_dirty(getblk(inode->map, 3));
+	brelse_dirty(getblk(inode->map, 4));
+	brelse_dirty(getblk(inode->map, 5));
+	brelse_dirty(getblk(inode->map, 6));
+	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
+
+	//show_buffers(inode->map);
 	return 0;
 }
 #endif

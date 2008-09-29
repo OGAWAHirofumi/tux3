@@ -185,7 +185,7 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
 	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
-		//printf("search mapblock %x/%x\n", mapblock, mapblocks);
+		trace_off("search mapblock %x/%x", mapblock, mapblocks);
 		struct buffer *buffer = bread(inode->map, mapblock);
 		if (!buffer)
 			return -1;
@@ -211,13 +211,14 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 					assert(mapblock == mapblocks - 1);
 					goto final_partial_byte;
 				}
+				found -= run - 1;
 				set_bits(buffer->data, found & mapmask, run);
 				set_buffer_dirty(buffer);
 				brelse(buffer);
-				inode->sb->nextalloc = found + 1;
+				inode->sb->nextalloc = found + run;
 				inode->sb->freeblocks -= run;
 				//set_sb_dirty(sb);
-				return found - run + 1;
+				return found;
 			}
 		}
 final_partial_byte:
@@ -235,6 +236,7 @@ block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
 
 block_t balloc(SB)
 {
+	trace_off("balloc block at goal %Lx", (L)sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
 	if ((block = balloc_from_range(sb->bitmap, goal, total - goal)) >= 0)
 		goto found;
@@ -248,6 +250,7 @@ found:
 
 block_t balloc_extent(SB, unsigned blocks)
 {
+	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
 	if ((block = balloc_extent_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
 		goto found;
