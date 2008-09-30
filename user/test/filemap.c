@@ -108,7 +108,7 @@ int filemap_blockwrite(struct buffer *buffer)
 			break;
 		}
 	struct dwalk rewind = *walk;
-	printf("incumbant extents:");
+	printf("prior extents:");
 	for (struct extent *extent; (extent = dwalk_next(walk));)
 		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
 	printf("\n");
@@ -130,6 +130,8 @@ int filemap_blockwrite(struct buffer *buffer)
 		unsigned gap = (next_extent ? dwalk_index(walk) : limit) - index;
 		if (!gap)
 			continue;
+		if (index + gap > limit)
+			gap = limit - index;
 		trace("fill gap at %Lx/%i", index, gap);
 		block_t block = balloc_extent(sb, gap); // goal ???
 		if (block == -1)
@@ -138,8 +140,11 @@ int filemap_blockwrite(struct buffer *buffer)
 		index += gap;
 	}
 
-	for (struct extent *after; (after = dwalk_next(walk));)
-		seg[segs++] = *after;
+	while (next_extent) {
+		trace("save tail");
+		seg[segs++] = *next_extent;
+		next_extent = dwalk_next(walk);
+	}
 
 	printf("segs:");
 	for (i = 0, index = start; i < segs; i++) {
@@ -241,13 +246,13 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
+	brelse_dirty(getblk(inode->map, 5));
+	brelse_dirty(getblk(inode->map, 6));
+
 	brelse_dirty(getblk(inode->map, 0));
 	brelse_dirty(getblk(inode->map, 1));
 	brelse_dirty(getblk(inode->map, 2));
 	brelse_dirty(getblk(inode->map, 3));
-
-	brelse_dirty(getblk(inode->map, 5));
-	brelse_dirty(getblk(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
 	brelse_dirty(getblk(inode->map, 0));
