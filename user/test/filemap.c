@@ -88,8 +88,6 @@ int filemap_blockwrite(struct buffer *buffer)
 	if (!levels)
 		return -EIO;
 #ifndef filemap_included
-	unsigned last_index, last_block, last_count;
-	unsigned next_index, next_block, next_count;
 	unsigned segs = 0, i;
 	index_t start = ends[0], limit = ends[1] + 1;
 
@@ -102,22 +100,15 @@ int filemap_blockwrite(struct buffer *buffer)
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct extent seg[1000];
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
-	next_index = start;
-	next_block = -1;
-	next_count = 0;
 
 	/* skip extents below start */
-	for (struct extent *extent; (extent = dwalk_next(walk));) {
-		next_index = dwalk_index(walk);
-		next_block = extent->block;
-		next_count = extent_count(*extent);
-		if (next_index + next_count >= start) {
+	for (struct extent *extent; (extent = dwalk_next(walk));)
+		if (dwalk_index(walk) + extent_count(*extent) >= start) {
 			dwalk_back(walk);
 			break;
 		}
-	}
 	struct dwalk rewind = *walk;
-	printf("existing extents:");
+	printf("incumbant extents:");
 	for (struct extent *extent; (extent = dwalk_next(walk));)
 		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
 	printf("\n");
@@ -127,50 +118,34 @@ int filemap_blockwrite(struct buffer *buffer)
 
 	// !!!<handle overlapping extent>!!! //
 
+	struct extent *next_extent = NULL;
 	index_t index = start;
-	last_index = next_index = start;
-	last_block = next_block = -1;
-	last_count = next_count = 0;
-	/* first extent goes in list only if it partially overlaps */
 	while (index < limit) {
-		index_t end = last_index + last_count, gap = next_index - end;
-		trace("at index %Lx/%Lx, segs = %i", (L)index, (L)limit, segs);
-		if (gap) {
-			trace("fill gap at %Lx/%i", end, gap);
-			//sb->nextalloc = end; // !!! balloc should take a goal parameter
-			block_t newblock = balloc_extent(sb, gap);
-			if (newblock == -1) {
-				err = -ENOSPC;
-				goto eek;
-			}
-			last_index = end;
-			last_block = newblock;
-			last_count = gap;
-		} else {
-			last_index = next_index;
-			last_block = next_block;
-			last_count = next_count;
-			struct extent *extent = dwalk_next(walk);
-			if (extent) {
-				trace("copy existing extent 0x%Lx/%x", (L)extent->block, extent_count(*extent));
-				next_index = dwalk_index(walk);
-				next_block = extent->block;
-				next_count = extent_count(*extent);
-			} else {
-				trace("fill to limit");
-				next_index = limit;
-				next_block = -1;
-				next_count = 0;
-			}
+		trace_off("index %Lx, limit %Lx", (L)index, (L)limit);
+		if (next_extent) {
+			seg[segs++] = *next_extent;
+			index += extent_count(*next_extent);
 		}
-		if (last_block != -1)
-			seg[segs++] = extent(last_block, last_count);
-		index += last_count;
+		next_extent = dwalk_next(walk);
+		unsigned gap = (next_extent ? dwalk_index(walk) : limit) - index;
+		if (!gap)
+			continue;
+		trace("fill gap at %Lx/%i", index, gap);
+		block_t block = balloc_extent(sb, gap); // goal ???
+		if (block == -1)
+			goto nospace; // clean up !!!
+		seg[segs++] = extent(block, gap);
+		index += gap;
 	}
 
+	for (struct extent *after; (after = dwalk_next(walk));)
+		seg[segs++] = *after;
+
 	printf("segs:");
-	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
+	for (i = 0, index = start; i < segs; i++) {
 		printf(" %Lx => %Lx/%x;", (L)index, (L)seg[i].block, extent_count(seg[i]));
+		index += extent_count(seg[i]);
+	}
 	printf(" (%i)\n", segs);
 
 if (0) {
@@ -184,19 +159,19 @@ if (0) {
 	*walk = rewind;
 	dwalk_chop_after(walk);
 	dleaf_dump(sb->blocksize, leaf);
-	for (i = 0, index = start; i < segs; i++, index += seg[i].count) {
+	for (i = 0, index = start; i < segs; i++) {
 		trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
 		dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
+		index += extent_count(seg[i]);
 	}
 	dleaf_dump(sb->blocksize, leaf);
 
-	/* copy in leaf tail */
-
 	// !!!<handle overlapping extent>!!! //
-
 	/* assert we used exactly the expected space */
-//	assert(??? == ???);
+	//assert(??? == ???);
 	/* check leaf */
+	if (0)
+		goto eek;
 
 	/* fake the actual write for now */
 	for (index = start; index < limit; index++)
@@ -214,10 +189,8 @@ if (0) {
 		trace("found block [%Lx]", (L)physical);
 	} else {
 		physical = balloc(sb);
-		if (physical == -1) {
-			err = -ENOSPC;
-			goto eek;
-		}
+		if (physical == -1)
+			goto nospace;
 		struct extent *store = tree_expand(&inode->btree, buffer->index, sizeof(struct extent), path);
 		if (!store)
 			goto eek;
@@ -226,6 +199,8 @@ if (0) {
 	release_path(path, levels + 1);
 	return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
 #endif
+nospace:
+	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %s", strerror(-err));
 // !!!	free_block(sb, physical);
@@ -265,13 +240,14 @@ int main(int argc, char *argv[])
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->map->inode = inode;
 	inode = inode;
-	brelse_dirty(getblk(inode->map, 5));
-	brelse_dirty(getblk(inode->map, 6));
 
 	brelse_dirty(getblk(inode->map, 0));
 	brelse_dirty(getblk(inode->map, 1));
 	brelse_dirty(getblk(inode->map, 2));
 	brelse_dirty(getblk(inode->map, 3));
+
+	brelse_dirty(getblk(inode->map, 5));
+	brelse_dirty(getblk(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
 	brelse_dirty(getblk(inode->map, 0));

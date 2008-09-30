@@ -283,15 +283,11 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 	trace_off("group %i entry %i of %i", gdict - 1 - group, estop + group->count - 1 - entry, group->count);
 	trace("extent = %tx, exstop = %tx", extent - leaf->table, exstop - leaf->table);
 	*walk = (struct dwalk){
-		.leaf = leaf,
-		.group = group,
-		.gdict = gdict,
-		.gstop = gstop,
-		.entry = entry,
-		.estop = estop,
-		.exbase = exbase,
-		.extent = extent,
-		.exstop = exstop };
+		.leaf = leaf, .gdict = gdict,
+		.group = group, .gstop = gstop,
+		.entry = entry, .estop = estop,
+		.extent = extent, .exstop = exstop,
+		.exbase = exbase };
 	return 0;
 }
 
