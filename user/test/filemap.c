@@ -119,20 +119,34 @@ int filemap_blockwrite(struct buffer *buffer)
 	// !!!<handle overlapping extent>!!! //
 
 	struct extent *next_extent = NULL;
-	index_t index = start;
+	index_t index = start, offset = 0;
 	while (index < limit) {
-		trace_off("index %Lx, limit %Lx", (L)index, (L)limit);
+		trace("index %Lx, limit %Lx", (L)index, (L)limit);
 		if (next_extent) {
+			trace("pass %Lx/%x", (L)next_extent->block, extent_count(*next_extent));
 			seg[segs++] = *next_extent;
-			index += extent_count(*next_extent);
+
+			unsigned count = extent_count(*next_extent);
+			if (start > dwalk_index(walk))
+				count -= start - dwalk_index(walk);
+			index += count;
 		}
 		next_extent = dwalk_next(walk);
-		unsigned gap = (next_extent ? dwalk_index(walk) : limit) - index;
-		if (!gap)
+		index_t next_index = limit;
+		if (next_extent) {
+			next_index = dwalk_index(walk);
+			if (next_index < start) {
+				offset = start - next_index;
+				next_index = start;
+			}
+		}
+		int gap = next_index - index;
+		trace("offset = %i, gap = %i", offset, gap);
+		if (gap == 0)
 			continue;
 		if (index + gap > limit)
 			gap = limit - index;
-		trace("fill gap at %Lx/%i", index, gap);
+		trace("fill gap at %Lx/%x", index, gap);
 		block_t block = balloc_extent(sb, gap); // goal ???
 		if (block == -1)
 			goto nospace; // clean up !!!
@@ -146,16 +160,16 @@ int filemap_blockwrite(struct buffer *buffer)
 		next_extent = dwalk_next(walk);
 	}
 
-	printf("segs:");
+	printf("segs (offset = %Lx):", (L)offset);
 	for (i = 0, index = start; i < segs; i++) {
-		printf(" %Lx => %Lx/%x;", (L)index, (L)seg[i].block, extent_count(seg[i]));
+		printf(" %Lx => %Lx/%x;", (L)index - offset, (L)seg[i].block, extent_count(seg[i]));
 		index += extent_count(seg[i]);
 	}
 	printf(" (%i)\n", segs);
 
 if (0) {
 	*walk = rewind;
-	for (i = 0, index = start; i < segs; i++, index += seg[i].count)
+	for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
 		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
 	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
 }
@@ -164,7 +178,7 @@ if (0) {
 	*walk = rewind;
 	dwalk_chop_after(walk);
 	dleaf_dump(sb->blocksize, leaf);
-	for (i = 0, index = start; i < segs; i++) {
+	for (i = 0, index = start - offset; i < segs; i++) {
 		trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
 		dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
 		index += extent_count(seg[i]);
@@ -248,6 +262,13 @@ int main(int argc, char *argv[])
 
 	brelse_dirty(getblk(inode->map, 5));
 	brelse_dirty(getblk(inode->map, 6));
+	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
+
+	brelse_dirty(getblk(inode->map, 6));
+	brelse_dirty(getblk(inode->map, 7));
+	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
+
+	return 0;
 
 	brelse_dirty(getblk(inode->map, 0));
 	brelse_dirty(getblk(inode->map, 1));
