@@ -125,6 +125,17 @@ unsigned leaf_need(BTREE, struct dleaf *leaf)
 	return btree->sb->blocksize - leaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
+int leaf_free2(BTREE, void *vleaf)
+{
+	struct dleaf *leaf = vleaf;
+	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - leaf->groups;
+	struct entry *edict = (void *)gstop, *entry = edict;
+	struct extent *extents = leaf->table;
+	for (struct group *group = gdict; group-- > gstop;)
+		extents += (entry -= group->count)->limit;
+	return (void *)entry - (void *)extents;
+}
+
 void dleaf_dump(unsigned blocksize, vleaf *vleaf)
 {
 	struct dleaf *leaf = vleaf;
@@ -463,23 +474,26 @@ void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 
 int dleaf_check(BTREE, struct dleaf *leaf)
 {
-	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = --groups - leaf->groups;
-	struct entry *entries = (void *)(grbase + 1), *entry = entries;
+	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - leaf->groups;
+	struct entry *edict = (void *)gstop, *entry = edict;
 	struct extent *extents = leaf->table;
 	unsigned excount = 0, encount = 0;
 	char *why;
 
-	for (struct group *group = groups; group > grbase; group--) {
+	for (struct group *group = gdict - 1; group >= gstop; group--) {
 		entry -= group->count;
 		excount += entry->limit;
 		encount += group->count;
 	}
 	//printf("encount = %i, excount = %i, \n", encount, excount);
+	why = "used count wrong";
+	if (leaf->used != (void *)(edict - encount) - (void *)leaf)
+		goto eek;
 	why = "free count wrong";
 	if (leaf->free != (void *)(extents + excount) - (void *)leaf)
 		goto eek;
-	why = "used count wrong";
-	if (leaf->used != (void *)(entries - encount) - (void *)leaf)
+	why = "free check mismatch";
+	if (leaf->used - leaf->free != leaf_free2(btree, leaf))
 		goto eek;
 	return 0;
 eek:
@@ -753,6 +767,7 @@ int main(int argc, char *argv[])
 	dleaf_insert(btree, keys[next++], leaf, (struct extent){ .block = 0x888 });
 	dleaf_insert(btree, keys[next], leaf, (struct extent){ .block = 0x999 });
 	dleaf_dump(sb->blocksize, leaf);
+	dleaf_check(btree, leaf);
 	struct dwalk *walk = &(struct dwalk){ };
 	if (1) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
@@ -783,7 +798,6 @@ int main(int argc, char *argv[])
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
 	dleaf_dump(sb->blocksize, leaf);
-return 0;
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
 		unsigned count;
