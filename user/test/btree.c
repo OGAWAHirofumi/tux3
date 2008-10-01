@@ -446,22 +446,17 @@ eek:
 	return -ENOMEM;
 }
 
-void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct path path[])
+int btree_leaf_split(struct btree *btree, struct path path[], tuxkey_t key)
 {
-	struct buffer *leafbuf = path[btree->root.depth].buffer;
-	struct btree_ops *ops = btree->ops;
-	set_buffer_dirty(leafbuf);
-	void *space = (ops->leaf_resize)(btree, key, leafbuf->data, newsize);
-	if (space)
-		return space;
 	trace("split leaf");
+	struct buffer *leafbuf = path[btree->root.depth].buffer;
 	struct buffer *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release path at point of error */
 		release_path(path, btree->root.depth);
-		return NULL;
+		return -ENOMEM;
 	}
-	u64 newkey = (ops->leaf_split)(btree, key, leafbuf->data, newbuf->data);
+	u64 newkey = (btree->ops->leaf_split)(btree, key, leafbuf->data, newbuf->data);
 	block_t childblock = newbuf->index;
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
@@ -469,15 +464,26 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct pa
 		leafbuf = path[btree->root.depth].buffer = newbuf;
 		newbuf = swap;
 	}
-	brelse_dirty(newbuf);
-	space = (ops->leaf_resize)(btree, key, leafbuf->data, newsize);
-	assert(space);
-	int err = insert_node(btree, newkey, childblock, path);
-	if (err) {
-		warn("insert_node failed (%s)", strerror(-err));
-		return NULL;
+	brelse(newbuf);
+	return insert_node(btree, newkey, childblock, path);
+}
+
+void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct path path[])
+{
+	for (int i = 0; i < 2; i++) {
+		struct buffer *leafbuf = path[btree->root.depth].buffer;
+		void *space = (btree->ops->leaf_resize)(btree, key, leafbuf->data, newsize);
+		set_buffer_dirty(leafbuf);
+		if (space)
+			return space;
+		assert(!i);
+		int err = btree_leaf_split(btree, path, key);
+		if (err) {
+			warn("insert_node failed (%s)", strerror(-err)); // release path ???
+			break;
+		}
 	}
-	return space;
+	return NULL;
 }
 
 struct btree new_btree(SB, struct btree_ops *ops)

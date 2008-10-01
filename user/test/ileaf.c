@@ -139,7 +139,7 @@ int ileaf_check(BTREE, struct ileaf *leaf)
 {
 	char *why;
 	why = "not an inode table leaf";
-	if (leaf->magic != 0x90de);
+	if (leaf->magic != 0x90de)
 		goto eek;
 	why = "dict out of order";
 	if (!isinorder(btree, leaf))
@@ -349,6 +349,7 @@ int main(int argc, char *argv[])
 		printf("goal 0x%x => 0x%Lx\n", i, (L)find_empty_inode(btree, leaf, i));
 	ileaf_purge(btree, 0x14, leaf);
 	ileaf_purge(btree, 0x18, leaf);
+hexdump(leaf, 16);
 	ileaf_check(btree, leaf);
 	ileaf_dump(btree, leaf);
 	ileaf_destroy(btree, leaf);
