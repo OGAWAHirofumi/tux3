@@ -115,17 +115,17 @@ void dleaf_destroy(BTREE, struct dleaf *leaf)
 	free(leaf);
 }
 
-unsigned leaf_free(BTREE, vleaf *leaf)
+unsigned dleaf_free(BTREE, vleaf *leaf)
 {
 	return to_dleaf(leaf)->used - to_dleaf(leaf)->free;
 }
 
-unsigned leaf_need(BTREE, struct dleaf *leaf)
+unsigned dleaf_need(BTREE, struct dleaf *leaf)
 {
-	return btree->sb->blocksize - leaf_free(btree, leaf) - sizeof(struct dleaf);
+	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
-int leaf_free2(BTREE, void *vleaf)
+int dleaf_free2(BTREE, void *vleaf)
 {
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - leaf->groups;
@@ -493,7 +493,7 @@ int dleaf_check(BTREE, struct dleaf *leaf)
 	if (leaf->free != (void *)(extents + excount) - (void *)leaf)
 		goto eek;
 	why = "free check mismatch";
-	if (leaf->used - leaf->free != leaf_free2(btree, leaf))
+	if (leaf->used - leaf->free != dleaf_free2(btree, leaf))
 		goto eek;
 	return 0;
 eek:
@@ -521,7 +521,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 	const int grouplim = MAX_GROUP_ENTRIES; /// !!! just for testing !!! ///
 
 	/* need room for one extent + maybe one group + maybe one entry */
-	if (leaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) + size)
+	if (dleaf_free(btree, leaf) < sizeof(struct group) + sizeof(struct entry) + size)
 		return NULL;
 
 	/* find group position */
@@ -589,7 +589,7 @@ void *dleaf_resize(BTREE, tuxkey_t key, vleaf *base, unsigned size)
 
 	/* insert the extent */
 	struct extent *where = extents + entry->limit;
-	printf("limit = %i, free = %i\n", entry->limit, leaf_free(btree, leaf));
+	printf("limit = %i, free = %i\n", entry->limit, dleaf_free(btree, leaf));
 	int tail = base + leaf->free - (void *)where;
 	assert(tail >= 0);
 	memmove(where + 1, where, tail);
@@ -681,7 +681,7 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf->groups;
 	struct entry *entries = (void *)grbase;
 	printf("merge %p into %p\n", from, leaf);
-	//assert(leaf_need(from) <= leaf_free(leaf));
+	//assert(dleaf_need(from) <= dleaf_free(leaf));
 
 	/* append extents */
 	unsigned size = from->free - sizeof(struct dleaf);

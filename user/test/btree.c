@@ -282,7 +282,7 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 			struct vleaf *this = leafbuf->data;
 			struct vleaf *that = leafprev->data;
 			trace_off("check leaf %p against %p", leafbuf, leafprev);
-			trace_off("need = %i, free = %i", (ops->leaf_need)(btree, this), leaf_free(sb, that));
+			trace_off("need = %i, free = %i", (ops->dleaf_need)(btree, this), dleaf_free(sb, that));
 			/* try to merge leaf with prev */
 			if ((ops->leaf_need)(btree, this) <= (ops->leaf_free)(btree, that)) {
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);

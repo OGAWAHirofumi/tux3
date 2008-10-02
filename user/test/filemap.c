@@ -173,7 +173,8 @@ retry:
 	
 	if (0) {
 		assert(!try);
-		err = btree_leaf_split(&inode->btree, path, 0);
+		if ((err = btree_leaf_split(&inode->btree, path, 0)))
+			goto eek;
 		try = 1;
 		goto retry;
 	}
