@@ -479,7 +479,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct pa
 		assert(!i);
 		int err = btree_leaf_split(btree, path, key);
 		if (err) {
-			warn("insert_node failed (%s)", strerror(-err)); // release path ???
+			warn("insert_node failed (%s)", strerror(-err));
 			break;
 		}
 	}

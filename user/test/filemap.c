@@ -64,9 +64,16 @@ int filemap_blockwrite(struct buffer *buffer)
 	warn("block write <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
+	struct dev *dev = sb->devmap->dev;
+	assert(dev->bits >= 8 && dev->fd);
+	int err, levels = inode->btree.root.depth;
+	struct path path[levels + 1];
+	if (!levels)
+		return -EIO;
 	if (buffer_empty(buffer))
 		warn("egad, wrote an invalid buffer");
 
+#ifndef filemap_included
 	/* Generate extent */
 	unsigned ends[2] = { buffer->index, buffer->index};
 	for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
@@ -81,13 +88,6 @@ int filemap_blockwrite(struct buffer *buffer)
 			ends[up] = next; /* what happens to the beer you send */
 		}
 	}
-	struct dev *dev = sb->devmap->dev;
-	assert(dev->bits >= 8 && dev->fd);
-	int err, levels = inode->btree.root.depth;
-	struct path path[levels + 1];
-	if (!levels)
-		return -EIO;
-#ifndef filemap_included
 	unsigned segs = 0, i;
 	index_t start = ends[0], limit = ends[1] + 1;
 
@@ -167,13 +167,13 @@ int filemap_blockwrite(struct buffer *buffer)
 	}
 	printf(" (%i)\n", segs);
 
-if (0) {
 	*walk = rewind;
 	for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
 		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
 	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
-}
-	/* split leaf if necessary */
+	
+	//if (???)
+	//	int err = btree_leaf_split(btree, path, key);
 
 	*walk = rewind;
 	dwalk_chop_after(walk);
@@ -185,7 +185,6 @@ if (0) {
 	}
 	dleaf_dump(sb->blocksize, leaf);
 
-	// !!!<handle overlapping extent>!!! //
 	/* assert we used exactly the expected space */
 	//assert(??? == ???);
 	/* check leaf */
