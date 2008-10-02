@@ -88,16 +88,17 @@ int filemap_blockwrite(struct buffer *buffer)
 			ends[up] = next; /* what happens to the beer you send */
 		}
 	}
-	unsigned segs = 0, i;
+	unsigned segs = 0, i, try = 0;
 	index_t start = ends[0], limit = ends[1] + 1;
 
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
+
+retry:
 	/* Probe below extent start to include possible overlap */
 	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
 		return err;
-
-	struct dwalk *walk = &(struct dwalk){ };
 	struct dleaf *leaf = path[levels].buffer->data;
+	struct dwalk *walk = &(struct dwalk){ };
 	struct extent seg[1000];
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
@@ -115,8 +116,6 @@ int filemap_blockwrite(struct buffer *buffer)
 
 	printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
 	*walk = rewind;
-
-	// !!!<handle overlapping extent>!!! //
 
 	struct extent *next_extent = NULL;
 	index_t index = start, offset = 0;
@@ -172,8 +171,12 @@ int filemap_blockwrite(struct buffer *buffer)
 		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
 	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
 	
-	//if (???)
-	//	int err = btree_leaf_split(btree, path, key);
+	if (0) {
+		assert(!try);
+		err = btree_leaf_split(&inode->btree, path, 0);
+		try = 1;
+		goto retry;
+	}
 
 	*walk = rewind;
 	dwalk_chop_after(walk);
@@ -186,7 +189,7 @@ int filemap_blockwrite(struct buffer *buffer)
 	dleaf_dump(sb->blocksize, leaf);
 
 	/* assert we used exactly the expected space */
-	//assert(??? == ???);
+	/* assert(??? == ???); */
 	/* check leaf */
 	if (0)
 		goto eek;
