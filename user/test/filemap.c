@@ -172,9 +172,8 @@ retry:;
 	*walk = rewind;
 	for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
 		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
-	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
-	
-	trace_on("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
+	trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
+	trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
 	if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
 		trace_on("--------- split leaf ---------");
 		assert(!try);
@@ -199,11 +198,28 @@ retry:;
 	if (0)
 		goto eek;
 
+#if 1
+	unsigned skip = offset;
+	for (i = 0, index = start - offset; !err && index < limit; i++) {
+		unsigned count = extent_count(seg[i]);
+		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)seg[i].block);
+		for (int j = skip; !err && j < count; j++) {
+			block_t block = seg[i].block + j;
+			struct buffer *buffer = getblk(inode->map, index + j);
+			trace_on("write block 0x%Lx => %Lx", (L)buffer->index, block);
+			err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
+			brelse(set_buffer_uptodate(buffer)); // leave dirty if error ???
+		}
+		index += count;
+		skip = 0;
+	}
+	return err;
+#else
 	/* fake the actual write for now */
 	for (index = start; index < limit; index++)
 		brelse(set_buffer_uptodate(getblk(inode->map, index)));
-
 	return 0;
+#endif
 #else
 	if ((err = probe(&inode->btree, buffer->index, path)))
 		return err;
@@ -267,7 +283,7 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
-#if 1
+#if 0
 	for (int i = 0; i < 20; i++) {
 		brelse_dirty(getblk(inode->map, i));
 		printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
