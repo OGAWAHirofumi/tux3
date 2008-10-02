@@ -1,5 +1,5 @@
 #ifndef trace
-#define trace trace_on
+#define trace trace_off
 #endif
 
 #define main notmain0
@@ -28,7 +28,7 @@
 #undef main
 
 #undef trace
-#define trace trace_on
+#define trace trace_off
 
 int filemap_blockread(struct buffer *buffer)
 {
@@ -174,7 +174,7 @@ retry:;
 		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
 	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
 	
-	trace_on("is %i needed more than %u free?", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
+	trace_on("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
 	if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
 		trace_on("--------- split leaf ---------");
 		assert(!try);
@@ -186,13 +186,12 @@ retry:;
 
 	*walk = rewind;
 	dwalk_chop_after(walk);
-	dleaf_dump(sb->blocksize, leaf);
 	for (i = 0, index = start - offset; i < segs; i++) {
 		trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
 		dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
 		index += extent_count(seg[i]);
 	}
-	dleaf_dump(sb->blocksize, leaf);
+	//dleaf_dump(sb->blocksize, leaf);
 
 	/* assert we used exactly the expected space */
 	/* assert(??? == ???); */
@@ -250,7 +249,7 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	struct dev *dev = &(struct dev){ fd, .bits = 9 };
+	struct dev *dev = &(struct dev){ fd, .bits = 8 };
 	SB = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
@@ -268,8 +267,8 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
-#if 0
-	for (int i = 0; i < 5; i++) {
+#if 1
+	for (int i = 0; i < 20; i++) {
 		brelse_dirty(getblk(inode->map, i));
 		printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 	}
