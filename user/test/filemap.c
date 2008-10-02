@@ -27,6 +27,9 @@
 #include "btree.c"
 #undef main
 
+#undef trace
+#define trace trace_on
+
 int filemap_blockread(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
@@ -66,7 +69,7 @@ int filemap_blockwrite(struct buffer *buffer)
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	int err, levels = inode->btree.root.depth;
+	int err, levels = inode->btree.root.depth, i, try = 0;
 	struct path path[levels + 1];
 	if (!levels)
 		return -EIO;
@@ -88,24 +91,23 @@ int filemap_blockwrite(struct buffer *buffer)
 			ends[up] = next; /* what happens to the beer you send */
 		}
 	}
-	unsigned segs = 0, i, try = 0;
 	index_t start = ends[0], limit = ends[1] + 1;
-
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
-
-retry:
+	struct extent seg[1000];
+retry:;
+	unsigned segs = 0;
 	/* Probe below extent start to include possible overlap */
 	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
 		return err;
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct dwalk *walk = &(struct dwalk){ };
-	struct extent seg[1000];
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
 	/* skip extents below start */
 	for (struct extent *extent; (extent = dwalk_next(walk));)
-		if (dwalk_index(walk) + extent_count(*extent) >= start) {
-			dwalk_back(walk);
+		if (dwalk_index(walk) + extent_count(*extent) > start) {
+			if (dwalk_index(walk) <= start)
+				dwalk_back(walk);
 			break;
 		}
 	struct dwalk rewind = *walk;
@@ -134,6 +136,7 @@ retry:
 		index_t next_index = limit;
 		if (next_extent) {
 			next_index = dwalk_index(walk);
+			trace("next_index = %Lx", (L)next_index);
 			if (next_index < start) {
 				offset = start - next_index;
 				next_index = start;
@@ -171,7 +174,9 @@ retry:
 		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
 	printf("need %i data and %i index bytes\n", walk->mock.free, -walk->mock.used);
 	
-	if (0) {
+	trace_on("is %i needed more than %u free?", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
+	if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
+		trace_on("--------- split leaf ---------");
 		assert(!try);
 		if ((err = btree_leaf_split(&inode->btree, path, 0)))
 			goto eek;
@@ -245,7 +250,7 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	struct dev *dev = &(struct dev){ fd, .bits = 12 };
+	struct dev *dev = &(struct dev){ fd, .bits = 9 };
 	SB = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
@@ -263,6 +268,15 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
+#if 0
+	for (int i = 0; i < 5; i++) {
+		brelse_dirty(getblk(inode->map, i));
+		printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
+	}
+	return 0;
+#endif
+
+#if 1
 	brelse_dirty(getblk(inode->map, 5));
 	brelse_dirty(getblk(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
@@ -272,6 +286,7 @@ int main(int argc, char *argv[])
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
 	return 0;
+#endif
 
 	brelse_dirty(getblk(inode->map, 0));
 	brelse_dirty(getblk(inode->map, 1));
