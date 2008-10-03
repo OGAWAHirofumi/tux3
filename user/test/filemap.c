@@ -77,12 +77,12 @@ int filemap_extent_io(struct buffer *buffer, int write)
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	int err, levels = inode->btree.root.depth, i, try = 0;
-	struct path path[levels + 1];
+	int levels = inode->btree.root.depth, try = 0, i, err;
 	if (!levels) {
 		if (!write) {
 			trace("unmapped block %Lx", (L)buffer->index);
 			memset(buffer->data, 0, sb->blocksize);
+			set_buffer_uptodate(buffer);
 			return 0;
 		}
 		return -EIO;
@@ -95,6 +95,7 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	index_t start, limit;
 	guess_extent(buffer, &start, &limit, 1);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
+	struct path path[levels + 1];
 	struct extent seg[1000];
 retry:;
 	unsigned segs = 0;
@@ -234,7 +235,7 @@ nospace:
 	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %s", strerror(-err));
-	// free block and try to clean up ???
+	// free blocks and try to clean up ???
 	return -EIO;
 }
 
