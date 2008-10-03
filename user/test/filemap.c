@@ -30,8 +30,45 @@
 #undef trace
 #define trace trace_on
 
-#ifndef filemap_included
-int filemap_extent_read(struct buffer *buffer)
+/*
+ * Extrapolate from single buffer flush or bread to opportunistic exent IO
+ *
+ * For write, try to include adjoining buffers above and below:
+ *  - stop at first uncached or clean buffer in either direction
+ *
+ * For read (essentially readahead):
+ *  - stop at first present buffer
+ *  - stop at end of file
+ *
+ * For both, stop when extent is "big enough", whatever that means.
+ */
+void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int write)
+{
+	struct inode *inode = buffer->map->inode;
+	unsigned ends[2] = { buffer->index, buffer->index };
+	for (int up = !write, sign = -1; up < 2; up++, sign = -sign) {
+		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
+			unsigned next = ends[up] + sign;
+			if (!write && next > inode->i_size >> inode->sb->blockbits)
+				break;
+			struct buffer *nextbuf = peekblk(buffer->map, next);
+			if (!nextbuf) {
+				if (write)
+					break;
+				continue;
+			}
+			unsigned stop = write ? !buffer_dirty(nextbuf) : buffer_empty(nextbuf);
+			brelse(nextbuf);
+			if (stop)
+				break;
+			ends[up] = next; /* what happens to the beer you send */
+		}
+	}
+	*start = ends[0];
+	*limit = ends[1] + 1;
+}
+
+int filemap_extent_io(struct buffer *buffer, int write)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
@@ -40,197 +77,18 @@ int filemap_extent_read(struct buffer *buffer)
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	int err, levels = inode->btree.root.depth, i;
-	struct path path[levels + 1];
-	if (!levels)
-		return -EIO;
-	if (buffer_dirty(buffer))
-		warn("egad, reading a dirty buffer");
-
-	/* Generate extent */
-	unsigned ends[2] = { buffer->index, buffer->index};
-//	for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
-	for (int up = 1, sign = -1; up < 2; up++, sign = -sign) {
-		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
-			// Form extent for read (essentially readahead):
-			//  * stop when extent is "big enough"
-			//  * stop at end of file
-			//  * stop at first present buffer
-			unsigned next = ends[up] + sign;
-			if (next > inode->i_size >> sb->blockbits)
-				break;
-			struct buffer *nextbuf = peekblk(buffer->map, next);
-			if (!nextbuf)
-				continue;
-			unsigned stop = buffer_empty(nextbuf);
-			brelse(nextbuf);
-			if (stop)
-				break;
-			ends[up] = next; /* what happens to the beer you send */
-		}
-	}
-	index_t start = ends[0], limit = ends[1] + 1;
-	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
-	struct extent seg[1000];
-
-	unsigned segs = 0;
-	/* Probe below extent start to include possible overlap */
-	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
-		return err;
-	struct dleaf *leaf = path[levels].buffer->data;
-	struct dwalk *walk = &(struct dwalk){ };
-	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
-
-	/* skip extents below start */
-	for (struct extent *extent; (extent = dwalk_next(walk));)
-		if (dwalk_index(walk) + extent_count(*extent) > start) {
-			if (dwalk_index(walk) <= start)
-				dwalk_back(walk);
-			break;
-		}
-	struct dwalk rewind = *walk;
-	printf("prior extents:");
-	for (struct extent *extent; (extent = dwalk_next(walk));)
-		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
-	printf("\n");
-
-	printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
-	*walk = rewind;
-
-	struct extent *next_extent = NULL;
-	index_t index = start;
-	unsigned offset = 0;
-	while (index < limit) {
-		trace("index %Lx, limit %Lx", (L)index, (L)limit);
-		if (next_extent) {
-			trace("pass %Lx/%x", (L)next_extent->block, extent_count(*next_extent));
-			seg[segs++] = *next_extent;
-
-			unsigned count = extent_count(*next_extent);
-			if (start > dwalk_index(walk))
-				count -= start - dwalk_index(walk);
-			index += count;
-		}
-		next_extent = dwalk_next(walk);
-		index_t next_index = limit;
-		if (next_extent) {
-			next_index = dwalk_index(walk);
-			trace("next_index = %Lx", (L)next_index);
-			if (next_index < start) {
-				offset = start - next_index;
-				next_index = start;
-			}
-		}
-		int gap = next_index - index;
-		trace("offset = %i, next = %Lx, gap = %i", offset, (L)next_index, gap);
-		if (gap == 0)
-			continue;
-		if (index + gap > limit)
-			gap = limit - index;
-		trace("fill gap at %Lx/%x", index, gap);
-		seg[segs++] = extent(-1, gap);
-		index += gap;
-	}
-
-	printf("segs (offset = %Lx):", (L)offset);
-	for (i = 0, index = start; i < segs; i++) {
-		printf(" %Lx => %Lx/%x;", (L)index - offset, (L)seg[i].block, extent_count(seg[i]));
-		index += extent_count(seg[i]);
-	}
-	printf(" (%i)\n", segs);
-
-#if 1
-	unsigned skip = offset;
-	for (i = 0, index = start - offset; !err && index < limit; i++) {
-		unsigned count = extent_count(seg[i]);
-		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)seg[i].block);
-		for (int j = skip; !err && j < count; j++) {
-			block_t block = seg[i].block + j;
-			struct buffer *buffer = getblk(inode->map, index + j);
-			trace_on("read block 0x%Lx => %Lx", (L)buffer->index, block);
-			if (block == ~(-1LL << MAX_BLOCKS_BITS)) {
-				trace("zero fill buffer");
-				memset(buffer->data, 0, sb->blocksize);
-				continue;
-			}
-			err = diskread(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
-			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
-		}
-		index += count;
-		skip = 0;
-	}
-	return err;
-#else
-	/* fake the actual io */
-	for (index = start; index < limit; index++)
-		brelse(set_buffer_uptodate(getblk(inode->map, index)));
-	return 0;
-#endif
-}
-#endif
-
-int filemap_block_read(struct buffer *buffer)
-{
-	struct inode *inode = buffer->map->inode;
-	struct sb *sb = inode->sb;
-	warn("block read <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
-	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
-		return -EIO;
-	int err, levels = inode->btree.root.depth;
-	struct path path[levels + 1];
-	if (!levels)
-		goto hole;
-	if ((err = probe(&inode->btree, buffer->index, path)))
-		return err;
-	unsigned count = 0;
-	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
-	//dleaf_dump(&inode->btree, path[levels].buffer->data);
-
-	release_path(path, levels + 1);
-	if (!count)
-		goto hole;
-	trace("found physical block %Lx", (L)found->block);
-	struct dev *dev = sb->devmap->dev;
-	assert(dev->bits >= 8 && dev->fd);
-	return diskread(dev->fd, buffer->data, sb->blocksize, found->block << dev->bits);
-hole:
-	trace("unmapped block %Lx", (L)buffer->index);
-	memset(buffer->data, 0, sb->blocksize);
-	return 0;
-}
-
-int filemap_block_write(struct buffer *buffer)
-{
-	struct inode *inode = buffer->map->inode;
-	struct sb *sb = inode->sb;
-	warn("block write <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
-	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
-		return -EIO;
-	struct dev *dev = sb->devmap->dev;
-	assert(dev->bits >= 8 && dev->fd);
 	int err, levels = inode->btree.root.depth, i, try = 0;
 	struct path path[levels + 1];
 	if (!levels)
 		return -EIO;
-	if (buffer_empty(buffer))
+	if (write && buffer_empty(buffer))
 		warn("egad, writing an invalid buffer");
+	if (!write && buffer_dirty(buffer))
+		warn("egad, reading a dirty buffer");
 
 #ifndef filemap_included
-	/* Generate extent */
-	unsigned ends[2] = { buffer->index, buffer->index};
-	for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
-		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
-			struct buffer *nextbuf = peekblk(buffer->map, ends[up] + sign);
-			if (!nextbuf)
-				break;
-			unsigned next = nextbuf->index, dirty = buffer_dirty(nextbuf);
-			brelse(nextbuf);
-			if (!dirty)
-				break;
-			ends[up] = next; /* what happens to the beer you send */
-		}
-	}
-	index_t start = ends[0], limit = ends[1] + 1;
+	index_t start, limit;
+	guess_extent(buffer, &start, &limit, 1);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	struct extent seg[1000];
 retry:;
@@ -282,23 +140,28 @@ retry:;
 			}
 		}
 		int gap = next_index - index;
-		trace("offset = %i, gap = %i", offset, gap);
+		trace("offset = %i, next = %Lx, gap = %i", offset, (L)next_index, gap);
 		if (gap == 0)
 			continue;
 		if (index + gap > limit)
 			gap = limit - index;
 		trace("fill gap at %Lx/%x", index, gap);
-		block_t block = balloc_extent(sb, gap); // goal ???
-		if (block == -1)
-			goto nospace; // clean up !!!
+		block_t block = -1;
+		if (write) {
+			block = balloc_extent(sb, gap); // goal ???
+			if (block == -1)
+				goto nospace; // clean up !!!
+		}
 		seg[segs++] = extent(block, gap);
 		index += gap;
 	}
 
-	while (next_extent) {
-		trace("save tail");
-		seg[segs++] = *next_extent;
-		next_extent = dwalk_next(walk);
+	if (write) {
+		while (next_extent) {
+			trace("save tail");
+			seg[segs++] = *next_extent;
+			next_extent = dwalk_next(walk);
+		}
 	}
 
 	printf("segs (offset = %Lx):", (L)offset);
@@ -308,35 +171,36 @@ retry:;
 	}
 	printf(" (%i)\n", segs);
 
-	*walk = rewind;
-	for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
-		dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
-	trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
-	trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
-	if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
-		trace_on("--------- split leaf ---------");
-		assert(!try);
-		if ((err = btree_leaf_split(&inode->btree, path, 0)))
+	if (write) {
+		*walk = rewind;
+		for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
+			dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
+		trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
+		trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
+		if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
+			trace_on("--------- split leaf ---------");
+			assert(!try);
+			if ((err = btree_leaf_split(&inode->btree, path, 0)))
+				goto eek;
+			try = 1;
+			goto retry;
+		}
+
+		*walk = rewind;
+		dwalk_chop_after(walk);
+		for (i = 0, index = start - offset; i < segs; i++) {
+			trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
+			dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
+			index += extent_count(seg[i]);
+		}
+		//dleaf_dump(sb->blocksize, leaf);
+	
+		/* assert we used exactly the expected space */
+		/* assert(??? == ???); */
+		/* check leaf */
+		if (0)
 			goto eek;
-		try = 1;
-		goto retry;
 	}
-
-	*walk = rewind;
-	dwalk_chop_after(walk);
-	for (i = 0, index = start - offset; i < segs; i++) {
-		trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
-		dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
-		index += extent_count(seg[i]);
-	}
-	//dleaf_dump(sb->blocksize, leaf);
-
-	/* assert we used exactly the expected space */
-	/* assert(??? == ???); */
-	/* check leaf */
-	if (0)
-		goto eek;
-
 #if 1
 	unsigned skip = offset;
 	for (i = 0, index = start - offset; !err && index < limit; i++) {
@@ -345,9 +209,18 @@ retry:;
 		for (int j = skip; !err && j < count; j++) {
 			block_t block = seg[i].block + j;
 			struct buffer *buffer = getblk(inode->map, index + j);
-			trace_on("write block 0x%Lx => %Lx", (L)buffer->index, block);
-			err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
-			brelse(set_buffer_uptodate(buffer)); // leave dirty if error ???
+			trace_on("block 0x%Lx => %Lx", (L)buffer->index, block);
+			if (write) {
+				err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
+			} else {
+				if (block == ~(-1LL << MAX_BLOCKS_BITS)) { // hmm, means we can read the highest block
+					trace("zero fill buffer");
+					memset(buffer->data, 0, sb->blocksize);
+					continue;
+				}
+				err = diskread(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
+			}
+			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
 		}
 		index += count;
 		skip = 0;
@@ -388,6 +261,41 @@ eek:
 	return -EIO;
 }
 
+int filemap_block_read(struct buffer *buffer)
+{
+	struct inode *inode = buffer->map->inode;
+	struct sb *sb = inode->sb;
+	warn("block read <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
+	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
+		return -EIO;
+	int err, levels = inode->btree.root.depth;
+	struct path path[levels + 1];
+	if (!levels)
+		goto hole;
+	if ((err = probe(&inode->btree, buffer->index, path)))
+		return err;
+	unsigned count = 0;
+	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
+	//dleaf_dump(&inode->btree, path[levels].buffer->data);
+
+	release_path(path, levels + 1);
+	if (!count)
+		goto hole;
+	trace("found physical block %Lx", (L)found->block);
+	struct dev *dev = sb->devmap->dev;
+	assert(dev->bits >= 8 && dev->fd);
+	return diskread(dev->fd, buffer->data, sb->blocksize, found->block << dev->bits);
+hole:
+	trace("unmapped block %Lx", (L)buffer->index);
+	memset(buffer->data, 0, sb->blocksize);
+	return 0;
+}
+
+int filemap_block_write(struct buffer *buffer)
+{
+	return filemap_extent_io(buffer, 1);
+}
+
 struct map_ops filemap_ops = {
 	.bread = filemap_block_read,
 	.bwrite = filemap_block_write,
@@ -422,8 +330,8 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
-#if 1
-	filemap_extent_read(getblk(inode->map, 5));
+#if 0
+	filemap_extent_io(getblk(inode->map, 5), 0);
 	return 0;
 #endif
 
