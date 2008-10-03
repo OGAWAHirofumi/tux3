@@ -313,7 +313,7 @@ int count_buffers(void)
 	return count;
 }
 
-struct buffer *findblk(struct map *map, block_t block)
+struct buffer *peekblk(struct map *map, block_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block);
 	for (struct buffer *buffer = *bucket; buffer; buffer = buffer->hashlink)

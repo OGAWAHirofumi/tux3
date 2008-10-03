@@ -59,7 +59,7 @@ int write_buffer_to(struct buffer *buffer, block_t pos);
 int write_buffer(struct buffer *buffer);
 int read_buffer(struct buffer *buffer);
 unsigned buffer_hash(block_t block);
-struct buffer *findblk(struct map *map, block_t block);
+struct buffer *peekblk(struct map *map, block_t block);
 struct buffer *getblk(struct map *map, block_t block);
 struct buffer *bread(struct map *map, block_t block);
 void add_buffer_journaled(struct buffer *buffer);

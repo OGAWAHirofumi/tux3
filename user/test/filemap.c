@@ -28,9 +28,148 @@
 #undef main
 
 #undef trace
-#define trace trace_off
+#define trace trace_on
 
-int filemap_blockread(struct buffer *buffer)
+#ifndef filemap_included
+int filemap_extent_read(struct buffer *buffer)
+{
+	struct inode *inode = buffer->map->inode;
+	struct sb *sb = inode->sb;
+	trace("logical block 0x%Lx of inode 0x%Lx", (L)buffer->index, (L)inode->inum);
+	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
+		return -EIO;
+	struct dev *dev = sb->devmap->dev;
+	assert(dev->bits >= 8 && dev->fd);
+	int err, levels = inode->btree.root.depth, i;
+	struct path path[levels + 1];
+	if (!levels)
+		return -EIO;
+	if (buffer_dirty(buffer))
+		warn("egad, reading a dirty buffer");
+
+	/* Generate extent */
+	unsigned ends[2] = { buffer->index, buffer->index};
+//	for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
+	for (int up = 1, sign = -1; up < 2; up++, sign = -sign) {
+		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
+			// Form extent for read (essentially readahead):
+			//  * stop when extent is "big enough"
+			//  * stop at end of file
+			//  * stop at first present buffer
+			unsigned next = ends[up] + sign;
+			if (next > inode->i_size >> sb->blockbits)
+				break;
+			struct buffer *nextbuf = peekblk(buffer->map, next);
+			if (!nextbuf)
+				continue;
+			unsigned stop = buffer_empty(nextbuf);
+			brelse(nextbuf);
+			if (stop)
+				break;
+			ends[up] = next; /* what happens to the beer you send */
+		}
+	}
+	index_t start = ends[0], limit = ends[1] + 1;
+	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
+	struct extent seg[1000];
+
+	unsigned segs = 0;
+	/* Probe below extent start to include possible overlap */
+	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
+		return err;
+	struct dleaf *leaf = path[levels].buffer->data;
+	struct dwalk *walk = &(struct dwalk){ };
+	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
+
+	/* skip extents below start */
+	for (struct extent *extent; (extent = dwalk_next(walk));)
+		if (dwalk_index(walk) + extent_count(*extent) > start) {
+			if (dwalk_index(walk) <= start)
+				dwalk_back(walk);
+			break;
+		}
+	struct dwalk rewind = *walk;
+	printf("prior extents:");
+	for (struct extent *extent; (extent = dwalk_next(walk));)
+		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
+	printf("\n");
+
+	printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
+	*walk = rewind;
+
+	struct extent *next_extent = NULL;
+	index_t index = start;
+	unsigned offset = 0;
+	while (index < limit) {
+		trace("index %Lx, limit %Lx", (L)index, (L)limit);
+		if (next_extent) {
+			trace("pass %Lx/%x", (L)next_extent->block, extent_count(*next_extent));
+			seg[segs++] = *next_extent;
+
+			unsigned count = extent_count(*next_extent);
+			if (start > dwalk_index(walk))
+				count -= start - dwalk_index(walk);
+			index += count;
+		}
+		next_extent = dwalk_next(walk);
+		index_t next_index = limit;
+		if (next_extent) {
+			next_index = dwalk_index(walk);
+			trace("next_index = %Lx", (L)next_index);
+			if (next_index < start) {
+				offset = start - next_index;
+				next_index = start;
+			}
+		}
+		int gap = next_index - index;
+		trace("offset = %i, next = %Lx, gap = %i", offset, (L)next_index, gap);
+		if (gap == 0)
+			continue;
+		if (index + gap > limit)
+			gap = limit - index;
+		trace("fill gap at %Lx/%x", index, gap);
+		seg[segs++] = extent(-1, gap);
+		index += gap;
+	}
+
+	printf("segs (offset = %Lx):", (L)offset);
+	for (i = 0, index = start; i < segs; i++) {
+		printf(" %Lx => %Lx/%x;", (L)index - offset, (L)seg[i].block, extent_count(seg[i]));
+		index += extent_count(seg[i]);
+	}
+	printf(" (%i)\n", segs);
+
+#if 1
+	unsigned skip = offset;
+	for (i = 0, index = start - offset; !err && index < limit; i++) {
+		unsigned count = extent_count(seg[i]);
+		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)seg[i].block);
+		for (int j = skip; !err && j < count; j++) {
+			block_t block = seg[i].block + j;
+			struct buffer *buffer = getblk(inode->map, index + j);
+			trace_on("read block 0x%Lx => %Lx", (L)buffer->index, block);
+			if (block == ~(-1LL << MAX_BLOCKS_BITS)) {
+				trace("zero fill buffer");
+				memset(buffer->data, 0, sb->blocksize);
+				continue;
+			}
+			err = diskread(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
+			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
+		}
+		index += count;
+		skip = 0;
+	}
+	return err;
+#else
+	/* fake the actual io */
+	for (index = start; index < limit; index++)
+		brelse(set_buffer_uptodate(getblk(inode->map, index)));
+	return 0;
+#endif
+}
+#endif
+
+int filemap_block_read(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
@@ -60,7 +199,7 @@ hole:
 	return 0;
 }
 
-int filemap_blockwrite(struct buffer *buffer)
+int filemap_block_write(struct buffer *buffer)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
@@ -74,14 +213,14 @@ int filemap_blockwrite(struct buffer *buffer)
 	if (!levels)
 		return -EIO;
 	if (buffer_empty(buffer))
-		warn("egad, wrote an invalid buffer");
+		warn("egad, writing an invalid buffer");
 
 #ifndef filemap_included
 	/* Generate extent */
 	unsigned ends[2] = { buffer->index, buffer->index};
 	for (int up = 0, sign = -1; up < 2; up++, sign = -sign) {
 		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
-			struct buffer *nextbuf = findblk(buffer->map, ends[up] + sign);
+			struct buffer *nextbuf = peekblk(buffer->map, ends[up] + sign);
 			if (!nextbuf)
 				break;
 			unsigned next = nextbuf->index, dirty = buffer_dirty(nextbuf);
@@ -215,7 +354,7 @@ retry:;
 	}
 	return err;
 #else
-	/* fake the actual write for now */
+	/* fake the actual io */
 	for (index = start; index < limit; index++)
 		brelse(set_buffer_uptodate(getblk(inode->map, index)));
 	return 0;
@@ -250,8 +389,8 @@ eek:
 }
 
 struct map_ops filemap_ops = {
-	.bread = filemap_blockread,
-	.bwrite = filemap_blockwrite,
+	.bread = filemap_block_read,
+	.bwrite = filemap_block_write,
 };
 
 #ifndef filemap_included
@@ -282,6 +421,11 @@ int main(int argc, char *argv[])
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->map->inode = inode;
 	inode = inode;
+
+#if 1
+	filemap_extent_read(getblk(inode->map, 5));
+	return 0;
+#endif
 
 #if 0
 	for (int i = 0; i < 20; i++) {
