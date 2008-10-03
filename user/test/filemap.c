@@ -92,8 +92,6 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	if (!write && buffer_dirty(buffer))
 		warn("egad, reading a dirty buffer");
 
-//#ifndef filemap_included
-#if 1
 	index_t start, limit;
 	guess_extent(buffer, &start, &limit, 1);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
@@ -201,14 +199,13 @@ retry:;
 			index += extent_count(seg[i]);
 		}
 		//dleaf_dump(sb->blocksize, leaf);
-	
 		/* assert we used exactly the expected space */
 		/* assert(??? == ???); */
 		/* check leaf */
 		if (0)
 			goto eek;
 	}
-#if 1
+
 	unsigned skip = offset;
 	for (i = 0, index = start - offset; !err && index < limit; i++) {
 		unsigned count = extent_count(seg[i]);
@@ -233,72 +230,17 @@ retry:;
 		skip = 0;
 	}
 	return err;
-#else
-	/* fake the actual io */
-	for (index = start; index < limit; index++)
-		brelse(set_buffer_uptodate(getblk(inode->map, index)));
-	return 0;
-#endif
-#else
-	if ((err = probe(&inode->btree, buffer->index, path)))
-		return err;
-	unsigned count = 0;
-	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
-	block_t physical;
-	if (count) {
-		physical = found->block;
-		trace("found block [%Lx]", (L)physical);
-	} else {
-		physical = balloc(sb);
-		if (physical == -1)
-			goto nospace;
-		struct extent *store = tree_expand(&inode->btree, buffer->index, sizeof(struct extent), path);
-		if (!store)
-			goto eek;
-		*store = (struct extent){ .block = physical };
-	}
-	release_path(path, levels + 1);
-	return diskwrite(dev->fd, buffer->data, sb->blocksize, physical << dev->bits);
-#endif
 nospace:
 	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %s", strerror(-err));
-// !!!	free_block(sb, physical);
+	// free block and try to clean up ???
 	return -EIO;
 }
 
 int filemap_block_read(struct buffer *buffer)
 {
-	if (1)
-		return filemap_extent_io(buffer, 0);
-
-	struct inode *inode = buffer->map->inode;
-	struct sb *sb = inode->sb;
-	warn("block read <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
-	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
-		return -EIO;
-	int err, levels = inode->btree.root.depth;
-	struct path path[levels + 1];
-	if (!levels)
-		goto hole;
-	if ((err = probe(&inode->btree, buffer->index, path)))
-		return err;
-	unsigned count = 0;
-	struct extent *found = dleaf_lookup(&inode->btree, path[levels].buffer->data, buffer->index, &count);
-	//dleaf_dump(&inode->btree, path[levels].buffer->data);
-
-	release_path(path, levels + 1);
-	if (!count)
-		goto hole;
-	trace("found physical block %Lx", (L)found->block);
-	struct dev *dev = sb->devmap->dev;
-	assert(dev->bits >= 8 && dev->fd);
-	return diskread(dev->fd, buffer->data, sb->blocksize, found->block << dev->bits);
-hole:
-	trace("unmapped block %Lx", (L)buffer->index);
-	memset(buffer->data, 0, sb->blocksize);
-	return 0;
+	return filemap_extent_io(buffer, 0);
 }
 
 int filemap_block_write(struct buffer *buffer)
