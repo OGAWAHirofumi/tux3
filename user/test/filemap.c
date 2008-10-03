@@ -152,7 +152,7 @@ retry:;
 		if (index + gap > limit)
 			gap = limit - index;
 		trace("fill gap at %Lx/%x", index, gap);
-		block_t block = -1;
+		block_t block = 0;
 		if (write) {
 			block = balloc_extent(sb, gap); // goal ???
 			if (block == -1)
@@ -218,7 +218,7 @@ retry:;
 			if (write) {
 				err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
 			} else {
-				if (block == ~(-1LL << MAX_BLOCKS_BITS)) { // hmm, means we can read the highest block
+				if (!block) { /* block zero is never allocated */
 					trace("zero fill buffer");
 					memset(buffer->data, 0, sb->blocksize);
 					continue;
@@ -283,7 +283,8 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
-#if 0
+#if 1
+	// need to test read with prior extents!
 	filemap_extent_io(getblk(inode->map, 5), 0);
 	return 0;
 #endif
