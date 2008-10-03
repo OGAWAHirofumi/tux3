@@ -372,7 +372,7 @@ int make_tux3(SB, int fd)
 	/* Always 8K regardless of blocksize */
 	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
 	for (int i = 0; i < reserve; i++)
-		trace("reserve %Lx", (L)balloc_from_range(sb->bitmap, i, 1));
+		trace("reserve %Lx", (L)balloc_from_range(sb->bitmap, i, 1)); // error ???
 
 	trace("create inode table");
 	sb->itable = new_btree(sb, &itable_ops);

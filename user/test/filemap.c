@@ -79,14 +79,21 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	assert(dev->bits >= 8 && dev->fd);
 	int err, levels = inode->btree.root.depth, i, try = 0;
 	struct path path[levels + 1];
-	if (!levels)
+	if (!levels) {
+		if (!write) {
+			trace("unmapped block %Lx", (L)buffer->index);
+			memset(buffer->data, 0, sb->blocksize);
+			return 0;
+		}
 		return -EIO;
+	}
 	if (write && buffer_empty(buffer))
 		warn("egad, writing an invalid buffer");
 	if (!write && buffer_dirty(buffer))
 		warn("egad, reading a dirty buffer");
 
-#ifndef filemap_included
+//#ifndef filemap_included
+#if 1
 	index_t start, limit;
 	guess_extent(buffer, &start, &limit, 1);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
@@ -263,6 +270,9 @@ eek:
 
 int filemap_block_read(struct buffer *buffer)
 {
+	if (1)
+		return filemap_extent_io(buffer, 0);
+
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
 	warn("block read <%Lx:%Lx>", (L)inode->inum, (L)buffer->index);
