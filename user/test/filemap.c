@@ -97,13 +97,17 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	struct path path[levels + 1];
 	struct extent seg[1000];
-retry:;
-	unsigned segs = 0;
-	/* Probe below extent start to include possible overlap */
-	if ((err = probe(&inode->btree, start - MAX_EXTENT, path)))
+	if ((err = probe(&inode->btree, start, path)))
 		return err;
+retry:;
+	//assert(start >= this_key(path, levels))	
+	/* do not overlap next leaf */
+	if (limit > next_key(path, levels))
+		limit = next_key(path, levels);
+	unsigned segs = 0;
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct dwalk *walk = &(struct dwalk){ };
+	/* Probe below io start to include overlapping extents */
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
 	/* skip extents below start */
