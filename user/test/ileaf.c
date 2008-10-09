@@ -129,7 +129,7 @@ void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 int isinorder(BTREE, struct ileaf *leaf)
 {
 	u16 *dict = (void *)leaf + btree->sb->blocksize;
-	for (int i = 0, offset = 0, limit; i > -leaf->count; i--, offset = limit)
+	for (int i = 0, offset = 0, limit; --i > -leaf->count; offset = limit)
 		if ((limit = dict[i]) < offset)
 			return 0;
 	return 1;
