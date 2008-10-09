@@ -136,8 +136,9 @@ int dleaf_free2(BTREE, void *vleaf)
 	return (void *)entry - (void *)extents;
 }
 
-void dleaf_dump(unsigned blocksize, vleaf *vleaf)
+void dleaf_dump(BTREE, vleaf *vleaf)
 {
+	unsigned blocksize = btree->sb->blocksize;
 	struct dleaf *leaf = vleaf;
 	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf->groups;
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
@@ -581,7 +582,7 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 struct btree_ops dtree_ops = {
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
-//	.leaf_dump = dleaf_dump,
+	.leaf_dump = dleaf_dump,
 	.leaf_split = dleaf_split,
 //	.leaf_resize = dleaf_resize,
 	.leaf_chop = dleaf_chop,
@@ -650,7 +651,7 @@ int main(int argc, char *argv[])
 		try(walk, 0x3001006, (struct extent){ .block = 0x6 });
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
-	dleaf_dump(sb->blocksize, leaf);
+	dleaf_dump(btree, leaf);
 	dleaf_check(btree, leaf);
 return 0;
 	if (1) {
@@ -664,10 +665,10 @@ return 0;
 	if (1) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1c01c);
 		dwalk_chop(walk);
-		dleaf_dump(sb->blocksize, leaf);
+		dleaf_dump(btree, leaf);
 		return 0;
 	}
-	dleaf_dump(sb->blocksize, leaf);
+	dleaf_dump(btree, leaf);
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
 		unsigned key = keys[i];
 		unsigned count;
@@ -682,12 +683,12 @@ return 0;
 	struct dleaf *dest = leaf_create(btree);
 	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
 	printf("split key 0x%Lx\n", (L)key);
-	dleaf_dump(sb->blocksize, leaf);
-	dleaf_dump(sb->blocksize, dest);
+	dleaf_dump(btree, leaf);
+	dleaf_dump(btree, dest);
 	dleaf_merge(btree, leaf, dest);
-	dleaf_dump(sb->blocksize, leaf);
+	dleaf_dump(btree, leaf);
 	dleaf_chop(btree, 0x14014LL, leaf);
-	dleaf_dump(sb->blocksize, leaf);
+	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
 	return 0;
