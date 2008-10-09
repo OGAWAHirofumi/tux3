@@ -417,7 +417,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
 	printf("group %i/%i ", walk->gstop + walk->leaf->groups - 1 - walk->group, walk->leaf->groups);
-	printf("at entry %i/%i\n", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
+	//printf("at entry %i/%i\n", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
 	if (!walk->leaf->groups || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
@@ -430,7 +430,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 			/* could preplan this to avoid move: need additional pack state */
 			vecmove(walk->entry - 1, walk->entry, (struct entry *)walk->group - walk->entry);
 			walk->entry--; /* adjust to moved position */
-			walk->exbase += walk->entry->limit;
+			walk->exbase += walk->leaf->groups ? walk->entry->limit : 0;
 			*--walk->group = (struct group){ .keyhi = keyhi };
 			walk->leaf->used -= sizeof(struct group);
 			walk->leaf->groups++;
@@ -639,9 +639,10 @@ int main(int argc, char *argv[])
 
 	for (int i = 1; i < 2; i++) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x3000055);
-		walk->mock.group = *walk->group;
-		walk->mock.entry = *walk->entry;
-		walk->mock.groups = walk->leaf->groups;
+		if ((walk->mock.groups = walk->leaf->groups)) {
+			walk->mock.group = *walk->group;
+			walk->mock.entry = *walk->entry;
+		}
 		int (*try)(struct dwalk *walk, tuxkey_t key, struct extent extent) = i ? dwalk_pack: dwalk_mock;
 		try(walk, 0x3001001, (struct extent){ .block = 0x1 });
 		try(walk, 0x3001002, (struct extent){ .block = 0x2 });
@@ -653,7 +654,7 @@ int main(int argc, char *argv[])
 	}
 	dleaf_dump(btree, leaf);
 	dleaf_check(btree, leaf);
-return 0;
+exit(0); // valgrind happiness
 	if (1) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
 		dwalk_back(walk);
