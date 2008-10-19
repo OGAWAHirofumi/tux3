@@ -23,7 +23,7 @@ static inline void logline(const char *caller, const char *fmt, ...)
 #define error(string, args...) ({ warn(string "!", ##args); die(99); 1; })
 #define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"", #expr); } while (0)
 #define warn(string, args...) do { logline(__func__, string, ##args); } while (0)
-#define trace_off(...)
-#define trace_on warn
+#define trace_off(...) do {} while (0)
+#define trace_on(fmt, args...) warn(fmt, ## args)
 
 #endif

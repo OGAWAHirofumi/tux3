@@ -334,7 +334,7 @@ int main(int argc, char *argv[])
 	}
 	for (int i = 0; i < 12; i++) {
 		block_t block = balloc_from_range(bitmap, 121, 10);
-		printf("%Li\n", block);
+		printf("%Li\n", (L)block);
 	}
 	hexdump(getblk(map, 0)->data, dumpsize);
 	hexdump(getblk(map, 1)->data, dumpsize);
@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 2)->data, dumpsize);
 
 	bitmap_dump(bitmap, 0, sb->super.volblocks);
-	printf("%Li used, %Li free\n", count_range(bitmap, 0, sb->super.volblocks), sb->freeblocks);
+	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, sb->super.volblocks), (L)sb->freeblocks);
 	bfree(sb, 0x7e);
 	bfree(sb, 0x80);
 	bitmap_dump(bitmap, 0, sb->super.volblocks);

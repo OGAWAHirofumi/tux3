@@ -1,4 +1,7 @@
 CC=gcc -std=gnu99 -Wall -g -D_FILE_OFFSET_BITS=64
+CC += -Werror -Wall -Wextra
+CC += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
+
 VG=valgrind --error-exitcode=200 --leak-check=full
 
 binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3

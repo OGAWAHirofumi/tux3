@@ -416,8 +416,8 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	printf("group %i/%i ", walk->gstop + walk->leaf->groups - 1 - walk->group, walk->leaf->groups);
-	//printf("at entry %i/%i\n", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
+	printf("group %ti/%i ", walk->gstop + walk->leaf->groups - 1 - walk->group, walk->leaf->groups);
+	//printf("at entry %ti/%i\n", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
 	if (!walk->leaf->groups || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
