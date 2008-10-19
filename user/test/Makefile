@@ -4,7 +4,8 @@ CC += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 
 VG=valgrind --error-exitcode=200 --leak-check=full
 
-binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3
+binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 \
+	tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fs tux3fuse
@@ -73,6 +74,9 @@ tux3fs: $(fsdeps) tux3fs.c
 
 tux3fuse: $(fsdeps) tux3fuse.c
 	$(CC) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
+
+tux3graph: $(fsdeps) tux3graph.c
+	$(CC) vfs.o tux3graph.c -lpopt -o $@
 
 makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
