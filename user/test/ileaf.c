@@ -193,7 +193,7 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 		*(destdict - i) -= split;
 #ifdef SPLIT_AT_INUM
 	/* round down to multiple of 64 above ibase */
-	inum_t round = inum & ~0x3fULL;
+	inum_t round = inum & ~(inum_t)(btree->entries_per_leaf - 1);
 	dest->ibase = round > leaf->ibase + leaf->count ? round : inum;
 #else
 	dest->ibase = leaf->ibase + at;
