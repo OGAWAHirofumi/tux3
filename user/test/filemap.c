@@ -123,7 +123,8 @@ retry:;
 		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
 	printf("\n");
 
-	printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
+	if (leaf->groups)
+		printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
 	*walk = rewind;
 
 	struct extent *next_extent = NULL;
@@ -197,7 +198,8 @@ retry:;
 		}
 
 		*walk = rewind;
-		dwalk_chop_after(walk);
+		if (leaf->groups)
+			dwalk_chop_after(walk);
 		for (i = 0, index = start - offset; i < segs; i++) {
 			trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
 			dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
