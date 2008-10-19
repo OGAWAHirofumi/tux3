@@ -163,7 +163,7 @@ retry:;
 			if (block == -1)
 				goto nospace; // clean up !!!
 		}
-		seg[segs++] = extent(block, gap);
+		seg[segs++] = make_extent(block, gap);
 		index += gap;
 	}
 
@@ -185,7 +185,7 @@ retry:;
 	if (write) {
 		*walk = rewind;
 		for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
-			dwalk_mock(walk, index, extent(seg[i].block, extent_count(seg[i])));
+			dwalk_mock(walk, index, make_extent(seg[i].block, extent_count(seg[i])));
 		trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
 		trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
 		if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
@@ -202,7 +202,7 @@ retry:;
 			dwalk_chop_after(walk);
 		for (i = 0, index = start - offset; i < segs; i++) {
 			trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
-			dwalk_pack(walk, index, extent(seg[i].block, extent_count(seg[i])));
+			dwalk_pack(walk, index, make_extent(seg[i].block, extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
 		//dleaf_dump(&inode->btree, leaf);

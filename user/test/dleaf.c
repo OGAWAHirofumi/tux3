@@ -25,7 +25,7 @@ struct group { u32 count:8, keyhi:24; };
 struct entry { u32 limit:8, keylo:24; };
 struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
 
-struct extent extent(block_t block, unsigned count)
+struct extent make_extent(block_t block, unsigned count)
 {
 	return (struct extent){ .block = block, .count = count - 1 };
 }
