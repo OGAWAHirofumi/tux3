@@ -464,6 +464,7 @@ int btree_leaf_split(struct btree *btree, struct path path[], tuxkey_t key)
 		leafbuf = path[btree->root.depth].buffer = newbuf;
 		newbuf = swap;
 	}
+	set_buffer_dirty(newbuf);
 	brelse(newbuf);
 	return insert_node(btree, newkey, childblock, path);
 }

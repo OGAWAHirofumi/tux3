@@ -205,6 +205,8 @@ retry:;
 			dwalk_pack(walk, index, make_extent(seg[i].block, extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
+		set_buffer_dirty(path[inode->btree.root.depth].buffer);
+
 		//dleaf_dump(&inode->btree, leaf);
 		/* assert we used exactly the expected space */
 		/* assert(??? == ???); */
