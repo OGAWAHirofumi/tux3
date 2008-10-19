@@ -129,7 +129,7 @@ void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 int isinorder(BTREE, struct ileaf *leaf)
 {
 	u16 *dict = (void *)leaf + btree->sb->blocksize;
-	for (int i = 0, offset = 0, limit; --i > -leaf->count; offset = limit)
+	for (int i = 0, offset = 0, limit; --i >= -leaf->count; offset = limit)
 		if ((limit = dict[i]) < offset)
 			return 0;
 	return 1;
@@ -226,7 +226,7 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	u16 *dict = base + btree->sb->blocksize;
 
 	unsigned at = inum - leaf->ibase;
-	if (at > 64)
+	if (at >= btree->entries_per_leaf)
 		return NULL;
 
 	unsigned extend_empty = at < leaf->count ? 0 : at - leaf->count + 1;
