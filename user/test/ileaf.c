@@ -18,7 +18,7 @@
 #define iattr_included_from_ileaf
 #include "iattr.c"
 
-struct ileaf { u16 magic, count; inum_t ibase; char table[]; };
+struct ileaf { u16 magic, count; u32 pad; inum_t ibase; char table[]; };
 
 /*
  * inode leaf format
