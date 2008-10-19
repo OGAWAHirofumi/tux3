@@ -235,7 +235,8 @@ int purge_inum(BTREE, inum_t inum)
 	int err = -ENOENT, levels = btree->sb->itable.root.depth;
 	struct path path[levels + 1];
 	if (!(err = probe(btree, inum, path))) {
-		err = ileaf_purge(btree, inum, to_ileaf(path[levels].buffer));
+		struct ileaf *ileaf = to_ileaf(path[levels].buffer->data);
+		err = ileaf_purge(btree, inum, ileaf);
 		release_path(path, levels + 1);
 	}
 	return err;
