@@ -6,6 +6,8 @@
 #include "buffer.h"
 #include "trace.h"
 
+#define BUFFER_PARANOIA_DEBUG
+
 #define buftrace trace_off
 
 /*
@@ -283,7 +285,7 @@ alloc_buffer:
 	if (!buffer)
 		return NULL;
 	*buffer = (struct buffer){ .state = BUFFER_STATE_EMPTY };
-	if ((err = posix_memalign((void **)&(buffer->data), SECTOR_SIZE, bufsize(buffer)))) {
+	if ((err = posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
 		return NULL;
@@ -399,6 +401,28 @@ int flush_buffers(struct map *map) // !!! should use lru list
 	return err;
 }
 
+#ifdef BUFFER_PARANOIA_DEBUG
+static void __destroy_buffers(void)
+{
+#define buffer_entry(x)		list_entry(x, struct buffer, lrulink)
+	struct list_head *heads[] = { &free_buffers, &lru_buffers, NULL, };
+	struct list_head **head = heads;
+	while (*head) {
+		while (!list_empty(*head)) {
+			struct buffer *buffer = buffer_entry((*head)->next);
+			list_del(&buffer->lrulink);
+			free(buffer->data);
+			free(buffer);
+		}
+		head++;
+	}
+}
+static void destroy_buffers(void)
+{
+	atexit(__destroy_buffers);
+}
+#endif
+
 int preallocate_buffers(unsigned bufsize) {
 	struct buffer *buffers = (struct buffer *)malloc(max_buffers*sizeof(struct buffer));
 	unsigned char *data_pool = NULL;
@@ -432,11 +456,14 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 	INIT_LIST_HEAD(&lru_buffers);
 	INIT_LIST_HEAD(&free_buffers);
 	INIT_LIST_HEAD(&journaled_buffers);
-
+#ifdef BUFFER_PARANOIA_DEBUG
+	destroy_buffers();
+#else
 	unsigned bufsize = 1 << dev->bits;
 	max_buffers = poolsize / bufsize;
 	max_evict = max_buffers / 10;
 	preallocate_buffers(bufsize);
+#endif
 }
 
 int dev_bread(struct buffer *buffer)
