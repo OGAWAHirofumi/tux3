@@ -49,7 +49,6 @@
 #define FUSE_USE_VERSION 27
 #include <fuse.h>
 #include <fuse/fuse_lowlevel.h>
-#include <fuse/fuse_lowlevel_compat.h>
 
 #define include_inode_c
 #include "inode.c"
@@ -59,34 +58,48 @@ static u64 volsize;
 static struct sb *sb;
 static struct dev *dev;
 
-static struct inode *ino2inode(fuse_ino_t ino)
+static struct inode *open_fuse_ino(fuse_ino_t ino)
 {
-	if (ino == 1)
+	struct inode *inode;
+	if (ino == FUSE_ROOT_ID)
 		return sb->rootdir;
-	return (struct inode *)ino;
+
+	inode = new_inode(sb, ino);
+	if (inode) {
+		if (!open_inode(inode))
+			return inode;
+		free_inode(inode);
+	}
+
+	return NULL;
 }
 
 static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct inode *inode = tuxopen(ino2inode(parent), name, strlen(name));
+	fprintf(stderr, "tux3_lookup(%Lx, '%s')\n", (L)parent, name);
+	struct inode *inode = tuxopen(sb->rootdir, name, strlen(name));
 
-	if (inode)
-	{
+	if (inode) {
 		struct fuse_entry_param ep = {
-			.attr.st_mode  = inode->i_mode,
-			.attr.st_atime = inode->i_atime,
-			.attr.st_mtime = inode->i_mtime,
-			.attr.st_ctime = inode->i_ctime,
-			.attr.st_size  = inode->i_size,
-			.attr.st_uid   = inode->i_uid,
-			.attr.st_gid   = inode->i_gid,
-			.attr.st_nlink = inode->i_links,
+			.attr = {
+				.st_ino   = inode->inum,
+				.st_mode  = inode->i_mode,
+				.st_atime = inode->i_atime,
+				.st_mtime = inode->i_mtime,
+				.st_ctime = inode->i_ctime,
+				.st_size  = inode->i_size,
+				.st_uid   = inode->i_uid,
+				.st_gid   = inode->i_gid,
+				.st_nlink = inode->i_links,
+			},
 
-			.ino = (fuse_ino_t)inode,
+			.ino = inode->inum,
 			.generation = 1,
-			.attr_timeout = 1.0,
-			.entry_timeout = 1.0,
+			.attr_timeout = 0.0,
+			.entry_timeout = 0.0,
 		};
+
+		tuxclose(inode);
 
 		fuse_reply_entry(req, &ep);
 	} else {
@@ -96,17 +109,22 @@ static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 static void tux3_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	printf("---- open file ----\n");
-	printf("flags: %i\n", fi->flags);
-	fi->flags |= 0666;
-	fuse_reply_open(req, fi);
+	fprintf(stderr, "tux3_open(%Lx)\n", (L)ino);
+	struct inode *inode = open_fuse_ino(ino);
+	if (inode) {
+		fi->flags |= 0666;
+		fi->fh = (uint64_t)(unsigned long)inode;
+		fuse_reply_open(req, fi);
+	} else {
+		fuse_reply_err(req, ENOENT);
+	}
 }
 
 static void tux3_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	off_t offset, struct fuse_file_info *fi)
 {
-	printf("---- read file ----\n");
-	struct inode *inode = ino2inode(ino);
+	fprintf(stderr, "tux3_read(%Lx)\n", (L)ino);
+	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *file = &(struct file){ .f_inode = inode };
 
 	printf("userspace tries to seek to %Li\n", (L)offset);
@@ -143,29 +161,30 @@ eek:
 static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, struct fuse_file_info *fi)
 {
-	printf("---- create file ----\n");
-	struct inode *inode = tuxcreate(ino2inode(parent), name, strlen(name),
+	fprintf(stderr, "tux3_create(%Lx, '%s')\n", (L)parent, name);
+	struct inode *inode = tuxcreate(sb->rootdir, name, strlen(name),
 		&(struct iattr){ .mode = mode | 0666 });
-	if (inode)
-	{
+	if (inode) {
 		struct fuse_entry_param fep = {
-			.attr.st_mode  = inode->i_mode,
-			.attr.st_atime = inode->i_atime,
-			.attr.st_mtime = inode->i_mtime,
-			.attr.st_ctime = inode->i_ctime,
-			.attr.st_size  = inode->i_size,
-			.attr.st_uid   = inode->i_uid,
-			.attr.st_gid   = inode->i_gid,
-			.attr.st_nlink = inode->i_links,
+			.attr = {
+				.st_ino   = inode->inum,
+				.st_mode  = inode->i_mode,
+				.st_atime = inode->i_atime,
+				.st_mtime = inode->i_mtime,
+				.st_ctime = inode->i_ctime,
+				.st_size  = inode->i_size,
+				.st_uid   = inode->i_uid,
+				.st_gid   = inode->i_gid,
+				.st_nlink = inode->i_links,
+			},
 
-			.ino = (fuse_ino_t)inode,
+			.ino = inode->inum,
 			.generation = 1,
-			.attr_timeout = 1.0,
-			.entry_timeout = 1.0,
+			.attr_timeout = 0.0,
+			.entry_timeout = 0.0,
 		};
 
-		dump_attrs(inode);
-
+		fi->fh = (uint64_t)(unsigned long)inode;
 		fuse_reply_create(req, &fep, fi);
 	} else {
 		fuse_reply_err(req, ENOMEM);
@@ -174,29 +193,14 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
-	printf("---- create directory ----\n");
-	struct inode *inode = tuxcreate(ino2inode(parent), name, strlen(name),
-		&(struct iattr){ .mode = mode | 0666 });
-	if (inode)
-	{
-		struct fuse_entry_param fep = {
-			.ino = (fuse_ino_t)inode,
-			.generation = 1,
-			.attr.st_mode = mode | 0666,
-			.attr_timeout = 1.0,
-			.entry_timeout = 1.0,
-		};
-
-		fuse_reply_entry(req, &fep);
-	} else {
-		fuse_reply_err(req, ENOMEM);
-	}
+	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 	size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	struct inode *inode = ino2inode(ino);
+	fprintf(stderr, "tux3_write(%Lx)\n", (L)ino);
+	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *file = &(struct file){ .f_inode = inode };
 
 	if (offset) {
@@ -225,6 +229,7 @@ eek:
 
 static void _tux3_getattr(struct inode *inode, struct stat *st)
 {
+	st->st_ino   = inode->inum;
 	st->st_mode  = inode->i_mode;
 	st->st_atime = inode->i_atime;
 	st->st_mtime = inode->i_mtime;
@@ -237,12 +242,42 @@ static void _tux3_getattr(struct inode *inode, struct stat *st)
 
 static void tux3_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct stat st;
-	_tux3_getattr(ino2inode(ino), &st);
-	fuse_reply_attr(req, &st, 0.0);
+	fprintf(stderr, "tux3_getattr(%Lx)\n", (L)ino);
+	struct inode *inode = open_fuse_ino(ino);
+	if (inode) {
+		struct stat stbuf;
+		_tux3_getattr(inode, &stbuf);
+		fuse_reply_attr(req, &stbuf, 0.0);
+	} else {
+		fuse_reply_err(req, ENOENT);
+	}
 }
 
-struct fillstate { char *dirent; int done; };
+static void tux3_opendir(fuse_req_t req, fuse_ino_t ino,
+	struct fuse_file_info *fi)
+{
+	fprintf(stderr, "tux3_opendir(%Lx)\n", (L)ino);
+	struct inode *inode = open_fuse_ino(ino);
+	if (inode) {
+		fi->fh = (uint64_t)(unsigned long)inode;
+		fuse_reply_open(req, fi);
+	} else {
+		fuse_reply_err(req, ENOENT);
+	}
+}
+
+static void tux3_releasedir(fuse_req_t req, fuse_ino_t ino,
+	struct fuse_file_info *fi)
+{
+	fprintf(stderr, "tux3_releasedir(%Lx)\n", (L)ino);
+	if (ino != FUSE_ROOT_ID) {
+		struct inode *inode = (struct inode *)(unsigned long)fi->fh;
+		tuxclose(inode);
+	}
+	fuse_reply_err(req, 0); /* Success */
+}
+
+struct fillstate { char *dirent; int done; unsigned inode; unsigned type;};
 
 int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
 {
@@ -252,6 +287,8 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 	printf("'%.*s'\n", namelen, name);
 	memcpy(state->dirent, name, namelen);
 	state->dirent[namelen] = 0;
+	state->inode = inode;
+	state->type = type;
 	state->done = 1;
 	return 0;
 }
@@ -260,29 +297,27 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	struct fuse_file_info *fi)
 {
-	struct inode *inode = ino2inode(ino);
+	fprintf(stderr, "tux3_readdir(%Lx)\n", (L)ino);
+	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *dirfile = &(struct file){ .f_inode = inode, .f_pos = offset };
 	char dirent[EXT2_NAME_LEN + 1];
-	char buf[1024]; //XXX
+	char buf[size];
 
 	while (dirfile->f_pos < dirfile->f_inode->i_size) {
-		if ((errno = -ext2_readdir(dirfile, &(struct fillstate){ .dirent = dirent }, tux3_filler)))
-		{
+		struct fillstate fstate = { .dirent = dirent };
+		if ((errno = -ext2_readdir(dirfile, &fstate, tux3_filler))) {
 			fuse_reply_err(req, errno);
 			return;
+		} else {
+			size_t len;
+			struct stat stbuf = {
+				.st_ino = fstate.inode,
+				.st_mode = fstate.type,
+			};
+			len = fuse_add_direntry(req, buf, size, dirent, &stbuf, dirfile->f_pos);
+			fuse_reply_buf(req, buf, len);
+			return;
 		}
-
-		struct stat st;
-		struct inode *inode2 = tuxopen(inode, dirent, strlen(dirent));
-		if (!inode2)
-			continue;
-
-		_tux3_getattr(inode2, &st);
-
-		int len = fuse_dirent_size(strlen(dirent));
-		fuse_add_direntry(req, buf, sizeof(buf), dirent, &st, dirfile->f_pos);
-		fuse_reply_buf(req, buf, len);
-		return;
 	}
 
 	fuse_reply_buf(req, NULL, 0);
@@ -290,12 +325,14 @@ static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offs
 
 static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	printf("---- delete file ----\n");
+	fprintf(stderr, "tux3_unlink(%Lx, '%s')\n", (L)parent, name);
 	struct buffer *buffer;
-	ext2_dirent *entry = ext2_find_entry(ino2inode(parent), name, strlen(name), &buffer);
+	ext2_dirent *entry = ext2_find_entry(sb->rootdir, name, strlen(name), &buffer);
 	if (!entry)
 		goto noent;
-	struct inode inode = { .sb = sb, .inum = entry->inum };
+	inum_t inum = entry->inum;
+	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
+	struct inode inode = { .sb = sb, .inum = inum };
 
 	if ((errno = -open_inode(&inode)))
 		goto eek;
@@ -373,19 +410,28 @@ static void tux3_forget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	int to_set, struct fuse_file_info *fi)
 {
-	struct inode *inode = ino2inode(ino);
+	fprintf(stderr, "tux3_setattr(%Lx)\n", (L)ino);
+	struct inode *inode = open_fuse_ino(ino);
+	if (!inode) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
 		printf("Setting mode\n");
+		inode->i_mode = attr->st_mode;
 	}
 	if (to_set & FUSE_SET_ATTR_UID) {
 		printf("Setting uid\n");
+		inode->i_uid = attr->st_uid;
 	}
 	if (to_set & FUSE_SET_ATTR_GID) {
 		printf("Setting gid\n");
+		inode->i_gid = attr->st_gid;
 	}
 	if (to_set & FUSE_SET_ATTR_SIZE) {
 		printf("Setting size\n");
+		inode->i_size = attr->st_size;
 	}
 	if (to_set & FUSE_SET_ATTR_ATIME) {
 		printf("Setting atime to %Lu\n", (L)attr->st_atime);
@@ -395,15 +441,24 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	if (to_set & FUSE_SET_ATTR_MTIME) {
 		printf("Setting mtime to %Lu\n", (L)attr->st_mtime);
 		inode->i_mtime = attr->st_mtime;
-		inode->present |= MTIME_ATTR;
+		inode->present |= MTIME_BIT;
 	}
 
 	if (save_inode(inode))
 		printf("save_inode error\n");
 
-	struct stat st;
-	_tux3_getattr(inode, &st);
-	fuse_reply_attr(req, &st, 1.0);
+	tuxsync(inode);
+	sync_super(sb);
+
+	struct stat stbuf;
+	_tux3_getattr(inode, &stbuf);
+
+	dump_attrs(inode);
+
+	if (ino != FUSE_ROOT_ID)
+		tuxclose(inode);
+
+	fuse_reply_attr(req, &stbuf, 0.0);
 }
 
 static void tux3_readlink(fuse_req_t req, fuse_ino_t ino)
@@ -451,18 +506,6 @@ static void tux3_access(fuse_req_t req, fuse_ino_t ino, int mask)
 	fuse_reply_err(req, 0);
 }
 
-static void tux3_opendir(fuse_req_t req, fuse_ino_t ino,
-	struct fuse_file_info *fi)
-{
-	fuse_reply_open(req, fi); /* Success */
-}
-
-static void tux3_releasedir(fuse_req_t req, fuse_ino_t ino,
-	struct fuse_file_info *fi)
-{
-	fuse_reply_err(req, 0); /* Success */
-}
-
 static void tux3_fsyncdir(fuse_req_t req, fuse_ino_t ino,
 	int datasync, struct fuse_file_info *fi)
 {
@@ -476,7 +519,11 @@ static void tux3_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 
 static void tux3_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	fuse_reply_err(req, ENOSYS);
+	if (ino != FUSE_ROOT_ID) {
+		struct inode *inode = (struct inode *)(unsigned long)fi->fh;
+		tuxclose(inode);
+	}
+	fuse_reply_err(req, 0);
 }
 
 static void tux3_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
@@ -488,31 +535,46 @@ static void tux3_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	const char *value, size_t size, int flags)
 {
-	struct inode *inode = ino2inode(ino);
+	fprintf(stderr, "tux3_setxattr(%Lx, '%s'='%s')\n", (L)ino, name, value);
+	struct inode *inode = open_fuse_ino(ino);
+	if (!inode) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
 	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
 
 	if (flags == XATTR_CREATE && xattr) {
 		fuse_reply_err(req, EEXIST);
-	} else  if (flags == XATTR_REPLACE && !xattr) {
-		fuse_reply_err(req, ENOENT);
+	} else if (flags == XATTR_REPLACE && !xattr) {
+		fuse_reply_err(req, ENODATA);
 	} else {
 		int err;
 		err = -set_xattr(inode, (char *)name, strlen(name), (void *)value, size);
-		if (!err)
-		{
+		if (!err) {
 			tuxsync(inode);
 			sync_super(sb);
 		}
 		fuse_reply_err(req, err);
 	}
+
+	if (ino != FUSE_ROOT_ID)
+		tuxclose(inode);
 }
 
 static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 {
-	struct inode *inode = ino2inode(ino);
-	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
-	if (!xattr) {
+	fprintf(stderr, "tux3_getxattr(%Lx, '%s')\n", (L)ino, name);
+	struct inode *inode = open_fuse_ino(ino);
+	if (!inode) {
 		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
+
+	if (!xattr) {
+		fuse_reply_err(req, ENODATA);
 	} else if (size == 0) {
 		fuse_reply_xattr(req, xattr->size);
 	} else if (size < xattr->size) {
@@ -520,6 +582,9 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 	} else {
 		fuse_reply_buf(req, xattr->body, xattr->size);
 	}
+
+	if (ino != FUSE_ROOT_ID)
+		tuxclose(inode);
 }
 
 static void tux3_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
