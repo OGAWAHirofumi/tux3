@@ -254,9 +254,9 @@ static inline fixed32 tuxtime(void)
 	return tuxtimeval(now.tv_sec, now.tv_usec);
 }
 
-static inline unsigned millionths(fixed32 val)
+static inline unsigned billionths(fixed32 val)
 {
-	return (((val & 0xffffffff) * 1000000) + 0x80000000) >> 32;
+	return ((((val & 0xffffffff) * 1000000) + 0x80000000) >> 32) * 1000;
 }
 
 static inline u32 high32(fixed32 val)

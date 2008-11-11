@@ -87,15 +87,15 @@ static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 #if 1
 				.st_atim  = {
 					.tv_sec  = high32(inode->i_atime),
-					.tv_nsec = millionths(inode->i_atime) * 1000,
+					.tv_nsec = billionths(inode->i_atime),
 				},
 				.st_mtim  = {
 					.tv_sec  = high32(inode->i_mtime),
-					.tv_nsec = millionths(inode->i_mtime) * 1000,
+					.tv_nsec = billionths(inode->i_mtime),
 				},
 				.st_ctim  = {
 					.tv_sec  = high32(inode->i_ctime),
-					.tv_nsec = millionths(inode->i_ctime) * 1000,
+					.tv_nsec = billionths(inode->i_ctime),
 				},
 #else
 				.st_atime = high32(inode->i_atime),
@@ -187,15 +187,15 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 #if 1
 				.st_atim  = {
 					.tv_sec  = high32(inode->i_atime),
-					.tv_nsec = millionths(inode->i_atime) * 1000,
+					.tv_nsec = billionths(inode->i_atime),
 				},
 				.st_mtim  = {
 					.tv_sec  = high32(inode->i_mtime),
-					.tv_nsec = millionths(inode->i_mtime) * 1000,
+					.tv_nsec = billionths(inode->i_mtime),
 				},
 				.st_ctim  = {
 					.tv_sec  = high32(inode->i_ctime),
-					.tv_nsec = millionths(inode->i_ctime) * 1000,
+					.tv_nsec = billionths(inode->i_ctime),
 				},
 #else
 				.st_atime = high32(inode->i_atime),
@@ -269,15 +269,15 @@ static void _tux3_getattr(struct inode *inode, struct stat *st)
 #if 1
 		.st_atim  = {
 			.tv_sec  = high32(inode->i_atime),
-			.tv_nsec = millionths(inode->i_atime) * 1000,
+			.tv_nsec = billionths(inode->i_atime),
 		},
 		.st_ctim  = {
 			.tv_sec  = high32(inode->i_ctime),
-			.tv_nsec = millionths(inode->i_ctime) * 1000,
+			.tv_nsec = billionths(inode->i_ctime),
 		},
 		.st_mtim  = {
 			.tv_sec  = high32(inode->i_mtime),
-			.tv_nsec = millionths(inode->i_mtime) * 1000,
+			.tv_nsec = billionths(inode->i_mtime),
 		},
 #else
 		.st_atime = high32(inode->i_atime),
