@@ -84,9 +84,24 @@ static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 			.attr = {
 				.st_ino   = inode->inum,
 				.st_mode  = inode->i_mode,
+#if 1
+				.st_atim  = {
+					.tv_sec  = high32(inode->i_atime),
+					.tv_nsec = millionths(inode->i_atime) * 1000,
+				},
+				.st_mtim  = {
+					.tv_sec  = high32(inode->i_mtime),
+					.tv_nsec = millionths(inode->i_mtime) * 1000,
+				},
+				.st_ctim  = {
+					.tv_sec  = high32(inode->i_ctime),
+					.tv_nsec = millionths(inode->i_ctime) * 1000,
+				},
+#else
 				.st_atime = high32(inode->i_atime),
 				.st_mtime = high32(inode->i_mtime),
 				.st_ctime = high32(inode->i_ctime),
+#endif
 				.st_size  = inode->i_size,
 				.st_uid   = inode->i_uid,
 				.st_gid   = inode->i_gid,
@@ -169,9 +184,24 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			.attr = {
 				.st_ino   = inode->inum,
 				.st_mode  = inode->i_mode,
+#if 1
+				.st_atim  = {
+					.tv_sec  = high32(inode->i_atime),
+					.tv_nsec = millionths(inode->i_atime) * 1000,
+				},
+				.st_mtim  = {
+					.tv_sec  = high32(inode->i_mtime),
+					.tv_nsec = millionths(inode->i_mtime) * 1000,
+				},
+				.st_ctim  = {
+					.tv_sec  = high32(inode->i_ctime),
+					.tv_nsec = millionths(inode->i_ctime) * 1000,
+				},
+#else
 				.st_atime = high32(inode->i_atime),
 				.st_mtime = high32(inode->i_mtime),
 				.st_ctime = high32(inode->i_ctime),
+#endif
 				.st_size  = inode->i_size,
 				.st_uid   = inode->i_uid,
 				.st_gid   = inode->i_gid,
