@@ -1,4 +1,4 @@
-CC=gcc -std=gnu99 -Wall -g -D_FILE_OFFSET_BITS=64
+CC = gcc -std=gnu99 -Wall -g -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 CC += -Werror -Wall -Wextra
 CC += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 
@@ -18,7 +18,7 @@ fsdeps = $(lowdeps) filemap.c inode.c
 all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
 
-vfs.o: Makefile buffer.h trace.h buffer.c diskio.c
+vfs.o: Makefile buffer.h trace.h buffer.c diskio.c vfs.c
 	$(CC) -Dmain=notmain vfs.c -c
 
 balloc: $(basedeps) balloc.c

@@ -98,11 +98,11 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = encode32(attrs, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = encode48(attrs, inode->i_ctime);
+			attrs = encode48(attrs, inode->i_ctime >> TIME_ATTR_SHIFT);
 			attrs = encode64(attrs, inode->i_size);
 			break;
 		case MTIME_ATTR:
-			attrs = encode48(attrs, inode->i_mtime);
+			attrs = encode48(attrs, inode->i_mtime >> TIME_ATTR_SHIFT);
 			break;
 		case DATA_BTREE_ATTR:;
 			struct root *root = &inode->btree.root;
@@ -137,11 +137,13 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode32(attrs, &inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = decode48(attrs, &inode->i_ctime);
+			attrs = decode48(attrs, &v64);
 			attrs = decode64(attrs, &inode->i_size);
+			inode->i_ctime = v64 << TIME_ATTR_SHIFT;
 			break;
 		case MTIME_ATTR:
-			attrs = decode48(attrs, &inode->i_mtime);
+			attrs = decode48(attrs, &v64);
+			inode->i_mtime = v64 << TIME_ATTR_SHIFT;
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);

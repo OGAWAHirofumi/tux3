@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <execinfo.h>
-#include <unistd.h> // getpid
 #include <stdarg.h>
 
 static inline void logline(const char *caller, const char *fmt, ...)

@@ -23,15 +23,6 @@
 #define trace trace_off
 #endif
 
-static millisecond_t gettime(void)
-{
-	struct timeval now;
-	if (gettimeofday(&now, NULL) != -1)
-		return now.tv_sec * 1000LL + now.tv_usec / 1000;
-	error("gettimeofday failed, %s (%i)", strerror(errno), errno);
-	return 0;
-}
-
 struct bnode
 {
 	u32 count, unused;
@@ -300,8 +291,8 @@ keep_prev_leaf:
 
 		//nanosleep(&(struct timespec){ 0, 50 * 1000000 }, NULL);
 		//printf("time remaining: %Lx\n", deadline - gettime());
-		if (deadline && gettime() > deadline)
-			suspend = -1;
+//		if (deadline && gettime() > deadline)
+//			suspend = -1;
 		if (info->blocks && info->freed >= info->blocks)
 			suspend = -1;
 

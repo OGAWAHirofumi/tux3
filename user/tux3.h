@@ -26,6 +26,7 @@ typedef long long L; // widen for printf on 64 bit systems
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
+typedef u64 fixed32; /* Tux3 time values */
 typedef u32 millisecond_t;
 typedef int64_t inum_t;
 typedef u64 tuxkey_t;
@@ -231,6 +232,13 @@ struct btree_ops {
 	block_t (*balloc)(SB);
 	void (*bfree)(SB, block_t block);
 };
+
+/*
+ * Tux3 times are 32.32 fixed point while time attributes are stored in 32.16
+ * format, trading away some precision to compress time fields by two bytes
+ * each.  It is not clear whether the saved space is worth the lower precision.
+ */
+#define TIME_ATTR_SHIFT 16
 
 struct iattr {
 	u64 isize, mtime, ctime, atime;

@@ -17,6 +17,26 @@
 #include "filemap.c"
 #undef main
 
+#include <sys/time.h>
+#include <time.h>
+
+fixed32 tuxtime(void)
+{
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	return ((u64)now.tv_sec << 32) + ((u64)now.tv_usec << 32) / 1000000;
+}
+
+unsigned millionths(fixed32 val)
+{
+	return (((val & 0xffffffff) * 1000000) + 0x80000000) >> 32;
+}
+
+u32 high32(fixed32 val)
+{
+	return val >> 32;
+}
+
 struct inode *new_inode(SB, inum_t inum)
 {
 	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
@@ -107,7 +127,7 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
 	inode->i_gid = iattr->gid;
-	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->mtime;
+	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
 	inode->i_links = 1;
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->present = MODE_OWNER_BIT|DATA_BTREE_BIT;
@@ -256,6 +276,8 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct iattr *iattr)
 {
+	iattr->ctime = tuxtime();
+
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
