@@ -59,7 +59,6 @@
 
 typedef u16 le16;
 
-#define CURRENT_TIME_SEC 123
 #define EXT2_DIR_PAD 3
 #define EXT2_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
 #define EXT2_MAX_REC_LEN ((1<<16)-1)
@@ -340,7 +339,7 @@ int main(int argc, char *argv[])
 
 	if (!ext2_delete_entry(buffer, entry)) {
 		show_buffers(map);
-		map->inode->i_ctime = map->inode->i_mtime = CURRENT_TIME_SEC;
+		map->inode->i_ctime = map->inode->i_mtime = tuxtime();
 		mark_inode_dirty(map->inode);
 	}
 
