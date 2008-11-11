@@ -174,6 +174,8 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		}
 		inode->present |= 1 << kind;
 	}
+	if (!(inode->present & MTIME_BIT))
+		inode->i_mtime = inode->i_ctime;
 	return attrs;
 }
 
