@@ -240,6 +240,11 @@ struct btree_ops {
  */
 #define TIME_ATTR_SHIFT 16
 
+static inline fixed32 tuxtimeval(unsigned sec, unsigned usec)
+{
+	return ((u64)sec << 32) + ((u64)usec << 32) / 1000000;
+}
+
 struct iattr {
 	u64 isize, mtime, ctime, atime;
 	unsigned mode, uid, gid, links;

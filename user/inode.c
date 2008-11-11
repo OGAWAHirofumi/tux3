@@ -24,7 +24,7 @@ fixed32 tuxtime(void)
 {
 	struct timeval now;
 	gettimeofday(&now, NULL);
-	return ((u64)now.tv_sec << 32) + ((u64)now.tv_usec << 32) / 1000000;
+	return tuxtimeval(now.tv_sec, now.tv_usec);
 }
 
 unsigned millionths(fixed32 val)
@@ -130,7 +130,7 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
 	inode->i_links = 1;
 	inode->btree = new_btree(sb, &dtree_ops); // error???
-	inode->present = MODE_OWNER_BIT|DATA_BTREE_BIT;
+	inode->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
 	if ((err = store_attrs(sb, path, inode)))
 		goto eek;
 	release_path(path, levels + 1);

@@ -232,13 +232,28 @@ static void _tux3_getattr(struct inode *inode, struct stat *st)
 	*st = (struct stat){
 		.st_ino   = inode->inum,
 		.st_mode  = inode->i_mode,
-		.st_atime = high32(inode->i_atime),
-		.st_mtime = high32(inode->i_mtime),
-		.st_ctime = high32(inode->i_ctime),
 		.st_size  = inode->i_size,
 		.st_uid   = inode->i_uid,
 		.st_gid   = inode->i_gid,
 		.st_nlink = inode->i_links,
+#if 1
+		.st_atim  = {
+			.tv_sec  = high32(inode->i_atime),
+			.tv_nsec = millionths(inode->i_atime) * 1000,
+		},
+		.st_ctim  = {
+			.tv_sec  = high32(inode->i_ctime),
+			.tv_nsec = millionths(inode->i_ctime) * 1000,
+		},
+		.st_mtim  = {
+			.tv_sec  = high32(inode->i_mtime),
+			.tv_nsec = millionths(inode->i_mtime) * 1000,
+		},
+#else
+		.st_atime = high32(inode->i_atime),
+		.st_mtime = high32(inode->i_mtime),
+		.st_ctime = high32(inode->i_ctime),
+#endif
 	};
 }
 
@@ -435,12 +450,11 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	}
 	if (to_set & FUSE_SET_ATTR_ATIME) {
 		printf("Setting atime to %Lu\n", (L)attr->st_atime);
-		inode->i_atime = attr->st_atime;
-		// !! no persistent atime support yet
+		inode->i_atime = tuxtimeval(attr->st_atim.tv_sec, attr->st_atim.tv_nsec / 1000);
 	}
 	if (to_set & FUSE_SET_ATTR_MTIME) {
 		printf("Setting mtime to %Lu\n", (L)attr->st_mtime);
-		inode->i_mtime = attr->st_mtime;
+		inode->i_atime = tuxtimeval(attr->st_mtim.tv_sec, attr->st_mtim.tv_nsec / 1000);
 		inode->present |= MTIME_BIT;
 	}
 
