@@ -1,4 +1,3 @@
-#define _XOPEN_SOURCE 600 /* pwrite >= 500, posix_memalign >= 600*/
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
@@ -7,7 +6,6 @@
 #include "trace.h"
 
 #define BUFFER_PARANOIA_DEBUG
-
 #define buftrace trace_off
 
 /*
