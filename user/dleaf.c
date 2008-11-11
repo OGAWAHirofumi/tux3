@@ -20,19 +20,24 @@
 #define trace trace_on
 #endif
 
-struct extent { u64 block:48, count:6, version:10; };
+struct extent { u64 block:48, count_field:6, version:10; };
 struct group { u32 count:8, keyhi:24; };
 struct entry { u32 limit:8, keylo:24; };
 struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
 
 struct extent make_extent(block_t block, unsigned count)
 {
-	return (struct extent){ .block = block, .count = count - 1 };
+	return (struct extent){ .block = block, .count_field = count - 1 };
 }
 
 static inline unsigned extent_count(struct extent extent)
 {
-	return extent.count + 1;
+	return extent.count_field + 1;
+}
+
+static inline unsigned extent_block(struct extent extent)
+{
+	return extent.block;
 }
 
 /*

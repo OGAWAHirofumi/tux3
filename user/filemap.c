@@ -184,7 +184,7 @@ retry:;
 
 	if (write) {
 		*walk = rewind;
-		for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
+		for (i = 0, index = start - offset; i < segs; i++, index += extent_count(seg[i]))
 			dwalk_mock(walk, index, make_extent(seg[i].block, extent_count(seg[i])));
 		trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
 		trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
