@@ -229,15 +229,17 @@ eek:
 
 static void _tux3_getattr(struct inode *inode, struct stat *st)
 {
-	st->st_ino   = inode->inum;
-	st->st_mode  = inode->i_mode;
-	st->st_atime = high32(inode->i_atime);
-	st->st_mtime = high32(inode->i_mtime);
-	st->st_ctime = high32(inode->i_ctime);
-	st->st_size  = inode->i_size;
-	st->st_uid   = inode->i_uid;
-	st->st_gid   = inode->i_gid;
-	st->st_nlink = inode->i_links;
+	*st = (struct stat){
+		.st_ino   = inode->inum,
+		.st_mode  = inode->i_mode,
+		.st_atime = high32(inode->i_atime),
+		.st_mtime = high32(inode->i_mtime),
+		.st_ctime = high32(inode->i_ctime),
+		.st_size  = inode->i_size,
+		.st_uid   = inode->i_uid,
+		.st_gid   = inode->i_gid,
+		.st_nlink = inode->i_links,
+	};
 }
 
 static void tux3_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
