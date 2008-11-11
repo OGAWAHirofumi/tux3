@@ -194,7 +194,7 @@ create:
 	memcpy(entry->name, name, len);
 	entry->inum = cpu_to_le32(inum);
 	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
-	dir->i_mtime = dir->i_ctime = CURRENT_TIME_SEC;
+	dir->i_mtime = dir->i_ctime = tuxtime();
 	mark_inode_dirty(dir);
 	offset = (void *)entry - buffer->data;
 	brelse_dirty(buffer);

@@ -17,26 +17,6 @@
 #include "filemap.c"
 #undef main
 
-#include <sys/time.h>
-#include <time.h>
-
-fixed32 tuxtime(void)
-{
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	return tuxtimeval(now.tv_sec, now.tv_usec);
-}
-
-unsigned millionths(fixed32 val)
-{
-	return (((val & 0xffffffff) * 1000000) + 0x80000000) >> 32;
-}
-
-u32 high32(fixed32 val)
-{
-	return val >> 32;
-}
-
 struct inode *new_inode(SB, inum_t inum)
 {
 	struct map *map = new_map(sb->devmap->dev, &filemap_ops);
