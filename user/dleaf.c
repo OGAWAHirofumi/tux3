@@ -20,14 +20,14 @@
 #define trace trace_on
 #endif
 
-struct extent { u64 block:48, count_field:6, version:10; };
+struct extent { u64 block_field:48, count_field:6, version:10; };
 struct group { u32 count:8, keyhi:24; };
 struct entry { u32 limit:8, keylo:24; };
 struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
 
 struct extent make_extent(block_t block, unsigned count)
 {
-	return (struct extent){ .block = block, .count_field = count - 1 };
+	return (struct extent){ .block_field = block, .count_field = count - 1 };
 }
 
 static inline unsigned extent_count(struct extent extent)
@@ -37,7 +37,7 @@ static inline unsigned extent_count(struct extent extent)
 
 static inline unsigned extent_block(struct extent extent)
 {
-	return extent.block;
+	return extent.block_field;
 }
 
 /*
@@ -164,7 +164,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++) {
 				struct extent extent = extents[offset + i];
-				printf(" %Lx", (L)extent.block);
+				printf(" %Lx", (L)extent_block(extent));
 				if (extent_count(extent))
 					printf("/%x", extent_count(extent));
 			}
@@ -219,7 +219,7 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 				trunc = 1;
 			}
 			for (int i = 0; i < count; i++)
-				(btree->ops->bfree)(btree->sb, leaf->table[extents + i].block);
+				(btree->ops->bfree)(btree->sb, extent_block(leaf->table[extents + i]));
 		}
 		start = entry->limit;
 		extents += count;
@@ -325,14 +325,14 @@ struct extent *dwalk_next(struct dwalk *walk)
 			if (walk->group <= walk->gstop)
 				return NULL;
 			walk->exbase += walk->estop->limit;
-			trace("exbase => %Lx", (L)walk->exbase->block);
-			trace("extent => %Lx", (L)walk->extent->block);
+			trace("exbase => %Lx", (L)extent_block(*walk->exbase));
+			trace("extent => %Lx", (L)extent_block(*walk->extent));
 			walk->estop -= (--walk->group)->count;
 		}
 		walk->entry--;
 		walk->exstop = walk->exbase + walk->entry->limit;
 	}
-	trace("next extent 0x%Lx => %Lx/%x", dwalk_index(walk), (L)walk->extent->block, extent_count(*walk->extent));
+	trace("next extent 0x%Lx => %Lx/%x", dwalk_index(walk), (L)extent_block(*walk->extent), extent_count(*walk->extent));
 	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
 	trace("at entry %i/%i", walk->estop + walk->group->count - 1 - walk->entry, walk->group->count);
 	return walk->extent++; // also return key
@@ -351,12 +351,12 @@ void dwalk_back(struct dwalk *walk)
 		}
 		walk->exbase -= walk->entry->limit;
 		walk->estop = walk->entry;
-		trace("exbase => %Lx", (L)walk->exbase->block);
+		trace("exbase => %Lx", (L)extent_block(*walk->exbase));
 		trace("entry offset = %i", walk->estop + walk->group->count - 1 - walk->entry);
 	}
 	walk->extent = walk->exbase + (walk->estop + walk->group->count - 1 - walk->entry);
 	walk->exstop = walk->exbase + walk->entry->limit;
-	trace("exstop => %Lx", (L)walk->exstop->block);
+	trace("exstop => %Lx", (L)extent_block(*walk->exstop));
 }
 
 void dwalk_chop_after(struct dwalk *walk)
@@ -412,7 +412,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		walk->mock.entry = (struct entry){ .keylo = keylo, .limit = walk->extent - walk->exbase };
 		walk->mock.group.count++;
 	}
-	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
+	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent_block(extent), extent_count(extent));
 	walk->mock.free += sizeof(*walk->extent);
 	walk->extent++;
 	walk->mock.entry.limit++;
@@ -649,12 +649,12 @@ int main(int argc, char *argv[])
 			walk->mock.entry = *walk->entry;
 		}
 		int (*try)(struct dwalk *walk, tuxkey_t key, struct extent extent) = i ? dwalk_pack: dwalk_mock;
-		try(walk, 0x3001001, (struct extent){ .block = 0x1 });
-		try(walk, 0x3001002, (struct extent){ .block = 0x2 });
-		try(walk, 0x3001003, (struct extent){ .block = 0x3 });
-		try(walk, 0x3001004, (struct extent){ .block = 0x4 });
-		try(walk, 0x3001005, (struct extent){ .block = 0x5 });
-		try(walk, 0x3001006, (struct extent){ .block = 0x6 });
+		try(walk, 0x3001001, make_extent(0x1, 1));
+		try(walk, 0x3001002, make_extent(0x2, 1));
+		try(walk, 0x3001003, make_extent(0x3, 1));
+		try(walk, 0x3001004, make_extent(0x4, 1));
+		try(walk, 0x3001005, make_extent(0x5, 1));
+		try(walk, 0x3001006, make_extent(0x6, 1));
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
 	dleaf_dump(btree, leaf);
@@ -665,7 +665,7 @@ exit(0); // valgrind happiness
 		dwalk_back(walk);
 		dwalk_back(walk);
 		for (struct extent *extent; (extent = dwalk_next(walk));)
-			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent->block);
+			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent_block(*extent));
 		return 0;
 	}
 	if (1) {

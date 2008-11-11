@@ -120,11 +120,11 @@ retry:;
 	struct dwalk rewind = *walk;
 	printf("prior extents:");
 	for (struct extent *extent; (extent = dwalk_next(walk));)
-		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent->block, extent_count(*extent));
+		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent_block(*extent), extent_count(*extent));
 	printf("\n");
 
 	if (leaf->groups)
-		printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)rewind.extent->block, extent_count(*rewind.extent));
+		printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)extent_block(*rewind.extent), extent_count(*rewind.extent));
 	*walk = rewind;
 
 	struct extent *next_extent = NULL;
@@ -132,7 +132,7 @@ retry:;
 	while (index < limit) {
 		trace("index %Lx, limit %Lx", (L)index, (L)limit);
 		if (next_extent) {
-			trace("pass %Lx/%x", (L)next_extent->block, extent_count(*next_extent));
+			trace("pass %Lx/%x", (L)extent_block(*next_extent), extent_count(*next_extent));
 			seg[segs++] = *next_extent;
 
 			unsigned count = extent_count(*next_extent);
@@ -177,7 +177,7 @@ retry:;
 
 	printf("segs (offset = %Lx):", (L)offset);
 	for (i = 0, index = start; i < segs; i++) {
-		printf(" %Lx => %Lx/%x;", (L)index - offset, (L)seg[i].block, extent_count(seg[i]));
+		printf(" %Lx => %Lx/%x;", (L)index - offset, (L)extent_block(seg[i]), extent_count(seg[i]));
 		index += extent_count(seg[i]);
 	}
 	printf(" (%i)\n", segs);
@@ -185,7 +185,7 @@ retry:;
 	if (write) {
 		*walk = rewind;
 		for (i = 0, index = start - offset; i < segs; i++, index += extent_count(seg[i]))
-			dwalk_mock(walk, index, make_extent(seg[i].block, extent_count(seg[i])));
+			dwalk_mock(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 		trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
 		trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
 		if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
@@ -201,8 +201,8 @@ retry:;
 		if (leaf->groups)
 			dwalk_chop_after(walk);
 		for (i = 0, index = start - offset; i < segs; i++) {
-			trace("pack 0x%Lx => %Lx/%x", index, (L)seg[i].block, extent_count(seg[i]));
-			dwalk_pack(walk, index, make_extent(seg[i].block, extent_count(seg[i])));
+			trace("pack 0x%Lx => %Lx/%x", index, (L)extent_block(seg[i]), extent_count(seg[i]));
+			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
 		set_buffer_dirty(path[inode->btree.root.depth].buffer);
@@ -218,9 +218,9 @@ retry:;
 	unsigned skip = offset;
 	for (i = 0, index = start - offset; !err && index < limit; i++) {
 		unsigned count = extent_count(seg[i]);
-		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)seg[i].block);
+		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)extent_block(seg[i]));
 		for (int j = skip; !err && j < count; j++) {
-			block_t block = seg[i].block + j;
+			block_t block = extent_block(seg[i]) + j;
 			struct buffer *buffer = getblk(inode->map, index + j);
 			trace_on("block 0x%Lx => %Lx", (L)buffer->index, block);
 			if (write) {
