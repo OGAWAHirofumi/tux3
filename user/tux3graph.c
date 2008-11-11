@@ -191,7 +191,7 @@ static inline struct entry *dleaf_entries(struct dleaf *dleaf,
 {
 	struct entry *entries = (struct entry *)(groups - dleaf->groups);
 	for (int i = 0; i < gr; i++)
-		entries -= dleaf_group(groups, i)->count;
+		entries -= group_count(dleaf_group(groups, i));
 	return entries;
 }
 
@@ -218,7 +218,7 @@ static inline struct extent *dleaf_extents(struct dleaf *dleaf,
 	for (i = 0; i < gr - 1; i++) {
 		group = dleaf_group(groups, i);
 		entries = dleaf_entries(dleaf, groups, i);
-		extents += dleaf_entry(entries, group->count - 1)->limit;
+		extents += dleaf_entry(entries, group_count(group) - 1)->limit;
 	}
 	if (ent) {
 		entries = dleaf_entries(dleaf, groups, i);
@@ -256,7 +256,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 	for (int gr = 0; gr < dleaf->groups; gr++) {
 		struct group *group = dleaf_group(groups, gr);
 		struct entry *entries = dleaf_entries(dleaf, groups, gr);
-		for (int ent = 0; ent < group->count; ent++) {
+		for (int ent = 0; ent < group_count(group); ent++) {
 			int ex_count = dleaf_extent_count(entries, ent);
 			extents = dleaf_extents(dleaf, groups, gr, ent);
 			for (int ex = 0; ex < ex_count; ex++) {
@@ -279,7 +279,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		struct group *group = dleaf_group(groups, gr);
 		struct entry *entries = dleaf_entries(dleaf, groups, gr);
 
-		for (int ent = group->count - 1; ent >= 0; ent--) {
+		for (int ent = group_count(group) - 1; ent >= 0; ent--) {
 			struct entry *entry = dleaf_entry(entries, ent);
 
 			fprintf(gi->f,
@@ -287,7 +287,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 				" (entry %u, count %u, iblock %llu)",
 				gr, ent, entry->limit, entry->keylo,
 				ent, dleaf_extent_count(entries, ent),
-				(L)(group->keyhi << 24 | entry->keylo));
+				(L)(group_keyhi(group) << 24 | entry->keylo));
 		}
 	}
 
@@ -297,7 +297,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 
 		fprintf(gi->f,
 			" | <gr%u> count %u, keyhi 0x%06x (group %u)",
-			gr, group->count, group->keyhi, gr);
+			gr, group_count(group), group_keyhi(group), gr);
 	}
 
 	fprintf(gi->f,
@@ -311,7 +311,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 			"%s_%llu:gr%u:w -> %s_%llu:gr%uent%u:w;\n",
 			gi->lname, (L)blocknr, gr,
 			gi->lname, (L)blocknr, gr, 0);
-		for (int ent = 0; ent < group->count; ent++) {
+		for (int ent = 0; ent < group_count(group); ent++) {
 			fprintf(gi->f,
 				"%s_%llu:gr%uent%u:w"
 				" -> %s_%llu:gr%uent%uex%u:w;\n",
