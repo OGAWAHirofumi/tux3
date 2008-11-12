@@ -25,7 +25,7 @@ struct group { u32 count_field:8, keyhi_field:24; };
 struct entry { u32 limit:8, keylo:24; };
 struct dleaf { u16 magic, free, used, groups; struct extent table[]; };
 
-static inline struct group pack_group(tuxkey_t keyhi, unsigned count)
+static inline struct group make_group(tuxkey_t keyhi, unsigned count)
 {
 	return (struct group){ .keyhi_field = keyhi, .count_field = count };
 }
@@ -429,7 +429,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		if (!walk->mock.groups || group_keyhi(&walk->mock.group) != keyhi || group_count(&walk->mock.group) >= MAX_GROUP_ENTRIES) {
 			trace("add group %i", walk->mock.groups);
 			walk->exbase += walk->mock.entry.limit;
-			walk->mock.group = pack_group(keyhi, 0);
+			walk->mock.group = make_group(keyhi, 0);
 			walk->mock.used -= sizeof(struct group);
 			walk->mock.groups++;
 		}
@@ -461,7 +461,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 			vecmove(walk->entry - 1, walk->entry, (struct entry *)walk->group - walk->entry);
 			walk->entry--; /* adjust to moved position */
 			walk->exbase += walk->leaf->groups ? walk->entry->limit : 0;
-			*--walk->group = pack_group(keyhi, 0);
+			*--walk->group = make_group(keyhi, 0);
 			walk->leaf->used -= sizeof(struct group);
 			walk->leaf->groups++;
 		}
