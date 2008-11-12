@@ -15,7 +15,7 @@
 #include "hexdump.c"
 #include "trace.h"
 #include "tux3.h"
-q
+
 #ifndef trace
 #define trace trace_on
 #endif
@@ -98,17 +98,17 @@ static inline unsigned extent_block(struct extent extent)
 
 static inline unsigned leaf_groups(struct dleaf *leaf)
 {
-	return leaf->be_groups;
+	return from_be_u16(leaf->be_groups);
 }
 
 static inline void set_leaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->be_groups = n;
+	leaf->be_groups = to_be_u16(n);
 }
 
 static inline void inc_leaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->be_groups += n;
+	leaf->be_groups = to_be_u16(from_be_u16(leaf->be_groups) + n);
 }
 
 /*
