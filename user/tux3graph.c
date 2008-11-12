@@ -202,8 +202,8 @@ static inline struct entry *dleaf_entry(struct entry *entries, int ent)
 
 static inline int dleaf_extent_count(struct entry *entries, int ent)
 {
-	int offset = ent ? dleaf_entry(entries, ent - 1)->limit : 0;
-	return dleaf_entry(entries, ent)->limit - offset;
+	int offset = ent ? entry_limit(dleaf_entry(entries, ent - 1)) : 0;
+	return entry_limit(dleaf_entry(entries, ent)) - offset;
 }
 
 static inline struct extent *dleaf_extents(struct dleaf *dleaf,
@@ -218,11 +218,11 @@ static inline struct extent *dleaf_extents(struct dleaf *dleaf,
 	for (i = 0; i < gr - 1; i++) {
 		group = dleaf_group(groups, i);
 		entries = dleaf_entries(dleaf, groups, i);
-		extents += dleaf_entry(entries, group_count(group) - 1)->limit;
+		extents += entry_limit(dleaf_entry(entries, group_count(group) - 1));
 	}
 	if (ent) {
 		entries = dleaf_entries(dleaf, groups, i);
-		extents += dleaf_entry(entries, ent)->limit;
+		extents += entry_limit(dleaf_entry(entries, ent));
 	}
 
 	return extents;
@@ -285,9 +285,9 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 			fprintf(gi->f,
 				" | <gr%uent%u> limit %u, keylo 0x%06x"
 				" (entry %u, count %u, iblock %llu)",
-				gr, ent, entry->limit, entry->keylo,
+				gr, ent, entry_limit(entry), entry_keylo(entry),
 				ent, dleaf_extent_count(entries, ent),
-				(L)(group_keyhi(group) << 24 | entry->keylo));
+				(L)(group_keyhi(group) << 24 | entry_keylo(entry)));
 		}
 	}
 
