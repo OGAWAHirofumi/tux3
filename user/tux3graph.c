@@ -186,10 +186,9 @@ static inline struct group *dleaf_group(struct group *groups, int gr)
 	return groups - (gr + 1);
 }
 
-static inline struct entry *dleaf_entries(struct dleaf *dleaf,
-					  struct group *groups, int gr)
+static inline struct entry *dleaf_entries(struct dleaf *leaf, struct group *groups, int gr)
 {
-	struct entry *entries = (struct entry *)(groups - dleaf->groups);
+	struct entry *entries = (struct entry *)(groups - leaf_groups(leaf));
 	for (int i = 0; i < gr; i++)
 		entries -= group_count(dleaf_group(groups, i));
 	return entries;
@@ -235,9 +234,9 @@ static inline struct extent *dleaf_extent(struct extent *extents, int ex)
 
 static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 {
-	struct dleaf *dleaf = buffer->data;
+	struct dleaf *leaf = buffer->data;
 	block_t blocknr = buffer->index;
-	struct group *groups = dleaf_groups(btree, dleaf);
+	struct group *groups = dleaf_groups(btree, leaf);
 	struct extent *extents;
 
 	if (!verbose && (drawn & DRAWN_DLEAF))
@@ -250,15 +249,15 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		" | magic 0x%04x, free %u, used %u, groups %u",
 		gi->lname, (L)blocknr,
 		gi->lname, gi->lname,
-		dleaf->magic, dleaf->free, dleaf->used, dleaf->groups);
+		from_be_u16(leaf->be_magic), leaf->free, leaf->used, leaf_groups(leaf));
 
 	/* draw extents */
-	for (int gr = 0; gr < dleaf->groups; gr++) {
+	for (int gr = 0; gr < leaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group(groups, gr);
-		struct entry *entries = dleaf_entries(dleaf, groups, gr);
+		struct entry *entries = dleaf_entries(leaf, groups, gr);
 		for (int ent = 0; ent < group_count(group); ent++) {
 			int ex_count = dleaf_extent_count(entries, ent);
-			extents = dleaf_extents(dleaf, groups, gr, ent);
+			extents = dleaf_extents(leaf, groups, gr, ent);
 			for (int ex = 0; ex < ex_count; ex++) {
 				fprintf(gi->f,
 					" | <gr%uent%uex%u>"
@@ -275,9 +274,9 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		" | .....");
 
 	/* draw entries */
-	for (int gr = dleaf->groups - 1; gr >= 0; gr--) {
+	for (int gr = leaf_groups(leaf) - 1; gr >= 0; gr--) {
 		struct group *group = dleaf_group(groups, gr);
-		struct entry *entries = dleaf_entries(dleaf, groups, gr);
+		struct entry *entries = dleaf_entries(leaf, groups, gr);
 
 		for (int ent = group_count(group) - 1; ent >= 0; ent--) {
 			struct entry *entry = dleaf_entry(entries, ent);
@@ -292,7 +291,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 	}
 
 	/* draw groups */
-	for (int gr = dleaf->groups - 1; gr >= 0; gr--) {
+	for (int gr = leaf_groups(leaf) - 1; gr >= 0; gr--) {
 		struct group *group = dleaf_group(groups, gr);
 
 		fprintf(gi->f,
@@ -305,7 +304,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		"shape = record\n"
 		"];\n");
 
-	for (int gr = 0; gr < dleaf->groups; gr++) {
+	for (int gr = 0; gr < leaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group(groups, gr);
 		fprintf(gi->f,
 			"%s_%llu:gr%u:w -> %s_%llu:gr%uent%u:w;\n",
