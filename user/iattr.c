@@ -158,10 +158,10 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case XATTR_ATTR:;
 			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
-			unsigned size, atom;
-			attrs = decode16(attrs, &size);
+			unsigned bytes, atom;
+			attrs = decode16(attrs, &bytes);
 			attrs = decode16(attrs, &atom);
-			*xattr = (struct xattr){ .atom = atom, .size = size - 2 };
+			*xattr = (struct xattr){ .atom = atom, .size = bytes - 2 };
 			unsigned xsize = sizeof(struct xattr) + xattr->size;
 			assert((void *)xattr + xsize <= (void *)inode->xcache + inode->xcache->maxsize);
 			memcpy(xattr->body, attrs, xattr->size);
@@ -186,8 +186,8 @@ int main(int argc, char *argv[])
 	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
 	struct inode *inode = &(struct inode){ .sb = sb,
 		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
-		.i_size = 0x123456789, .i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
+		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
+		.i_size = 0x123456789ULL, .i_ctime = 0xdec0debeadULL, .i_mtime = 0xbadfaced00dULL };
 
 	char attrs[1000] = { };
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
