@@ -28,7 +28,7 @@ lowdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c
 fsdeps = $(lowdeps) filemap.c inode.c
 
 all: $(binaries)
-tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
+tests: balloctest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c vfs.c
 
