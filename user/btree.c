@@ -559,8 +559,8 @@ void uleaf_dump(BTREE, vleaf *data)
 {
 	struct uleaf *leaf = data;
 	printf("leaf %p/%i", leaf, leaf->count);
-	struct entry *limit = leaf->entries + leaf->count;
-	for (struct entry *entry = leaf->entries; entry < limit; entry++)
+	struct entry *entry, *limit = leaf->entries + leaf->count;
+	for (entry = leaf->entries; entry < limit; entry++)
 		printf(" %x:%x", entry->key, entry->val);
 	printf(" (%x free)\n", uleaf_free(btree, leaf));
 }
