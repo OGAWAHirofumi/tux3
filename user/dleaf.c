@@ -26,7 +26,7 @@ struct extent { be_u64 block_count_version; };
 struct group { be_u32 count_and_keyhi; };
 /* limit:8, keylo:24 */
 struct entry { be_u32 limit_and_keylo; };
-struct dleaf { be_u16 be_magic, be_groups, free, used; struct extent table[]; };
+struct dleaf { be_u16 magic, groups, free, used; struct extent table[]; };
 
 /* group wrappers */
 
@@ -104,17 +104,17 @@ static inline unsigned extent_version(struct extent extent)
 
 static inline unsigned leaf_groups(struct dleaf *leaf)
 {
-	return from_be_u16(leaf->be_groups);
+	return from_be_u16(leaf->groups);
 }
 
 static inline void set_leaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->be_groups = to_be_u16(n);
+	leaf->groups = to_be_u16(n);
 }
 
 static inline void inc_leaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->be_groups = to_be_u16(from_be_u16(leaf->be_groups) + n);
+	leaf->groups = to_be_u16(from_be_u16(leaf->groups) + n);
 }
 
 /*
@@ -176,7 +176,7 @@ int dleaf_init(BTREE, vleaf *leaf)
 	if (!leaf)
 		return -1;
 	*to_dleaf(leaf) = (struct dleaf){
-		.be_magic = to_be_u16(0x1eaf),
+		.magic = to_be_u16(0x1eaf),
 		.free = to_be_u16(sizeof(struct dleaf)),
 		.used = to_be_u16(btree->sb->blocksize) };
 	return 0;
@@ -191,7 +191,7 @@ struct dleaf *leaf_create(BTREE)
 
 int dleaf_sniff(BTREE, vleaf *leaf)
 {
-	return from_be_u16(to_dleaf(leaf)->be_magic) == 0x1eaf;
+	return from_be_u16(to_dleaf(leaf)->magic) == 0x1eaf;
 }
 
 void dleaf_destroy(BTREE, struct dleaf *leaf)
