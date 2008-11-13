@@ -142,7 +142,7 @@ static inline void *decode48(void *at, u64 *val)
 }
 
 /* Tux3 disk format */
-
+#define SB_MAGIC_SIZE	8
 #define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x09, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
@@ -164,7 +164,7 @@ struct disktree { be_u64 depth:16, block:48; };
 
 struct disksuper
 {
-	typeof((char[])SB_MAGIC) magic;
+	char magic[SB_MAGIC_SIZE];
 	be_u64 birthdate;
 	be_u64 flags;
 	be_u64 iroot;
