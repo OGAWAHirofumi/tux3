@@ -61,7 +61,7 @@ static inline struct entry make_entry(tuxkey_t keylo, unsigned limit)
 
 static inline unsigned entry_keylo(struct entry *entry)
 {
-	return from_be_u32(*(be_u32 *)entry) & 0xffffff;
+	return from_be_u32(*(be_u32 *)entry) & ~(-1 << 24);
 }
 
 static inline unsigned entry_limit(struct entry *entry)
@@ -86,7 +86,7 @@ static inline struct extent make_extent(block_t block, unsigned count)
 
 static inline unsigned extent_block(struct extent extent)
 {
-	return *(be_u64 *)&extent & 0xffffffffffff;
+	return *(be_u64 *)&extent & ~(-1LL << 48);
 }
 
 static inline unsigned extent_count(struct extent extent)
