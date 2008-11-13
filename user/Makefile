@@ -19,7 +19,7 @@ all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c vfs.c
-	$(CC) -Dmain=notmain vfs.c -c
+	$(CC) vfs.c -c
 
 balloc: $(basedeps) balloc.c
 	$(CC) vfs.o balloc.c -o balloc
