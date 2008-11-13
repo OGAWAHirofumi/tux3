@@ -53,7 +53,6 @@
 #define include_inode_c
 #include "inode.c"
 
-static fd_t fd;
 static u64 volsize;
 static struct sb *sb;
 static struct dev *dev;
@@ -413,6 +412,7 @@ eek:
 static void tux3_init(void *data, struct fuse_conn_info *conn)
 {
 	const char *volname = data;
+	int fd;
 	if (!(fd = open(volname, O_RDWR, S_IRWXU)))
 		error("volume %s not found", volname);
 
@@ -420,7 +420,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	if (fdsize64(fd, &volsize))
 		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
 	dev = malloc(sizeof(*dev));
-	*dev = (struct dev){ fd, .bits = 12 };
+	*dev = (struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1<<20);
 	sb = malloc(sizeof(*sb));
 	*sb = (struct sb){
