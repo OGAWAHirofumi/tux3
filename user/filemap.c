@@ -226,7 +226,7 @@ dleaf_dump(&inode->btree, leaf);
 		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)extent_block(seg[i]));
 		for (int j = skip; !err && j < count; j++) {
 			block_t block = extent_block(seg[i]) + j;
-			struct buffer *buffer = getblk(inode->map, index + j);
+			buffer = getblk(inode->map, index + j);
 			trace_on("block 0x%Lx => %Lx", (L)buffer->index, block);
 			if (write) {
 				err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
