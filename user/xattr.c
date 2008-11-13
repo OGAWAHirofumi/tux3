@@ -46,7 +46,12 @@
  *   the count table in case we decide 32 bits of ref count is not enough.
  */
 
-typedef fieldtype(ext2_dirent, inum) atom_t; // just for now
+typedef u32 atom_t;
+
+static inline atom_t entry_atom(ext2_dirent *entry)
+{
+	return from_be_u32(entry->inum);
+}
 
 struct buffer *bread_unatom(struct inode *inode, atom_t atom, unsigned *offset)
 {
@@ -82,7 +87,7 @@ void dump_atoms(struct inode *inode)
 			if (!buffer)
 				goto eek;
 			ext2_dirent *entry = buffer->data + (where & sb->blockmask);
-			if (entry->inum != atom) {
+			if (entry_atom(entry) != atom) {
 				warn("atom %x reverse entry broken", atom);
 				continue;
 			}
@@ -173,7 +178,7 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 		sb->freeatom = atom;
 		buffer = bread(inode->map, where >> sb->blockbits);
 		ext2_dirent *entry = buffer->data + (where & sb->blockmask);
-		if (entry->inum == atom)
+		if (entry_atom(entry) == atom)
 			ext2_delete_entry(buffer, entry);
 		else {
 			warn("atom entry not found");
@@ -189,7 +194,7 @@ atom_t find_atom(struct inode *inode, char *name, unsigned len)
 	ext2_dirent *entry = ext2_find_entry(inode, name, len, &buffer);
 	if (!entry)
 		return -1;
-	atom_t atom = entry->inum;
+	atom_t atom = entry_atom(entry);
 	brelse(buffer);
 	return atom;
 }
