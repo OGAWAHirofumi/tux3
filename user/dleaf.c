@@ -23,7 +23,7 @@
 struct extent { be_u64 block_count_version; };
 struct group { be_u32 count_and_keyhi; };
 struct entry { be_u32 limit_and_keylo; };
-struct dleaf { be_u16 be_magic, be_groups, free, used; struct extent table[]; };
+struct dleaf { be_u16 be_magic, be_groups; u16 free, used; struct extent table[]; };
 
 /* group wrappers */
 
@@ -78,7 +78,7 @@ static inline void inc_entry_limit(struct entry *entry, int n)
 
 static inline struct extent make_extent(block_t block, unsigned count)
 {
-	return (struct extent){ (to_be_u64((u64)(count - 1)) << 48) | block };
+	return (struct extent){ to_be_u64(((u64)(count - 1) << 48) | block) };
 }
 
 static inline unsigned extent_block(struct extent extent)
@@ -88,12 +88,13 @@ static inline unsigned extent_block(struct extent extent)
 
 static inline unsigned extent_count(struct extent extent)
 {
-	return (from_be_u64(*(be_u64 *)&extent >> 48) & 0x3f) + 1;
+	//static inline u64 from_be_u64(be_u64 val)
+	return ((from_be_u64(*(be_u64 *)&extent) >> 48) & 0x3f) + 1;
 }
 
 static inline unsigned extent_version(struct extent extent)
 {
-	return from_be_u64(*(be_u64 *)&extent >> 54);
+	return from_be_u64(*(be_u64 *)&extent) >> 54;
 }
 
 /* dleaf wrappers */
