@@ -173,7 +173,7 @@ static inline void *decode48(void *at, u64 *val)
 #define SB_LOC (1 << 12)
 #define SB struct sb *sb
 
-struct disktree { be_u64 depth:16, block:48; };
+struct disktree { u64 depth:16, block:48; };
 
 struct disksuper
 {
