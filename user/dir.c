@@ -51,10 +51,6 @@
 #include "hexdump.c"
 #include "tux3.h"
 
-#define le16_to_cpu(x) x
-#define cpu_to_le16(x) x
-#define le32_to_cpu(x) x
-#define cpu_to_le32(x) x
 #define mark_inode_dirty(x)
 
 typedef u16 le16;
@@ -64,23 +60,23 @@ typedef u16 le16;
 #define EXT2_MAX_REC_LEN ((1<<16)-1)
 #define EXT2_NAME_LEN 255
 
-typedef struct { u32 inum; u16 rec_len; u8 name_len, type; char name[]; } ext2_dirent;
+typedef struct { be_u32 inum; be_u16 rec_len; u8 name_len, type; char name[]; } ext2_dirent;
 
-static inline unsigned ext2_rec_len_from_disk(le16 dlen)
+static inline unsigned ext2_rec_len_from_disk(be_u16 dlen)
 {
-	unsigned len = le16_to_cpu(dlen);
+	unsigned len = from_be_u16(dlen);
 	if (len == EXT2_MAX_REC_LEN)
 		return 1 << 16;
 	return len;
 }
 
-static inline le16 ext2_rec_len_to_disk(unsigned len)
+static inline be_u16 ext2_rec_len_to_disk(unsigned len)
 {
 	if (len == (1 << 16))
-		return cpu_to_le16(EXT2_MAX_REC_LEN);
+		return to_be_u16(EXT2_MAX_REC_LEN);
 	else if (len > (1 << 16))
 		error("oops");
-	return cpu_to_le16(len);
+	return to_be_u16(len);
 }
 
 static inline int is_deleted(ext2_dirent *entry)
@@ -191,7 +187,7 @@ create:
 	}
 	entry->name_len = len;
 	memcpy(entry->name, name, len);
-	entry->inum = cpu_to_le32(inum);
+	entry->inum = to_be_u32(inum);
 	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	dir->i_mtime = dir->i_ctime = tuxtime();
 	mark_inode_dirty(dir);
@@ -282,7 +278,7 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 				int lame = filldir(
 					state, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
-					le32_to_cpu(entry->inum), type);
+					from_be_u32(entry->inum), type);
 				if (lame) {
 					brelse(buffer);
 					return 0;
@@ -312,7 +308,8 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *entry)
 		prev->rec_len = ext2_rec_len_to_disk((void *)entry +
 		ext2_rec_len_from_disk(entry->rec_len) - (void *)prev);
 	memset(entry->name, 0, entry->name_len);
-	entry->inum = entry->type = entry->name_len = 0;
+	entry->name_len = entry->type = 0;
+	entry->inum = to_be_u32(0);
 	brelse(buffer);
 	return 0;
 }

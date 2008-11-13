@@ -30,9 +30,6 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
-typedef uint16_t le_u16;
-typedef uint32_t le_u32;
-typedef uint64_t le_u64;
 typedef long long L; // widen for printf on 64 bit systems
 
 #define PACKED __attribute__ ((packed))
