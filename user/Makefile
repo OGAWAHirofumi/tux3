@@ -10,6 +10,9 @@ CFLAGS += -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 CFLAGS += -Werror -Wall -Wextra
 CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 
+CHECK = sparse
+CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
+
 VG=valgrind --error-exitcode=200 --leak-check=full
 
 binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 \
@@ -30,6 +33,9 @@ vfs.o: Makefile buffer.h trace.h buffer.c diskio.c vfs.c
 
 .c.o:
 	$(CC) $(CFLAGS) -c -o $@ $<
+ifeq ($(C),1)
+	$(CHECK) $(CFLAGS) $(CHECKFLAGS) -c $<
+endif
 
 balloc: $(basedeps) balloc.o
 	$(CC) $(CFLAGS) vfs.o balloc.o -o balloc
@@ -81,9 +87,15 @@ tux3: $(fsdeps) tux3.o
 
 tux3fs: $(fsdeps) tux3fs.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fs.c -lfuse -otux3fs
+ifeq ($(C),1)
+	$(CHECK) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fs.c
+endif
 
 tux3fuse: $(fsdeps) tux3fuse.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
+ifeq ($(C),1)
+	$(CHECK) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
+endif
 
 tux3graph: $(fsdeps) tux3graph.o
 	$(CC) $(CFLAGS) vfs.o tux3graph.o -lpopt -o $@
