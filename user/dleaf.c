@@ -81,6 +81,7 @@ static inline void inc_entry_limit(struct entry *entry, int n)
 
 static inline struct extent make_extent(block_t block, unsigned count)
 {
+	assert(block < (1ULL << 48) && count - 1 < (1 << 6));
 	return (struct extent){ to_be_u64(((u64)(count - 1) << 48) | block) };
 }
 
@@ -91,7 +92,6 @@ static inline unsigned extent_block(struct extent extent)
 
 static inline unsigned extent_count(struct extent extent)
 {
-	//static inline u64 from_be_u64(be_u64 val)
 	return ((from_be_u64(*(be_u64 *)&extent) >> 48) & 0x3f) + 1;
 }
 
