@@ -95,10 +95,15 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	index_t start, limit;
 	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
-	struct path path[levels + 1];
 	struct extent seg[1000];
-	if ((err = probe(&inode->btree, start, path)))
+	struct path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if ((err = probe(&inode->btree, start, path))) {
+		free_path(path);
 		return err;
+	}
 retry:
 	//assert(start >= this_key(path, levels))	
 	/* do not overlap next leaf */
@@ -238,11 +243,13 @@ dleaf_dump(&inode->btree, leaf);
 		index += count;
 		skip = 0;
 	}
+	free_path(path);
 	return err;
 nospace:
 	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %s", strerror(-err));
+	free_path(path);
 	// free blocks and try to clean up ???
 	return -EIO;
 }

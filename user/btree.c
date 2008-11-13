@@ -98,6 +98,16 @@ void show_path(struct path *path, int levels)
 	printf("\n");
 }
 
+static struct path *alloc_path(int levels)
+{
+	return malloc(sizeof(struct path) * levels);
+}
+
+static void free_path(struct path *path)
+{
+	free(path);
+}
+
 static int probe(BTREE, tuxkey_t key, struct path *path)
 {
 	unsigned i, levels = btree->root.depth;
@@ -254,11 +264,14 @@ int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 {
 	int levels = btree->root.depth, level = levels - 1, suspend = 0;
-	struct path path[levels + 1], prev[levels + 1];
+	struct path *path, *prev;
 	struct buffer *leafbuf, *leafprev = NULL;
 	struct btree_ops *ops = btree->ops;
 	struct sb *sb = btree->sb;
-	memset(prev, 0, sizeof(path));
+
+	path = alloc_path(levels + 1);
+	prev = alloc_path(levels + 1);
+	memset(prev, 0, sizeof(struct path) * (levels + 1));
 
 	probe(btree, info->resume, path);
 	leafbuf = path[levels].buffer;
@@ -337,6 +350,8 @@ keep_prev_node:
 				}
 				brelse(leafprev);
 				release_path(prev, levels);
+				free_path(path);
+				free_path(prev);
 				//sb->snapmask &= ~snapmask; delete_snapshot_from_disk();
 				//set_sb_dirty(sb);
 				//save_sb(sb);
@@ -352,6 +367,8 @@ keep_prev_node:
 			if (!buffer) {
 				brelse(leafprev);
 				release_path(path, level - 1);
+				free_path(path);
+				free_path(prev);
 				return -ENOMEM;
 			}
 			path[level].buffer = buffer;
@@ -362,6 +379,8 @@ keep_prev_node:
 		/* go to next leaf */
 		if (!(leafbuf = bread(sb->devmap, path[level].next++->block))) {
 			release_path(path, level);
+			free_path(path);
+			free_path(prev);
 			return -ENOMEM;
 		}
 	}

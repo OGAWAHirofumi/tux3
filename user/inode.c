@@ -81,9 +81,14 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 {
 	SB = inode->sb;
 	int err = -ENOENT, levels = sb->itable.root.depth;
-	struct path path[levels + 1];
-	if ((err = probe(&sb->itable, inode->inum, path)))
+	struct path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if ((err = probe(&sb->itable, inode->inum, path))) {
+		free_path(path);
 		return err;
+	}
 	struct buffer *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
 
@@ -114,10 +119,12 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	if ((err = store_attrs(sb, path, inode)))
 		goto eek;
 	release_path(path, levels + 1);
+	free_path(path);
 	return 0;
 eek:
 	release_path(path, levels + 1);
 errout:
+	free_path(path);
 	warn("make_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
 	return err;
 }
@@ -126,9 +133,14 @@ int open_inode(struct inode *inode)
 {
 	SB = inode->sb;
 	int err, levels = sb->itable.root.depth;
-	struct path path[levels + 1];
-	if ((err = probe(&sb->itable, inode->inum, path)))
+	struct path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if ((err = probe(&sb->itable, inode->inum, path))) {
+		free_path(path);
 		return err;
+	}
 	unsigned size;
 	void *attrs = ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size);
 	if (!attrs) {
@@ -149,6 +161,7 @@ int open_inode(struct inode *inode)
 	err = 0;
 eek:
 	release_path(path, levels + 1);
+	free_path(path);
 	return err;
 }
 
@@ -157,9 +170,14 @@ int save_inode(struct inode *inode)
 	trace("save inode 0x%Lx", (L)inode->inum);
 	SB = inode->sb;
 	int err, levels = sb->itable.root.depth;
-	struct path path[levels + 1];
-	if ((err = probe(&sb->itable, inode->inum, path)))
+	struct path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if ((err = probe(&sb->itable, inode->inum, path))) {
+		free_path(path);
 		return err;
+	}
 	unsigned size;
 	if (!(ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size)))
 		return -EINVAL;
@@ -167,6 +185,7 @@ int save_inode(struct inode *inode)
 		inode->present |= CTIME_SIZE_BIT;
 	err = store_attrs(sb, path, inode);
 	release_path(path, levels + 1);
+	free_path(path);
 	return err;
 }
 
@@ -233,12 +252,16 @@ void tuxseek(struct file *file, loff_t pos)
 int purge_inum(BTREE, inum_t inum)
 {
 	int err = -ENOENT, levels = btree->sb->itable.root.depth;
-	struct path path[levels + 1];
+	struct path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
 	if (!(err = probe(btree, inum, path))) {
 		struct ileaf *ileaf = to_ileaf(path[levels].buffer->data);
 		err = ileaf_purge(btree, inum, ileaf);
 		release_path(path, levels + 1);
 	}
+	free_path(path);
 	return err;
 }
 

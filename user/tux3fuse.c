@@ -151,7 +151,12 @@ static void tux3_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	}
 	tuxseek(file, offset);
 
-	char buf[size];
+	char *buf = malloc(size);
+	if (!buf) {
+		fuse_reply_err(req, ENOMEM);
+		return;
+	}
+
 	int read = tuxread(file, buf, size);
 	if (read < 0)
 	{
@@ -162,15 +167,18 @@ static void tux3_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	if (offset + read > inode->i_size)
 	{
 		fuse_reply_err(req, EINVAL);
+		free(buf);
 		return;
 	}
 
 	fuse_reply_buf(req, buf, read);
+	free(buf);
 	return;
 
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	fuse_reply_err(req, errno);
+	free(buf);
 }
 
 static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -348,12 +356,17 @@ static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offs
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *dirfile = &(struct file){ .f_inode = inode, .f_pos = offset };
 	char dirent[EXT2_NAME_LEN + 1];
-	char buf[size];
+	char *buf = malloc(size);
+	if (!buf) {
+		fuse_reply_err(req, ENOMEM);
+		return;
+	}
 
 	while (dirfile->f_pos < dirfile->f_inode->i_size) {
 		struct fillstate fstate = { .dirent = dirent };
 		if ((errno = -ext2_readdir(dirfile, &fstate, tux3_filler))) {
 			fuse_reply_err(req, errno);
+			free(buf);
 			return;
 		}
 		struct stat stbuf = {
@@ -362,10 +375,12 @@ static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offs
 		};
 		size_t len = fuse_add_direntry(req, buf, size, dirent, &stbuf, dirfile->f_pos);
 		fuse_reply_buf(req, buf, len);
+		free(buf);
 		return;
 	}
 
 	fuse_reply_buf(req, NULL, 0);
+	free(buf);
 }
 
 static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
