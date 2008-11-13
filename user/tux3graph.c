@@ -262,11 +262,12 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 			for (ex = 0; ex < ex_count; ex++) {
 				fprintf(gi->f,
 					" | <gr%uent%uex%u>"
-					" block %llu, count %u, version 0x%03x"
+					" version 0x%03x, count %u, block %llu "
 					" (extent %u)",
 					gr, ent, ex,
-					(L)extent_block(extents[ex]), extent_count(extents[ex]),
 					extent_version(extents[ex]),
+					extent_count(extents[ex]),
+					(L)extent_block(extents[ex]),
 					ex);
 			}
 		}
