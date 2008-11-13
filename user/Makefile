@@ -1,6 +1,14 @@
-CC = gcc -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
-CC += -Werror -Wall -Wextra
-CC += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
+ARCH = $(shell uname -m)
+CC = gcc
+ifeq ($(ARCH),x86_64)
+CFLAGS  += -m64
+else
+CFLAGS  += -m32
+endif
+
+CFLAGS += -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS += -Werror -Wall -Wextra
+CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 
 VG=valgrind --error-exitcode=200 --leak-check=full
 
@@ -19,64 +27,66 @@ all: $(binaries)
 tests: dleaftest ileaftest dirtest iattrtest inodetest xattrtest
 
 vfs.o: Makefile buffer.h trace.h buffer.c diskio.c vfs.c
-	$(CC) vfs.c -c
 
-balloc: $(basedeps) balloc.c
-	$(CC) vfs.o balloc.c -o balloc
+.c.o:
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+balloc: $(basedeps) balloc.o
+	$(CC) $(CFLAGS) vfs.o balloc.o -o balloc
 balloctest: balloc
 	$(VG) ./balloc
 
-dleaf: $(basedeps) dleaf.c
-	$(CC) vfs.o dleaf.c -o dleaf
+dleaf: $(basedeps) dleaf.o
+	$(CC) $(CFLAGS) vfs.o dleaf.o -o dleaf
 dleaftest: dleaf
 	$(VG) ./dleaf
 
-ileaf: $(basedeps) ileaf.c
-	$(CC) vfs.o ileaf.c -o ileaf
+ileaf: $(basedeps) ileaf.o
+	$(CC) $(CFLAGS) vfs.o ileaf.o -o ileaf
 ileaftest: ileaf
 	$(VG) ./ileaf
 
-btree: $(basedeps) btree.c dleaf.c
-	$(CC) vfs.o btree.c -o btree
+btree: $(basedeps) btree.o dleaf.c
+	$(CC) $(CFLAGS) vfs.o btree.o -o btree
 btreetest: btree
 	$(VG) ./btree foodev
 
-dir: $(basedeps) dir.c dleaf.c
-	$(CC) vfs.o dir.c -o dir
+dir: $(basedeps) dir.o dleaf.c
+	$(CC) $(CFLAGS) vfs.o dir.o -o dir
 dirtest: dir
 	$(VG) ./dir
 
-iattr: $(basedeps) iattr.c
-	$(CC) vfs.o iattr.c -o iattr
+iattr: $(basedeps) iattr.o
+	$(CC) $(CFLAGS) vfs.o iattr.o -o iattr
 iattrtest: iattr
 	$(VG) ./iattr
 
-xattr: $(lowdeps) xattr.c
-	$(CC) vfs.o xattr.c -o xattr
+xattr: $(lowdeps) xattr.o
+	$(CC) $(CFLAGS) vfs.o xattr.o -o xattr
 xattrtest: xattr
 	$(VG) ./xattr foodev
 
-filemap: $(lowdeps) filemap.c
-	$(CC) vfs.o filemap.c -o filemap
+filemap: $(lowdeps) filemap.o
+	$(CC) $(CFLAGS) vfs.o filemap.o -o filemap
 filemaptest: filemap
 	$(VG) ./filemap foodev
 
-inode: $(fsdeps)
-	$(CC) vfs.o inode.c -o inode
+inode: $(fsdeps) inode.o
+	$(CC) $(CFLAGS) vfs.o inode.o -o inode
 inodetest: inode
 	$(VG) ./inode foodev
 
-tux3: $(fsdeps) tux3.c
-	$(CC) vfs.o tux3.c -lpopt -otux3
+tux3: $(fsdeps) tux3.o
+	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
 
 tux3fs: $(fsdeps) tux3fs.c
-	$(CC) $$(pkg-config --cflags fuse) vfs.o tux3fs.c -lfuse -otux3fs
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fs.c -lfuse -otux3fs
 
 tux3fuse: $(fsdeps) tux3fuse.c
-	$(CC) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 
-tux3graph: $(fsdeps) tux3graph.c
-	$(CC) vfs.o tux3graph.c -lpopt -o $@
+tux3graph: $(fsdeps) tux3graph.o
+	$(CC) $(CFLAGS) vfs.o tux3graph.o -lpopt -o $@
 
 makefs mkfs: tux3 tux3fs
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
