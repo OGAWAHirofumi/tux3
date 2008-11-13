@@ -333,7 +333,7 @@ int load_sb(SB)
 		return err;
 	struct disksuper *disk = &sb->super;
 	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
-		warn("invalid superblock [%Lx]", (L)from_be_u64(*(u64 *)disk->magic));
+		warn("invalid superblock [%Lx]", (L)from_be_u64(*(be_u64 *)disk->magic));
 		return -ENOENT;
 	}
 	int blockbits = from_be_u16(disk->blockbits);
