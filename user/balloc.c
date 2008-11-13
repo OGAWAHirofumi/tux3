@@ -38,7 +38,8 @@ void set_bits(u8 *bitmap, unsigned start, unsigned count)
 	}
 	bitmap[loff] |= lmask;
 	memset(bitmap + loff + 1, -1, roff - loff - 1);
-	bitmap[roff] |= rmask;
+	if (rmask)
+		bitmap[roff] |= rmask;
 }
 
 void clear_bits(u8 *bitmap, unsigned start, unsigned count)
@@ -53,7 +54,8 @@ void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 	}
 	bitmap[loff] &= ~lmask;
 	memset(bitmap + loff + 1, 0, roff - loff - 1);
-	bitmap[roff] &= ~rmask;
+	if (rmask)
+		bitmap[roff] &= ~rmask;
 }
 
 int all_set(u8 *bitmap, unsigned start, unsigned count)
@@ -70,7 +72,7 @@ int all_set(u8 *bitmap, unsigned start, unsigned count)
 		if (bitmap[i] != 0xff)
 			return 0;
 	return	(bitmap[loff] & lmask) == lmask &&
-		(bitmap[roff] & rmask) == rmask;
+		(!rmask || (bitmap[roff] & rmask) == rmask);
 }
 
 static int bytebits(unsigned char c)
@@ -314,6 +316,14 @@ int main(int argc, char *argv[])
 		clear_bits(bits, 49, 16);
 		clear_bits(bits, 0x51, 2);
 		hexdump(bits, sizeof(bits)); // all zero now
+
+		/* corner case */
+		unsigned char *bitmap = malloc(7);
+		set_bits(bitmap, 0, 7 * 8);
+		int ret = all_set(bitmap, 0, 7 * 8);
+		assert(ret);
+		clear_bits(bitmap, 0, 7 * 8);
+		free(bitmap);
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
