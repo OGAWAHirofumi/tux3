@@ -12,6 +12,7 @@ CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializer
 
 CHECK = sparse
 CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
+CHECKFLAGS += -Wno-decl -Wno-declaration-after-statement
 
 VG=valgrind --error-exitcode=200 --leak-check=full
 
