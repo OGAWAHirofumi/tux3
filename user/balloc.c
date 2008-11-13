@@ -85,7 +85,7 @@ static int bytebits(unsigned char c)
 
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
-	assert(!start & 7);
+	assert(!(start & 7));
 	unsigned char ones[256];
 	for (int i = 0; i < sizeof(ones); i++)
 		ones[i] = bytebits(i);
@@ -327,10 +327,10 @@ int main(int argc, char *argv[])
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .super = { .volblocks = 150 } };
+	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) } };
 	struct inode *bitmap = &(struct inode){ .sb = sb, .map = map };
-	sb->freeblocks = sb->super.volblocks;
-	sb->nextalloc = sb->super.volblocks; // this should wrap around to zero
+	sb->freeblocks = from_be_u64(sb->super.volblocks);
+	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero
 	sb->bitmap = bitmap;
 
 	init_buffers(dev, 1 << 20);
@@ -360,11 +360,11 @@ int main(int argc, char *argv[])
 	hexdump(getblk(map, 1)->data, dumpsize);
 	hexdump(getblk(map, 2)->data, dumpsize);
 
-	bitmap_dump(bitmap, 0, sb->super.volblocks);
-	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, sb->super.volblocks), (L)sb->freeblocks);
+	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
+	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, from_be_u64(sb->super.volblocks)), (L)sb->freeblocks);
 	bfree(sb, 0x7e);
 	bfree(sb, 0x80);
-	bitmap_dump(bitmap, 0, sb->super.volblocks);
+	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	return 0;
 }
 #endif
