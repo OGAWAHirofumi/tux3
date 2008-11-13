@@ -13,6 +13,19 @@
 #include "trace.h"
 #include "buffer.h"
 
+#ifdef __CHECKER__
+#define __force		__attribute__((force))
+#define __bitwise__	__attribute__((bitwise))
+#else
+#define __force
+#define __bitwise__
+#endif
+#ifdef __CHECK_ENDIAN__
+#define __bitwise __bitwise__
+#else
+#define __bitwise
+#endif
+
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -56,38 +69,38 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 
 /* Endian support */
 
-typedef u16 be_u16;
-typedef u32 be_u32;
-typedef u64 be_u64;
+typedef u16 __bitwise be_u16;
+typedef u32 __bitwise be_u32;
+typedef u64 __bitwise be_u64;
 
 static inline u16 from_be_u16(be_u16 val)
 {
-	return bswap_16(val);
+	return bswap_16((__force u16)val);
 }
 
 static inline u32 from_be_u32(be_u32 val)
 {
-	return bswap_32(val);
+	return bswap_32((__force u32)val);
 }
 
 static inline u64 from_be_u64(be_u64 val)
 {
-	return bswap_64(val);
+	return bswap_64((__force u64)val);
 }
 
 static inline be_u16 to_be_u16(u16 val)
 {
-	return bswap_16(val);
+	return (__force be_u16)bswap_16(val);
 }
 
 static inline be_u32 to_be_u32(u32 val)
 {
-	return bswap_32(val);
+	return (__force be_u32)bswap_32(val);
 }
 
 static inline be_u64 to_be_u64(u64 val)
 {
-	return bswap_64(val);
+	return (__force be_u64)bswap_64(val);
 }
 
 static inline void *encode16(void *at, unsigned val)
