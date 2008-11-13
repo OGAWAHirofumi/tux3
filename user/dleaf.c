@@ -20,8 +20,11 @@
 #define trace trace_on
 #endif
 
+/* version:10, count:6, block:48 */
 struct extent { be_u64 block_count_version; };
+/* count:8, keyhi:24 */
 struct group { be_u32 count_and_keyhi; };
+/* limit:8, keylo:24 */
 struct entry { be_u32 limit_and_keylo; };
 struct dleaf { be_u16 be_magic, be_groups; u16 free, used; struct extent table[]; };
 
