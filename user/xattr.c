@@ -27,12 +27,12 @@
 /*
  * Atom count table:
  *
- * * Both tables are mapped into the atom table at a high logical offset.
+ * * Both tables are mapped into the atom table at a high logical offset.
  *   Allowing 32 bits worth of atom numbers, and with at most 256 atom entries
  *   per 4K dirent block, we need about (32 << 8) = 1 TB dirent bytes for the
  *   atom dictionary, so the refcount tables start at block 2^40 >> 12 = 2^28.
  *
- * * The refcount table consists of pairs of blocks: even blocks with the low
+ * * The refcount table consists of pairs of blocks: even blocks with the low
  *   16 bits of refcount and odd blocks with the high 16 bits.  For 2^32 atoms
  *   that is 2^34 bytes at most, or 2^22 4K blocks.
  *
@@ -41,7 +41,7 @@
  * * When a new atom dirent is created we also set the reverse map for the
  *   dirent's atom number to the file offset at which the dirent was created.
  *   This will be 64 bits just to be lazy so that is 2^32 atoms * 8 bytes
- *   = 2^35 revmap bytes = 2^23 4K blocks.  This starts just above the count
+ *   = 2^35 revmap bytes = 2^23 4K blocks. This starts just above the count
  *   table, which puts it at logical offset 2^28 + 2^23, leaving a gap after
  *   the count table in case we decide 32 bits of ref count is not enough.
  */
@@ -164,7 +164,7 @@ int use_atom(struct inode *inode, atom_t atom, int use)
 	brelse_dirty(buffer);
 	if (kill) {
 		warn("delete atom %Lx", (L) atom);
-		struct buffer *buffer = bread_unatom(inode, atom, &offset);
+		buffer = bread_unatom(inode, atom, &offset);
 		if (!buffer)
 			return -1; // better set a flag that unatom broke or something!!!
 		u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
@@ -444,8 +444,8 @@ int main(int argc, char *argv[])
 	struct inode *inode = &(struct inode){ .sb = sb,
 		.map = map, .i_mode = S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.btree = { .root = { .block = 0xcaba1f00d, .depth = 3 } },
-		.i_ctime = 0xdec0debead, .i_mtime = 0xbadfaced00d };
+		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
+		.i_ctime = 0xdec0debeadULL, .i_mtime = 0xbadfaced00dULL };
 	map->inode = inode;
 	sb->atable = inode;
 
