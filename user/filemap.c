@@ -46,21 +46,21 @@ void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int wri
 {
 	struct inode *inode = buffer->map->inode;
 	unsigned ends[2] = { buffer->index, buffer->index };
-	for (int up = !write, sign = -1; up < 2; up++, sign = -sign) {
+	for (int up = !write; up < 2; up++) {
 		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
-			unsigned next = ends[up] + sign;
-			if (!write && next > inode->i_size >> inode->sb->blockbits)
-				break;
+			unsigned next = ends[up] + (up ? 1 : -1);
 			struct buffer *nextbuf = peekblk(buffer->map, next);
 			if (!nextbuf) {
 				if (write)
 					break;
-				continue;
+				if (next > inode->i_size >> inode->sb->blockbits)
+					break;
+			} else {
+				unsigned stop = write ? !buffer_dirty(nextbuf) : buffer_empty(nextbuf);
+				brelse(nextbuf);
+				if (stop)
+					break;
 			}
-			unsigned stop = write ? !buffer_dirty(nextbuf) : buffer_empty(nextbuf);
-			brelse(nextbuf);
-			if (stop)
-				break;
 			ends[up] = next; /* what happens to the beer you send */
 		}
 	}
@@ -72,7 +72,7 @@ int filemap_extent_io(struct buffer *buffer, int write)
 {
 	struct inode *inode = buffer->map->inode;
 	struct sb *sb = inode->sb;
-	trace("logical block 0x%Lx of inode 0x%Lx", (L)buffer->index, (L)inode->inum);
+	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
@@ -93,13 +93,13 @@ int filemap_extent_io(struct buffer *buffer, int write)
 		warn("egad, reading a dirty buffer");
 
 	index_t start, limit;
-	guess_extent(buffer, &start, &limit, 1);
+	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	struct path path[levels + 1];
 	struct extent seg[1000];
 	if ((err = probe(&inode->btree, start, path)))
 		return err;
-retry:;
+retry:
 	//assert(start >= this_key(path, levels))	
 	/* do not overlap next leaf */
 	if (limit > next_key(path, levels))
@@ -107,6 +107,7 @@ retry:;
 	unsigned segs = 0;
 	struct dleaf *leaf = path[levels].buffer->data;
 	struct dwalk *walk = &(struct dwalk){ };
+dleaf_dump(&inode->btree, leaf);
 	/* Probe below io start to include overlapping extents */
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
@@ -132,7 +133,7 @@ retry:;
 	while (index < limit) {
 		trace("index %Lx, limit %Lx", (L)index, (L)limit);
 		if (next_extent) {
-			trace("pass %Lx/%x", (L)extent_block(*next_extent), extent_count(*next_extent));
+			trace("emit %Lx/%x", (L)extent_block(*next_extent), extent_count(*next_extent));
 			seg[segs++] = *next_extent;
 
 			unsigned count = extent_count(*next_extent);
@@ -140,9 +141,8 @@ retry:;
 				count -= start - dwalk_index(walk);
 			index += count;
 		}
-		next_extent = dwalk_next(walk);
 		index_t next_index = limit;
-		if (next_extent) {
+		if ((next_extent = dwalk_next(walk))) {
 			next_index = dwalk_index(walk);
 			trace("next_index = %Lx", (L)next_index);
 			if (next_index < start) {
@@ -150,21 +150,21 @@ retry:;
 				next_index = start;
 			}
 		}
-		int gap = next_index - index;
-		trace("offset = %i, next = %Lx, gap = %i", offset, (L)next_index, gap);
-		if (gap == 0)
-			continue;
-		if (index + gap > limit)
-			gap = limit - index;
-		trace("fill gap at %Lx/%x", index, gap);
-		block_t block = 0;
-		if (write) {
-			block = balloc_extent(sb, gap); // goal ???
-			if (block == -1)
-				goto nospace; // clean up !!!
+		if (index < next_index) {
+			int gap = next_index - index;
+			trace("index = %Lx, offset = %Li, next = %Lx, gap = %i", (L)index, (L)offset, (L)next_index, gap);
+			if (index + gap > limit)
+				gap = limit - index;
+			trace("fill gap at %Lx/%x", index, gap);
+			block_t block = 0;
+			if (write) {
+				block = balloc_extent(sb, gap); // goal ???
+				if (block == -1)
+					goto nospace; // clean up !!!
+			}
+			seg[segs++] = make_extent(block, gap);
+			index += gap;
 		}
-		seg[segs++] = make_extent(block, gap);
-		index += gap;
 	}
 
 	if (write) {
@@ -292,7 +292,14 @@ int main(int argc, char *argv[])
 	inode = inode;
 
 #if 1
-	// need to test read with prior extents!
+	brelse_dirty(bread(inode->map, 0));
+	brelse_dirty(bread(inode->map, 1));
+	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
+	filemap_extent_io(getblk(inode->map, 0), 0);
+	return 0;
+#endif
+
+#if 1
 	filemap_extent_io(getblk(inode->map, 5), 0);
 	return 0;
 #endif

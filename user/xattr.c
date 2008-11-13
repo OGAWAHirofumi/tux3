@@ -332,7 +332,7 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 		use++;
 	}
 	if (use)
-		use_atom(inode, atom, use);
+		use_atom(inode->sb->atable, atom, use);
 	return 0;
 }
 

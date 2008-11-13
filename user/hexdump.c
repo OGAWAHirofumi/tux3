@@ -22,4 +22,15 @@ void hexdump(void *data, unsigned size)
 		size -= n;
 	}
 }
+
+#include <execinfo.h>
+
+void stacktrace(void)
+{
+	void *array[100];
+	size_t size = backtrace(array, 100);
+	printf("_______stack ______\n");
+	backtrace_symbols_fd(array, size, 2);
+}
+
 #endif

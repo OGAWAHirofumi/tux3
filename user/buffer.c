@@ -301,10 +301,10 @@ have_buffer:
 
 int count_buffers(void)
 {
-        int count = 0;
-        struct list_head *list, *safe;
-        list_for_each_safe(list, safe, &lru_buffers) {
-                struct buffer *buffer = list_entry(list, struct buffer, lrulink);	
+	int count = 0;
+	struct list_head *list, *safe;
+	list_for_each_safe(list, safe, &lru_buffers) {
+		struct buffer *buffer = list_entry(list, struct buffer, lrulink);	
 		if (!buffer->count)
 			continue;
 		trace_off("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count);

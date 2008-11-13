@@ -265,7 +265,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 					" (extent %u)",
 					gr, ent, ex,
 					(L)extent_block(extents[ex]), extent_count(extents[ex]),
-					extents[ex].version,
+					extent_version(extents[ex]),
 					ex);
 			}
 		}

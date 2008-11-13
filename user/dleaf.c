@@ -20,75 +20,83 @@
 #define trace trace_on
 #endif
 
-struct extent { u64 block_field:48, count_field:6, version:10; };
-struct group { u32 count_field:8, keyhi_field:24; };
-struct entry { u32 limit_field:8, keylo_field:24; };
+struct extent { be_u64 block_count_version; };
+struct group { be_u32 count_and_keyhi; };
+struct entry { be_u32 limit_and_keylo; };
 struct dleaf { be_u16 be_magic, be_groups, free, used; struct extent table[]; };
 
 /* group wrappers */
 
 static inline struct group make_group(tuxkey_t keyhi, unsigned count)
 {
-	return (struct group){ .keyhi_field = keyhi, .count_field = count };
+	return (struct group){ to_be_u32(keyhi | (count << 24)) };
 }
 
 static inline unsigned group_keyhi(struct group *group)
 {
-	return group->keyhi_field;
+	return from_be_u32(*(be_u32 *)group) & 0xffffff;
 }
 
 static inline unsigned group_count(struct group *group)
 {
-	return group->count_field;
+	return *(unsigned char *)group;
 }
 
 static inline void set_group_count(struct group *group, int n)
 {
-	group->count_field = n;
+	*(unsigned char *)group = n;
 }
 
 static inline void inc_group_count(struct group *group, int n)
 {
-	group->count_field += n;
+	*(unsigned char *)group += n;
 }
 
 /* entry wrappers */
 
 static inline struct entry make_entry(tuxkey_t keylo, unsigned limit)
 {
-	return (struct entry){ .keylo_field = keylo, .limit_field = limit };
+	return (struct entry){ to_be_u32(keylo | (limit << 24)) };
 }
 
 static inline unsigned entry_keylo(struct entry *entry)
 {
-	return entry->keylo_field;
+	return from_be_u32(*(be_u32 *)entry) & 0xffffff;
 }
 
 static inline unsigned entry_limit(struct entry *entry)
 {
-	return entry->limit_field;
+	return *(unsigned char *)entry;
 }
 
 static inline void inc_entry_limit(struct entry *entry, int n)
 {
-	entry->limit_field += n;
+	*(unsigned char *)entry += n;
 }
 
 /* extent wrappers */
 
 static inline struct extent make_extent(block_t block, unsigned count)
 {
-	return (struct extent){ .block_field = block, .count_field = count - 1 };
-}
-
-static inline unsigned extent_count(struct extent extent)
-{
-	return extent.count_field + 1;
+	if (count - 1 >= 0x40)
+		warn("count = %i", count);
+	assert(count - 1 < 0x40);
+	return (struct extent){ (((u64)count - 1) << 48) | block };
 }
 
 static inline unsigned extent_block(struct extent extent)
 {
-	return extent.block_field;
+	return *(be_u64 *)&extent & 0xffffffffffff;
+}
+
+static inline unsigned extent_count(struct extent extent)
+{
+	return ((*(be_u64 *)&extent >> 48) & 0x3f) + 1;
+}
+
+static inline unsigned extent_version(struct extent extent)
+{
+	return from_be_u64(*(be_u64 *)&extent >> 54);
 }
 
 /* dleaf wrappers */
@@ -495,7 +503,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	printf("group %ti/%i ", walk->gstop + leaf_groups(walk->leaf) - 1 - walk->group, leaf_groups(walk->leaf));
+	trace("group %ti/%i", walk->gstop + leaf_groups(walk->leaf) - 1 - walk->group, leaf_groups(walk->leaf));
 	//printf("at entry %ti/%i\n", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
 	if (!leaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
