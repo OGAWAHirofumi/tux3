@@ -96,11 +96,11 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 		"%s_bnode_%llu [\n"
 		"label = \"{ <bnode0> [bnode] | count %u |",
 		gi->bname, (L)blocknr, bnode->count);
-	for (n = 0; n < bnode->count; n++) {
+	for (n = 0; n < bcount(bnode); n++) {
 		fprintf(gi->f,
 			" %c <f%u> key %llu, block %lld",
 			n ? '|' : '{', n,
-			(L)index[n].key, (L)index[n].block);
+			(L)from_be_u64(index[n].key), (L)from_be_u64(index[n].block));
 	}
 	fprintf(gi->f,
 		" }}\"\n"
@@ -108,19 +108,19 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 		"];\n");
 
 	if (level == levels - 1) {
-		for (n = 0; n < bnode->count; n++) {
+		for (n = 0; n < bcount(bnode); n++) {
 			fprintf(gi->f,
 				"%s_bnode_%llu:f%u -> %s_%llu:%s0;\n",
 				gi->bname, (L)blocknr, n,
-				gi->lname, (L)index[n].block,
+				gi->lname, (L)from_be_u64(index[n].block),
 				gi->lname);
 		}
 	} else {
-		for (n = 0; n < bnode->count; n++) {
+		for (n = 0; n < bcount(bnode); n++) {
 			fprintf(gi->f,
 				"%s_bnode_%llu:f%u -> %s_bnode_%llu:bnode0;\n",
 				gi->bname, (L)blocknr, n,
-				gi->bname, (L)index[n].block);
+				gi->bname, (L)from_be_u64(index[n].block));
 		}
 	}
 }
@@ -145,7 +145,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 		node = (buffer = path[--level].buffer)->data;
 	} while (level_finished(path, level));
 	do {
-		if (!(buffer = bread(map, path[level].next++->block)))
+		if (!(buffer = bread(map, from_be_u64(path[level].next++->block))))
 			goto eek;
 		path[++level] = (struct path){
 			.buffer = buffer,
@@ -250,7 +250,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		" | magic 0x%04x, free %u, used %u, groups %u",
 		gi->lname, (L)blocknr,
 		gi->lname, gi->lname,
-		from_be_u16(leaf->be_magic), leaf->free, leaf->used, leaf_groups(leaf));
+		from_be_u16(leaf->magic), from_be_u16(leaf->free), from_be_u16(leaf->used), leaf_groups(leaf));
 
 	/* draw extents */
 	for (gr = 0; gr < leaf_groups(leaf); gr++) {
@@ -323,18 +323,18 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 	}
 }
 
-static inline u16 *ileaf_dict(BTREE, struct ileaf *ileaf)
+static inline be_u16 *ileaf_dict(BTREE, struct ileaf *ileaf)
 {
 	return (void *)ileaf + btree->sb->blocksize;
 }
 
-static inline u16 __ileaf_atdict(u16 *dict, int at)
+static inline u16 __ileaf_atdict(be_u16 *dict, int at)
 {
 	assert(at > 0);
-	return *(dict - at);
+	return from_be_u16(*(dict - at));
 }
 
-static inline u16 ileaf_attr_size(u16 *dict, int at)
+static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 {
 	int size = __ileaf_atdict(dict, at + 1) - atdict(dict, at);
 	assert(size >= 0);
@@ -345,7 +345,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 {
 	struct ileaf *ileaf = buffer->data;
 	block_t blocknr = buffer->index;
-	u16 *dict = ileaf_dict(btree, ileaf);
+	be_u16 *dict = ileaf_dict(btree, ileaf);
 	int at;
 
 	if (!verbose && (drawn & DRAWN_ILEAF))
@@ -356,10 +356,10 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		"%s_%llu [\n"
 		"label = \"{ <%s0> [%s] | magic 0x%04x, count %u, ibase %llu",
 		gi->lname, (L)blocknr, gi->lname,
-		gi->lname, ileaf->magic, ileaf->count, (L)ileaf->ibase);
+		gi->lname, ileaf->magic, icount(ileaf), (L)ibase(ileaf));
 
 	/* draw inode attributes */
-	for (at = 0; at < ileaf->count; at++) {
+	for (at = 0; at < icount(ileaf); at++) {
 		u16 size = ileaf_attr_size(dict, at);
 		if (!size)
 			continue;
@@ -373,7 +373,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		fprintf(gi->f,
 			" | <a%d> attrs (ino %llu, size %u,"
 			" block %llu, depth %d)",
-			at, (L)ileaf->ibase + at, size,
+			at, (L)ibase(ileaf) + at, size,
 			(L)inode.btree.root.block,
 			inode.btree.root.depth);
 	}
@@ -381,15 +381,15 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		" | .....");
 
 	/* draw offset part */
-	for (at = ileaf->count; at > 0; at--) {
-		if (at == ileaf->count) {
+	for (at = icount(ileaf); at > 0; at--) {
+		if (at == icount(ileaf)) {
 			fprintf(gi->f,
 				" | <o%d> offset %u (at %d)",
 				at, atdict(dict, at), at);
 		} else {
 			fprintf(gi->f,
 				" | <o%d> offset %u (at %d, ino %llu, size %u)",
-				at, atdict(dict, at), at, (L)ileaf->ibase + at,
+				at, atdict(dict, at), at, (L)ibase(ileaf) + at,
 				ileaf_attr_size(dict, at));
 		}
 	}
@@ -400,7 +400,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		"];\n");
 
 	/* draw allows from offset to attributes */
-	for (at = 1; at < ileaf->count; at++) {
+	for (at = 1; at < icount(ileaf); at++) {
 		if (!ileaf_attr_size(dict, at))
 			continue;
 
@@ -411,7 +411,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 	}
 
 	/* draw inode's dtree */
-	for (at = 0; at < ileaf->count; at++) {
+	for (at = 0; at < icount(ileaf); at++) {
 		u16 size = ileaf_attr_size(dict, at);
 		if (!size)
 			continue;
@@ -423,7 +423,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 		decode_attrs(&inode, attrs, size);
 
 		char name[64];
-		inum_t ino = ileaf->ibase + at;
+		inum_t ino = ibase(ileaf) + at;
 		if (ino < ARRAY_SIZE(dtree_names) && dtree_names[ino])
 			sprintf(name, "%s_dtree", dtree_names[ino]);
 		else

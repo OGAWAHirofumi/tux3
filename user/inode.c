@@ -97,7 +97,7 @@ int make_inode(struct inode *inode, struct iattr *iattr)
 	inum_t inum = inode->inum;
 	assert(inum < next_key(path, levels));
 	while (1) {
-		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)leaf->ibase);
+		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)ibase(leaf));
 		inum = find_empty_inode(&sb->itable, leafbuf->data, (L)inum);
 		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
 		if (inum < next_key(path, levels))
@@ -271,7 +271,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (!entry)
 		return NULL;
-	inum_t inum = entry->inum;
+	inum_t inum = from_be_u32(entry->inum);
 	brelse(buffer);
 	struct inode *inode = new_inode(dir->sb, inum);
 	return open_inode(inode) ? NULL : inode;

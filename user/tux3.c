@@ -222,7 +222,7 @@ int main(int argc, const char *argv[])
 			errno = ENOENT;
 			goto eek;
 		}
-		inum_t inum = entry->inum;
+		inum_t inum = from_be_u32(entry->inum);
 		brelse(buffer);
 		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
@@ -238,7 +238,7 @@ int main(int argc, const char *argv[])
 			errno = ENOENT;
 			goto eek;
 		}
-		inum_t inum = entry->inum;
+		inum_t inum = from_be_u32(entry->inum);
 		brelse(buffer);
 		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
