@@ -183,9 +183,9 @@ eek:
 static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, struct fuse_file_info *fi)
 {
-	fprintf(stderr, "tux3_create(%Lx, '%s')\n", (L)parent, name);
+	fprintf(stderr, "tux3_create(%Lx, '%s', mode = %o)\n", (L)parent, name, mode);
 	struct inode *inode = tuxcreate(sb->rootdir, name, strlen(name),
-		&(struct iattr){ .mode = mode | 0666 });
+		&(struct iattr){ .mode = mode });
 	if (inode) {
 		struct fuse_entry_param fep = {
 			.attr = {
