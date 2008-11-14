@@ -88,7 +88,7 @@ tux3: $(fsdeps) tux3.o
 
 tux3fuse: $(fsdeps) tux3fuse.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
-ifeq ($(C),1)
+ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
 
