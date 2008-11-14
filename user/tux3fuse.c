@@ -230,6 +230,7 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
@@ -522,40 +523,47 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 static void tux3_readlink(fuse_req_t req, fuse_ino_t ino)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, dev_t rdev)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_link(fuse_req_t req, fuse_ino_t ino,
 	fuse_ino_t newparent, const char *newname)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_symlink(fuse_req_t req, const char *link,
 	fuse_ino_t parent, const char *name)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_rename(fuse_req_t req, fuse_ino_t parent,
 	const char *name, fuse_ino_t newparent, const char *newname)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_statfs(fuse_req_t req, fuse_ino_t ino)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
@@ -568,11 +576,13 @@ static void tux3_access(fuse_req_t req, fuse_ino_t ino, int mask)
 static void tux3_fsyncdir(fuse_req_t req, fuse_ino_t ino,
 	int datasync, struct fuse_file_info *fi)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
@@ -588,6 +598,7 @@ static void tux3_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 static void tux3_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	struct fuse_file_info *fi)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
@@ -648,28 +659,33 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 
 static void tux3_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_getlk(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
 	struct flock *lock)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_setlk(fuse_req_t req, fuse_ino_t ino,
 	struct fuse_file_info *fi, struct flock *lock, int sleep)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize, uint64_t idx)
 {
+	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
