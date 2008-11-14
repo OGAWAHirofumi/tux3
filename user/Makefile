@@ -20,7 +20,7 @@ binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 \
 	tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
-	binaries += tux3fs tux3fuse
+	binaries += tux3fuse
 endif
 
 basedeps = Makefile vfs.o trace.h tux3.h
@@ -86,12 +86,6 @@ inodetest: inode
 tux3: $(fsdeps) tux3.o
 	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
 
-tux3fs: $(fsdeps) tux3fs.c
-	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fs.c -lfuse -otux3fs
-ifeq ($(C),1)
-	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fs.c
-endif
-
 tux3fuse: $(fsdeps) tux3fuse.c
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(C),1)
@@ -101,24 +95,16 @@ endif
 tux3graph: $(fsdeps) tux3graph.o
 	$(CC) $(CFLAGS) vfs.o tux3graph.o -lpopt -o $@
 
-makefs mkfs: tux3 tux3fs
+makefs mkfs: tux3
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs /tmp/testdev
 	mkdir -p /tmp/test
 
-testfs: makefs
-	sudo ./tux3fs /tmp/testdev /tmp/test
-	sudo ls -ld /tmp/test
-
-debug: tux3fs
-	mkdir -p /tmp/test
-	sudo ./tux3fs /tmp/testdev /tmp/test -f
-
-testfuse: makefs
+testfs testfuse: makefs
 	sudo ./tux3fuse /tmp/testdev /tmp/test
 	sudo ls -ld /tmp/test
 
-defuse: tux3fuse
+debug defuse: tux3fuse
 	mkdir -p /tmp/test
 	sudo ./tux3fuse /tmp/testdev /tmp/test -f
 
