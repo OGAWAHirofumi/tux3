@@ -314,8 +314,8 @@ unsigned atsize[MAX_ATTRS] = {
 	[XATTR_ATTR] = 4,
 };
 
-struct xattr { u16 atom, size; char body[]; } PACKED;
-struct xcache { u16 size, maxsize; struct xattr xattrs[]; } PACKED;
+struct xattr { u16 atom, size; char body[]; };
+struct xcache { u16 size, maxsize; struct xattr xattrs[]; };
 
 static inline struct xattr *xcache_next(struct xattr *xattr)
 {
