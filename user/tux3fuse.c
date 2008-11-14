@@ -183,9 +183,11 @@ eek:
 static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, struct fuse_file_info *fi)
 {
-	fprintf(stderr, "tux3_create(%Lx, '%s', mode = %o)\n", (L)parent, name, mode);
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+
+	fprintf(stderr, "tux3_create(%Lx, '%s', uid = %u, gid = %u, mode = %o)\n", (L)parent, name, ctx->uid, ctx->gid, mode);
 	struct inode *inode = tuxcreate(sb->rootdir, name, strlen(name),
-		&(struct iattr){ .mode = mode });
+		&(struct iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
 	if (inode) {
 		struct fuse_entry_param fep = {
 			.attr = {
@@ -390,7 +392,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, name, strlen(name), &buffer);
 	if (!entry)
 		goto noent;
-	inum_t inum = entry->inum;
+	inum_t inum = from_be_u32(entry->inum);
 	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
 	struct inode inode = { .sb = sb, .inum = inum };
 
