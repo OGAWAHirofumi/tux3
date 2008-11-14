@@ -16,6 +16,8 @@ CHECKFLAGS += -Wno-decl -Wno-declaration-after-statement
 
 VG=valgrind --error-exitcode=200 --leak-check=full
 
+TESTDIR = .
+
 binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 \
 	tux3graph
 
@@ -96,23 +98,23 @@ tux3graph: $(fsdeps) tux3graph.o
 	$(CC) $(CFLAGS) vfs.o tux3graph.o -lpopt -o $@
 
 makefs mkfs: tux3
-	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
-	./tux3 mkfs /tmp/testdev
-	mkdir -p /tmp/test
+	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M
+	./tux3 mkfs $(TESTDIR)/testdev
+	mkdir -p $(TESTDIR)/test
 	if [[ ! -f /etc/fuse.conf ]]; then sudo sh -c "echo user_allow_other >/etc/fuse.conf"; fi
 
 testfs testfuse: makefs
-	./tux3fuse /tmp/testdev /tmp/test -o allow_other 
+	./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other 
 
 debug defuse: tux3fuse
-	sudo ./tux3fuse /tmp/testdev /tmp/test -o allow_other -f
+	sudo ./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other -f
 
 untest:
-	sudo umount /tmp/test || true
-	rmdir /tmp/test
+	sudo umount $(TESTDIR)/test || true
+	rmdir $(TESTDIR)/test
 
 unbork:
-	sudo umount -l /tmp/test
+	sudo umount -l $(TESTDIR)/test
 
 clean:
-	rm -f $(binaries) *.o a.out foodev
+	rm -f $(binaries) *.o a.out foodev $(TESTDIR)/testdev
