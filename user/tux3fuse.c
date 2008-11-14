@@ -390,7 +390,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, name, strlen(name), &buffer);
 	if (!entry)
 		goto noent;
-	inum_t inum = entry->inum;
+	inum_t inum = from_be_u32(entry->inum);
 	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
 	struct inode inode = { .sb = sb, .inum = inum };
 

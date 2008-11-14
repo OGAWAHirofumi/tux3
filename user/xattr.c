@@ -71,9 +71,9 @@ void dump_atoms(struct inode *inode)
 			goto eek;
 		if (!(hibuf = bread(inode->map, block)))
 			goto eek;
-		u16 *lorefs = lobuf->data, *hirefs = hibuf->data;
+		be_u16 *lorefs = lobuf->data, *hirefs = hibuf->data;
 		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
-			unsigned refs = (hirefs[i] << 16) + lorefs[i];
+			unsigned refs = (from_be_u16(hirefs[i]) << 16) + from_be_u16(lorefs[i]);
 			if (!refs)
 				continue;
 			atom_t atom = i;
