@@ -99,14 +99,13 @@ makefs mkfs: tux3
 	dd if=/dev/zero of=/tmp/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs /tmp/testdev
 	mkdir -p /tmp/test
+	if [[ ! -f /etc/fuse.conf ]]; then sudo sh -c "echo user_allow_other >/etc/fuse.conf"; fi
 
 testfs testfuse: makefs
-	sudo ./tux3fuse /tmp/testdev /tmp/test
-	sudo ls -ld /tmp/test
+	./tux3fuse /tmp/testdev /tmp/test -o allow_other 
 
 debug defuse: tux3fuse
-	mkdir -p /tmp/test
-	sudo ./tux3fuse /tmp/testdev /tmp/test -f
+	sudo ./tux3fuse /tmp/testdev /tmp/test -o allow_other -f
 
 untest:
 	sudo umount /tmp/test || true
