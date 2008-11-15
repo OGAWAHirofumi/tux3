@@ -181,8 +181,6 @@ int save_inode(struct inode *inode)
 	unsigned size;
 	if (!(ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size)))
 		return -EINVAL;
-	if (inode->i_size)
-		inode->present |= CTIME_SIZE_BIT;
 	err = store_attrs(sb, path, inode);
 	release_path(path, levels + 1);
 	free_path(path);

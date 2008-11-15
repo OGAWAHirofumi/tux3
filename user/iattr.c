@@ -22,6 +22,16 @@
  *    immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
  */
 
+unsigned atsize[MAX_ATTRS] = {
+	[MODE_OWNER_ATTR] = 12,
+	[CTIME_SIZE_ATTR] = 14,
+	[DATA_BTREE_ATTR] = 8,
+	[LINK_COUNT_ATTR] = 4,
+	[MTIME_ATTR] = 6,
+	[IDATA_ATTR] = 2,
+	[XATTR_ATTR] = 4,
+};
+
 unsigned encode_asize(unsigned bits)
 {
 	unsigned need = 0;

@@ -275,7 +275,7 @@ static inline u32 high32(fixed32 val)
 struct iattr {
 	u64 isize, mtime, ctime, atime;
 	unsigned mode, uid, gid, links;
-} iattrs;
+};
 
 void hexdump(void *data, unsigned size);
 block_t balloc(SB);
@@ -304,15 +304,7 @@ enum atbit {
 	XATTR_BIT = 1 << XATTR_ATTR,
 };
 
-unsigned atsize[MAX_ATTRS] = {
-	[MODE_OWNER_ATTR] = 12,
-	[CTIME_SIZE_ATTR] = 14,
-	[DATA_BTREE_ATTR] = 8,
-	[LINK_COUNT_ATTR] = 4,
-	[MTIME_ATTR] = 6,
-	[IDATA_ATTR] = 2,
-	[XATTR_ATTR] = 4,
-};
+unsigned atsize[MAX_ATTRS];
 
 struct xattr { u16 atom, size; char body[]; };
 struct xcache { u16 size, maxsize; struct xattr xattrs[]; };
