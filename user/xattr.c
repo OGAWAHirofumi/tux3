@@ -53,11 +53,11 @@ static inline atom_t entry_atom(ext2_dirent *entry)
 	return from_be_u32(entry->inum);
 }
 
-struct buffer *bread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
+struct buffer *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
 {
 	unsigned shift = atable->sb->blockbits - 3;
 	*offset = atom & ~(-1 << shift);
-	return bread(atable->map, atable->sb->unatom_base + (atom >> shift));
+	return blockread(atable->map, atable->sb->unatom_base + (atom >> shift));
 }
 
 void dump_atoms(struct inode *atable)
@@ -67,9 +67,9 @@ void dump_atoms(struct inode *atable)
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
 		struct buffer *lobuf, *hibuf;
-		if (!(lobuf = bread(atable->map, block)))
+		if (!(lobuf = blockread(atable->map, block)))
 			goto eek;
-		if (!(hibuf = bread(atable->map, block)))
+		if (!(hibuf = blockread(atable->map, block)))
 			goto eek;
 		be_u16 *lorefs = lobuf->data, *hirefs = hibuf->data;
 		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
@@ -78,12 +78,12 @@ void dump_atoms(struct inode *atable)
 				continue;
 			atom_t atom = i;
 			unsigned offset;
-			struct buffer *buffer = bread_unatom(atable, atom, &offset);
+			struct buffer *buffer = blockread_unatom(atable, atom, &offset);
 			if (!buffer)
 				goto eek;
 			u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 			brelse(buffer);
-			buffer = bread(atable->map, where >> sb->blockbits);
+			buffer = blockread(atable->map, where >> sb->blockbits);
 			if (!buffer)
 				goto eek;
 			ext2_dirent *entry = buffer->data + (where & sb->blockmask);
@@ -110,7 +110,7 @@ void show_freeatoms(SB)
 	while (atom) {
 		warn("free atom: %Lx", (L)atom);
 		unsigned offset;
-		struct buffer *buffer = bread_unatom(atable, atom, &offset);
+		struct buffer *buffer = blockread_unatom(atable, atom, &offset);
 		if (!buffer)
 			goto eek;
 		u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
@@ -131,7 +131,7 @@ atom_t get_freeatom(struct inode *atable)
 	if (!atom)
 		return sb->atomgen++;
 	unsigned offset;
-	struct buffer *buffer = bread_unatom(atable, atom, &offset);
+	struct buffer *buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
 		goto eek;
 	u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
@@ -152,14 +152,14 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
 	struct buffer *buffer;
-	if (!(buffer = bread(atable->map, block)))
+	if (!(buffer = blockread(atable->map, block)))
 		return -EIO;
 	int low = from_be_u16(((be_u16 *)buffer->data)[offset]) + use;
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
 	((be_u16 *)buffer->data)[offset] = to_be_u16(low);
 	if (!low || (low & (-1 << 16))) {
 		brelse_dirty(buffer);
-		if (!(buffer = bread(atable->map, block + 1)))
+		if (!(buffer = blockread(atable->map, block + 1)))
 			return -EIO;
 		int high = from_be_u16(((be_u16 *)buffer->data)[offset]) + (low >> 16);
 		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
@@ -169,14 +169,14 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 	brelse_dirty(buffer);
 	if (kill) {
 		warn("delete atom %Lx", (L) atom);
-		buffer = bread_unatom(atable, atom, &offset);
+		buffer = blockread_unatom(atable, atom, &offset);
 		if (!buffer)
 			return -1; // better set a flag that unatom broke or something!!!
 		u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 		brelse(buffer);
 		((be_u64 *)buffer->data)[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
 		sb->freeatom = atom;
-		buffer = bread(atable->map, where >> sb->blockbits);
+		buffer = blockread(atable->map, where >> sb->blockbits);
 		ext2_dirent *entry = buffer->data + (where & sb->blockmask);
 		if (entry_atom(entry) == atom)
 			ext2_delete_entry(buffer, entry);
@@ -211,7 +211,7 @@ atom_t make_atom(struct inode *atable, char *name, unsigned len)
 
 	/* Enter into reverse map - maybe verify zero refs? */
 	unsigned offset;
-	struct buffer *buffer = bread_unatom(atable, atom, &offset);
+	struct buffer *buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
 		return -1; // better set a flag that unatom broke or something!!!
 	((be_u64 *)buffer->data)[offset] = to_be_u64(where);
@@ -455,7 +455,7 @@ int main(int argc, char *argv[])
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {
-		struct buffer *buffer = getblk(inode->map, inode->sb->atomref_base + i);
+		struct buffer *buffer = blockget(inode->map, inode->sb->atomref_base + i);
 		memset(buffer->data, 0, sb->blocksize);
 		brelse_dirty(buffer);
 	}
@@ -515,10 +515,10 @@ int main(int argc, char *argv[])
 	warn("---- test atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
 		unsigned atom = i, offset;
-		struct buffer *buffer = bread_unatom(inode, atom, &offset);
+		struct buffer *buffer = blockread_unatom(inode, atom, &offset);
 		loff_t where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 		brelse_dirty(buffer);
-		buffer = bread(inode->map, where >> sb->blockbits);
+		buffer = blockread(inode->map, where >> sb->blockbits);
 		printf("atom %.3Lx at dirent %.4Lx, ", (L)atom, (L)where);
 		hexdump(buffer->data + (where & sb->blockmask), 16);
 		brelse(buffer);

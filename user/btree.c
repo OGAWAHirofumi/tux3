@@ -51,7 +51,7 @@ static struct buffer *new_block(struct btree *btree)
 	block_t block = (btree->ops->balloc)(btree->sb);
 	if (block == -1)
 		return NULL;
-	struct buffer *buffer = getblk(btree->sb->devmap, block);
+	struct buffer *buffer = blockget(btree->sb->devmap, block);
 	if (!buffer)
 		return NULL;
 	memset(buffer->data, 0, bufsize(buffer));
@@ -116,7 +116,7 @@ static void free_path(struct path *path)
 static int probe(BTREE, tuxkey_t key, struct path *path)
 {
 	unsigned i, levels = btree->root.depth;
-	struct buffer *buffer = bread(btree->sb->devmap, btree->root.block);
+	struct buffer *buffer = blockread(btree->sb->devmap, btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = buffer->data;
@@ -128,7 +128,7 @@ static int probe(BTREE, tuxkey_t key, struct path *path)
 				break;
 		//printf("probe level %i, %ti of %i\n", i, next - node->entries, bcount(node));
 		path[i] = (struct path){ buffer, next };
-		if (!(buffer = bread(btree->sb->devmap, from_be_u64((next - 1)->block))))
+		if (!(buffer = blockread(btree->sb->devmap, from_be_u64((next - 1)->block))))
 			goto eek;
 		node = (struct bnode *)buffer->data;
 	}
@@ -161,7 +161,7 @@ int advance(struct map *map, struct path *path, int levels)
 	} while (level_finished(path, level));
 	do {
 		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
-		if (!(buffer = bread(map, from_be_u64(path[level].next++->block))))
+		if (!(buffer = blockread(map, from_be_u64(path[level].next++->block))))
 			goto eek;
 		path[++level] = (struct path){ .buffer = buffer, .next = (node = buffer->data)->entries };
 	} while (level < levels);
@@ -368,7 +368,7 @@ keep_prev_node:
 
 		/* push back down to leaf level */
 		while (level < levels - 1) {
-			struct buffer *buffer = bread(sb->devmap, from_be_u64(path[level++].next++->block));
+			struct buffer *buffer = blockread(sb->devmap, from_be_u64(path[level++].next++->block));
 			if (!buffer) {
 				brelse(leafprev);
 				release_path(path, level - 1);
@@ -382,7 +382,7 @@ keep_prev_node:
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
-		if (!(leafbuf = bread(sb->devmap, from_be_u64(path[level].next++->block)))) {
+		if (!(leafbuf = blockread(sb->devmap, from_be_u64(path[level].next++->block)))) {
 			release_path(path, level);
 			free_path(path);
 			free_path(prev);

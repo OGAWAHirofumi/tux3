@@ -120,7 +120,7 @@ int main(int argc, const char *argv[])
 			errno = EEXIST;
 			goto eek;
 		}
-		ext2_dump_entries(getblk(sb->rootdir->map, 0));
+		ext2_dump_entries(blockget(sb->rootdir->map, 0));
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 		//tuxseek(file, (1LL << 60) - 12);
@@ -153,14 +153,14 @@ int main(int argc, const char *argv[])
 		if ((errno = -sync_super(sb)))
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
-		ext2_dump_entries(getblk(sb->rootdir->map, 0));
+		ext2_dump_entries(blockget(sb->rootdir->map, 0));
 		//show_tree_range(&sb->itable, 0, -1);
 	}
 
 	if (!strcmp(command, "read")) {
 		printf("---- read file ----\n");
 		//show_tree_range(&sb->itable, 0, -1);
-		//ext2_dump_entries(bread(sb->rootdir->map, 0));
+		//ext2_dump_entries(blockread(sb->rootdir->map, 0));
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (!inode) {
 			errno = ENOENT;
@@ -247,7 +247,7 @@ int main(int argc, const char *argv[])
 			goto eek;
 		if ((errno = -ext2_delete_entry(buffer, entry)))
 			goto eek;
-		ext2_dump_entries(bread(sb->rootdir->map, 0));
+		ext2_dump_entries(blockread(sb->rootdir->map, 0));
 	}
 
 	//printf("---- show state ----\n");

@@ -145,7 +145,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 		node = (buffer = path[--level].buffer)->data;
 	} while (level_finished(path, level));
 	do {
-		if (!(buffer = bread(map, from_be_u64(path[level].next++->block))))
+		if (!(buffer = blockread(map, from_be_u64(path[level].next++->block))))
 			goto eek;
 		path[++level] = (struct path){
 			.buffer = buffer,

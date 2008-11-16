@@ -153,7 +153,7 @@ loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned 
 	unsigned blockbits = dir->map->dev->bits, blocksize = 1 << blockbits;
 	unsigned blocks = dir->i_size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
-		buffer = getblk(dir->map, block);
+		buffer = blockget(dir->map, block);
 		entry = buffer->data;
 		ext2_dirent *limit = buffer->data + blocksize - reclen;
 		while (entry <= limit) {
@@ -172,7 +172,7 @@ loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned 
 		}
 		brelse(buffer);
 	}
-	buffer = getblk(dir->map, block = blocks);
+	buffer = blockget(dir->map, block = blocks);
 	entry = buffer->data;
 	name_len = 0;
 	rec_len = blocksize;
@@ -202,7 +202,7 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 	unsigned blocksize = 1 << dir->map->dev->bits;
 	unsigned blocks = dir->i_size >> dir->map->dev->bits, block;
 	for (block = 0; block < blocks; block++) {
-		struct buffer *buffer = bread(dir->map, block);
+		struct buffer *buffer = blockread(dir->map, block);
 		ext2_dirent *entry = buffer->data;
 		ext2_dirent *limit = (void *)entry + blocksize - reclen;
 		while (entry <= limit) {
@@ -249,7 +249,7 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 	unsigned blocks = dir->i_size >> blockbits;
 	unsigned offset = pos & blockmask;
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
-		struct buffer *buffer = bread(dir->map, block);
+		struct buffer *buffer = blockread(dir->map, block);
 		void *base = buffer->data;
 		if (!buffer)
 			return -EIO;
@@ -332,7 +332,7 @@ int main(int argc, char *argv[])
 	ext2_dirent *entry = ext2_find_entry(map->inode, "hello", 5, &buffer);
 	if (entry)
 		hexdump(entry, entry->name_len);
-	ext2_dump_entries(getblk(map, 0));
+	ext2_dump_entries(blockget(map, 0));
 
 	if (!ext2_delete_entry(buffer, entry)) {
 		show_buffers(map);
@@ -340,14 +340,14 @@ int main(int argc, char *argv[])
 		mark_inode_dirty(map->inode);
 	}
 
-	ext2_dump_entries(getblk(map, 0));
+	ext2_dump_entries(blockget(map, 0));
 	struct file *file = &(struct file){ .f_inode = map->inode };
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
 		ext2_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
 	}
-	ext2_dump_entries(getblk(map, 0));
+	ext2_dump_entries(blockget(map, 0));
 	char dents[10000];
 	ext2_readdir(file, dents, filldir);
 	show_buffers(map);

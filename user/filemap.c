@@ -31,7 +31,7 @@
 #define trace trace_on
 
 /*
- * Extrapolate from single buffer flush or bread to opportunistic exent IO
+ * Extrapolate from single buffer flush or blockread to opportunistic exent IO
  *
  * For write, try to include adjoining buffers above and below:
  *  - stop at first uncached or clean buffer in either direction
@@ -226,7 +226,7 @@ dleaf_dump(&inode->btree, leaf);
 		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)extent_block(seg[i]));
 		for (int j = skip; !err && j < count; j++) {
 			block_t block = extent_block(seg[i]) + j;
-			buffer = getblk(inode->map, index + j);
+			buffer = blockget(inode->map, index + j);
 			trace_on("block 0x%Lx => %Lx", (L)buffer->index, block);
 			if (write) {
 				err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
@@ -265,8 +265,8 @@ int filemap_block_write(struct buffer *buffer)
 }
 
 struct map_ops filemap_ops = {
-	.bread = filemap_block_read,
-	.bwrite = filemap_block_write,
+	.blockread = filemap_block_read,
+	.blockwrite = filemap_block_write,
 };
 
 #ifndef filemap_included
@@ -299,51 +299,51 @@ int main(int argc, char *argv[])
 	inode = inode;
 
 #if 1
-	brelse_dirty(bread(inode->map, 0));
-	brelse_dirty(bread(inode->map, 1));
+	brelse_dirty(blockread(inode->map, 0));
+	brelse_dirty(blockread(inode->map, 1));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
-	filemap_extent_io(getblk(inode->map, 0), 0);
+	filemap_extent_io(blockget(inode->map, 0), 0);
 	return 0;
 #endif
 
 #if 1
-	filemap_extent_io(getblk(inode->map, 5), 0);
+	filemap_extent_io(blockget(inode->map, 5), 0);
 	return 0;
 #endif
 
 #if 0
 	for (int i = 0; i < 20; i++) {
-		brelse_dirty(getblk(inode->map, i));
+		brelse_dirty(blockget(inode->map, i));
 		printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 	}
 	return 0;
 #endif
 
 #if 1
-	brelse_dirty(getblk(inode->map, 5));
-	brelse_dirty(getblk(inode->map, 6));
+	brelse_dirty(blockget(inode->map, 5));
+	brelse_dirty(blockget(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
-	brelse_dirty(getblk(inode->map, 6));
-	brelse_dirty(getblk(inode->map, 7));
+	brelse_dirty(blockget(inode->map, 6));
+	brelse_dirty(blockget(inode->map, 7));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
 	return 0;
 #endif
 
-	brelse_dirty(getblk(inode->map, 0));
-	brelse_dirty(getblk(inode->map, 1));
-	brelse_dirty(getblk(inode->map, 2));
-	brelse_dirty(getblk(inode->map, 3));
+	brelse_dirty(blockget(inode->map, 0));
+	brelse_dirty(blockget(inode->map, 1));
+	brelse_dirty(blockget(inode->map, 2));
+	brelse_dirty(blockget(inode->map, 3));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
-	brelse_dirty(getblk(inode->map, 0));
-	brelse_dirty(getblk(inode->map, 1));
-	brelse_dirty(getblk(inode->map, 2));
-	brelse_dirty(getblk(inode->map, 3));
-	brelse_dirty(getblk(inode->map, 4));
-	brelse_dirty(getblk(inode->map, 5));
-	brelse_dirty(getblk(inode->map, 6));
+	brelse_dirty(blockget(inode->map, 0));
+	brelse_dirty(blockget(inode->map, 1));
+	brelse_dirty(blockget(inode->map, 2));
+	brelse_dirty(blockget(inode->map, 3));
+	brelse_dirty(blockget(inode->map, 4));
+	brelse_dirty(blockget(inode->map, 5));
+	brelse_dirty(blockget(inode->map, 6));
 	printf("flush... %s\n", strerror(-flush_buffers(inode->map)));
 
 	//show_buffers(inode->map);

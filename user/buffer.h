@@ -19,8 +19,8 @@ struct buffer;
 struct map_ops
 {
 	int (*blockio)(struct buffer *buffer, int write);
-	int (*bwrite)(struct buffer *buffer);
-	int (*bread)(struct buffer *buffer);
+	int (*blockwrite)(struct buffer *buffer);
+	int (*blockread)(struct buffer *buffer);
 };
 
 struct map {
@@ -60,8 +60,8 @@ int write_buffer(struct buffer *buffer);
 int read_buffer(struct buffer *buffer);
 unsigned buffer_hash(block_t block);
 struct buffer *peekblk(struct map *map, block_t block);
-struct buffer *getblk(struct map *map, block_t block);
-struct buffer *bread(struct map *map, block_t block);
+struct buffer *blockget(struct map *map, block_t block);
+struct buffer *blockread(struct map *map, block_t block);
 void add_buffer_journaled(struct buffer *buffer);
 int flush_buffers(struct map *map);
 void evict_buffers(struct map *map);

@@ -208,7 +208,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 		unsigned from = pos & bmask;
 		unsigned some = from + tail > bsize ? bsize - from : tail;
 		int full = write && some == bsize;
-		struct buffer *buffer = (full ? getblk : bread)(inode->map, pos >> bbits);
+		struct buffer *buffer = (full ? blockget : blockread)(inode->map, pos >> bbits);
 		if (!buffer) {
 			err = -EIO;
 			break;
@@ -475,7 +475,7 @@ int main(int argc, char *argv[])
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(getblk(sb->rootdir->map, 0));
+	ext2_dump_entries(blockget(sb->rootdir->map, 0));
 
 	trace(">>> write file");
 	char buf[100] = { };

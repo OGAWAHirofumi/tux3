@@ -176,7 +176,7 @@ void brelse_dirty(struct buffer *buffer)
 
 int write_buffer_to(struct buffer *buffer, block_t block)
 {
-	return (buffer->map->ops->bwrite)(buffer);
+	return (buffer->map->ops->blockwrite)(buffer);
 }
 
 int write_buffer(struct buffer *buffer)
@@ -324,7 +324,7 @@ struct buffer *peekblk(struct map *map, block_t block)
 	return NULL;
 }
 
-struct buffer *getblk(struct map *map, block_t block)
+struct buffer *blockget(struct map *map, block_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block), *buffer;
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
@@ -342,12 +342,12 @@ struct buffer *getblk(struct map *map, block_t block)
 	return buffer;
 }
 
-struct buffer *bread(struct map *map, block_t block)
+struct buffer *blockread(struct map *map, block_t block)
 {
-	struct buffer *buffer = getblk(map, block);
+	struct buffer *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
-		int err = buffer->map->ops->bread(buffer);
+		int err = buffer->map->ops->blockread(buffer);
 		if (err) {
 			warn("failed to read block %Lx (%s)", block, strerror(-err));
 			brelse(buffer);
@@ -464,7 +464,7 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 #endif
 }
 
-int dev_bread(struct buffer *buffer)
+int dev_blockread(struct buffer *buffer)
 {
 	warn("read [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
@@ -472,7 +472,7 @@ int dev_bread(struct buffer *buffer)
 	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
-int dev_bwrite(struct buffer *buffer)
+int dev_blockwrite(struct buffer *buffer)
 {
 	warn("write [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
@@ -480,7 +480,7 @@ int dev_bwrite(struct buffer *buffer)
 	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
-struct map_ops devmap_ops = { .bread = dev_bread, .bwrite = dev_bwrite };
+struct map_ops devmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
 
 struct map *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
@@ -502,11 +502,11 @@ int buffer_main(int argc, char *argv[])
 	struct map *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
 	show_dirty_buffers(map);
-	set_buffer_dirty(getblk(map, 1));
+	set_buffer_dirty(blockget(map, 1));
 	show_dirty_buffers(map);
-	printf("get %p\n", getblk(map, 0));
-	printf("get %p\n", getblk(map, 1));
-	printf("get %p\n", getblk(map, 2));
-	printf("get %p\n", getblk(map, 1));
+	printf("get %p\n", blockget(map, 0));
+	printf("get %p\n", blockget(map, 1));
+	printf("get %p\n", blockget(map, 2));
+	printf("get %p\n", blockget(map, 1));
 	return 0;
 }

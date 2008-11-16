@@ -100,7 +100,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		//printf("count block %x/%x\n", block, blocks);
-		struct buffer *buffer = bread(inode->map, block);
+		struct buffer *buffer = blockread(inode->map, block);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset;
@@ -130,7 +130,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	printf("%i bitmap blocks:\n", blocks);
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
-		struct buffer *buffer = bread(inode->map, block);
+		struct buffer *buffer = blockread(inode->map, block);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset;
@@ -188,7 +188,7 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 	block_t tail = (count + startbit + 7) >> 3;
 	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
-		struct buffer *buffer = bread(inode->map, mapblock);
+		struct buffer *buffer = blockread(inode->map, mapblock);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset, run = 0;
@@ -270,7 +270,7 @@ void bfree_extent(SB, block_t start, unsigned count)
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
-	struct buffer *buffer = bread(sb->bitmap->map, mapblock);
+	struct buffer *buffer = blockread(sb->bitmap->map, mapblock);
 	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
 		goto eek;
@@ -338,7 +338,7 @@ int main(int argc, char *argv[])
 	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
 
 	for (int block = 0; block < 10; block++) {
-		struct buffer *buffer = getblk(map, block);
+		struct buffer *buffer = blockget(map, block);
 		memset(buffer->data, 0, blocksize);
 		set_buffer_uptodate(buffer);
 	}
@@ -346,9 +346,9 @@ int main(int argc, char *argv[])
 		block_t block = balloc_from_range(bitmap, 121, 10);
 		printf("%Li\n", (L)block);
 	}
-	hexdump(getblk(map, 0)->data, dumpsize);
-	hexdump(getblk(map, 1)->data, dumpsize);
-	hexdump(getblk(map, 2)->data, dumpsize);
+	hexdump(blockget(map, 0)->data, dumpsize);
+	hexdump(blockget(map, 1)->data, dumpsize);
+	hexdump(blockget(map, 2)->data, dumpsize);
 
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 1; i++)
@@ -356,9 +356,9 @@ int main(int argc, char *argv[])
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 10; i++)
 		balloc(sb);
-	hexdump(getblk(map, 0)->data, dumpsize);
-	hexdump(getblk(map, 1)->data, dumpsize);
-	hexdump(getblk(map, 2)->data, dumpsize);
+	hexdump(blockget(map, 0)->data, dumpsize);
+	hexdump(blockget(map, 1)->data, dumpsize);
+	hexdump(blockget(map, 2)->data, dumpsize);
 
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, from_be_u64(sb->super.volblocks)), (L)sb->freeblocks);
