@@ -75,7 +75,7 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	struct dev *dev = sb->devmap->dev;
+	struct dev *dev = sb->s_bdev->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	int levels = inode->btree.root.depth, try = 0, i, err;
 	if (!levels) {
@@ -284,7 +284,7 @@ int main(int argc, char *argv[])
 	SB = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
+		.s_bdev = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,

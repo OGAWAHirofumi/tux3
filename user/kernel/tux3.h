@@ -205,7 +205,7 @@ struct sb
 	struct disksuper super;
 	struct btree itable;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
-	struct map *devmap;
+	struct map *s_bdev;
 	struct buffer *rootbuf;
 	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;

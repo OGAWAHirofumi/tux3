@@ -73,7 +73,7 @@ int main(int argc, const char *argv[])
 	*sb = (struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
+		.s_bdev = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
@@ -252,7 +252,7 @@ int main(int argc, const char *argv[])
 
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
-	//show_buffers(sb->devmap);
+	//show_buffers(sb->s_bdev);
 	poptFreeContext(popt);
 	return 0;
 eek:
