@@ -187,7 +187,7 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	fprintf(stderr, "tux3_create(%Lx, '%s', uid = %u, gid = %u, mode = %o)\n", (L)parent, name, ctx->uid, ctx->gid, mode);
 	struct inode *inode = tuxcreate(sb->rootdir, name, strlen(name),
-		&(struct iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
+		&(struct tux_iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
 	if (inode) {
 		struct fuse_entry_param fep = {
 			.attr = {

@@ -115,7 +115,7 @@ int main(int argc, const char *argv[])
 	if (!strcmp(command, "write")) {
 		printf("---- create file ----\n");
 		struct inode *inode = tuxcreate(sb->rootdir, filename, strlen(filename),
-			&(struct iattr){ .mode = S_IFREG | S_IRWXU });
+			&(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
 		if (!inode) {
 			errno = EEXIST;
 			goto eek;

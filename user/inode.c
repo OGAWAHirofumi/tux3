@@ -77,7 +77,7 @@ int store_attrs(SB, struct path *path, struct inode *inode)
  * we should only round down the split point, not the returned goal.)
  */
 
-int make_inode(struct inode *inode, struct iattr *iattr)
+int make_inode(struct inode *inode, struct tux_iattr *iattr)
 {
 	SB = inode->sb;
 	int err = -ENOENT, levels = sb->itable.root.depth;
@@ -275,7 +275,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	return open_inode(inode) ? NULL : inode;
 }
 
-struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct iattr *iattr)
+struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
 {
 	iattr->ctime = tuxtime();
 
@@ -405,17 +405,17 @@ int make_tux3(SB, int fd)
 	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
 	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
 	trace("create bitmap inode");
-	if (make_inode(sb->bitmap, &(struct iattr){ }))
+	if (make_inode(sb->bitmap, &(struct tux_iattr){ }))
 		goto eek;
 	trace("create version table");
 	if (!(sb->vtable = new_inode(sb, 0x2)))
 		goto eek;
-	if (make_inode(sb->vtable, &(struct iattr){ }))
+	if (make_inode(sb->vtable, &(struct tux_iattr){ }))
 		goto eek;
 	trace("create root directory");
 	if (!(sb->rootdir = new_inode(sb, 0xd)))
 		goto eek;
-	if (make_inode(sb->rootdir, &(struct iattr){ .mode = S_IFDIR | 0755 }))
+	if (make_inode(sb->rootdir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }))
 		goto eek;
 	trace("create atom dictionary");
 	if (!(sb->atable = new_inode(sb, 0xa)))
@@ -423,7 +423,7 @@ int make_tux3(SB, int fd)
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->unatom_base + (1 << (34 - sb->blockbits));
 	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
-	if (make_inode(sb->atable, &(struct iattr){ }))
+	if (make_inode(sb->atable, &(struct tux_iattr){ }))
 		goto eek;
 	if ((err = sync_super(sb)))
 		goto eek;
@@ -472,7 +472,7 @@ int main(int argc, char *argv[])
 	if ((errno = -make_tux3(sb, fd)))
 		goto eek;
 	trace("create file");
-	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct iattr){ .mode = S_IFREG | S_IRWXU });
+	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
 	ext2_dump_entries(getblk(sb->rootdir->map, 0));
