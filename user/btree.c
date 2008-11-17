@@ -104,17 +104,17 @@ void show_path(struct tux_path *path, int levels)
 	printf("\n");
 }
 
-static struct tux_path *alloc_path(int levels)
+struct tux_path *alloc_path(int levels)
 {
 	return malloc(sizeof(struct tux_path) * levels);
 }
 
-static void free_path(struct tux_path *path)
+void free_path(struct tux_path *path)
 {
 	free(path);
 }
 
-static int probe(BTREE, tuxkey_t key, struct tux_path *path)
+int probe(BTREE, tuxkey_t key, struct tux_path *path)
 {
 	unsigned i, levels = btree->root.depth;
 	struct buffer_head *buffer = blockread(btree->sb->devmap, btree->root.block);
@@ -534,7 +534,7 @@ void free_btree(struct btree *btree)
 
 #ifndef __KERNEL__
 #ifndef main
-struct uleaf { u32 magic, count; struct entry { u32 key, val; } entries[]; };
+struct uleaf { u32 magic, count; struct uentry { u16 key, val; } entries[]; };
 
 static inline struct uleaf *to_uleaf(vleaf *leaf)
 {
@@ -566,7 +566,7 @@ void uleaf_dump(BTREE, vleaf *data)
 {
 	struct uleaf *leaf = data;
 	printf("leaf %p/%i", leaf, leaf->count);
-	struct entry *entry, *limit = leaf->entries + leaf->count;
+	struct uentry *entry, *limit = leaf->entries + leaf->count;
 	for (entry = leaf->entries; entry < limit; entry++)
 		printf(" %x:%x", entry->key, entry->val);
 	printf(" (%x free)\n", uleaf_free(btree, leaf));
@@ -641,11 +641,11 @@ block_t balloc(SB)
 int uleaf_insert(BTREE, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
-	struct entry *entry = uleaf_resize(btree, key, leaf, 1);
+	struct uentry *entry = uleaf_resize(btree, key, leaf, 1);
 	if (!entry)
 		return 1; // need to expand
 	assert(entry);
-	*entry = (struct entry){ .key = key, .val = val };
+	*entry = (struct uentry){ .key = key, .val = val };
 	return 0;
 }
 
@@ -673,8 +673,8 @@ int main(int argc, char *argv[])
 	for (int key = 0; key < 30; key++) {
 		if (probe(&btree, key, path))
 			error("probe for %i failed", key);
-		struct entry *entry = tree_expand(&btree, key, 1, path);
-		*entry = (struct entry){ .key = key, .val = key + 0x100 };
+		struct uentry *entry = tree_expand(&btree, key, 1, path);
+		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
 		release_path(path, btree.root.depth + 1);
 	}
 	show_tree_range(&btree, 0, -1);
