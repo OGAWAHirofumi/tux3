@@ -377,7 +377,7 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 
 #else
 
-static struct inode *buffer_inode(struct buffer *buffer)
+static inline struct inode *buffer_inode(struct buffer *buffer)
 {
 	return buffer->map->inode;
 }

@@ -224,7 +224,7 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = from_be_u32(entry->inum);
 		brelse(buffer);
-		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
+		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		dump_attrs(inode);
@@ -240,7 +240,7 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = from_be_u32(entry->inum);
 		brelse(buffer);
-		struct inode *inode = &(struct inode){ .sb = sb, .inum = inum };
+		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum };
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
