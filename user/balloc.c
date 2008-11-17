@@ -91,8 +91,8 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 		ones[i] = bytebits(i);
 
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->map->dev->bits;
-	unsigned mapshift = inode->map->dev->bits + 3;
+	unsigned blocksize = 1 << inode->sb->blockbits;
+	unsigned mapshift = inode->sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -100,7 +100,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		//printf("count block %x/%x\n", block, blocks);
-		struct buffer *buffer = blockread(inode->map, block);
+		struct buffer *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset;
@@ -119,8 +119,8 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->map->dev->bits;
-	unsigned mapshift = inode->map->dev->bits + 3;
+	unsigned blocksize = 1 << inode->sb->blockbits;
+	unsigned mapshift = inode->sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift, active = 0;
 	unsigned offset = (start & mapmask) >> 3;
@@ -130,7 +130,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	printf("%i bitmap blocks:\n", blocks);
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
-		struct buffer *buffer = blockread(inode->map, block);
+		struct buffer *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset;
@@ -179,8 +179,8 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 {
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->map->dev->bits;
-	unsigned mapshift = inode->map->dev->bits + 3;
+	unsigned blocksize = 1 << inode->sb->blockbits;
+	unsigned mapshift = inode->sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -188,7 +188,7 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 	block_t tail = (count + startbit + 7) >> 3;
 	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
-		struct buffer *buffer = blockread(inode->map, mapblock);
+		struct buffer *buffer = blockread(mapping(inode), mapblock);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset, run = 0;
@@ -266,11 +266,11 @@ found:
 
 void bfree_extent(SB, block_t start, unsigned count)
 {
-	unsigned mapshift = sb->bitmap->map->dev->bits + 3;
+	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
-	struct buffer *buffer = blockread(sb->bitmap->map, mapblock);
+	struct buffer *buffer = blockread(mapping(sb->bitmap), mapblock);
 	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
 		goto eek;
@@ -326,8 +326,8 @@ int main(int argc, char *argv[])
 		free(bitmap);
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
-	struct map *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) } };
+	map_t *map = new_map(dev, NULL);
+	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
 	struct inode *bitmap = &(struct inode){ .sb = sb, .map = map };
 	sb->freeblocks = from_be_u64(sb->super.volblocks);
 	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero

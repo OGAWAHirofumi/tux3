@@ -32,9 +32,11 @@ struct map {
 	unsigned dirty_count;
 };
 
+typedef struct map map_t;
+
 struct buffer
 {
-	struct map *map;
+	map_t *map;
 	struct buffer *hashlink;
 	struct list_head dirtylink;
 	struct list_head lrulink; /* used for LRU list and the free list */
@@ -49,7 +51,7 @@ struct list_head journaled_buffers;
 extern unsigned journaled_count;
 
 void show_buffer(struct buffer *buffer);
-void show_buffers(struct map *map);
+void show_buffers(map_t *map);
 struct buffer *set_buffer_dirty(struct buffer *buffer);
 struct buffer *set_buffer_uptodate(struct buffer *buffer);
 struct buffer *set_buffer_empty(struct buffer *buffer);
@@ -59,12 +61,12 @@ int write_buffer_to(struct buffer *buffer, block_t pos);
 int write_buffer(struct buffer *buffer);
 int read_buffer(struct buffer *buffer);
 unsigned buffer_hash(block_t block);
-struct buffer *peekblk(struct map *map, block_t block);
-struct buffer *blockget(struct map *map, block_t block);
-struct buffer *blockread(struct map *map, block_t block);
+struct buffer *peekblk(map_t *map, block_t block);
+struct buffer *blockget(map_t *map, block_t block);
+struct buffer *blockread(map_t *map, block_t block);
 void add_buffer_journaled(struct buffer *buffer);
-int flush_buffers(struct map *map);
-void evict_buffers(struct map *map);
+int flush_buffers(map_t *map);
+void evict_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize);
 
 static inline unsigned bufsize(struct buffer *buffer)
@@ -92,6 +94,6 @@ static inline int buffer_journaled(struct buffer *buffer)
 	return buffer->state == BUFFER_STATE_JOURNALED;
 }
 
-struct map *new_map(struct dev *dev, struct map_ops *ops); // belongs here???
-void free_map(struct map *map);
+map_t *new_map(struct dev *dev, struct map_ops *ops); // new_map should take inode *??? does it belong here???
+void free_map(map_t *map);
 #endif

@@ -47,7 +47,7 @@ void show_buffer(struct buffer *buffer)
 		"???");
 }
 
-void show_buffers_(struct map *map, int all)
+void show_buffers_(map_t *map, int all)
 {
 	unsigned i;
 
@@ -66,19 +66,19 @@ void show_buffers_(struct map *map, int all)
 	}
 }
 
-void show_active_buffers(struct map *map)
+void show_active_buffers(map_t *map)
 {
 	warn("(map %p)", map);
 	show_buffers_(map, 0);
 }
 
-void show_buffers(struct map *map)
+void show_buffers(map_t *map)
 {
 	warn("(map %p)", map);
 	show_buffers_(map, 1);
 }
 
-void show_dirty_buffers(struct map *map)
+void show_dirty_buffers(map_t *map)
 {
 	struct list_head *list;
 
@@ -240,7 +240,7 @@ static struct buffer *remove_buffer_free(void)
 #define SECTOR_BITS 9
 #define SECTOR_SIZE (1 << SECTOR_BITS)
 
-struct buffer *new_buffer(struct map *map, block_t block)
+struct buffer *new_buffer(map_t *map, block_t block)
 {
 	buftrace("Allocate buffer, block = %Lx", block);
 	struct buffer *buffer = NULL;
@@ -313,7 +313,7 @@ int count_buffers(void)
 	return count;
 }
 
-struct buffer *peekblk(struct map *map, block_t block)
+struct buffer *peekblk(map_t *map, block_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block);
 	for (struct buffer *buffer = *bucket; buffer; buffer = buffer->hashlink)
@@ -324,7 +324,7 @@ struct buffer *peekblk(struct map *map, block_t block)
 	return NULL;
 }
 
-struct buffer *blockget(struct map *map, block_t block)
+struct buffer *blockget(map_t *map, block_t block)
 {
 	struct buffer **bucket = map->hash + buffer_hash(block), *buffer;
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
@@ -342,7 +342,7 @@ struct buffer *blockget(struct map *map, block_t block)
 	return buffer;
 }
 
-struct buffer *blockread(struct map *map, block_t block)
+struct buffer *blockread(map_t *map, block_t block)
 {
 	struct buffer *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
@@ -368,7 +368,7 @@ void evict_buffer(struct buffer *buffer)
 }
 
 /* !!! only used for testing */
-void evict_buffers(struct map *map)
+void evict_buffers(map_t *map)
 {
 	unsigned i;
 	for (i = 0; i < BUFFER_BUCKETS; i++)
@@ -385,7 +385,7 @@ void evict_buffers(struct map *map)
 }
 
 /* !!! only used for testing */
-int flush_buffers(struct map *map) // !!! should use lru list
+int flush_buffers(map_t *map) // !!! should use lru list
 {
 	int err = 0;
 
@@ -482,15 +482,15 @@ int dev_blockwrite(struct buffer *buffer)
 
 struct map_ops devmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
 
-struct map *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
+map_t *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
-	struct map *map = malloc(sizeof(*map)); // error???
-	*map = (struct map){ .dev = dev, .ops = ops ? ops : &devmap_ops };
+	map_t *map = malloc(sizeof(*map)); // error???
+	*map = (map_t){ .dev = dev, .ops = ops ? ops : &devmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
 	return map;
 }
 
-void free_map(struct map *map)
+void free_map(map_t *map)
 {
 	assert(list_empty(&map->dirty));
 	free(map);
@@ -499,7 +499,7 @@ void free_map(struct map *map)
 int buffer_main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	struct map *map = new_map(dev, NULL);
+	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
 	show_dirty_buffers(map);
 	set_buffer_dirty(blockget(map, 1));

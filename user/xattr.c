@@ -57,7 +57,7 @@ struct buffer *blockread_unatom(struct inode *atable, atom_t atom, unsigned *off
 {
 	unsigned shift = atable->sb->blockbits - 3;
 	*offset = atom & ~(-1 << shift);
-	return blockread(atable->map, atable->sb->unatom_base + (atom >> shift));
+	return blockread(mapping(atable), atable->sb->unatom_base + (atom >> shift));
 }
 
 void dump_atoms(struct inode *atable)
@@ -67,9 +67,9 @@ void dump_atoms(struct inode *atable)
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
 		struct buffer *lobuf, *hibuf;
-		if (!(lobuf = blockread(atable->map, block)))
+		if (!(lobuf = blockread(mapping(atable), block)))
 			goto eek;
-		if (!(hibuf = blockread(atable->map, block)))
+		if (!(hibuf = blockread(mapping(atable), block)))
 			goto eek;
 		be_u16 *lorefs = lobuf->data, *hirefs = hibuf->data;
 		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
@@ -83,7 +83,7 @@ void dump_atoms(struct inode *atable)
 				goto eek;
 			u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 			brelse(buffer);
-			buffer = blockread(atable->map, where >> sb->blockbits);
+			buffer = blockread(mapping(atable), where >> sb->blockbits);
 			if (!buffer)
 				goto eek;
 			ext2_dirent *entry = buffer->data + (where & sb->blockmask);
@@ -152,14 +152,14 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
 	struct buffer *buffer;
-	if (!(buffer = blockread(atable->map, block)))
+	if (!(buffer = blockread(mapping(atable), block)))
 		return -EIO;
 	int low = from_be_u16(((be_u16 *)buffer->data)[offset]) + use;
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
 	((be_u16 *)buffer->data)[offset] = to_be_u16(low);
 	if (!low || (low & (-1 << 16))) {
 		brelse_dirty(buffer);
-		if (!(buffer = blockread(atable->map, block + 1)))
+		if (!(buffer = blockread(mapping(atable), block + 1)))
 			return -EIO;
 		int high = from_be_u16(((be_u16 *)buffer->data)[offset]) + (low >> 16);
 		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
@@ -176,7 +176,7 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 		brelse(buffer);
 		((be_u64 *)buffer->data)[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
 		sb->freeatom = atom;
-		buffer = blockread(atable->map, where >> sb->blockbits);
+		buffer = blockread(mapping(atable), where >> sb->blockbits);
 		ext2_dirent *entry = buffer->data + (where & sb->blockmask);
 		if (entry_atom(entry) == atom)
 			ext2_delete_entry(buffer, entry);
@@ -435,7 +435,7 @@ int main(int argc, char *argv[])
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRWXU) };
 	ftruncate(dev->fd, 1 << 24);
-	struct map *map = new_map(dev, NULL);
+	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
 	SB = &(struct sb){
 		.version = 0, .atable = map->inode,
@@ -455,7 +455,7 @@ int main(int argc, char *argv[])
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {
-		struct buffer *buffer = blockget(inode->map, inode->sb->atomref_base + i);
+		struct buffer *buffer = blockget(mapping(inode), inode->sb->atomref_base + i);
 		memset(buffer->data, 0, sb->blocksize);
 		brelse_dirty(buffer);
 	}
@@ -518,7 +518,7 @@ int main(int argc, char *argv[])
 		struct buffer *buffer = blockread_unatom(inode, atom, &offset);
 		loff_t where = from_be_u64(((be_u64 *)buffer->data)[offset]);
 		brelse_dirty(buffer);
-		buffer = blockread(inode->map, where >> sb->blockbits);
+		buffer = blockread(mapping(inode), where >> sb->blockbits);
 		printf("atom %.3Lx at dirent %.4Lx, ", (L)atom, (L)where);
 		hexdump(buffer->data + (where & sb->blockmask), 16);
 		brelse(buffer);

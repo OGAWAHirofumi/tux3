@@ -25,7 +25,7 @@ ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
 endif
 
-basedeps = Makefile vfs.o trace.h tux3.h
+basedeps = Makefile vfs.o trace.h tux3.h kernel/tux3.h
 lowdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c
 fsdeps = $(lowdeps) filemap.c inode.c
 

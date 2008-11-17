@@ -3,6 +3,7 @@
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
+#include <linux/fs.h>
 
 #define printf printk
 #define vprintf vprintk
@@ -200,12 +201,21 @@ struct btree {
 	u16 entries_per_leaf;
 };
 
+#ifdef __KERNEL__
+typedef struct address_space map_t;
+
+static inline map_t *mapping(struct inode *inode)
+{
+	return inode->i_mapping;
+}
+#endif
+
 struct sb
 {
 	struct disksuper super;
 	struct btree itable;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
-	struct map *s_bdev;
+	map_t *s_bdev;
 	struct buffer *rootbuf;
 	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;
@@ -218,7 +228,7 @@ struct sb
 #ifndef __KERNEL__
 struct inode {
 	struct sb *sb;
-	struct map *map;
+	map_t *map;
 	struct btree btree;
 	inum_t inum;
 	unsigned i_version, present;
@@ -232,6 +242,12 @@ struct file {
 	unsigned f_version;
 	loff_t f_pos;
 };
+
+static inline map_t *mapping(struct inode *inode)
+{
+	return inode->map;
+}
+
 #endif
 
 typedef void vleaf;

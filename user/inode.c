@@ -19,7 +19,7 @@
 
 struct inode *new_inode(SB, inum_t inum)
 {
-	struct map *map = new_map(sb->s_bdev->dev, &filemap_ops);
+	map_t *map = new_map(sb->s_bdev->dev, &filemap_ops);
 	if (!map)
 		goto eek;
 	struct inode *inode = malloc(sizeof(*inode));
@@ -35,8 +35,8 @@ eek:
 
 void free_inode(struct inode *inode)
 {
-	assert(inode->map); /* some inodes are not malloced */
-	free_map(inode->map); // invalidate dirty buffers!!!
+	assert(mapping(inode)); /* some inodes are not malloced */
+	free_map(mapping(inode)); // invalidate dirty buffers!!!
 	if (inode->xcache)
 		free(inode->xcache);
 	free(inode);
@@ -208,7 +208,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 		unsigned from = pos & bmask;
 		unsigned some = from + tail > bsize ? bsize - from : tail;
 		int full = write && some == bsize;
-		struct buffer *buffer = (full ? blockget : blockread)(inode->map, pos >> bbits);
+		struct buffer *buffer = (full ? blockget : blockread)(mapping(inode), pos >> bbits);
 		if (!buffer) {
 			err = -EIO;
 			break;
@@ -308,7 +308,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 
 int tuxflush(struct inode *inode)
 {
-	return flush_buffers(inode->map);
+	return flush_buffers(mapping(inode));
 }
 
 int tuxsync(struct inode *inode)
@@ -342,10 +342,9 @@ int load_sb(SB)
 	sb->freeblocks = from_be_u64(disk->freeblocks);
 	u64 iroot = from_be_u64(disk->iroot);
 	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
-	sb->blockbits = blockbits,
-	sb->blocksize = 1 << blockbits,
-	sb->blockmask = (1 << blockbits) - 1,
-	sb->s_bdev->dev->bits = blockbits;
+	sb->blockbits = blockbits;
+	sb->blocksize = 1 << blockbits;
+	sb->blockmask = (1 << blockbits) - 1;
 	//hexdump(&sb->super, sizeof(sb->super));
 	return 0;
 }
@@ -353,7 +352,7 @@ int load_sb(SB)
 int save_sb(SB)
 {
 	struct disksuper *disk = &sb->super;
-	disk->blockbits = to_be_u16(sb->s_bdev->dev->bits);
+	disk->blockbits = to_be_u16(sb->blockbits);
 	disk->volblocks = to_be_u64(sb->volblocks);
 	disk->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
 	disk->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
@@ -428,8 +427,8 @@ int make_tux3(SB, int fd)
 	if ((err = sync_super(sb)))
 		goto eek;
 
-	show_buffers(sb->bitmap->map);
-	show_buffers(sb->rootdir->map);
+	show_buffers(mapping(sb->bitmap));
+	show_buffers(mapping(sb->rootdir));
 	show_buffers(sb->s_bdev);
 	return 0;
 eek:
@@ -475,7 +474,7 @@ int main(int argc, char *argv[])
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(blockget(sb->rootdir->map, 0));
+	ext2_dump_entries(blockget(mapping(sb->rootdir), 0));
 
 	trace(">>> write file");
 	char buf[100] = { };
@@ -508,8 +507,8 @@ int main(int argc, char *argv[])
 		return 1;
 	hexdump(buf, got);
 	trace(">>> show state");
-	show_buffers(file->f_inode->map);
-	show_buffers(sb->rootdir->map);
+	show_buffers(mapping(file->f_inode));
+	show_buffers(mapping(sb->rootdir));
 	show_buffers(sb->s_bdev);
 	bitmap_dump(sb->bitmap, 0, sb->volblocks);
 	show_tree_range(&sb->itable, 0, -1);

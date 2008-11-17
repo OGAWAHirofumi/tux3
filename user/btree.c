@@ -147,7 +147,7 @@ static inline int level_finished(struct path path[], int level)
 }
 // also write level_beginning!!!
 
-int advance(struct map *map, struct path *path, int levels)
+int advance(map_t *map, struct path *path, int levels)
 {
 	int level = levels;
 	struct buffer *buffer = path[level].buffer;
@@ -650,7 +650,7 @@ int uleaf_insert(BTREE, struct uleaf *leaf, unsigned key, unsigned val)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
-	struct map *map = new_map(dev, NULL);
+	map_t *map = new_map(dev, NULL);
 	SB = &(struct sb){ .s_bdev = map, .blocksize = 1 << dev->bits };
 	map->inode = &(struct inode){ .sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
