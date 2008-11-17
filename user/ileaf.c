@@ -64,22 +64,9 @@ int ileaf_init(BTREE, vleaf *leaf)
 	return 0;
 }
 
-struct ileaf *ileaf_create(BTREE)
-{
-	struct ileaf *leaf = malloc(btree->sb->blocksize);
-	ileaf_init(btree, leaf);
-	return leaf;
-}
-
 int ileaf_sniff(BTREE, vleaf *leaf)
 {
 	return ((struct ileaf *)leaf)->magic == to_be_u16(0x90de);
-}
-
-void ileaf_destroy(BTREE, struct ileaf *leaf)
-{
-	assert(ileaf_sniff(btree, leaf));
-	free(leaf);
 }
 
 unsigned ileaf_need(BTREE, vleaf *vleaf)
@@ -316,6 +303,19 @@ struct btree_ops itable_ops = {
 
 #ifndef __KERNEL__
 #ifndef main
+struct ileaf *ileaf_create(BTREE)
+{
+	struct ileaf *leaf = malloc(btree->sb->blocksize);
+	ileaf_init(btree, leaf);
+	return leaf;
+}
+
+void ileaf_destroy(BTREE, struct ileaf *leaf)
+{
+	assert(ileaf_sniff(btree, leaf));
+	free(leaf);
+}
+
 void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
 {
 	unsigned size = 0;

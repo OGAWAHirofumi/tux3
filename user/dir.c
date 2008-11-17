@@ -126,29 +126,6 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = EXT2_LNK,
 };
 
-void ext2_dump_entries(struct buffer *buffer)
-{
-	unsigned blocksize = bufsize(buffer);
-	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)buffer->index);
-	ext2_dirent *entry = (ext2_dirent *)buffer->data;
-	ext2_dirent *limit = buffer->data + blocksize;
-	while (entry < limit) {
-		if (!entry->rec_len) {
-			warn("Zero length entry");
-			break;
-		}
-		if (!is_deleted(entry))
-			printf("%.*s (%x:%i) ",
-				entry->name_len,
-				entry->name,
-				entry->inum,
-				entry->type);
-		entry = next_entry(entry);
-	}
-	brelse(buffer);
-	printf("\n");
-}
-
 loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
 {
 	ext2_dirent *entry;
@@ -314,6 +291,29 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *entry)
 	return 0;
 }
 #ifndef __KERNEL__
+void ext2_dump_entries(struct buffer *buffer)
+{
+	unsigned blocksize = bufsize(buffer);
+	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)buffer->index);
+	ext2_dirent *entry = (ext2_dirent *)buffer->data;
+	ext2_dirent *limit = buffer->data + blocksize;
+	while (entry < limit) {
+		if (!entry->rec_len) {
+			warn("Zero length entry");
+			break;
+		}
+		if (!is_deleted(entry))
+			printf("%.*s (%x:%i) ",
+				entry->name_len,
+				entry->name,
+				entry->inum,
+				entry->type);
+		entry = next_entry(entry);
+	}
+	brelse(buffer);
+	printf("\n");
+}
+
 int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned inum, unsigned type)
 {
 	printf("\"%.*s\"\n", namelen, name);

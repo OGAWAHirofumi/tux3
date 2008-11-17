@@ -184,22 +184,9 @@ int dleaf_init(BTREE, vleaf *leaf)
 	return 0;
 }
 
-struct dleaf *leaf_create(BTREE)
-{
-	struct dleaf *leaf = malloc(btree->sb->blocksize);
-	dleaf_init(btree, leaf);
-	return leaf;
-}
-
 int dleaf_sniff(BTREE, vleaf *leaf)
 {
 	return from_be_u16(to_dleaf(leaf)->magic) == 0x1eaf;
-}
-
-void dleaf_destroy(BTREE, struct dleaf *leaf)
-{
-	assert(dleaf_sniff(btree, leaf));
-	free(leaf);
 }
 
 unsigned dleaf_free(BTREE, vleaf *leaf)
@@ -689,6 +676,19 @@ void bfree(SB, block_t block)
 	printf(" free %Lx\n", (L)block);
 }
 
+struct dleaf *dleaf_create(BTREE)
+{
+	struct dleaf *leaf = malloc(btree->sb->blocksize);
+	dleaf_init(btree, leaf);
+	return leaf;
+}
+
+void dleaf_destroy(BTREE, struct dleaf *leaf)
+{
+	assert(dleaf_sniff(btree, leaf));
+	free(leaf);
+}
+
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf_groups(leaf);
@@ -718,7 +718,7 @@ int main(int argc, char *argv[])
 	printf("--- leaf test ---\n");
 	SB = &(struct sb){ .blocksize = 1 << 10 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
-	struct dleaf *leaf = leaf_create(btree);
+	struct dleaf *leaf = dleaf_create(btree);
 	dleaf_chop(btree, 0x14014LL, leaf);
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi/*, next = 0*/;
@@ -769,7 +769,7 @@ exit(0); // valgrind happiness
 			printf("0x%x not found\n", key);
 	}
 
-	struct dleaf *dest = leaf_create(btree);
+	struct dleaf *dest = dleaf_create(btree);
 	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
 	printf("split key 0x%Lx\n", (L)key);
 	dleaf_dump(btree, leaf);

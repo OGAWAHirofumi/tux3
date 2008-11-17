@@ -252,7 +252,7 @@ dleaf_dump(&inode->btree, leaf);
 nospace:
 	err = -ENOSPC;
 eek:
-	warn("could not add extent to tree: %s", strerror(-err));
+	warn("could not add extent to tree: %d", err);
 	free_path(path);
 	// free blocks and try to clean up ???
 	return -EIO;
