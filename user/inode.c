@@ -277,7 +277,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
 {
-	iattr->ctime = tuxtime();
+	iattr->ctime = gettime();
 
 	struct buffer *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);

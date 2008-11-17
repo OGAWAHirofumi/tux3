@@ -450,7 +450,8 @@ int main(int argc, char *argv[])
 		.map = map, .i_mode = S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
-		.i_ctime = 0xdec0debeadULL, .i_mtime = 0xbadfaced00dULL };
+		.i_ctime = spectime(0xdec0debeadULL),
+		.i_mtime = spectime(0xbadfaced00dULL) };
 	map->inode = inode;
 	sb->atable = inode;
 

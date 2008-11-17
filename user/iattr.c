@@ -72,10 +72,10 @@ void dump_attrs(struct inode *inode)
 			printf("root %Lx:%u ", (L)inode->btree.root.block, inode->btree.root.depth);
 			break;
 		case CTIME_SIZE_ATTR:
-			printf("ctime %Lx size %Lx ", (L)inode->i_ctime, (L)inode->i_size);
+			printf("ctime %Lx size %Lx ", (L)tuxtime(inode->i_ctime), (L)inode->i_size);
 			break;
 		case MTIME_ATTR:
-			printf("mtime %Lx ", (L)inode->i_mtime);
+			printf("mtime %Lx ", (L)tuxtime(inode->i_mtime));
 			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", inode->i_links);
@@ -108,11 +108,11 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = encode32(attrs, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = encode48(attrs, inode->i_ctime >> TIME_ATTR_SHIFT);
+			attrs = encode48(attrs, tuxtime(inode->i_ctime) >> TIME_ATTR_SHIFT);
 			attrs = encode64(attrs, inode->i_size);
 			break;
 		case MTIME_ATTR:
-			attrs = encode48(attrs, inode->i_mtime >> TIME_ATTR_SHIFT);
+			attrs = encode48(attrs, tuxtime(inode->i_mtime) >> TIME_ATTR_SHIFT);
 			break;
 		case DATA_BTREE_ATTR:;
 			struct root *root = &inode->btree.root;
@@ -149,11 +149,11 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case CTIME_SIZE_ATTR:
 			attrs = decode48(attrs, &v64);
 			attrs = decode64(attrs, &inode->i_size);
-			inode->i_ctime = v64 << TIME_ATTR_SHIFT;
+			inode->i_ctime = spectime(v64 << TIME_ATTR_SHIFT);
 			break;
 		case MTIME_ATTR:
 			attrs = decode48(attrs, &v64);
-			inode->i_mtime = v64 << TIME_ATTR_SHIFT;
+			inode->i_mtime = spectime(v64 << TIME_ATTR_SHIFT);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
@@ -197,7 +197,9 @@ int main(int argc, char *argv[])
 	struct inode *inode = &(struct inode){ .i_sb = sb,
 		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
-		.i_size = 0x123456789ULL, .i_ctime = 0xdec0debeadULL, .i_mtime = 0xbadfaced00dULL };
+		.i_size = 0x123456789ULL,
+		.i_ctime = spectime(0xdec0debeadULL),
+		.i_mtime = spectime(0xbadfaced00dULL) };
 
 	char attrs[1000] = { };
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);

@@ -232,7 +232,8 @@ struct inode {
 	struct btree btree;
 	inum_t inum;
 	unsigned i_version, present;
-	u64 i_size, i_mtime, i_ctime, i_atime;
+	u64 i_size;
+	struct timespec i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_links;
 	struct xcache *xcache;
 };
@@ -279,21 +280,9 @@ struct btree_ops {
  */
 #define TIME_ATTR_SHIFT 16
 
-static inline fixed32 tuxtimeval(unsigned sec, unsigned nsec)
+static inline u32 high32(fixed32 val)
 {
-	return ((u64)sec << 32) + ((u64)nsec << 32) / 1000000000ULL;
-}
-
-static inline fixed32 tuxtime(void)
-{
-#ifdef __KERNEL__
-	struct timespec now = current_kernel_time();
-	return tuxtimeval(now.tv_sec, now.tv_nsec);
-#else
-	struct timeval now;
-	gettimeofday(&now, NULL);
-	return tuxtimeval(now.tv_sec, now.tv_usec * 1000);
-#endif
+	return val >> 32;
 }
 
 static inline unsigned billionths(fixed32 val)
@@ -301,13 +290,30 @@ static inline unsigned billionths(fixed32 val)
 	return (((val & 0xffffffff) * 1000000000ULL) + 0x80000000) >> 32;
 }
 
-static inline u32 high32(fixed32 val)
+static inline struct timespec spectime(fixed32 time)
 {
-	return val >> 32;
+	return (struct timespec){ .tv_sec = high32(time), .tv_nsec = billionths(time) };
+}
+
+static inline fixed32 tuxtime(struct timespec time)
+{
+	return ((u64)time.tv_sec << 32) + ((u64)time.tv_nsec << 32) / 1000000000ULL;
+}
+
+static inline struct timespec gettime(void)
+{
+#ifdef __KERNEL__
+	return current_kernel_time();
+#else
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
+#endif
 }
 
 struct tux_iattr {
-	u64 isize, mtime, ctime, atime;
+	u64 isize;
+	struct timespec mtime, ctime, atime;
 	unsigned mode, uid, gid, links;
 };
 

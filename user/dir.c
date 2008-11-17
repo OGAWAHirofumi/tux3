@@ -189,7 +189,7 @@ create:
 	memcpy(entry->name, name, len);
 	entry->inum = to_be_u32(inum);
 	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
-	dir->i_mtime = dir->i_ctime = tuxtime();
+	dir->i_mtime = dir->i_ctime = gettime();
 	mark_inode_dirty(dir);
 	offset = (void *)entry - buffer->data;
 	brelse_dirty(buffer);
@@ -337,7 +337,7 @@ int main(int argc, char *argv[])
 
 	if (!ext2_delete_entry(buffer, entry)) {
 		show_buffers(map);
-		map->inode->i_ctime = map->inode->i_mtime = tuxtime();
+		map->inode->i_ctime = map->inode->i_mtime = gettime();
 		mark_inode_dirty(map->inode);
 	}
 
