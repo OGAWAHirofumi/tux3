@@ -8,6 +8,7 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef __KERNEL__
 #ifndef main
 #ifndef trace
 #define trace trace_on
@@ -21,6 +22,9 @@
 #include "dir.c"
 #undef main
 #endif
+#endif /* !__KERNEL */
+
+#include "tux3.h"
 
 /* Xattr Atoms */
 

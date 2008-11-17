@@ -8,12 +8,14 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef __KERNEL__
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include "hexdump.c"
 #include "trace.h"
+#endif
 #include "tux3.h"
 
 #ifndef trace
@@ -675,6 +677,7 @@ struct btree_ops dtree_ops = {
 	.bfree = bfree,
 };
 
+#ifndef __KERNEL__
 #ifndef main
 block_t balloc(SB)
 {
@@ -780,3 +783,4 @@ exit(0); // valgrind happiness
 	return 0;
 }
 #endif
+#endif /* !__KERNEL__ */

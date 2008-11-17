@@ -9,10 +9,12 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef __KERNEL__
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
 #include "hexdump.c"
+#endif
 #include "tux3.h"
 
 /*
@@ -189,6 +191,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	return attrs;
 }
 
+#ifndef __KERNEL__
 #ifndef iattr_included_from_ileaf
 int main(int argc, char *argv[])
 {
@@ -209,4 +212,5 @@ int main(int argc, char *argv[])
 	dump_attrs(inode);
 	return 0;
 }
+#endif
 #endif

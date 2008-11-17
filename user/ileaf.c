@@ -8,15 +8,18 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef __KERNEL__
 #include <stdio.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <string.h>
 #include <stdlib.h>
 #include "hexdump.c"
-#include "tux3.h"
 #define iattr_included_from_ileaf
 #include "iattr.c"
+#endif
+
+#include "tux3.h"
 
 struct ileaf { be_u16 magic, count; u32 pad; be_u64 ibase; char table[]; };
 
@@ -311,6 +314,7 @@ struct btree_ops itable_ops = {
 	.balloc = balloc,
 };
 
+#ifndef __KERNEL__
 #ifndef main
 void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
 {
@@ -374,3 +378,4 @@ hexdump(leaf, 16);
 	return 0;
 }
 #endif
+#endif /* !__KERNEL__ */

@@ -38,6 +38,7 @@
  * and moved here. AV
  */
 
+#ifndef __KERNEL__
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
@@ -47,13 +48,16 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
 #include "hexdump.c"
-#include "tux3.h"
 
 #define mark_inode_dirty(x)
-
 typedef u16 le16;
+
+enum {DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
+typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
+#endif
+
+#include "tux3.h"
 
 #define EXT2_DIR_PAD 3
 #define EXT2_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
@@ -223,8 +227,6 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 	return NULL;
 }
 
-enum {DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
-
 static unsigned char filetype[EXT2_TYPES] = {
 	[EXT2_UNKNOWN] = DT_UNKNOWN,
 	[EXT2_REG] = DT_REG,
@@ -235,8 +237,6 @@ static unsigned char filetype[EXT2_TYPES] = {
 	[EXT2_SOCK] = DT_SOCK,
 	[EXT2_LNK] = DT_LNK,
 };
-
-typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
 
 static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 {
@@ -313,7 +313,7 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *entry)
 	brelse(buffer);
 	return 0;
 }
-
+#ifndef __KERNEL__
 int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned inum, unsigned type)
 {
 	printf("\"%.*s\"\n", namelen, name);
@@ -354,3 +354,4 @@ int main(int argc, char *argv[])
 	show_buffers(map);
 	return 0;
 }
+#endif /* !__KERNEL__ */

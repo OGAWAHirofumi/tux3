@@ -9,6 +9,7 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef __KERNEL__
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
@@ -18,8 +19,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
 #include "hexdump.c"
+#endif
+
 #include "tux3.h"
 
 #ifndef trace
@@ -293,6 +295,7 @@ void bfree(SB, block_t block)
 	bfree_extent(sb, block, 1);
 }
 
+#ifndef __KERNEL__
 #ifndef main
 int main(int argc, char *argv[])
 {
@@ -368,3 +371,4 @@ int main(int argc, char *argv[])
 	return 0;
 }
 #endif
+#endif /* !__KERNEL__ */

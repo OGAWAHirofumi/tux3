@@ -9,6 +9,7 @@
  * the right to distribute those changes under any license.
  */
 
+#ifndef __KERNEL__
 #include <stdlib.h>
 #include <stddef.h>
 #include <time.h>
@@ -17,6 +18,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include "diskio.h"
+#endif
 #include "tux3.h"
 
 #ifndef trace
@@ -531,6 +533,7 @@ void free_btree(struct btree *btree)
 	// write me
 }
 
+#ifndef __KERNEL__
 #ifndef main
 struct uleaf { u32 magic, count; struct entry { u32 key, val; } entries[]; };
 
@@ -682,3 +685,4 @@ int main(int argc, char *argv[])
 	return 0;
 }
 #endif
+#endif /* !__KERNEL */

@@ -3,6 +3,7 @@
 
 #ifdef __KERNEL__
 #include <linux/kernel.h>
+#include <linux/time.h>
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
 

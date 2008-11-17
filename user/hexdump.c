@@ -2,7 +2,8 @@
 
 #ifndef HEXDUMP
 #define HEXDUMP
-#include <stdio.h>
+
+#include "tux3.h"
 
 void hexdump(void *data, unsigned size)
 {
@@ -23,6 +24,7 @@ void hexdump(void *data, unsigned size)
 	}
 }
 
+#ifndef __KERNEL__
 #include <execinfo.h>
 
 void stacktrace(void)
@@ -32,5 +34,5 @@ void stacktrace(void)
 	printf("_______stack ______\n");
 	backtrace_symbols_fd(array, size, 2);
 }
-
+#endif
 #endif

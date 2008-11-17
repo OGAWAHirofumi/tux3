@@ -1,3 +1,4 @@
+#ifndef __KERNEL__
 #ifndef trace
 #define trace trace_off
 #endif
@@ -26,6 +27,9 @@
 #define main notmain4
 #include "btree.c"
 #undef main
+#endif /* !__KERNEL */
+
+#include "tux3.h"
 
 #undef trace
 #define trace trace_on
@@ -254,6 +258,7 @@ eek:
 	return -EIO;
 }
 
+#ifndef __KERNEL__
 int filemap_block_read(struct buffer *buffer)
 {
 	return filemap_extent_io(buffer, 0);
@@ -350,3 +355,4 @@ int main(int argc, char *argv[])
 	return 0;
 }
 #endif
+#endif /* !__KERNEL */
