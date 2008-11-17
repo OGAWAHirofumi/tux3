@@ -233,6 +233,11 @@ static inline struct tux_inode *tux_inode(struct inode *inode)
 {
 	return container_of(inode, struct tux_inode, vfs_inode);
 }
+
+static inline struct sb *tux_sb(struct super_block *sb)
+{
+	return sb->s_fs_info;
+}
 #else
 struct inode {
 	struct sb *i_sb;
