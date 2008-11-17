@@ -76,12 +76,12 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = tux_sb(inode->i_sb);
-	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)bufindex(buffer));
+	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)tux_inode(inode)->inum, (L)bufindex(buffer));
 	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	int levels = inode->btree.root.depth, try = 0, i, err;
+	int levels = tux_inode(inode)->btree.root.depth, try = 0, i, err;
 	if (!levels) {
 		if (!write) {
 			trace("unmapped block %Lx", (L)bufindex(buffer));
@@ -104,7 +104,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	if (!path)
 		return -ENOMEM;
 
-	if ((err = probe(&inode->btree, start, path))) {
+	if ((err = probe(&tux_inode(inode)->btree, start, path))) {
 		free_path(path);
 		return err;
 	}
@@ -116,7 +116,7 @@ retry:
 	unsigned segs = 0;
 	struct dleaf *leaf = bufdata(path[levels].buffer);
 	struct dwalk *walk = &(struct dwalk){ };
-dleaf_dump(&inode->btree, leaf);
+dleaf_dump(&tux_inode(inode)->btree, leaf);
 	/* Probe below io start to include overlapping extents */
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
@@ -196,11 +196,11 @@ dleaf_dump(&inode->btree, leaf);
 		for (i = 0, index = start - offset; i < segs; i++, index += extent_count(seg[i]))
 			dwalk_mock(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 		trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
-		trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&inode->btree, leaf));
-		if (dleaf_free(&inode->btree, leaf) <= walk->mock.free - walk->mock.used) {
+		trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&tux_inode(inode)->btree, leaf));
+		if (dleaf_free(&tux_inode(inode)->btree, leaf) <= walk->mock.free - walk->mock.used) {
 			trace_on("--------- split leaf ---------");
 			assert(!try);
-			if ((err = btree_leaf_split(&inode->btree, path, 0)))
+			if ((err = btree_leaf_split(&tux_inode(inode)->btree, path, 0)))
 				goto eek;
 			try = 1;
 			goto retry;
@@ -214,9 +214,9 @@ dleaf_dump(&inode->btree, leaf);
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		set_buffer_dirty(path[inode->btree.root.depth].buffer);
+		set_buffer_dirty(path[tux_inode(inode)->btree.root.depth].buffer);
 
-		//dleaf_dump(&inode->btree, leaf);
+		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */
 		/* assert(??? == ???); */
 		/* check leaf */

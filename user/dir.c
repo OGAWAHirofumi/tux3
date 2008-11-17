@@ -189,7 +189,7 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length entry at <%Lx:%x>", (L)dir->inum, block);
+				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return NULL;
 			}
 			if (ext2_match(entry, name, len)) {
@@ -247,7 +247,7 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 		for (ext2_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length entry at <%Lx:%x>", (L)dir->inum, block);
+				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return -EIO;
 			}
 			if (!is_deleted(entry)) {

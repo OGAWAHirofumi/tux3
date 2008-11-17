@@ -215,7 +215,25 @@ struct sb
 	unsigned freeatom, atomgen;
 };
 
-#ifndef __KERNEL__
+#ifdef __KERNEL__
+struct tux_inode {
+	struct sb *sb;
+	struct map *map;
+	struct btree btree;
+	inum_t inum;
+	unsigned i_version, present;
+	u64 i_size, i_mtime, i_ctime, i_atime;
+	unsigned i_mode, i_uid, i_gid, i_links;
+	struct xcache *xcache;
+
+	struct inode vfs_inode;
+};
+
+static inline struct tux_inode *tux_inode(struct inode *inode)
+{
+	return container_of(inode, struct tux_inode, vfs_inode);
+}
+#else
 struct inode {
 	struct sb *i_sb;
 	map_t *map;
@@ -243,7 +261,12 @@ static inline struct sb *tux_sb(struct sb *sb)
 {
 	return sb;
 }
-#endif
+
+static inline struct inode *tux_inode(struct inode *inode)
+{
+	return inode;
+}
+#endif /* !__KERNEL__ */
 
 typedef void vleaf;
 
