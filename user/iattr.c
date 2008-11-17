@@ -80,7 +80,7 @@ void dump_attrs(struct inode *inode)
 			printf("mtime %Lx ", (L)tuxtime(inode->i_mtime));
 			break;
 		case LINK_COUNT_ATTR:
-			printf("links %u ", inode->i_links);
+			printf("links %u ", inode->i_nlink);
 			break;
 		case XATTR_ATTR:
 			printf("xattr(s) ");
@@ -121,7 +121,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = encode64(attrs, ((u64)root->depth << 48) | root->block);
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = encode32(attrs, inode->i_links);
+			attrs = encode32(attrs, inode->i_nlink);
 			break;
 		}
 	}
@@ -166,7 +166,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 				.root = { .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 } };
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = decode32(attrs, &inode->i_links);
+			attrs = decode32(attrs, &inode->i_nlink);
 			break;
 		case XATTR_ATTR:;
 			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]

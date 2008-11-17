@@ -113,7 +113,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	inode->i_uid = iattr->uid;
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
-	inode->i_links = 1;
+	inode->i_nlink = 1;
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
 	if ((err = store_attrs(sb, path, inode)))

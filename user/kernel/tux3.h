@@ -224,7 +224,7 @@ struct inode {
 	unsigned i_version, present;
 	u64 i_size;
 	struct timespec i_mtime, i_ctime, i_atime;
-	unsigned i_mode, i_uid, i_gid, i_links;
+	unsigned i_mode, i_uid, i_gid, i_nlink;
 	struct xcache *xcache;
 };
 
