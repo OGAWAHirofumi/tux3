@@ -13,20 +13,6 @@ typedef loff_t block_t;
 #include "trace.h"
 #endif
 
-#ifdef __CHECKER__
-#define __force		__attribute__((force))
-#define __bitwise__	__attribute__((bitwise))
-#else
-#define __force
-#define __bitwise__
-#endif
-
-#ifdef __CHECK_ENDIAN__
-#define __bitwise __bitwise__
-#else
-#define __bitwise
-#endif
-
 typedef long long L; // widen for printf on 64 bit systems
 
 #define PACKED __attribute__ ((packed))
@@ -65,17 +51,17 @@ static inline u64 from_be_u64(be_u64 val)
 
 static inline be_u16 to_be_u16(u16 val)
 {
-	return __cpu_to_le16(val);
+	return __cpu_to_be16(val);
 }
 
 static inline be_u32 to_be_u32(u32 val)
 {
-	return __cpu_to_le32(val);
+	return __cpu_to_be32(val);
 }
 
 static inline be_u64 to_be_u64(u64 val)
 {
-	return __cpu_to_le64(val);
+	return __cpu_to_be64(val);
 }
 #else
 static inline u16 from_be_u16(be_u16 val)
