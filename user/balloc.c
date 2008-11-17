@@ -91,8 +91,8 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 		ones[i] = bytebits(i);
 
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->sb->blockbits;
-	unsigned mapshift = inode->sb->blockbits + 3;
+	unsigned blocksize = 1 << inode->i_sb->blockbits;
+	unsigned mapshift = inode->i_sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -119,8 +119,8 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->sb->blockbits;
-	unsigned mapshift = inode->sb->blockbits + 3;
+	unsigned blocksize = 1 << inode->i_sb->blockbits;
+	unsigned mapshift = inode->i_sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift, active = 0;
 	unsigned offset = (start & mapmask) >> 3;
@@ -179,8 +179,8 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 {
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->sb->blockbits;
-	unsigned mapshift = inode->sb->blockbits + 3;
+	unsigned blocksize = 1 << inode->i_sb->blockbits;
+	unsigned mapshift = inode->i_sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -217,8 +217,8 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 				set_bits(buffer->data, found & mapmask, run);
 				set_buffer_dirty(buffer);
 				brelse(buffer);
-				inode->sb->nextalloc = found + run;
-				inode->sb->freeblocks -= run;
+				inode->i_sb->nextalloc = found + run;
+				inode->i_sb->freeblocks -= run;
 				//set_sb_dirty(sb);
 				return found;
 			}
@@ -328,7 +328,7 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	map_t *map = new_map(dev, NULL);
 	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
-	struct inode *bitmap = &(struct inode){ .sb = sb, .map = map };
+	struct inode *bitmap = &(struct inode){ .i_sb = sb, .map = map };
 	sb->freeblocks = from_be_u64(sb->super.volblocks);
 	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero
 	sb->bitmap = bitmap;

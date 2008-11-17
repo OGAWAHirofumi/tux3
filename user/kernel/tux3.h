@@ -227,7 +227,7 @@ struct sb
 
 #ifndef __KERNEL__
 struct inode {
-	struct sb *sb;
+	struct sb *i_sb;
 	map_t *map;
 	struct btree btree;
 	inum_t inum;

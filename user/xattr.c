@@ -55,14 +55,14 @@ static inline atom_t entry_atom(ext2_dirent *entry)
 
 struct buffer *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
 {
-	unsigned shift = atable->sb->blockbits - 3;
+	unsigned shift = atable->i_sb->blockbits - 3;
 	*offset = atom & ~(-1 << shift);
-	return blockread(mapping(atable), atable->sb->unatom_base + (atom >> shift));
+	return blockread(mapping(atable), atable->i_sb->unatom_base + (atom >> shift));
 }
 
 void dump_atoms(struct inode *atable)
 {
-	SB = atable->sb;
+	SB = atable->i_sb;
 	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
@@ -126,7 +126,7 @@ eek:
 
 atom_t get_freeatom(struct inode *atable)
 {
-	SB = atable->sb;
+	SB = atable->i_sb;
 	atom_t atom = sb->freeatom;
 	if (!atom)
 		return sb->atomgen++;
@@ -147,7 +147,7 @@ eek:
 
 int use_atom(struct inode *atable, atom_t atom, int use)
 {
-	SB = atable->sb;
+	SB = atable->i_sb;
 	unsigned shift = sb->blockbits - 1;
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
@@ -232,7 +232,7 @@ int xcache_dump(struct inode *inode)
 	while (xattr < limit) {
 		if (!xattr->size)
 			goto zero;
-		if (xattr->size > inode->sb->blocksize)
+		if (xattr->size > inode->i_sb->blocksize)
 			goto barf;
 		printf("atom %.3x => ", xattr->atom);
 		hexdump(xattr->body, xattr->size);
@@ -337,14 +337,14 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 		use++;
 	}
 	if (use)
-		use_atom(inode->sb->atable, atom, use);
+		use_atom(inode->i_sb->atable, atom, use);
 	return 0;
 }
 
 struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
 {
 	int err = 0;
-	atom_t atom = find_atom(inode->sb->atable, name, len);
+	atom_t atom = find_atom(inode->i_sb->atable, name, len);
 	if (atom == -1)
 		return NULL;
 	return xcache_lookup(inode, atom, &err); // and what about the err???
@@ -352,7 +352,7 @@ struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
 
 int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
 {
-	atom_t atom = make_atom(inode->sb->atable, name, len);
+	atom_t atom = make_atom(inode->i_sb->atable, name, len);
 	if (atom == -1)
 		return -ENOENT;
 	return xcache_update(inode, atom, data, size);
@@ -378,7 +378,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		//immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
 		//printf("xattr %x/%x ", xattr->atom, xattr->size);
-		attrs = encode_kind(attrs, XATTR_ATTR, inode->sb->version);
+		attrs = encode_kind(attrs, XATTR_ATTR, inode->i_sb->version);
 		attrs = encode16(attrs, xattr->size + 2);
 		attrs = encode16(attrs, xattr->atom);
 		memcpy(attrs, xattr->body, xattr->size);
@@ -390,7 +390,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 {
-	SB = inode->sb;
+	SB = inode->i_sb;
 	unsigned total = 0, bytes;
 	void *limit = attrs + size;
 	while (attrs < limit - 1) {
@@ -446,7 +446,7 @@ int main(int argc, char *argv[])
 		.unatom_base = 1 << 11,
 		.atomgen = 1,
 	};
-	struct inode *inode = &(struct inode){ .sb = sb,
+	struct inode *inode = &(struct inode){ .i_sb = sb,
 		.map = map, .i_mode = S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
@@ -455,7 +455,7 @@ int main(int argc, char *argv[])
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {
-		struct buffer *buffer = blockget(mapping(inode), inode->sb->atomref_base + i);
+		struct buffer *buffer = blockget(mapping(inode), inode->i_sb->atomref_base + i);
 		memset(buffer->data, 0, sb->blocksize);
 		brelse_dirty(buffer);
 	}

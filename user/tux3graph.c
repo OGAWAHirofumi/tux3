@@ -365,9 +365,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 			continue;
 
 		void *attrs = ileaf->table + atdict(dict, at);
-		struct inode inode = {
-			.sb = btree->sb,
-		};
+		struct inode inode = { .i_sb = btree->sb };
 		decode_attrs(&inode, attrs, size);
 
 		fprintf(gi->f,
@@ -417,9 +415,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
 			continue;
 
 		void *attrs = ileaf->table + atdict(dict, at);
-		struct inode inode = {
-			.sb = btree->sb,
-		};
+		struct inode inode = { .i_sb = btree->sb };
 		decode_attrs(&inode, attrs, size);
 
 		char name[64];

@@ -53,7 +53,7 @@ void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int wri
 			if (!nextbuf) {
 				if (write)
 					break;
-				if (next > inode->i_size >> inode->sb->blockbits)
+				if (next > inode->i_size >> inode->i_sb->blockbits)
 					break;
 			} else {
 				unsigned stop = write ? !buffer_dirty(nextbuf) : buffer_empty(nextbuf);
@@ -71,7 +71,7 @@ void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int wri
 int filemap_extent_io(struct buffer *buffer, int write)
 {
 	struct inode *inode = buffer->map->inode;
-	struct sb *sb = inode->sb;
+	struct sb *sb = inode->i_sb;
 	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
@@ -290,10 +290,10 @@ int main(int argc, char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
-	sb->bitmap = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) },
+	sb->bitmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) },
 	sb->bitmap->map->inode = sb->bitmap;
 	init_buffers(dev, 1 << 20);
-	struct inode *inode = &(struct inode){ .sb = sb, .map = new_map(dev, &filemap_ops) };
+	struct inode *inode = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) };
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->map->inode = inode;
 	inode = inode;

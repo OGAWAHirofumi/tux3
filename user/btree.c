@@ -652,7 +652,7 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	map_t *map = new_map(dev, NULL);
 	SB = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
-	map->inode = &(struct inode){ .sb = sb, .map = map };
+	map->inode = &(struct inode){ .i_sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);

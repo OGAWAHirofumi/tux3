@@ -25,7 +25,7 @@ struct inode *new_inode(SB, inum_t inum)
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto eek;
-	*inode = (struct inode){ .sb = sb, .map = map, .inum = inum };
+	*inode = (struct inode){ .i_sb = sb, .map = map, .inum = inum };
 	return inode->map->inode = inode;
 eek:
 	if (map)
@@ -79,7 +79,7 @@ int store_attrs(SB, struct path *path, struct inode *inode)
 
 int make_inode(struct inode *inode, struct tux_iattr *iattr)
 {
-	SB = inode->sb;
+	SB = inode->i_sb;
 	int err = -ENOENT, levels = sb->itable.root.depth;
 	struct path *path = alloc_path(levels + 1);
 	if (!path)
@@ -131,7 +131,7 @@ errout:
 
 int open_inode(struct inode *inode)
 {
-	SB = inode->sb;
+	SB = inode->i_sb;
 	int err, levels = sb->itable.root.depth;
 	struct path *path = alloc_path(levels + 1);
 	if (!path)
@@ -168,7 +168,7 @@ eek:
 int save_inode(struct inode *inode)
 {
 	trace("save inode 0x%Lx", (L)inode->inum);
-	SB = inode->sb;
+	SB = inode->i_sb;
 	int err, levels = sb->itable.root.depth;
 	struct path *path = alloc_path(levels + 1);
 	if (!path)
@@ -200,9 +200,9 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			return 0;
 		len = inode->i_size - pos;
 	}
-	unsigned bbits = inode->sb->blockbits;
-	unsigned bsize = inode->sb->blocksize;
-	unsigned bmask = inode->sb->blockmask;
+	unsigned bbits = inode->i_sb->blockbits;
+	unsigned bsize = inode->i_sb->blocksize;
+	unsigned bmask = inode->i_sb->blockmask;
 	loff_t tail = len;
 	while (tail) {
 		unsigned from = pos & bmask;
@@ -271,7 +271,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 		return NULL;
 	inum_t inum = from_be_u32(entry->inum);
 	brelse(buffer);
-	struct inode *inode = new_inode(dir->sb, inum);
+	struct inode *inode = new_inode(dir->i_sb, inum);
 	return open_inode(inode) ? NULL : inode;
 }
 
@@ -292,7 +292,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	 * file data belonging to those inodes provided somebody sets the block
 	 * allocation goal based on the directory the file will be in.
 	 */
-	struct inode *inode = new_inode(dir->sb, dir->sb->nextalloc);
+	struct inode *inode = new_inode(dir->i_sb, dir->i_sb->nextalloc);
 	if (!inode)
 		return NULL; // err ???
 	int err = make_inode(inode, iattr);
@@ -300,7 +300,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 		return NULL; // err ???
 	if (ext2_create_entry(dir, name, len, inode->inum, iattr->mode) >= 0)
 		return inode;
-	purge_inum(&dir->sb->itable, inode->inum); // test me!!!
+	purge_inum(&dir->i_sb->itable, inode->inum); // test me!!!
 	free_inode(inode);
 	inode = NULL;
 	return NULL; // err ???

@@ -100,7 +100,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			continue;
 		if (attrs >= limit)
 			break;
-		attrs = encode_kind(attrs, kind, inode->sb->version);
+		attrs = encode_kind(attrs, kind, inode->i_sb->version);
 		switch (kind) {
 		case MODE_OWNER_ATTR:
 			attrs = encode32(attrs, inode->i_mode);
@@ -136,7 +136,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		unsigned head;
 		attrs = decode16(attrs, &head);
 		unsigned version = head & 0xfff, kind = head >> 12;
-		if (version != inode->sb->version) {
+		if (version != inode->i_sb->version) {
 			attrs += atsize[kind];
 			continue;
 		}
@@ -157,7 +157,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->btree = (struct btree){ .sb = inode->sb, .entries_per_leaf = 64, // !!! should depend on blocksize
+			inode->btree = (struct btree){ .sb = inode->i_sb, .entries_per_leaf = 64, // !!! should depend on blocksize
 #ifdef iattr_notmain_from_inode
 				.ops = &dtree_ops,
 #endif
@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
-	struct inode *inode = &(struct inode){ .sb = sb,
+	struct inode *inode = &(struct inode){ .i_sb = sb,
 		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
 		.i_size = 0x123456789ULL, .i_ctime = 0xdec0debeadULL, .i_mtime = 0xbadfaced00dULL };

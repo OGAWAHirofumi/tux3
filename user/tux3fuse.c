@@ -394,7 +394,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		goto noent;
 	inum_t inum = from_be_u32(entry->inum);
 	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
-	struct inode inode = { .sb = sb, .inum = inum };
+	struct inode inode = { .i_sb = sb, .inum = inum };
 
 	if ((errno = -open_inode(&inode)))
 		goto eek;
