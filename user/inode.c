@@ -79,7 +79,7 @@ int store_attrs(SB, struct path *path, struct inode *inode)
 
 int make_inode(struct inode *inode, struct tux_iattr *iattr)
 {
-	SB = inode->i_sb;
+	SB = tux_sb(inode->i_sb);
 	int err = -ENOENT, levels = sb->itable.root.depth;
 	struct path *path = alloc_path(levels + 1);
 	if (!path)
@@ -131,7 +131,7 @@ errout:
 
 int open_inode(struct inode *inode)
 {
-	SB = inode->i_sb;
+	SB = tux_sb(inode->i_sb);
 	int err, levels = sb->itable.root.depth;
 	struct path *path = alloc_path(levels + 1);
 	if (!path)
@@ -168,7 +168,7 @@ eek:
 int save_inode(struct inode *inode)
 {
 	trace("save inode 0x%Lx", (L)inode->inum);
-	SB = inode->i_sb;
+	SB = tux_sb(inode->i_sb);
 	int err, levels = sb->itable.root.depth;
 	struct path *path = alloc_path(levels + 1);
 	if (!path)
@@ -200,9 +200,9 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			return 0;
 		len = inode->i_size - pos;
 	}
-	unsigned bbits = inode->i_sb->blockbits;
-	unsigned bsize = inode->i_sb->blocksize;
-	unsigned bmask = inode->i_sb->blockmask;
+	unsigned bbits = tux_sb(inode->i_sb)->blockbits;
+	unsigned bsize = tux_sb(inode->i_sb)->blocksize;
+	unsigned bmask = tux_sb(inode->i_sb)->blockmask;
 	loff_t tail = len;
 	while (tail) {
 		unsigned from = pos & bmask;

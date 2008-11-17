@@ -100,7 +100,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			continue;
 		if (attrs >= limit)
 			break;
-		attrs = encode_kind(attrs, kind, inode->i_sb->version);
+		attrs = encode_kind(attrs, kind, tux_sb(inode->i_sb)->version);
 		switch (kind) {
 		case MODE_OWNER_ATTR:
 			attrs = encode32(attrs, inode->i_mode);
@@ -136,7 +136,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		unsigned head;
 		attrs = decode16(attrs, &head);
 		unsigned version = head & 0xfff, kind = head >> 12;
-		if (version != inode->i_sb->version) {
+		if (version != tux_sb(inode->i_sb)->version) {
 			attrs += atsize[kind];
 			continue;
 		}
@@ -157,7 +157,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->btree = (struct btree){ .sb = inode->i_sb, .entries_per_leaf = 64, // !!! should depend on blocksize
+			inode->btree = (struct btree){ .sb = tux_sb(inode->i_sb), .entries_per_leaf = 64, // !!! should depend on blocksize
 #ifdef iattr_notmain_from_inode
 				.ops = &dtree_ops,
 #endif

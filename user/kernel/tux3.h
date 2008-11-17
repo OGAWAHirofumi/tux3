@@ -248,6 +248,10 @@ static inline map_t *mapping(struct inode *inode)
 	return inode->map;
 }
 
+static inline struct sb *tux_sb(struct sb *sb)
+{
+	return sb;
+}
 #endif
 
 typedef void vleaf;

@@ -124,7 +124,7 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 
 void ext2_dump_entries(struct buffer *buffer)
 {
-	unsigned blocksize = 1 << buffer->map->inode->i_sb->blockbits;
+	unsigned blocksize = bufsize(buffer);
 	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)buffer->index);
 	ext2_dirent *entry = (ext2_dirent *)buffer->data;
 	ext2_dirent *limit = buffer->data + blocksize;

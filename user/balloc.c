@@ -91,8 +91,8 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 		ones[i] = bytebits(i);
 
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->i_sb->blockbits;
-	unsigned mapshift = inode->i_sb->blockbits + 3;
+	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
+	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -119,8 +119,8 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->i_sb->blockbits;
-	unsigned mapshift = inode->i_sb->blockbits + 3;
+	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
+	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift, active = 0;
 	unsigned offset = (start & mapmask) >> 3;
@@ -179,8 +179,8 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 {
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << inode->i_sb->blockbits;
-	unsigned mapshift = inode->i_sb->blockbits + 3;
+	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
+	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -217,8 +217,8 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 				set_bits(buffer->data, found & mapmask, run);
 				set_buffer_dirty(buffer);
 				brelse(buffer);
-				inode->i_sb->nextalloc = found + run;
-				inode->i_sb->freeblocks -= run;
+				tux_sb(inode->i_sb)->nextalloc = found + run;
+				tux_sb(inode->i_sb)->freeblocks -= run;
 				//set_sb_dirty(sb);
 				return found;
 			}

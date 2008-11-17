@@ -232,7 +232,7 @@ int xcache_dump(struct inode *inode)
 	while (xattr < limit) {
 		if (!xattr->size)
 			goto zero;
-		if (xattr->size > inode->i_sb->blocksize)
+		if (xattr->size > tux_sb(inode->i_sb)->blocksize)
 			goto barf;
 		printf("atom %.3x => ", xattr->atom);
 		hexdump(xattr->body, xattr->size);
@@ -337,14 +337,14 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 		use++;
 	}
 	if (use)
-		use_atom(inode->i_sb->atable, atom, use);
+		use_atom(tux_sb(inode->i_sb)->atable, atom, use);
 	return 0;
 }
 
 struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
 {
 	int err = 0;
-	atom_t atom = find_atom(inode->i_sb->atable, name, len);
+	atom_t atom = find_atom(tux_sb(inode->i_sb)->atable, name, len);
 	if (atom == -1)
 		return NULL;
 	return xcache_lookup(inode, atom, &err); // and what about the err???
@@ -352,7 +352,7 @@ struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
 
 int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
 {
-	atom_t atom = make_atom(inode->i_sb->atable, name, len);
+	atom_t atom = make_atom(tux_sb(inode->i_sb)->atable, name, len);
 	if (atom == -1)
 		return -ENOENT;
 	return xcache_update(inode, atom, data, size);
@@ -378,7 +378,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		//immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
 		//printf("xattr %x/%x ", xattr->atom, xattr->size);
-		attrs = encode_kind(attrs, XATTR_ATTR, inode->i_sb->version);
+		attrs = encode_kind(attrs, XATTR_ATTR, tux_sb(inode->i_sb)->version);
 		attrs = encode16(attrs, xattr->size + 2);
 		attrs = encode16(attrs, xattr->atom);
 		memcpy(attrs, xattr->body, xattr->size);
@@ -390,7 +390,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 {
-	SB = inode->i_sb;
+	SB = tux_sb(inode->i_sb);
 	unsigned total = 0, bytes;
 	void *limit = attrs + size;
 	while (attrs < limit - 1) {
@@ -455,7 +455,7 @@ int main(int argc, char *argv[])
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {
-		struct buffer *buffer = blockget(mapping(inode), inode->i_sb->atomref_base + i);
+		struct buffer *buffer = blockget(mapping(inode), tux_sb(inode->i_sb)->atomref_base + i);
 		memset(buffer->data, 0, sb->blocksize);
 		brelse_dirty(buffer);
 	}
