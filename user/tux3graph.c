@@ -507,7 +507,7 @@ int main(int argc, const char *argv[])
 	*sb = (struct sb){
 		.max_inodes_per_block	= 64,
 		.entries_per_node	= 20,
-		.s_bdev			= new_map(dev, NULL),
+		.devmap			= new_map(dev, NULL),
 		.blockbits		= dev->bits,
 		.blocksize		= 1 << dev->bits,
 		.blockmask		= (1 << dev->bits) - 1,
@@ -568,7 +568,7 @@ int main(int argc, const char *argv[])
 	free_inode(sb->bitmap);
 	free_inode(sb->rootdir);
 	free_inode(sb->atable);
-	free_map(sb->s_bdev);
+	free_map(sb->devmap);
 
 out:
 	/* damn, popt doesn't free str returned by poptGetArg() */

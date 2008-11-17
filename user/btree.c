@@ -51,7 +51,7 @@ static struct buffer *new_block(struct btree *btree)
 	block_t block = (btree->ops->balloc)(btree->sb);
 	if (block == -1)
 		return NULL;
-	struct buffer *buffer = blockget(btree->sb->s_bdev, block);
+	struct buffer *buffer = blockget(btree->sb->devmap, block);
 	if (!buffer)
 		return NULL;
 	memset(buffer->data, 0, bufsize(buffer));
@@ -116,7 +116,7 @@ static void free_path(struct path *path)
 static int probe(BTREE, tuxkey_t key, struct path *path)
 {
 	unsigned i, levels = btree->root.depth;
-	struct buffer *buffer = blockread(btree->sb->s_bdev, btree->root.block);
+	struct buffer *buffer = blockread(btree->sb->devmap, btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = buffer->data;
@@ -128,7 +128,7 @@ static int probe(BTREE, tuxkey_t key, struct path *path)
 				break;
 		//printf("probe level %i, %ti of %i\n", i, next - node->entries, bcount(node));
 		path[i] = (struct path){ buffer, next };
-		if (!(buffer = blockread(btree->sb->s_bdev, from_be_u64((next - 1)->block))))
+		if (!(buffer = blockread(btree->sb->devmap, from_be_u64((next - 1)->block))))
 			goto eek;
 		node = (struct bnode *)buffer->data;
 	}
@@ -368,7 +368,7 @@ keep_prev_node:
 
 		/* push back down to leaf level */
 		while (level < levels - 1) {
-			struct buffer *buffer = blockread(sb->s_bdev, from_be_u64(path[level++].next++->block));
+			struct buffer *buffer = blockread(sb->devmap, from_be_u64(path[level++].next++->block));
 			if (!buffer) {
 				brelse(leafprev);
 				release_path(path, level - 1);
@@ -382,7 +382,7 @@ keep_prev_node:
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
-		if (!(leafbuf = blockread(sb->s_bdev, from_be_u64(path[level].next++->block)))) {
+		if (!(leafbuf = blockread(sb->devmap, from_be_u64(path[level].next++->block)))) {
 			release_path(path, level);
 			free_path(path);
 			free_path(prev);
@@ -651,7 +651,7 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	map_t *map = new_map(dev, NULL);
-	SB = &(struct sb){ .s_bdev = map, .blocksize = 1 << dev->bits };
+	SB = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
 	map->inode = &(struct inode){ .sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
@@ -676,7 +676,7 @@ int main(int argc, char *argv[])
 		release_path(path, btree.root.depth + 1);
 	}
 	show_tree_range(&btree, 0, -1);
-	show_buffers(sb->s_bdev);
+	show_buffers(sb->devmap);
 	tree_chop(&btree, &(struct delete_info){ .key = 0x10 }, -1);
 	show_tree_range(&btree, 0, -1);
 	return 0;

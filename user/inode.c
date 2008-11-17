@@ -19,7 +19,7 @@
 
 struct inode *new_inode(SB, inum_t inum)
 {
-	map_t *map = new_map(sb->s_bdev->dev, &filemap_ops);
+	map_t *map = new_map(sb->devmap->dev, &filemap_ops);
 	if (!map)
 		goto eek;
 	struct inode *inode = malloc(sizeof(*inode));
@@ -326,7 +326,7 @@ void tuxclose(struct inode *inode)
 
 int load_sb(SB)
 {
-	int err = diskread(sb->s_bdev->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
+	int err = diskread(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 	if (err)
 		return err;
 	struct disksuper *disk = &sb->super;
@@ -360,7 +360,7 @@ int save_sb(SB)
 	disk->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
 	disk->iroot = to_be_u64((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
 	//hexdump(&sb->super, sizeof(sb->super));
-	return diskwrite(sb->s_bdev->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
+	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
 }
 
 int sync_super(SB)
@@ -376,7 +376,7 @@ int sync_super(SB)
 	if ((err = tuxsync(sb->atable)))
 		return err;
 	printf("sync devmap\n");
-	if ((err = flush_buffers(sb->s_bdev)))
+	if ((err = flush_buffers(sb->devmap)))
 		return err;
 	printf("sync super\n");
 	if ((err = save_sb(sb)))
@@ -429,7 +429,7 @@ int make_tux3(SB, int fd)
 
 	show_buffers(mapping(sb->bitmap));
 	show_buffers(mapping(sb->rootdir));
-	show_buffers(sb->s_bdev);
+	show_buffers(sb->devmap);
 	return 0;
 eek:
 	free_btree(&sb->itable);
@@ -460,7 +460,7 @@ int main(int argc, char *argv[])
 	SB = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.s_bdev = new_map(dev, NULL),
+		.devmap = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
@@ -485,7 +485,7 @@ int main(int argc, char *argv[])
 	err = tuxwrite(file, "world!", 6);
 #if 0
 	tuxflush(sb->bitmap);
-	flush_buffers(sb->s_bdev);
+	flush_buffers(sb->devmap);
 #endif
 #if 1
 	trace(">>> close file <<<");
@@ -509,7 +509,7 @@ int main(int argc, char *argv[])
 	trace(">>> show state");
 	show_buffers(mapping(file->f_inode));
 	show_buffers(mapping(sb->rootdir));
-	show_buffers(sb->s_bdev);
+	show_buffers(sb->devmap);
 	bitmap_dump(sb->bitmap, 0, sb->volblocks);
 	show_tree_range(&sb->itable, 0, -1);
 	return 0;

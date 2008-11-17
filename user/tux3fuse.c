@@ -429,7 +429,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	*sb = (struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.s_bdev = new_map(dev, NULL),
+		.devmap = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
