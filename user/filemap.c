@@ -44,7 +44,7 @@
  */
 void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int write)
 {
-	struct inode *inode = buffer->map->inode;
+	struct inode *inode = buffer_inode(buffer);
 	unsigned ends[2] = { buffer->index, buffer->index };
 	for (int up = !write; up < 2; up++) {
 		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
@@ -70,7 +70,7 @@ void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int wri
 
 int filemap_extent_io(struct buffer *buffer, int write)
 {
-	struct inode *inode = buffer->map->inode;
+	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = tux_sb(inode->i_sb);
 	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)buffer->index);
 	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))

@@ -4,6 +4,7 @@
 #ifdef __KERNEL__
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/buffer_head.h>
 
 #define printf printk
 #define vprintf vprintk
@@ -366,6 +367,20 @@ static inline void *encode_kind(void *attrs, unsigned kind, unsigned version)
 
 #ifdef __KERNEL__
 struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
+
+#define bufmap(map) NULL // just ignore this until we have peekblk
+
+static inline struct inode *buffer_inode(struct buffer_head *buffer)
+{
+	return buffer->b_page->mapping->host;
+}
+
+#else
+
+static struct inode *buffer_inode(struct buffer *buffer)
+{
+	return buffer->map->inode;
+}
 #endif
 
 #endif
