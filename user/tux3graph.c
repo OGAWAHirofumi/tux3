@@ -125,7 +125,7 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 	}
 }
 
-static void draw_path(struct graph_info *gi, BTREE, struct path *path)
+static void draw_path(struct graph_info *gi, BTREE, struct tux_path *path)
 {
 	int level;
 	for (level = 0; level < btree->root.depth; level++)
@@ -133,7 +133,7 @@ static void draw_path(struct graph_info *gi, BTREE, struct path *path)
 }
 
 static int draw_advance(struct graph_info *gi, struct map *map,
-			struct path *path, int levels)
+			struct tux_path *path, int levels)
 {
 	int level = levels;
 	struct buffer *buffer = path[level].buffer;
@@ -147,7 +147,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 	do {
 		if (!(buffer = blockread(map, from_be_u64(path[level].next++->block))))
 			goto eek;
-		path[++level] = (struct path){
+		path[++level] = (struct tux_path){
 			.buffer = buffer,
 			.next = ((struct bnode *)buffer->data)->entries
 		};
@@ -162,7 +162,7 @@ eek:
 
 static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 {
-	struct path path[30]; // check for overflow!!!
+	struct tux_path path[30]; // check for overflow!!!
 	struct buffer *buffer;
 
 	if (probe(btree, 0, path))

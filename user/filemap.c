@@ -100,7 +100,7 @@ int filemap_extent_io(struct buffer *buffer, int write)
 	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	struct extent seg[1000];
-	struct path *path = alloc_path(levels + 1);
+	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
 		return -ENOMEM;
 

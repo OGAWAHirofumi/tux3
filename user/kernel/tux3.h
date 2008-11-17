@@ -198,6 +198,8 @@ static inline map_t *mapping(struct inode *inode)
 }
 #endif
 
+struct tux_path { struct buffer *buffer; struct index_entry *next; };
+
 struct sb
 {
 	struct disksuper super;

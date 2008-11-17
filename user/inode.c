@@ -42,7 +42,7 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
-int store_attrs(SB, struct path *path, struct inode *inode)
+int store_attrs(SB, struct tux_path *path, struct inode *inode)
 {
 	unsigned size = encode_asize(inode->present) + encode_xsize(inode);
 	void *base = tree_expand(&sb->itable, inode->inum, size, path);
@@ -81,7 +81,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 {
 	SB = tux_sb(inode->i_sb);
 	int err = -ENOENT, levels = sb->itable.root.depth;
-	struct path *path = alloc_path(levels + 1);
+	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
 		return -ENOMEM;
 
@@ -133,7 +133,7 @@ int open_inode(struct inode *inode)
 {
 	SB = tux_sb(inode->i_sb);
 	int err, levels = sb->itable.root.depth;
-	struct path *path = alloc_path(levels + 1);
+	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
 		return -ENOMEM;
 
@@ -170,7 +170,7 @@ int save_inode(struct inode *inode)
 	trace("save inode 0x%Lx", (L)inode->inum);
 	SB = tux_sb(inode->i_sb);
 	int err, levels = sb->itable.root.depth;
-	struct path *path = alloc_path(levels + 1);
+	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
 		return -ENOMEM;
 
@@ -250,7 +250,7 @@ void tuxseek(struct file *file, loff_t pos)
 int purge_inum(BTREE, inum_t inum)
 {
 	int err = -ENOENT, levels = btree->sb->itable.root.depth;
-	struct path *path = alloc_path(levels + 1);
+	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
 		return -ENOMEM;
 
