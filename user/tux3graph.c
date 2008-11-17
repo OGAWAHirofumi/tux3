@@ -50,7 +50,7 @@ struct graph_info {
 	const char *lname;	/* leaf name */
 };
 
-typedef void (*draw_leaf_t)(struct graph_info *, BTREE, struct buffer *);
+typedef void (*draw_leaf_t)(struct graph_info *, BTREE, struct buffer_head *);
 
 static void draw_sb(struct graph_info *gi, struct sb *sb)
 {
@@ -85,7 +85,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 }
 
 static void draw_bnode(struct graph_info *gi, int levels, int level,
-		       struct buffer *buffer)
+		       struct buffer_head *buffer)
 {
 	struct bnode *bnode = buffer->data;
 	block_t blocknr = buffer->index;
@@ -136,7 +136,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 			struct tux_path *path, int levels)
 {
 	int level = levels;
-	struct buffer *buffer = path[level].buffer;
+	struct buffer_head *buffer = path[level].buffer;
 	struct bnode *node;
 	do {
 		brelse(buffer);
@@ -163,7 +163,7 @@ eek:
 static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 {
 	struct tux_path path[30]; // check for overflow!!!
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 
 	if (probe(btree, 0, path))
 		error("tell me why!!!");
@@ -232,7 +232,7 @@ static inline struct extent *dleaf_extent(struct extent *extents, int ex)
 	return extents + ex;
 }
 
-static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer *buffer)
+static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 {
 	struct dleaf *leaf = buffer->data;
 	block_t blocknr = buffer->index;
@@ -341,7 +341,7 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 	return size;
 }
 
-static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer *buffer)
+static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 {
 	struct ileaf *ileaf = buffer->data;
 	block_t blocknr = buffer->index;

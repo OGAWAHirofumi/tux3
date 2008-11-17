@@ -198,7 +198,7 @@ static inline map_t *mapping(struct inode *inode)
 }
 #endif
 
-struct tux_path { struct buffer *buffer; struct index_entry *next; };
+struct tux_path { struct buffer_head *buffer; struct index_entry *next; };
 
 struct sb
 {
@@ -206,7 +206,7 @@ struct sb
 	struct btree itable;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
 	map_t *devmap;
-	struct buffer *rootbuf;
+	struct buffer_head *rootbuf;
 	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
@@ -357,6 +357,26 @@ static inline void *encode_kind(void *attrs, unsigned kind, unsigned version)
 #ifdef __KERNEL__
 struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
 
+static inline void *bufdata(struct buffer_head *buffer)
+{
+	return buffer->b_data;
+}
+
+static inline size_t bufsize(struct buffer_head *buffer)
+{
+	return buffer->b_size;
+}
+
+static inline block_t bufindex(struct buffer_head *buffer)
+{
+	return buffer->b_blocknr;
+}
+
+static inline int bufcount(struct buffer_head *buffer)
+{
+	return atomic_read(&buffer->b_count);
+}
+
 #define bufmap(map) NULL // just ignore this until we have peekblk
 
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
@@ -366,7 +386,7 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 
 #else
 
-static inline struct inode *buffer_inode(struct buffer *buffer)
+static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
 	return buffer->map->inode;
 }

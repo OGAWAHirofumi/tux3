@@ -216,7 +216,7 @@ int main(int argc, const char *argv[])
 
 	if (!strcmp(command, "stat")) {
 		printf("---- stat file ----\n");
-		struct buffer *buffer;
+		struct buffer_head *buffer;
 		ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
 		if (!entry) {
 			errno = ENOENT;
@@ -232,7 +232,7 @@ int main(int argc, const char *argv[])
 
 	if (!strcmp(command, "delete")) {
 		printf("---- delete file ----\n");
-		struct buffer *buffer;
+		struct buffer_head *buffer;
 		ext2_dirent *entry = ext2_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
 		if (!entry) {
 			errno = ENOENT;

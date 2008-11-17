@@ -89,7 +89,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 		free_path(path);
 		return err;
 	}
-	struct buffer *leafbuf = path[levels].buffer;
+	struct buffer_head *leafbuf = path[levels].buffer;
 	struct ileaf *leaf = to_ileaf(leafbuf->data);
 
 	trace("create inode 0x%Lx", (L)inode->inum);
@@ -208,7 +208,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 		unsigned from = pos & bmask;
 		unsigned some = from + tail > bsize ? bsize - from : tail;
 		int full = write && some == bsize;
-		struct buffer *buffer = (full ? blockget : blockread)(mapping(inode), pos >> bbits);
+		struct buffer_head *buffer = (full ? blockget : blockread)(mapping(inode), pos >> bbits);
 		if (!buffer) {
 			err = -EIO;
 			break;
@@ -265,7 +265,7 @@ int purge_inum(BTREE, inum_t inum)
 
 struct inode *tuxopen(struct inode *dir, const char *name, int len)
 {
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (!entry)
 		return NULL;
@@ -279,7 +279,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 {
 	iattr->ctime = gettime();
 
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
 	if (entry) {
 		brelse(buffer);

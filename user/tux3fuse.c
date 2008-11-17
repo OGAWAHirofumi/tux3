@@ -343,7 +343,7 @@ static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offs
 static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	fprintf(stderr, "tux3_unlink(%Lx, '%s')\n", (L)parent, name);
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	ext2_dirent *entry = ext2_find_entry(sb->rootdir, name, strlen(name), &buffer);
 	if (!entry)
 		goto noent;

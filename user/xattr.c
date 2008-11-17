@@ -57,7 +57,7 @@ static inline atom_t entry_atom(ext2_dirent *entry)
 	return from_be_u32(entry->inum);
 }
 
-struct buffer *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
+struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
 {
 	unsigned shift = atable->i_sb->blockbits - 3;
 	*offset = atom & ~(-1 << shift);
@@ -70,7 +70,7 @@ void dump_atoms(struct inode *atable)
 	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
-		struct buffer *lobuf, *hibuf;
+		struct buffer_head *lobuf, *hibuf;
 		if (!(lobuf = blockread(mapping(atable), block)))
 			goto eek;
 		if (!(hibuf = blockread(mapping(atable), block)))
@@ -82,15 +82,15 @@ void dump_atoms(struct inode *atable)
 				continue;
 			atom_t atom = i;
 			unsigned offset;
-			struct buffer *buffer = blockread_unatom(atable, atom, &offset);
+			struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
 			if (!buffer)
 				goto eek;
-			u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
+			u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
 			brelse(buffer);
 			buffer = blockread(mapping(atable), where >> sb->blockbits);
 			if (!buffer)
 				goto eek;
-			ext2_dirent *entry = buffer->data + (where & sb->blockmask);
+			ext2_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 			if (entry_atom(entry) != atom) {
 				warn("atom %x reverse entry broken", atom);
 				continue;
@@ -114,10 +114,10 @@ void show_freeatoms(SB)
 	while (atom) {
 		warn("free atom: %Lx", (L)atom);
 		unsigned offset;
-		struct buffer *buffer = blockread_unatom(atable, atom, &offset);
+		struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
 		if (!buffer)
 			goto eek;
-		u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
+		u64 next = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
 		if ((next >> 48) != 0xdead)
 			goto eek;
 		atom = next & ~(-1LL << 48);
@@ -135,10 +135,10 @@ atom_t get_freeatom(struct inode *atable)
 	if (!atom)
 		return sb->atomgen++;
 	unsigned offset;
-	struct buffer *buffer = blockread_unatom(atable, atom, &offset);
+	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
 		goto eek;
-	u64 next = from_be_u64(((be_u64 *)buffer->data)[offset]);
+	u64 next = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
 	brelse(buffer);
 	if ((next >> 48) != 0xdead)
 		goto eek;
@@ -155,19 +155,19 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 	unsigned shift = sb->blockbits - 1;
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	if (!(buffer = blockread(mapping(atable), block)))
 		return -EIO;
-	int low = from_be_u16(((be_u16 *)buffer->data)[offset]) + use;
+	int low = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + use;
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
-	((be_u16 *)buffer->data)[offset] = to_be_u16(low);
+	((be_u16 *)bufdata(buffer))[offset] = to_be_u16(low);
 	if (!low || (low & (-1 << 16))) {
 		brelse_dirty(buffer);
 		if (!(buffer = blockread(mapping(atable), block + 1)))
 			return -EIO;
-		int high = from_be_u16(((be_u16 *)buffer->data)[offset]) + (low >> 16);
+		int high = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + (low >> 16);
 		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
-		((be_u16 *)buffer->data)[offset] = to_be_u16(high);
+		((be_u16 *)bufdata(buffer))[offset] = to_be_u16(high);
 		kill = !(low | high);
 	}
 	brelse_dirty(buffer);
@@ -176,12 +176,12 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 		buffer = blockread_unatom(atable, atom, &offset);
 		if (!buffer)
 			return -1; // better set a flag that unatom broke or something!!!
-		u64 where = from_be_u64(((be_u64 *)buffer->data)[offset]);
+		u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
 		brelse(buffer);
-		((be_u64 *)buffer->data)[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
+		((be_u64 *)bufdata(buffer))[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
 		sb->freeatom = atom;
 		buffer = blockread(mapping(atable), where >> sb->blockbits);
-		ext2_dirent *entry = buffer->data + (where & sb->blockmask);
+		ext2_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 		if (entry_atom(entry) == atom)
 			ext2_delete_entry(buffer, entry);
 		else {
@@ -194,7 +194,7 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 
 atom_t find_atom(struct inode *atable, char *name, unsigned len)
 {
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	ext2_dirent *entry = ext2_find_entry(atable, name, len, &buffer);
 	if (!entry)
 		return -1;
@@ -215,10 +215,10 @@ atom_t make_atom(struct inode *atable, char *name, unsigned len)
 
 	/* Enter into reverse map - maybe verify zero refs? */
 	unsigned offset;
-	struct buffer *buffer = blockread_unatom(atable, atom, &offset);
+	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
 		return -1; // better set a flag that unatom broke or something!!!
-	((be_u64 *)buffer->data)[offset] = to_be_u64(where);
+	((be_u64 *)bufdata(buffer))[offset] = to_be_u64(where);
 	brelse_dirty(buffer);
 
 	return atom;
@@ -460,8 +460,8 @@ int main(int argc, char *argv[])
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {
-		struct buffer *buffer = blockget(mapping(inode), tux_sb(inode->i_sb)->atomref_base + i);
-		memset(buffer->data, 0, sb->blocksize);
+		struct buffer_head *buffer = blockget(mapping(inode), tux_sb(inode->i_sb)->atomref_base + i);
+		memset(bufdata(buffer), 0, sb->blocksize);
 		brelse_dirty(buffer);
 	}
 
@@ -520,12 +520,12 @@ int main(int argc, char *argv[])
 	warn("---- test atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
 		unsigned atom = i, offset;
-		struct buffer *buffer = blockread_unatom(inode, atom, &offset);
-		loff_t where = from_be_u64(((be_u64 *)buffer->data)[offset]);
+		struct buffer_head *buffer = blockread_unatom(inode, atom, &offset);
+		loff_t where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
 		brelse_dirty(buffer);
 		buffer = blockread(mapping(inode), where >> sb->blockbits);
 		printf("atom %.3Lx at dirent %.4Lx, ", (L)atom, (L)where);
-		hexdump(buffer->data + (where & sb->blockmask), 16);
+		hexdump(bufdata(buffer) + (where & sb->blockmask), 16);
 		brelse(buffer);
 	}
 	warn("---- test atom recovery ----");

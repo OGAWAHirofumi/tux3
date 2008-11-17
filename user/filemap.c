@@ -46,14 +46,14 @@
  *
  * For both, stop when extent is "big enough", whatever that means.
  */
-void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int write)
+void guess_extent(struct buffer_head *buffer, index_t *start, index_t *limit, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
-	unsigned ends[2] = { buffer->index, buffer->index };
+	unsigned ends[2] = { bufindex(buffer), bufindex(buffer) };
 	for (int up = !write; up < 2; up++) {
 		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
 			unsigned next = ends[up] + (up ? 1 : -1);
-			struct buffer *nextbuf = peekblk(buffer->map, next);
+			struct buffer_head *nextbuf = peekblk(buffer->map, next);
 			if (!nextbuf) {
 				if (write)
 					break;
@@ -72,20 +72,20 @@ void guess_extent(struct buffer *buffer, index_t *start, index_t *limit, int wri
 	*limit = ends[1] + 1;
 }
 
-int filemap_extent_io(struct buffer *buffer, int write)
+int filemap_extent_io(struct buffer_head *buffer, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = tux_sb(inode->i_sb);
-	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)buffer->index);
-	if (buffer->index & (-1LL << MAX_BLOCKS_BITS))
+	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)inode->inum, (L)bufindex(buffer));
+	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	int levels = inode->btree.root.depth, try = 0, i, err;
 	if (!levels) {
 		if (!write) {
-			trace("unmapped block %Lx", (L)buffer->index);
-			memset(buffer->data, 0, sb->blocksize);
+			trace("unmapped block %Lx", (L)bufindex(buffer));
+			memset(bufdata(buffer), 0, sb->blocksize);
 			set_buffer_uptodate(buffer);
 			return 0;
 		}
@@ -114,7 +114,7 @@ retry:
 	if (limit > next_key(path, levels))
 		limit = next_key(path, levels);
 	unsigned segs = 0;
-	struct dleaf *leaf = path[levels].buffer->data;
+	struct dleaf *leaf = bufdata(path[levels].buffer);
 	struct dwalk *walk = &(struct dwalk){ };
 dleaf_dump(&inode->btree, leaf);
 	/* Probe below io start to include overlapping extents */
@@ -231,16 +231,16 @@ dleaf_dump(&inode->btree, leaf);
 		for (int j = skip; !err && j < count; j++) {
 			block_t block = extent_block(seg[i]) + j;
 			buffer = blockget(mapping(inode), index + j);
-			trace_on("block 0x%Lx => %Lx", (L)buffer->index, (L)block);
+			trace_on("block 0x%Lx => %Lx", (L)bufindex(buffer), (L)block);
 			if (write) {
-				err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
+				err = diskwrite(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			} else {
 				if (!block) { /* block zero is never allocated */
 					trace("zero fill buffer");
-					memset(buffer->data, 0, sb->blocksize);
+					memset(bufdata(buffer), 0, sb->blocksize);
 					continue;
 				}
-				err = diskread(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
+				err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			}
 			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
 		}
@@ -259,12 +259,12 @@ eek:
 }
 
 #ifndef __KERNEL__
-int filemap_block_read(struct buffer *buffer)
+int filemap_block_read(struct buffer_head *buffer)
 {
 	return filemap_extent_io(buffer, 0);
 }
 
-int filemap_block_write(struct buffer *buffer)
+int filemap_block_write(struct buffer_head *buffer)
 {
 	return filemap_extent_io(buffer, 1);
 }

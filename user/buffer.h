@@ -14,13 +14,13 @@ typedef block_t index_t; // block cache address range
 
 struct dev { unsigned fd, bits; };
 
-struct buffer;
+struct buffer_head;
 
 struct map_ops
 {
-	int (*blockio)(struct buffer *buffer, int write);
-	int (*blockwrite)(struct buffer *buffer);
-	int (*blockread)(struct buffer *buffer);
+	int (*blockio)(struct buffer_head *buffer, int write);
+	int (*blockwrite)(struct buffer_head *buffer);
+	int (*blockread)(struct buffer_head *buffer);
 };
 
 struct map {
@@ -28,16 +28,16 @@ struct map {
 	struct inode *inode;
 	struct dev *dev;
 	struct map_ops *ops;
-	struct buffer *hash[BUFFER_BUCKETS];
+	struct buffer_head *hash[BUFFER_BUCKETS];
 	unsigned dirty_count;
 };
 
 typedef struct map map_t;
 
-struct buffer
+struct buffer_head
 {
 	map_t *map;
-	struct buffer *hashlink;
+	struct buffer_head *hashlink;
 	struct list_head dirtylink;
 	struct list_head lrulink; /* used for LRU list and the free list */
 	unsigned count, state; // should be atomic_t
@@ -50,46 +50,61 @@ extern unsigned dirty_buffer_count;
 struct list_head journaled_buffers;
 extern unsigned journaled_count;
 
-void show_buffer(struct buffer *buffer);
+void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
-struct buffer *set_buffer_dirty(struct buffer *buffer);
-struct buffer *set_buffer_uptodate(struct buffer *buffer);
-struct buffer *set_buffer_empty(struct buffer *buffer);
-void brelse(struct buffer *buffer);
-void brelse_dirty(struct buffer *buffer);
-int write_buffer_to(struct buffer *buffer, block_t pos);
-int write_buffer(struct buffer *buffer);
-int read_buffer(struct buffer *buffer);
+struct buffer_head *set_buffer_dirty(struct buffer_head *buffer);
+struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer);
+struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
+void brelse(struct buffer_head *buffer);
+void brelse_dirty(struct buffer_head *buffer);
+int write_buffer_to(struct buffer_head *buffer, block_t pos);
+int write_buffer(struct buffer_head *buffer);
+int read_buffer(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
-struct buffer *peekblk(map_t *map, block_t block);
-struct buffer *blockget(map_t *map, block_t block);
-struct buffer *blockread(map_t *map, block_t block);
-void add_buffer_journaled(struct buffer *buffer);
+struct buffer_head *peekblk(map_t *map, block_t block);
+struct buffer_head *blockget(map_t *map, block_t block);
+struct buffer_head *blockread(map_t *map, block_t block);
+void add_buffer_journaled(struct buffer_head *buffer);
 int flush_buffers(map_t *map);
 void evict_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize);
 
-static inline unsigned bufsize(struct buffer *buffer)
+static inline void *bufdata(struct buffer_head *buffer)
+{
+	return buffer->data;
+}
+
+static inline unsigned bufsize(struct buffer_head *buffer)
 {
 	return 1 << buffer->map->dev->bits;
 }
 
-static inline int buffer_empty(struct buffer *buffer)
+static inline block_t bufindex(struct buffer_head *buffer)
+{
+	return buffer->index;
+}
+
+static inline int bufcount(struct buffer_head *buffer)
+{
+	return buffer->count;
+}
+
+static inline int buffer_empty(struct buffer_head *buffer)
 {
 	return buffer->state == BUFFER_STATE_EMPTY;
 }
 
-static inline int buffer_uptodate(struct buffer *buffer)
+static inline int buffer_uptodate(struct buffer_head *buffer)
 {
 	return buffer->state == BUFFER_STATE_CLEAN;
 }
 
-static inline int buffer_dirty(struct buffer *buffer)
+static inline int buffer_dirty(struct buffer_head *buffer)
 {
 	return buffer->state == BUFFER_STATE_DIRTY;
 }
 
-static inline int buffer_journaled(struct buffer *buffer)
+static inline int buffer_journaled(struct buffer_head *buffer)
 {
 	return buffer->state == BUFFER_STATE_JOURNALED;
 }

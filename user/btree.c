@@ -48,32 +48,32 @@ static void free_block(SB, block_t block)
 {
 }
 
-static struct buffer *new_block(struct btree *btree)
+static struct buffer_head *new_block(struct btree *btree)
 {
 	block_t block = (btree->ops->balloc)(btree->sb);
 	if (block == -1)
 		return NULL;
-	struct buffer *buffer = blockget(btree->sb->devmap, block);
+	struct buffer_head *buffer = blockget(btree->sb->devmap, block);
 	if (!buffer)
 		return NULL;
-	memset(buffer->data, 0, bufsize(buffer));
+	memset(bufdata(buffer), 0, bufsize(buffer));
 	set_buffer_dirty(buffer);
 	return buffer;
 }
 
-static struct buffer *new_leaf(struct btree *btree)
+static struct buffer_head *new_leaf(struct btree *btree)
 {
-	struct buffer *buffer = new_block(btree);
+	struct buffer_head *buffer = new_block(btree);
 	if (buffer)
-		(btree->ops->leaf_init)(btree, buffer->data);
+		(btree->ops->leaf_init)(btree, bufdata(buffer));
 	return buffer;
 }
 
-static struct buffer *new_node(struct btree *btree)
+static struct buffer_head *new_node(struct btree *btree)
 {
-	struct buffer *buffer = new_block(btree);
+	struct buffer_head *buffer = new_block(btree);
 	if (buffer)
-		((struct bnode *)buffer->data)->count = 0;
+		((struct bnode *)bufdata(buffer))->count = 0;
 	return buffer;
 }
 
@@ -87,7 +87,7 @@ static struct buffer *new_node(struct btree *btree)
 
 static inline struct bnode *path_node(struct tux_path path[], int level)
 {
-	return (struct bnode *)path[level].buffer->data;
+	return bufdata(path[level].buffer);
 }
 
 static void release_path(struct tux_path *path, int levels)
@@ -100,7 +100,7 @@ void show_path(struct tux_path *path, int levels)
 {
 	printf(">>> path %p/%i:", path, levels);
 	for (int i = 0; i < levels; i++)
-		printf(" [%Lx/%i]", (L)path[i].buffer->index, path[i].buffer->count);
+		printf(" [%Lx/%i]", (L)bufindex(path[i].buffer), bufcount(path[i].buffer));
 	printf("\n");
 }
 
@@ -117,10 +117,10 @@ static void free_path(struct tux_path *path)
 static int probe(BTREE, tuxkey_t key, struct tux_path *path)
 {
 	unsigned i, levels = btree->root.depth;
-	struct buffer *buffer = blockread(btree->sb->devmap, btree->root.block);
+	struct buffer_head *buffer = blockread(btree->sb->devmap, btree->root.block);
 	if (!buffer)
 		return -EIO;
-	struct bnode *node = buffer->data;
+	struct bnode *node = bufdata(buffer);
 
 	for (i = 0; i < levels; i++) {
 		struct index_entry *next = node->entries, *top = next + bcount(node);
@@ -131,9 +131,9 @@ static int probe(BTREE, tuxkey_t key, struct tux_path *path)
 		path[i] = (struct tux_path){ buffer, next };
 		if (!(buffer = blockread(btree->sb->devmap, from_be_u64((next - 1)->block))))
 			goto eek;
-		node = (struct bnode *)buffer->data;
+		node = (struct bnode *)bufdata(buffer);
 	}
-	assert((btree->ops->leaf_sniff)(btree, buffer->data));
+	assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 	path[levels] = (struct tux_path){ buffer };
 	return 0;
 eek:
@@ -151,20 +151,20 @@ static inline int level_finished(struct tux_path path[], int level)
 int advance(struct map *map, struct tux_path *path, int levels)
 {
 	int level = levels;
-	struct buffer *buffer = path[level].buffer;
+	struct buffer_head *buffer = path[level].buffer;
 	struct bnode *node;
 	do {
 		brelse(buffer);
 		if (!level)
 			return 0;
-		node = (buffer = path[--level].buffer)->data;
+		node = bufdata(buffer = path[--level].buffer);
 		//printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
 	} while (level_finished(path, level));
 	do {
 		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
 		if (!(buffer = blockread(map, from_be_u64(path[level].next++->block))))
 			goto eek;
-		path[++level] = (struct tux_path){ .buffer = buffer, .next = (node = buffer->data)->entries };
+		path[++level] = (struct tux_path){ .buffer = buffer, .next = (node = bufdata(buffer))->entries };
 	} while (level < levels);
 	return 1;
 eek:
@@ -198,11 +198,11 @@ void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 	struct tux_path path[30]; // check for overflow!!!
 	if (probe(btree, start, path))
 		error("tell me why!!!");
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	do {
 		buffer = path[btree->root.depth].buffer;
-		assert((btree->ops->leaf_sniff)(btree, buffer->data));
-		(btree->ops->leaf_dump)(btree, buffer->data);
+		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
+		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 		//tuxkey_t *next = pnext_key(path, btree->levels);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
 	} while (--count && advance(buffer->map, path, btree->root.depth));
@@ -210,14 +210,14 @@ void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 
 /* Deletion */
 
-static void brelse_free(SB, struct buffer *buffer)
+static void brelse_free(SB, struct buffer_head *buffer)
 {
 	brelse(buffer);
-	if (buffer->count) {
-		warn("free block %Lx still in use!", (long long)buffer->index);
+	if (bufcount(buffer)) {
+		warn("free block %Lx still in use!", (long long)bufindex(buffer));
 		return;
 	}
-	free_block(sb, buffer->index);
+	free_block(sb, bufindex(buffer));
 	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
 
@@ -271,7 +271,7 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 {
 	int levels = btree->root.depth, level = levels - 1, suspend = 0;
 	struct tux_path *path, *prev;
-	struct buffer *leafbuf, *leafprev = NULL;
+	struct buffer_head *leafbuf, *leafprev = NULL;
 	struct btree_ops *ops = btree->ops;
 	struct sb *sb = btree->sb;
 
@@ -284,13 +284,13 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 
 	/* leaf walk */
 	while (1) {
-		if (delete_from_leaf(btree, leafbuf->data, info))
+		if (delete_from_leaf(btree, bufdata(leafbuf), info))
 			set_buffer_dirty(leafbuf);
 
 		/* try to merge this leaf with prev */
 		if (leafprev) {
-			struct vleaf *this = leafbuf->data;
-			struct vleaf *that = leafprev->data;
+			struct vleaf *this = bufdata(leafbuf);
+			struct vleaf *that = bufdata(leafprev);
 			trace_off("check leaf %p against %p", leafbuf, leafprev);
 			trace_off("need = %i, free = %i", (ops->dleaf_need)(btree, this), dleaf_free(sb, that));
 			/* try to merge leaf with prev */
@@ -347,7 +347,7 @@ keep_prev_node:
 			if (!level) { /* remove levels if possible */
 				while (levels > 1 && bcount(path_node(prev, 0)) == 1) {
 					trace("drop btree level");
-					btree->root.block = prev[1].buffer->index;
+					btree->root.block = bufindex(prev[1].buffer);
 					brelse_free(sb, prev[0].buffer);
 					//dirty_buffer_count_check(sb);
 					levels = --btree->root.depth;
@@ -369,7 +369,7 @@ keep_prev_node:
 
 		/* push back down to leaf level */
 		while (level < levels - 1) {
-			struct buffer *buffer = blockread(sb->devmap, from_be_u64(path[level++].next++->block));
+			struct buffer_head *buffer = blockread(sb->devmap, from_be_u64(path[level++].next++->block));
 			if (!buffer) {
 				brelse(leafprev);
 				release_path(path, level - 1);
@@ -378,8 +378,8 @@ keep_prev_node:
 				return -ENOMEM;
 			}
 			path[level].buffer = buffer;
-			path[level].next = ((struct bnode *)buffer->data)->entries;
-			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, buffer->index, bcount(path_node(path, level))););
+			path[level].next = ((struct bnode *)bufdata(buffer))->entries;
+			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(path_node(path, level))););
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
@@ -408,8 +408,8 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 	int levels = btree->root.depth;
 	while (levels--) {
 		struct index_entry *next = path[levels].next;
-		struct buffer *parentbuf = path[levels].buffer;
-		struct bnode *parent = parentbuf->data;
+		struct buffer_head *parentbuf = path[levels].buffer;
+		struct bnode *parent = bufdata(parentbuf);
 
 		/* insert and exit if not full */
 		if (bcount(parent) < btree->sb->entries_per_node) {
@@ -419,10 +419,10 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 		}
 
 		/* split a full index node */
-		struct buffer *newbuf = new_node(btree);
+		struct buffer_head *newbuf = new_node(btree);
 		if (!newbuf)
 			goto eek;
-		struct bnode *newnode = newbuf->data;
+		struct bnode *newnode = bufdata(newbuf);
 		unsigned half = bcount(parent) / 2;
 		u64 newkey = from_be_u64(parent->entries[half].key);
 		newnode->count = to_be_u32(bcount(parent) - half);
@@ -439,19 +439,19 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 		add_child(parent, next, childblock, childkey);
 		set_buffer_dirty(parentbuf);
 		childkey = newkey;
-		childblock = newbuf->index;
+		childblock = bufindex(newbuf);
 		brelse(newbuf);
 	}
 	trace("add tree level");
-	struct buffer *newbuf = new_node(btree);
+	struct buffer_head *newbuf = new_node(btree);
 	if (!newbuf)
 		goto eek;
-	struct bnode *newroot = newbuf->data;
+	struct bnode *newroot = bufdata(newbuf);
 	newroot->count = to_be_u32(2);
 	newroot->entries[0].block = to_be_u64(btree->root.block);
 	newroot->entries[1].key = to_be_u64(childkey);
 	newroot->entries[1].block = to_be_u64(childblock);
-	btree->root.block = newbuf->index;
+	btree->root.block = bufindex(newbuf);
 	vecmove(path + 1, path, btree->root.depth++ + 1);
 	path[0] = (struct tux_path){ .buffer = newbuf }; // .next = ???
 	//set_sb_dirty(sb);
@@ -465,18 +465,18 @@ eek:
 int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key)
 {
 	trace("split leaf");
-	struct buffer *leafbuf = path[btree->root.depth].buffer;
-	struct buffer *newbuf = new_leaf(btree);
+	struct buffer_head *leafbuf = path[btree->root.depth].buffer;
+	struct buffer_head *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release path at point of error */
 		release_path(path, btree->root.depth);
 		return -ENOMEM;
 	}
-	u64 newkey = (btree->ops->leaf_split)(btree, key, leafbuf->data, newbuf->data);
-	block_t childblock = newbuf->index;
+	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
+	block_t childblock = bufindex(newbuf);
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
-		struct buffer *swap = leafbuf;
+		struct buffer_head *swap = leafbuf;
 		leafbuf = path[btree->root.depth].buffer = newbuf;
 		newbuf = swap;
 	}
@@ -488,8 +488,8 @@ int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key)
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tux_path path[])
 {
 	for (int i = 0; i < 2; i++) {
-		struct buffer *leafbuf = path[btree->root.depth].buffer;
-		void *space = (btree->ops->leaf_resize)(btree, key, leafbuf->data, newsize);
+		struct buffer_head *leafbuf = path[btree->root.depth].buffer;
+		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
 		set_buffer_dirty(leafbuf);
 		if (space)
 			return space;
@@ -506,16 +506,16 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tu
 struct btree new_btree(SB, struct btree_ops *ops)
 {
 	struct btree btree = { .sb = sb, .ops = ops };
-	struct buffer *rootbuf = new_node(&btree);
-	struct buffer *leafbuf = new_leaf(&btree);
+	struct buffer_head *rootbuf = new_node(&btree);
+	struct buffer_head *leafbuf = new_leaf(&btree);
 	if (!rootbuf || !leafbuf)
 		goto eek;
-	struct bnode *root = rootbuf->data;
-	root->entries[0].block = to_be_u64(leafbuf->index);
+	struct bnode *root = bufdata(rootbuf);
+	root->entries[0].block = to_be_u64(bufindex(leafbuf));
 	root->count = to_be_u32(1);
-	btree.root = (struct root){ .block = rootbuf->index, .depth = 1 };
-	printf("root at %Lx\n", (L)rootbuf->index);
-	printf("leaf at %Lx\n", (L)leafbuf->index);
+	btree.root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
+	printf("root at %Lx\n", (L)bufindex(rootbuf));
+	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
 	return btree;
@@ -662,10 +662,10 @@ int main(int argc, char *argv[])
 	btree.entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct entry);
 
 	if (0) {
-		struct buffer *buffer = new_leaf(&btree);
+		struct buffer_head *buffer = new_leaf(&btree);
 		for (int i = 0; i < 7; i++)
-			uleaf_insert(&btree, buffer->data, i, i + 0x100);
-		uleaf_dump(&btree, buffer->data);
+			uleaf_insert(&btree, bufdata(buffer), i, i + 0x100);
+		uleaf_dump(&btree, bufdata(buffer));
 		return 0;
 	}
 

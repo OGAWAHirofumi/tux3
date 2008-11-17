@@ -102,13 +102,13 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		//printf("count block %x/%x\n", block, blocks);
-		struct buffer *buffer = blockread(mapping(inode), block);
+		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset;
 		if (bytes > tail)
 			bytes = tail;
-		unsigned char *p = buffer->data + offset, *top = p + bytes;
+		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes;
 		while (p < top)
 			total += ones[*p++];
 		brelse(buffer);
@@ -132,13 +132,13 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	printf("%i bitmap blocks:\n", blocks);
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
-		struct buffer *buffer = blockread(mapping(inode), block);
+		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset;
 		if (bytes > tail)
 			bytes = tail;
-		unsigned char *p = buffer->data + offset, *top = p + bytes;
+		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes;
 		for (; p < top; p++, startbit = 0) {
 			unsigned c = *p;
 			if (!any && c)
@@ -149,7 +149,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 			for (int i = startbit, mask = 1 << startbit; i < 8; i++, mask <<= 1) {
 				if (!(c & mask) == (begin < 0))
 					continue;
-				block_t found = i + (((void *)p - buffer->data) << 3) + (block << mapshift);
+				block_t found = i + (((void *)p - bufdata(buffer)) << 3) + (block << mapshift);
 				if (begin < 0)
 					begin = found;
 				else {
@@ -190,13 +190,13 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 	block_t tail = (count + startbit + 7) >> 3;
 	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
-		struct buffer *buffer = blockread(mapping(inode), mapblock);
+		struct buffer_head *buffer = blockread(mapping(inode), mapblock);
 		if (!buffer)
 			return -1;
 		unsigned bytes = blocksize - offset, run = 0;
 		if (bytes > tail)
 			bytes = tail;
-		unsigned char *p = buffer->data + offset, *top = p + bytes, c;
+		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes, c;
 		for (; p < top; p++, startbit = 0) {
 			if ((c = *p) == 0xff) {
 				run = 0;
@@ -210,13 +210,13 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 				if (++run < blocks)
 					continue;
 				assert(run == blocks);
-				block_t found = i + (((void *)p - buffer->data) << 3) + (mapblock << mapshift);
+				block_t found = i + (((void *)p - bufdata(buffer)) << 3) + (mapblock << mapshift);
 				if (found >= limit) {
 					assert(mapblock == mapblocks - 1);
 					goto final_partial_byte;
 				}
 				found -= run - 1;
-				set_bits(buffer->data, found & mapmask, run);
+				set_bits(bufdata(buffer), found & mapmask, run);
 				set_buffer_dirty(buffer);
 				brelse(buffer);
 				tux_sb(inode->i_sb)->nextalloc = found + run;
@@ -272,13 +272,13 @@ void bfree_extent(SB, block_t start, unsigned count)
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
-	struct buffer *buffer = blockread(mapping(sb->bitmap), mapblock);
+	struct buffer_head *buffer = blockread(mapping(sb->bitmap), mapblock);
 	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
 		goto eek;
-	if (!all_set(buffer->data, start &= mapmask, count))
+	if (!all_set(bufdata(buffer), start &= mapmask, count))
 		goto eeek;
-	clear_bits(buffer->data, start, count);
+	clear_bits(bufdata(buffer), start, count);
 	brelse_dirty(buffer);
 	sb->freeblocks += count;
 	//set_sb_dirty(sb);
@@ -341,8 +341,8 @@ int main(int argc, char *argv[])
 	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
 
 	for (int block = 0; block < 10; block++) {
-		struct buffer *buffer = blockget(map, block);
-		memset(buffer->data, 0, blocksize);
+		struct buffer_head *buffer = blockget(map, block);
+		memset(bufdata(buffer), 0, blocksize);
 		set_buffer_uptodate(buffer);
 	}
 	for (int i = 0; i < 12; i++) {

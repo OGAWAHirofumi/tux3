@@ -129,14 +129,14 @@ static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
 {
 	ext2_dirent *entry;
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len, offset;
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
 	unsigned blocks = dir->i_size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		buffer = blockget(mapping(dir), block);
-		entry = buffer->data;
-		ext2_dirent *limit = buffer->data + blocksize - reclen;
+		entry = bufdata(buffer);
+		ext2_dirent *limit = bufdata(buffer) + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				warn("zero-length directory entry");
@@ -154,7 +154,7 @@ loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned 
 		brelse(buffer);
 	}
 	buffer = blockget(mapping(dir), block = blocks);
-	entry = buffer->data;
+	entry = bufdata(buffer);
 	name_len = 0;
 	rec_len = blocksize;
 	*entry = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
@@ -172,19 +172,19 @@ create:
 	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	dir->i_mtime = dir->i_ctime = gettime();
 	mark_inode_dirty(dir);
-	offset = (void *)entry - buffer->data;
+	offset = (void *)entry - bufdata(buffer);
 	brelse_dirty(buffer);
 	return (block << blockbits) + offset;
 }
 
-ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer **result)
+ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
 {
 	unsigned reclen = EXT2_REC_LEN(len);
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
 	unsigned blocks = dir->i_size >> tux_sb(dir->i_sb)->blockbits, block;
 	for (block = 0; block < blocks; block++) {
-		struct buffer *buffer = blockread(mapping(dir), block);
-		ext2_dirent *entry = buffer->data;
+		struct buffer_head *buffer = blockread(mapping(dir), block);
+		ext2_dirent *entry = bufdata(buffer);
 		ext2_dirent *limit = (void *)entry + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
@@ -226,8 +226,8 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 	unsigned blocks = dir->i_size >> blockbits;
 	unsigned offset = pos & blockmask;
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
-		struct buffer *buffer = blockread(mapping(dir), block);
-		void *base = buffer->data;
+		struct buffer_head *buffer = blockread(mapping(dir), block);
+		void *base = bufdata(buffer);
 		if (!buffer)
 			return -EIO;
 		if (revalidate) {
@@ -269,9 +269,9 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 	return 0;
 }
 
-int ext2_delete_entry(struct buffer *buffer, ext2_dirent *entry)
+int ext2_delete_entry(struct buffer_head *buffer, ext2_dirent *entry)
 {
-	ext2_dirent *prev = NULL, *this = buffer->data;
+	ext2_dirent *prev = NULL, *this = bufdata(buffer);
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
 			warn("zero-length directory entry");
@@ -291,12 +291,12 @@ int ext2_delete_entry(struct buffer *buffer, ext2_dirent *entry)
 	return 0;
 }
 #ifndef __KERNEL__
-void ext2_dump_entries(struct buffer *buffer)
+void ext2_dump_entries(struct buffer_head *buffer)
 {
 	unsigned blocksize = bufsize(buffer);
-	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)buffer->index);
-	ext2_dirent *entry = (ext2_dirent *)buffer->data;
-	ext2_dirent *limit = buffer->data + blocksize;
+	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)bufindex(buffer));
+	ext2_dirent *entry = (ext2_dirent *)bufdata(buffer);
+	ext2_dirent *limit = bufdata(buffer) + blocksize;
 	while (entry < limit) {
 		if (!entry->rec_len) {
 			warn("Zero length entry");
@@ -325,7 +325,7 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 8 };
 	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
-	struct buffer *buffer;
+	struct buffer_head *buffer;
 	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
 	map->inode = &(struct inode){ .i_sb = sb, .map = map, .i_mode = S_IFDIR };
 	ext2_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
