@@ -164,7 +164,7 @@ dleaf_dump(&inode->btree, leaf);
 			trace("index = %Lx, offset = %Li, next = %Lx, gap = %i", (L)index, (L)offset, (L)next_index, gap);
 			if (index + gap > limit)
 				gap = limit - index;
-			trace("fill gap at %Lx/%x", index, gap);
+			trace("fill gap at %Lx/%x", (L)index, gap);
 			block_t block = 0;
 			if (write) {
 				block = balloc_extent(sb, gap); // goal ???
@@ -210,7 +210,7 @@ dleaf_dump(&inode->btree, leaf);
 		if (leaf_groups(leaf))
 			dwalk_chop_after(walk);
 		for (i = 0, index = start - offset; i < segs; i++) {
-			trace("pack 0x%Lx => %Lx/%x", index, (L)extent_block(seg[i]), extent_count(seg[i]));
+			trace("pack 0x%Lx => %Lx/%x", (L)index, (L)extent_block(seg[i]), extent_count(seg[i]));
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
@@ -227,11 +227,11 @@ dleaf_dump(&inode->btree, leaf);
 	unsigned skip = offset;
 	for (i = 0, index = start - offset; !err && index < limit; i++) {
 		unsigned count = extent_count(seg[i]);
-		trace_on("extent 0x%Lx/%x => %Lx", index, count, (L)extent_block(seg[i]));
+		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)extent_block(seg[i]));
 		for (int j = skip; !err && j < count; j++) {
 			block_t block = extent_block(seg[i]) + j;
 			buffer = blockget(mapping(inode), index + j);
-			trace_on("block 0x%Lx => %Lx", (L)buffer->index, block);
+			trace_on("block 0x%Lx => %Lx", (L)buffer->index, (L)block);
 			if (write) {
 				err = diskwrite(dev->fd, buffer->data, sb->blocksize, block << dev->bits);
 			} else {

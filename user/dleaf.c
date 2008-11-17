@@ -401,7 +401,7 @@ struct extent *dwalk_next(struct dwalk *walk)
 		return NULL;
 	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
 	if (walk->extent >= walk->exstop) {
-		trace("at entry %i/%i", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
+		trace("at entry %ti/%i", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
 		if (walk->entry <= walk->estop) {
 			trace("next group, end = %i", walk->group <= walk->gstop);
 			if (walk->group <= walk->gstop)
@@ -414,9 +414,9 @@ struct extent *dwalk_next(struct dwalk *walk)
 		walk->entry--;
 		walk->exstop = walk->exbase + entry_limit(walk->entry);
 	}
-	trace("next extent 0x%Lx => %Lx/%x", dwalk_index(walk), (L)extent_block(*walk->extent), extent_count(*walk->extent));
+	trace("next extent 0x%Lx => %Lx/%x", (L)dwalk_index(walk), (L)extent_block(*walk->extent), extent_count(*walk->extent));
 	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
-	trace("at entry %i/%i", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
+	trace("at entry %ti/%i", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
 	return walk->extent++; // also return key
 }
 
@@ -434,7 +434,7 @@ void dwalk_back(struct dwalk *walk)
 		walk->exbase -= entry_limit(walk->entry);
 		walk->estop = walk->entry;
 		trace("exbase => %Lx", (L)extent_block(*walk->exbase));
-		trace("entry offset = %i", walk->estop + group_count(walk->group) - 1 - walk->entry);
+		trace("entry offset = %ti", walk->estop + group_count(walk->group) - 1 - walk->entry);
 	}
 	walk->extent = walk->exbase + (walk->estop + group_count(walk->group) - 1 - walk->entry);
 	walk->exstop = walk->exbase + entry_limit(walk->entry);
@@ -527,7 +527,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 		*--walk->entry = make_entry(keylo, walk->extent - walk->exbase);
 		inc_group_count(walk->group, 1);
 	}
-	trace("add extent %i", walk->extent - walk->leaf->table);
+	trace("add extent %ti", walk->extent - walk->leaf->table);
 	//trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent.block, extent_count(extent));
 	assert(from_be_u16(walk->leaf->free) + sizeof(*walk->extent) <= from_be_u16(walk->leaf->used));
 	walk->leaf->free = to_be_u16(from_be_u16(walk->leaf->free) + sizeof(*walk->extent));

@@ -87,7 +87,7 @@ void show_dirty_buffers(map_t *map)
 		struct buffer *buffer = list_entry(list, struct buffer, dirtylink);
 		show_buffer(buffer);
 	}
-	warn("");
+	warn("end");
 }
 
 void show_journaled_buffers(void)
@@ -98,7 +98,7 @@ void show_journaled_buffers(void)
 		struct buffer *buffer = list_entry(list, struct buffer, dirtylink);
 		show_buffer(buffer);
 	}
-	warn("");
+	warn("end");
 }
 
 #if 0
@@ -349,7 +349,7 @@ struct buffer *blockread(map_t *map, block_t block)
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
 		int err = buffer->map->ops->blockread(buffer);
 		if (err) {
-			warn("failed to read block %Lx (%s)", block, strerror(-err));
+			warn("failed to read block %Lx (%s)", (L)block, strerror(-err));
 			brelse(buffer);
 			return NULL;
 		}

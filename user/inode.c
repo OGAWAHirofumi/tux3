@@ -192,7 +192,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 	int err = 0;
 	struct inode *inode = file->f_inode;
 	loff_t pos = file->f_pos;
-	trace("%s %u bytes at %Lu, isize = 0x%Lx", write ? "write" : "read", len, pos, (L)inode->i_size);
+	trace("%s %u bytes at %Lu, isize = 0x%Lx", write ? "write" : "read", len, (L)pos, (L)inode->i_size);
 	if (write && pos + len > MAX_FILESIZE)
 		return -EFBIG;
 	if (!write && pos + len > inode->i_size) {
