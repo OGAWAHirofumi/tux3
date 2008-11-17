@@ -150,7 +150,7 @@ loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned 
 	ext2_dirent *entry;
 	struct buffer *buffer;
 	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len, offset;
-	unsigned blockbits = dir->i_sb->blockbits, blocksize = 1 << blockbits;
+	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
 	unsigned blocks = dir->i_size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		buffer = blockget(mapping(dir), block);
@@ -199,8 +199,8 @@ create:
 ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer **result)
 {
 	unsigned reclen = EXT2_REC_LEN(len);
-	unsigned blocksize = 1 << dir->i_sb->blockbits;
-	unsigned blocks = dir->i_size >> dir->i_sb->blockbits, block;
+	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
+	unsigned blocks = dir->i_size >> tux_sb(dir->i_sb)->blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		struct buffer *buffer = blockread(mapping(dir), block);
 		ext2_dirent *entry = buffer->data;
@@ -243,7 +243,7 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 	loff_t pos = file->f_pos;
 	struct inode *dir = file->f_inode;
 	int revalidate = file->f_version != dir->i_version;
-	unsigned blockbits = dir->i_sb->blockbits;
+	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
 	unsigned blocksize = 1 << blockbits;
 	unsigned blockmask = blocksize - 1;
 	unsigned blocks = dir->i_size >> blockbits;
