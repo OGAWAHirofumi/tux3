@@ -209,13 +209,9 @@ struct sb
 
 #ifdef __KERNEL__
 struct tux_inode {
-	struct sb *sb;
-	struct map *map;
 	struct btree btree;
 	inum_t inum;
-	unsigned i_version, present;
-	u64 i_size, i_mtime, i_ctime, i_atime;
-	unsigned i_mode, i_uid, i_gid, i_links;
+	unsigned present;
 	struct xcache *xcache;
 
 	struct inode vfs_inode;
@@ -239,15 +235,17 @@ static inline map_t *mapping(struct inode *inode)
 }
 #else
 struct inode {
-	struct sb *i_sb;
-	map_t *map;
 	struct btree btree;
 	inum_t inum;
-	unsigned i_version, present;
+	unsigned present;
+	struct xcache *xcache;
+
+	struct sb *i_sb;
+	map_t *map;
 	u64 i_size;
+	unsigned i_version;
 	struct timespec i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_nlink;
-	struct xcache *xcache;
 };
 
 struct file {
