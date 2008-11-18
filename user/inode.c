@@ -102,7 +102,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
 		if (inum < next_key(path, levels))
 			break;
-		int more = advance(leafbuf->map, path, levels);
+		int more = advance(&sb->itable, path);
 		printf("no more inode space here, advance %i\n", more);
 		if (!more)
 			goto errout;

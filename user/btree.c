@@ -148,9 +148,9 @@ static inline int level_finished(struct tux_path path[], int level)
 }
 // also write level_beginning!!!
 
-int advance(struct map *map, struct tux_path *path, int levels)
+int advance(BTREE, struct tux_path *path)
 {
-	int level = levels;
+	int levels = btree->root.depth, level = levels;
 	struct buffer_head *buffer = path[level].buffer;
 	struct bnode *node;
 	do {
@@ -162,7 +162,7 @@ int advance(struct map *map, struct tux_path *path, int levels)
 	} while (level_finished(path, level));
 	do {
 		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
-		if (!(buffer = blockread(map, from_be_u64(path[level].next++->block))))
+		if (!(buffer = sb_bread(btree->sb, from_be_u64(path[level].next++->block))))
 			goto eek;
 		path[++level] = (struct tux_path){ .buffer = buffer, .next = (node = bufdata(buffer))->entries };
 	} while (level < levels);
@@ -205,7 +205,7 @@ void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 		//tuxkey_t *next = pnext_key(path, btree->levels);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
-	} while (--count && advance(buffer->map, path, btree->root.depth));
+	} while (--count && advance(btree, path));
 }
 
 /* Deletion */
