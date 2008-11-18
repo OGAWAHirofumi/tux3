@@ -10,7 +10,6 @@
 #include "list.h"
 
 typedef loff_t block_t; // disk io address range
-typedef block_t index_t; // block cache address range
 
 struct dev { unsigned fd, bits; };
 
@@ -41,7 +40,7 @@ struct buffer_head
 	struct list_head dirtylink;
 	struct list_head lrulink; /* used for LRU list and the free list */
 	unsigned count, state; // should be atomic_t
-	index_t index;
+	block_t index;
 	void *data;
 };
 

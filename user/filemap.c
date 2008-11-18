@@ -46,13 +46,13 @@
  *
  * For both, stop when extent is "big enough", whatever that means.
  */
-void guess_extent(struct buffer_head *buffer, index_t *start, index_t *limit, int write)
+void guess_extent(struct buffer_head *buffer, block_t *start, block_t *limit, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
-	unsigned ends[2] = { bufindex(buffer), bufindex(buffer) };
+	block_t ends[2] = { bufindex(buffer), bufindex(buffer) };
 	for (int up = !write; up < 2; up++) {
 		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
-			unsigned next = ends[up] + (up ? 1 : -1);
+			block_t next = ends[up] + (up ? 1 : -1);
 			struct buffer_head *nextbuf = peekblk(buffer->map, next);
 			if (!nextbuf) {
 				if (write)
@@ -96,7 +96,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	if (!write && buffer_dirty(buffer))
 		warn("egad, reading a dirty buffer");
 
-	index_t start, limit;
+	block_t start, limit;
 	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	struct extent seg[1000];
@@ -138,7 +138,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 	*walk = rewind;
 
 	struct extent *next_extent = NULL;
-	index_t index = start, offset = 0;
+	block_t index = start, offset = 0;
 	while (index < limit) {
 		trace("index %Lx, limit %Lx", (L)index, (L)limit);
 		if (next_extent) {
@@ -150,7 +150,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 				count -= start - dwalk_index(walk);
 			index += count;
 		}
-		index_t next_index = limit;
+		block_t next_index = limit;
 		if ((next_extent = dwalk_next(walk))) {
 			next_index = dwalk_index(walk);
 			trace("next_index = %Lx", (L)next_index);
