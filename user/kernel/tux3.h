@@ -193,11 +193,8 @@ struct tux_path { struct buffer_head *buffer; struct index_entry *next; };
 struct sb
 {
 	struct disksuper super;
+
 	struct btree itable;
-	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
-#ifndef __KERNEL__
-	map_t *devmap;
-#endif
 	struct buffer_head *rootbuf;
 	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;
@@ -205,6 +202,9 @@ struct sb
 	unsigned entries_per_node, max_inodes_per_block;
 	unsigned version, atomref_base, unatom_base;
 	unsigned freeatom, atomgen;
+#ifndef __KERNEL__
+	map_t *devmap;
+#endif
 };
 
 #ifdef __KERNEL__
