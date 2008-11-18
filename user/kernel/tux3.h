@@ -24,9 +24,8 @@ typedef long long L; // widen for printf on 64 bit systems
 
 typedef u64 fixed32; /* Tux3 time values */
 typedef u32 millisecond_t;
-typedef int64_t inum_t;
+typedef u64 inum_t;
 typedef u64 tuxkey_t;
-typedef int fd_t;
 
 /* Endian support */
 
@@ -189,15 +188,6 @@ struct btree {
 	u16 entries_per_leaf;
 };
 
-#ifdef __KERNEL__
-typedef struct address_space map_t;
-
-static inline map_t *mapping(struct inode *inode)
-{
-	return inode->i_mapping;
-}
-#endif
-
 struct tux_path { struct buffer_head *buffer; struct index_entry *next; };
 
 struct sb
@@ -205,7 +195,9 @@ struct sb
 	struct disksuper super;
 	struct btree itable;
 	char bogopad[4096 - sizeof(struct disksuper)]; // point to super in buffer!!!
+#ifndef __KERNEL__
 	map_t *devmap;
+#endif
 	struct buffer_head *rootbuf;
 	struct inode *bitmap, *rootdir, *vtable, *atable;
 	unsigned blocksize, blockbits, blockmask;
@@ -229,14 +221,21 @@ struct tux_inode {
 	struct inode vfs_inode;
 };
 
+static inline struct sb *tux_sb(struct super_block *sb)
+{
+	return sb->s_fs_info;
+}
+
 static inline struct tux_inode *tux_inode(struct inode *inode)
 {
 	return container_of(inode, struct tux_inode, vfs_inode);
 }
 
-static inline struct sb *tux_sb(struct super_block *sb)
+typedef struct address_space map_t;
+
+static inline map_t *mapping(struct inode *inode)
 {
-	return sb->s_fs_info;
+	return inode->i_mapping;
 }
 #else
 struct inode {
@@ -257,11 +256,6 @@ struct file {
 	loff_t f_pos;
 };
 
-static inline map_t *mapping(struct inode *inode)
-{
-	return inode->map;
-}
-
 static inline struct sb *tux_sb(struct sb *sb)
 {
 	return sb;
@@ -270,6 +264,11 @@ static inline struct sb *tux_sb(struct sb *sb)
 static inline struct inode *tux_inode(struct inode *inode)
 {
 	return inode;
+}
+
+static inline map_t *mapping(struct inode *inode)
+{
+	return inode->map;
 }
 #endif /* !__KERNEL__ */
 
@@ -492,8 +491,6 @@ static inline void *encode_kind(void *attrs, unsigned kind, unsigned version)
 }
 
 #ifdef __KERNEL__
-struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
-
 static inline void *bufdata(struct buffer_head *buffer)
 {
 	return buffer->b_data;
@@ -541,12 +538,14 @@ void dwalk_back(struct dwalk *walk);
 void dwalk_chop_after(struct dwalk *walk);
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent);
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent);
-#else
 
+/* inode.c */
+struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
+#else /* !__KERNEL__ */
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
 	return buffer->map->inode;
 }
-#endif
+#endif /* !__KERNEL__ */
 
 #endif
