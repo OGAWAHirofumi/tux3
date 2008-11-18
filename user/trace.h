@@ -1,11 +1,13 @@
 #ifndef TRACE_H
 #define TRACE_H
 
+#ifndef __KERNEL__
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
 #include <execinfo.h>
 #include <stdarg.h>
+#endif
 
 #define logline(caller, fmt, args...)	do {	\
 	printf("%s: ", caller);			\
