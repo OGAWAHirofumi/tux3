@@ -190,8 +190,7 @@ struct btree {
 
 struct tux_path { struct buffer_head *buffer; struct index_entry *next; };
 
-struct sb
-{
+struct sb {
 	struct disksuper super;
 
 	struct btree itable;
@@ -202,7 +201,9 @@ struct sb
 	unsigned entries_per_node, max_inodes_per_block;
 	unsigned version, atomref_base, unatom_base;
 	unsigned freeatom, atomgen;
-#ifndef __KERNEL__
+#ifdef __KERNEL__
+	struct super_block *vfs_sb;
+#else
 	map_t *devmap;
 #endif
 };
@@ -220,6 +221,11 @@ struct tux_inode {
 static inline struct sb *tux_sb(struct super_block *sb)
 {
 	return sb->s_fs_info;
+}
+
+static inline struct super_block *vfs_sb(struct sb *sb)
+{
+	return sb->vfs_sb;
 }
 
 static inline struct tux_inode *tux_inode(struct inode *inode)
@@ -255,6 +261,11 @@ struct file {
 };
 
 static inline struct sb *tux_sb(struct sb *sb)
+{
+	return sb;
+}
+
+static inline struct sb *vfs_sb(struct sb *sb)
 {
 	return sb;
 }

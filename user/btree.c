@@ -53,7 +53,7 @@ static struct buffer_head *new_block(struct btree *btree)
 	block_t block = (btree->ops->balloc)(btree->sb);
 	if (block == -1)
 		return NULL;
-	struct buffer_head *buffer = sb_getblk(btree->sb, block);
+	struct buffer_head *buffer = sb_getblk(vfs_sb(btree->sb), block);
 	if (!buffer)
 		return NULL;
 	memset(bufdata(buffer), 0, bufsize(buffer));
@@ -117,7 +117,7 @@ void free_path(struct tux_path *path)
 int probe(BTREE, tuxkey_t key, struct tux_path *path)
 {
 	unsigned i, levels = btree->root.depth;
-	struct buffer_head *buffer = sb_bread(btree->sb, btree->root.block);
+	struct buffer_head *buffer = sb_bread(vfs_sb(btree->sb), btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = bufdata(buffer);
@@ -129,7 +129,7 @@ int probe(BTREE, tuxkey_t key, struct tux_path *path)
 				break;
 		//printf("probe level %i, %ti of %i\n", i, next - node->entries, bcount(node));
 		path[i] = (struct tux_path){ buffer, next };
-		if (!(buffer = sb_bread(btree->sb, from_be_u64((next - 1)->block))))
+		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64((next - 1)->block))))
 			goto eek;
 		node = (struct bnode *)bufdata(buffer);
 	}
@@ -162,7 +162,7 @@ int advance(BTREE, struct tux_path *path)
 	} while (level_finished(path, level));
 	do {
 		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
-		if (!(buffer = sb_bread(btree->sb, from_be_u64(path[level].next++->block))))
+		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(path[level].next++->block))))
 			goto eek;
 		path[++level] = (struct tux_path){ .buffer = buffer, .next = (node = bufdata(buffer))->entries };
 	} while (level < levels);
@@ -369,7 +369,7 @@ keep_prev_node:
 
 		/* push back down to leaf level */
 		while (level < levels - 1) {
-			struct buffer_head *buffer = sb_bread(sb, from_be_u64(path[level++].next++->block));
+			struct buffer_head *buffer = sb_bread(vfs_sb(sb), from_be_u64(path[level++].next++->block));
 			if (!buffer) {
 				brelse(leafprev);
 				release_path(path, level - 1);
@@ -383,7 +383,7 @@ keep_prev_node:
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
-		if (!(leafbuf = sb_bread(sb, from_be_u64(path[level].next++->block)))) {
+		if (!(leafbuf = sb_bread(vfs_sb(sb), from_be_u64(path[level].next++->block)))) {
 			release_path(path, level);
 			free_path(path);
 			free_path(prev);
