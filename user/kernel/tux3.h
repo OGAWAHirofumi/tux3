@@ -281,6 +281,14 @@ static inline map_t *mapping(struct inode *inode)
 }
 #endif /* !__KERNEL__ */
 
+/* directory entry */
+typedef struct {
+	be_u32 inum;
+	be_u16 rec_len;
+	u8 name_len, type;
+	char name[];
+} tux_dirent;
+
 /* version:10, count:6, block:48 */
 struct extent { be_u64 block_count_version; };
 /* count:8, keyhi:24 */
@@ -530,12 +538,17 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 /* balloc.c */
 block_t balloc_extent(SB, unsigned blocks);
 
-/* btee.c */
+/* btree.c */
 struct tux_path *alloc_path(int);
 void free_path(struct tux_path *path);
 int probe(BTREE, tuxkey_t key, struct tux_path *path);
 tuxkey_t next_key(struct tux_path *path, int levels);
 int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key);
+
+/* dir.c */
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode);
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result);
+int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
 
 /* dtree.c */
 unsigned dleaf_free(BTREE, vleaf *leaf);

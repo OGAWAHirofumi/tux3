@@ -10,10 +10,6 @@
 
 #ifndef __KERNEL__
 #ifndef main
-#ifndef trace
-#define trace trace_on
-#endif
-
 #define main notmain0
 #include "balloc.c"
 #undef main
@@ -25,6 +21,10 @@
 #endif /* !__KERNEL */
 
 #include "tux3.h"
+
+#ifndef trace
+#define trace trace_on
+#endif
 
 /* Xattr Atoms */
 
@@ -59,14 +59,14 @@ static inline atom_t entry_atom(tux_dirent *entry)
 
 struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
 {
-	unsigned shift = atable->i_sb->blockbits - 3;
+	unsigned shift = tux_sb(atable->i_sb)->blockbits - 3;
 	*offset = atom & ~(-1 << shift);
-	return blockread(mapping(atable), atable->i_sb->unatom_base + (atom >> shift));
+	return blockread(mapping(atable), tux_sb(atable->i_sb)->unatom_base + (atom >> shift));
 }
 
 void dump_atoms(struct inode *atable)
 {
-	SB = atable->i_sb;
+	SB = tux_sb(atable->i_sb);
 	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
@@ -75,7 +75,7 @@ void dump_atoms(struct inode *atable)
 			goto eek;
 		if (!(hibuf = blockread(mapping(atable), block)))
 			goto eek;
-		be_u16 *lorefs = lobuf->data, *hirefs = hibuf->data;
+		be_u16 *lorefs = bufdata(lobuf), *hirefs = bufdata(hibuf);
 		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
 			unsigned refs = (from_be_u16(hirefs[i]) << 16) + from_be_u16(lorefs[i]);
 			if (!refs)
@@ -130,7 +130,7 @@ eek:
 
 atom_t get_freeatom(struct inode *atable)
 {
-	SB = atable->i_sb;
+	SB = tux_sb(atable->i_sb);
 	atom_t atom = sb->freeatom;
 	if (!atom)
 		return sb->atomgen++;
@@ -151,7 +151,7 @@ eek:
 
 int use_atom(struct inode *atable, atom_t atom, int use)
 {
-	SB = atable->i_sb;
+	SB = tux_sb(atable->i_sb);
 	unsigned shift = sb->blockbits - 1;
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
@@ -228,11 +228,11 @@ atom_t make_atom(struct inode *atable, char *name, unsigned len)
 
 int xcache_dump(struct inode *inode)
 {
-	if (!inode->xcache)
+	if (!tux_inode(inode)->xcache)
 		return 0;
 	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
-	struct xattr *xattr = inode->xcache->xattrs;
-	struct xattr *limit = xcache_limit(inode->xcache);
+	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
+	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
 	while (xattr < limit) {
 		if (!xattr->size)
 			goto zero;
@@ -258,10 +258,10 @@ barf:
 
 struct xattr *xcache_lookup(struct inode *inode, unsigned atom, int *err)
 {
-	if (!inode->xcache)
+	if (!tux_inode(inode)->xcache)
 		return NULL;
-	struct xattr *xattr = inode->xcache->xattrs;
-	struct xattr *limit = xcache_limit(inode->xcache);
+	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
+	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
 	while (xattr < limit) {
 		if (!xattr->size)
 			goto zero;
@@ -313,12 +313,12 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 	if (xattr) {
 		unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
 		//warn("size = %i\n", size);
-		memmove(xattr, xcache_next(xattr), inode->xcache->size -= size);
+		memmove(xattr, xcache_next(xattr), tux_inode(inode)->xcache->size -= size);
 		use--;
 	}
 	if (len) {
 		unsigned more = sizeof(*xattr) + len;
-		struct xcache *xcache = inode->xcache;
+		struct xcache *xcache = tux_inode(inode)->xcache;
 		if (!xcache || xcache->size + more > xcache->maxsize) {
 			unsigned oldsize = xcache ? xcache->size : offsetof(struct xcache, xattrs);
 			unsigned maxsize = xcache ? xcache->maxsize : (1 << 7);
@@ -331,11 +331,11 @@ int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
 				newcache->size = oldsize;
 				free(xcache);
 			}
-			inode->xcache = newcache;
+			tux_inode(inode)->xcache = newcache;
 		}
-		xattr = xcache_limit(inode->xcache);
+		xattr = xcache_limit(tux_inode(inode)->xcache);
 		//warn("expand by %i\n", more);
-		inode->xcache->size += more;
+		tux_inode(inode)->xcache->size += more;
 		memcpy(xattr->body, data, (xattr->size = len));
 		xattr->atom = atom;
 		use++;
@@ -363,19 +363,20 @@ int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigne
 }
 
 /* Xattr encode/decode */
-
+#ifndef __KERNEL__
 #ifndef main
 #define main notmain2
 #include "ileaf.c"
 #undef main
 #endif
+#endif /* !__KERNEL__ */
 
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 {
-	if (!inode->xcache)
+	if (!tux_inode(inode)->xcache)
 		return attrs;
-	struct xattr *xattr = inode->xcache->xattrs;
-	struct xattr *xtop = xcache_limit(inode->xcache);
+	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
+	struct xattr *xtop = xcache_limit(tux_inode(inode)->xcache);
 	void *limit = attrs + size - 3;
 	while (xattr < xtop) {
 		if (attrs >= limit)
@@ -418,11 +419,11 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 
 unsigned encode_xsize(struct inode *inode)
 {
-	if (!inode->xcache)
+	if (!tux_inode(inode)->xcache)
 		return 0;
 	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
-	struct xattr *xattr = inode->xcache->xattrs;
-	struct xattr *limit = xcache_limit(inode->xcache);
+	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
+	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
 	while (xattr < limit) {
 		size += 2 + xatsize + xattr->size;
 		xattr = xcache_next(xattr);
@@ -431,6 +432,7 @@ unsigned encode_xsize(struct inode *inode)
 	return size;
 }
 
+#ifndef __KERNEL__
 #ifndef main
 #include <fcntl.h>
 
@@ -543,3 +545,4 @@ int main(int argc, char *argv[])
 	return 0;
 }
 #endif
+#endif /* !__KERNEL__ */

@@ -64,8 +64,6 @@ typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offse
 #define TUX_MAX_REC_LEN ((1<<16)-1)
 #define TUX_NAME_LEN 255
 
-typedef struct { be_u32 inum; be_u16 rec_len; u8 name_len, type; char name[]; } tux_dirent;
-
 static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
 {
 	unsigned len = from_be_u16(dlen);
