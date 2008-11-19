@@ -239,6 +239,17 @@ static inline map_t *mapping(struct inode *inode)
 {
 	return inode->i_mapping;
 }
+
+static inline void *malloc(size_t size)
+{
+	might_sleep();
+	return kmalloc(size, GFP_KERNEL);
+}
+
+static inline void free(void *ptr)
+{
+	kfree(ptr);
+}
 #else
 struct inode {
 	struct btree btree;
