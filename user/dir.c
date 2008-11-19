@@ -59,36 +59,36 @@ typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offse
 
 #include "tux3.h"
 
-#define EXT2_DIR_PAD 3
-#define EXT2_REC_LEN(name_len) (((name_len) + 8 + EXT2_DIR_PAD) & ~EXT2_DIR_PAD)
-#define EXT2_MAX_REC_LEN ((1<<16)-1)
-#define EXT2_NAME_LEN 255
+#define TUX_DIR_PAD 3
+#define TUX_REC_LEN(name_len) (((name_len) + 8 + TUX_DIR_PAD) & ~TUX_DIR_PAD)
+#define TUX_MAX_REC_LEN ((1<<16)-1)
+#define TUX_NAME_LEN 255
 
-typedef struct { be_u32 inum; be_u16 rec_len; u8 name_len, type; char name[]; } ext2_dirent;
+typedef struct { be_u32 inum; be_u16 rec_len; u8 name_len, type; char name[]; } tux_dirent;
 
-static inline unsigned ext2_rec_len_from_disk(be_u16 dlen)
+static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
 {
 	unsigned len = from_be_u16(dlen);
-	if (len == EXT2_MAX_REC_LEN)
+	if (len == TUX_MAX_REC_LEN)
 		return 1 << 16;
 	return len;
 }
 
-static inline be_u16 ext2_rec_len_to_disk(unsigned len)
+static inline be_u16 tux_rec_len_to_disk(unsigned len)
 {
 	if (len == (1 << 16))
-		return to_be_u16(EXT2_MAX_REC_LEN);
+		return to_be_u16(TUX_MAX_REC_LEN);
 	else if (len > (1 << 16))
 		error("oops");
 	return to_be_u16(len);
 }
 
-static inline int is_deleted(ext2_dirent *entry)
+static inline int is_deleted(tux_dirent *entry)
 {
 	return !entry->name_len; /* ext2 uses !inum for this */
 }
 
-static inline int ext2_match(ext2_dirent *entry, const char *const name, int len)
+static inline int tux_match(tux_dirent *entry, const char *const name, int len)
 {
 	if (len != entry->name_len)
 		return 0;
@@ -97,59 +97,59 @@ static inline int ext2_match(ext2_dirent *entry, const char *const name, int len
 	return !memcmp(name, entry->name, len);
 }
 
-static inline ext2_dirent *next_entry(ext2_dirent *entry)
+static inline tux_dirent *next_entry(tux_dirent *entry)
 {
-	return (ext2_dirent *)((char *)entry + ext2_rec_len_from_disk(entry->rec_len));
+	return (tux_dirent *)((char *)entry + tux_rec_len_from_disk(entry->rec_len));
 }
 
 enum {
-	EXT2_UNKNOWN,
-	EXT2_REG,
-	EXT2_DIR,
-	EXT2_CHR,
-	EXT2_BLK,
-	EXT2_FIFO,
-	EXT2_SOCK,
-	EXT2_LNK,
-	EXT2_TYPES
+	TUX_UNKNOWN,
+	TUX_REG,
+	TUX_DIR,
+	TUX_CHR,
+	TUX_BLK,
+	TUX_FIFO,
+	TUX_SOCK,
+	TUX_LNK,
+	TUX_TYPES
 };
 
 #define STAT_SHIFT 12
 
-static unsigned char ext2_type_by_mode[S_IFMT >> STAT_SHIFT] = {
-	[S_IFREG >> STAT_SHIFT] = EXT2_REG,
-	[S_IFDIR >> STAT_SHIFT] = EXT2_DIR,
-	[S_IFCHR >> STAT_SHIFT] = EXT2_CHR,
-	[S_IFBLK >> STAT_SHIFT] = EXT2_BLK,
-	[S_IFIFO >> STAT_SHIFT] = EXT2_FIFO,
-	[S_IFSOCK >> STAT_SHIFT] = EXT2_SOCK,
-	[S_IFLNK >> STAT_SHIFT] = EXT2_LNK,
+static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
+	[S_IFREG >> STAT_SHIFT] = TUX_REG,
+	[S_IFDIR >> STAT_SHIFT] = TUX_DIR,
+	[S_IFCHR >> STAT_SHIFT] = TUX_CHR,
+	[S_IFBLK >> STAT_SHIFT] = TUX_BLK,
+	[S_IFIFO >> STAT_SHIFT] = TUX_FIFO,
+	[S_IFSOCK >> STAT_SHIFT] = TUX_SOCK,
+	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
-loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
 {
-	ext2_dirent *entry;
+	tux_dirent *entry;
 	struct buffer_head *buffer;
-	unsigned reclen = EXT2_REC_LEN(len), rec_len, name_len, offset;
+	unsigned reclen = TUX_REC_LEN(len), rec_len, name_len, offset;
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
 	unsigned blocks = dir->i_size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		buffer = blockget(mapping(dir), block);
 		entry = bufdata(buffer);
-		ext2_dirent *limit = bufdata(buffer) + blocksize - reclen;
+		tux_dirent *limit = bufdata(buffer) + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				warn("zero-length directory entry");
 				brelse(buffer);
 				return -1;
 			}
-			name_len = EXT2_REC_LEN(entry->name_len);
-			rec_len = ext2_rec_len_from_disk(entry->rec_len);
+			name_len = TUX_REC_LEN(entry->name_len);
+			rec_len = tux_rec_len_from_disk(entry->rec_len);
 			if (is_deleted(entry) && rec_len >= reclen)
 				goto create;
 			if (rec_len >= name_len + reclen)
 				goto create;
-			entry = (ext2_dirent *)((char *)entry + rec_len);
+			entry = (tux_dirent *)((char *)entry + rec_len);
 		}
 		brelse(buffer);
 	}
@@ -157,19 +157,19 @@ loff_t ext2_create_entry(struct inode *dir, const char *name, int len, unsigned 
 	entry = bufdata(buffer);
 	name_len = 0;
 	rec_len = blocksize;
-	*entry = (ext2_dirent){ .rec_len = ext2_rec_len_to_disk(blocksize) };
+	*entry = (tux_dirent){ .rec_len = tux_rec_len_to_disk(blocksize) };
 	dir->i_size += blocksize;
 create:
 	if (!is_deleted(entry)) {
-		ext2_dirent *newent = (ext2_dirent *)((char *)entry + name_len);
-		newent->rec_len = ext2_rec_len_to_disk(rec_len - name_len);
-		entry->rec_len = ext2_rec_len_to_disk(name_len);
+		tux_dirent *newent = (tux_dirent *)((char *)entry + name_len);
+		newent->rec_len = tux_rec_len_to_disk(rec_len - name_len);
+		entry->rec_len = tux_rec_len_to_disk(name_len);
 		entry = newent;
 	}
 	entry->name_len = len;
 	memcpy(entry->name, name, len);
 	entry->inum = to_be_u32(inum);
-	entry->type = ext2_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
+	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	dir->i_mtime = dir->i_ctime = gettime();
 	mark_inode_dirty(dir);
 	offset = (void *)entry - bufdata(buffer);
@@ -177,22 +177,22 @@ create:
 	return (block << blockbits) + offset;
 }
 
-ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
 {
-	unsigned reclen = EXT2_REC_LEN(len);
+	unsigned reclen = TUX_REC_LEN(len);
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
 	unsigned blocks = dir->i_size >> tux_sb(dir->i_sb)->blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
-		ext2_dirent *entry = bufdata(buffer);
-		ext2_dirent *limit = (void *)entry + blocksize - reclen;
+		tux_dirent *entry = bufdata(buffer);
+		tux_dirent *limit = (void *)entry + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
 				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return NULL;
 			}
-			if (ext2_match(entry, name, len)) {
+			if (tux_match(entry, name, len)) {
 				*result = buffer;
 				return entry;
 			}
@@ -204,18 +204,18 @@ ext2_dirent *ext2_find_entry(struct inode *dir, const char *name, int len, struc
 	return NULL;
 }
 
-static unsigned char filetype[EXT2_TYPES] = {
-	[EXT2_UNKNOWN] = DT_UNKNOWN,
-	[EXT2_REG] = DT_REG,
-	[EXT2_DIR] = DT_DIR,
-	[EXT2_CHR] = DT_CHR,
-	[EXT2_BLK] = DT_BLK,
-	[EXT2_FIFO] = DT_FIFO,
-	[EXT2_SOCK] = DT_SOCK,
-	[EXT2_LNK] = DT_LNK,
+static unsigned char filetype[TUX_TYPES] = {
+	[TUX_UNKNOWN] = DT_UNKNOWN,
+	[TUX_REG] = DT_REG,
+	[TUX_DIR] = DT_DIR,
+	[TUX_CHR] = DT_CHR,
+	[TUX_BLK] = DT_BLK,
+	[TUX_FIFO] = DT_FIFO,
+	[TUX_SOCK] = DT_SOCK,
+	[TUX_LNK] = DT_LNK,
 };
 
-static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
+static int tux_readdir(struct file *file, void *state, filldir_t filldir)
 {
 	loff_t pos = file->f_pos;
 	struct inode *dir = file->f_inode;
@@ -232,8 +232,8 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 			return -EIO;
 		if (revalidate) {
 			if (offset) {
-				ext2_dirent *entry = base + offset;
-				ext2_dirent *p = base + (offset & blockmask);
+				tux_dirent *entry = base + offset;
+				tux_dirent *p = base + (offset & blockmask);
 				while (p < entry && p->rec_len)
 					p = next_entry(p);
 				offset = (void *)p - base;
@@ -243,15 +243,15 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 			revalidate = 0;
 		}
 		unsigned size = dir->i_size - (block << blockbits);
-		ext2_dirent *limit = base + (size > blocksize ? blocksize : size) - EXT2_REC_LEN(1);
-		for (ext2_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
+		tux_dirent *limit = base + (size > blocksize ? blocksize : size) - TUX_REC_LEN(1);
+		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
 				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return -EIO;
 			}
 			if (!is_deleted(entry)) {
-				unsigned type = (entry->type < EXT2_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
+				unsigned type = (entry->type < TUX_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
 				int lame = filldir(
 					state, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
@@ -261,7 +261,7 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 					return 0;
 				}
 			}
-			file->f_pos += ext2_rec_len_from_disk(entry->rec_len);
+			file->f_pos += tux_rec_len_from_disk(entry->rec_len);
 		}
 		brelse(buffer);
 		offset = 0;
@@ -269,9 +269,9 @@ static int ext2_readdir(struct file *file, void *state, filldir_t filldir)
 	return 0;
 }
 
-int ext2_delete_entry(struct buffer_head *buffer, ext2_dirent *entry)
+int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 {
-	ext2_dirent *prev = NULL, *this = bufdata(buffer);
+	tux_dirent *prev = NULL, *this = bufdata(buffer);
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
 			warn("zero-length directory entry");
@@ -282,8 +282,8 @@ int ext2_delete_entry(struct buffer_head *buffer, ext2_dirent *entry)
 		this = next_entry(this);
 	}
 	if (prev)
-		prev->rec_len = ext2_rec_len_to_disk((void *)entry +
-		ext2_rec_len_from_disk(entry->rec_len) - (void *)prev);
+		prev->rec_len = tux_rec_len_to_disk((void *)entry +
+		tux_rec_len_from_disk(entry->rec_len) - (void *)prev);
 	memset(entry->name, 0, entry->name_len);
 	entry->name_len = entry->type = 0;
 	entry->inum = to_be_u32(0);
@@ -291,12 +291,12 @@ int ext2_delete_entry(struct buffer_head *buffer, ext2_dirent *entry)
 	return 0;
 }
 #ifndef __KERNEL__
-void ext2_dump_entries(struct buffer_head *buffer)
+void tux_dump_entries(struct buffer_head *buffer)
 {
 	unsigned blocksize = bufsize(buffer);
 	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)bufindex(buffer));
-	ext2_dirent *entry = (ext2_dirent *)bufdata(buffer);
-	ext2_dirent *limit = bufdata(buffer) + blocksize;
+	tux_dirent *entry = (tux_dirent *)bufdata(buffer);
+	tux_dirent *limit = bufdata(buffer) + blocksize;
 	while (entry < limit) {
 		if (!entry->rec_len) {
 			warn("Zero length entry");
@@ -328,29 +328,29 @@ int main(int argc, char *argv[])
 	struct buffer_head *buffer;
 	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
 	map->inode = &(struct inode){ .i_sb = sb, .map = map, .i_mode = S_IFDIR };
-	ext2_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
-	ext2_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
-	ext2_dirent *entry = ext2_find_entry(map->inode, "hello", 5, &buffer);
+	tux_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
+	tux_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
+	tux_dirent *entry = tux_find_entry(map->inode, "hello", 5, &buffer);
 	if (entry)
 		hexdump(entry, entry->name_len);
-	ext2_dump_entries(blockget(map, 0));
+	tux_dump_entries(blockget(map, 0));
 
-	if (!ext2_delete_entry(buffer, entry)) {
+	if (!tux_delete_entry(buffer, entry)) {
 		show_buffers(map);
 		map->inode->i_ctime = map->inode->i_mtime = gettime();
 		mark_inode_dirty(map->inode);
 	}
 
-	ext2_dump_entries(blockget(map, 0));
+	tux_dump_entries(blockget(map, 0));
 	struct file *file = &(struct file){ .f_inode = map->inode };
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
-		ext2_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
+		tux_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
 	}
-	ext2_dump_entries(blockget(map, 0));
+	tux_dump_entries(blockget(map, 0));
 	char dents[10000];
-	ext2_readdir(file, dents, filldir);
+	tux_readdir(file, dents, filldir);
 	show_buffers(map);
 	return 0;
 }

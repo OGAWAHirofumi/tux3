@@ -294,7 +294,7 @@ struct fillstate { char *dirent; int done; unsigned inode; unsigned type; };
 int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
 {
 	struct fillstate *state = info;
-	if (state->done || namelen > EXT2_NAME_LEN)
+	if (state->done || namelen > TUX_NAME_LEN)
 		return -EINVAL;
 	printf("'%.*s'\n", namelen, name);
 	memcpy(state->dirent, name, namelen);
@@ -305,14 +305,14 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 	return 0;
 }
 
-/* FIXME: this should return more than one dirent per ext2_readdir */
+/* FIXME: this should return more than one dirent per tux_readdir */
 static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	struct fuse_file_info *fi)
 {
 	fprintf(stderr, "tux3_readdir(%Lx)\n", (L)ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *dirfile = &(struct file){ .f_inode = inode, .f_pos = offset };
-	char dirent[EXT2_NAME_LEN + 1];
+	char dirent[TUX_NAME_LEN + 1];
 	char *buf = malloc(size);
 	if (!buf) {
 		fuse_reply_err(req, ENOMEM);
@@ -321,7 +321,7 @@ static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offs
 
 	while (dirfile->f_pos < dirfile->f_inode->i_size) {
 		struct fillstate fstate = { .dirent = dirent };
-		if ((errno = -ext2_readdir(dirfile, &fstate, tux3_filler))) {
+		if ((errno = -tux_readdir(dirfile, &fstate, tux3_filler))) {
 			fuse_reply_err(req, errno);
 			free(buf);
 			return;
@@ -344,7 +344,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	fprintf(stderr, "tux3_unlink(%Lx, '%s')\n", (L)parent, name);
 	struct buffer_head *buffer;
-	ext2_dirent *entry = ext2_find_entry(sb->rootdir, name, strlen(name), &buffer);
+	tux_dirent *entry = tux_find_entry(sb->rootdir, name, strlen(name), &buffer);
 	if (!entry)
 		goto noent;
 	inum_t inum = from_be_u32(entry->inum);
@@ -355,7 +355,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		goto eek;
 	if ((errno = -tree_chop(&inode.btree, &(struct delete_info){ .key = 0 }, -1)))
 		goto eek;
-	if ((errno = -ext2_delete_entry(buffer, entry)))
+	if ((errno = -tux_delete_entry(buffer, entry)))
 		goto eek;
 
 	fuse_reply_err(req, 0);

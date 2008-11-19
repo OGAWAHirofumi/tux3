@@ -266,7 +266,7 @@ int purge_inum(BTREE, inum_t inum)
 struct inode *tuxopen(struct inode *dir, const char *name, int len)
 {
 	struct buffer_head *buffer;
-	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
 	if (!entry)
 		return NULL;
 	inum_t inum = from_be_u32(entry->inum);
@@ -280,7 +280,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	iattr->ctime = gettime();
 
 	struct buffer_head *buffer;
-	ext2_dirent *entry = ext2_find_entry(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
 	if (entry) {
 		brelse(buffer);
 		return NULL; // should allow create of a file that already exists
@@ -298,7 +298,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	int err = make_inode(inode, iattr);
 	if (err)
 		return NULL; // err ???
-	if (ext2_create_entry(dir, name, len, inode->inum, iattr->mode) >= 0)
+	if (tux_create_entry(dir, name, len, inode->inum, iattr->mode) >= 0)
 		return inode;
 	purge_inum(&dir->i_sb->itable, inode->inum); // test me!!!
 	free_inode(inode);
@@ -474,7 +474,7 @@ int main(int argc, char *argv[])
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
 		return 1;
-	ext2_dump_entries(blockget(mapping(sb->rootdir), 0));
+	tux_dump_entries(blockget(mapping(sb->rootdir), 0));
 
 	trace(">>> write file");
 	char buf[100] = { };

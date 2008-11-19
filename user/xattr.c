@@ -52,7 +52,7 @@
 
 typedef u32 atom_t;
 
-static inline atom_t entry_atom(ext2_dirent *entry)
+static inline atom_t entry_atom(tux_dirent *entry)
 {
 	return from_be_u32(entry->inum);
 }
@@ -90,7 +90,7 @@ void dump_atoms(struct inode *atable)
 			buffer = blockread(mapping(atable), where >> sb->blockbits);
 			if (!buffer)
 				goto eek;
-			ext2_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
+			tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 			if (entry_atom(entry) != atom) {
 				warn("atom %x reverse entry broken", atom);
 				continue;
@@ -181,9 +181,9 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 		((be_u64 *)bufdata(buffer))[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
 		sb->freeatom = atom;
 		buffer = blockread(mapping(atable), where >> sb->blockbits);
-		ext2_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
+		tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 		if (entry_atom(entry) == atom)
-			ext2_delete_entry(buffer, entry);
+			tux_delete_entry(buffer, entry);
 		else {
 			warn("atom entry not found");
 			brelse(buffer);
@@ -195,7 +195,7 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 atom_t find_atom(struct inode *atable, char *name, unsigned len)
 {
 	struct buffer_head *buffer;
-	ext2_dirent *entry = ext2_find_entry(atable, name, len, &buffer);
+	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer);
 	if (!entry)
 		return -1;
 	atom_t atom = entry_atom(entry);
@@ -209,7 +209,7 @@ atom_t make_atom(struct inode *atable, char *name, unsigned len)
 	if (atom != -1)
 		return atom;
 	atom = get_freeatom(atable);
-	loff_t where = ext2_create_entry(atable, name, len, atom, 0);
+	loff_t where = tux_create_entry(atable, name, len, atom, 0);
 	if (where < 0)
 		return -1; // and what about the err???
 
