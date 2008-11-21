@@ -243,7 +243,7 @@ static inline map_t *mapping(struct inode *inode)
 static inline void *malloc(size_t size)
 {
 	might_sleep();
-	return kmalloc(size, GFP_KERNEL);
+	return kmalloc(size, GFP_NOFS);
 }
 
 static inline void free(void *ptr)
