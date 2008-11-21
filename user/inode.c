@@ -42,10 +42,10 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
-int store_attrs(SB, struct tux_path path[], struct inode *inode)
+int store_attrs(struct inode *inode, struct tux_path path[])
 {
 	unsigned size = encode_asize(inode->present) + encode_xsize(inode);
-	void *base = tree_expand(&sb->itable, inode->inum, size, path);
+	void *base = tree_expand(&inode->i_sb->itable, inode->inum, size, path);
 	if (!base)
 		return -ENOMEM; // what was the actual error???
 	void *attr = encode_attrs(inode, base, size);
@@ -116,7 +116,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	inode->i_nlink = 1;
 	inode->btree = new_btree(sb, &dtree_ops); // error???
 	inode->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
-	if ((err = store_attrs(sb, path, inode)))
+	if ((err = store_attrs(inode, path)))
 		goto eek;
 	release_path(path, levels + 1);
 	free_path(path);
@@ -181,7 +181,7 @@ int save_inode(struct inode *inode)
 	unsigned size;
 	if (!(ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size)))
 		return -EINVAL;
-	err = store_attrs(sb, path, inode);
+	err = store_attrs(inode, path);
 	release_path(path, levels + 1);
 	free_path(path);
 	return err;
