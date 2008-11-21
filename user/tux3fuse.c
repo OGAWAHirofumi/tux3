@@ -395,11 +395,11 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	if (!(sb->bitmap = new_inode(sb, 0)))
+	if (!(sb->bitmap = new_inode(sb, TUX_BITMAP_INO)))
 		goto nomem;
-	if (!(sb->rootdir = new_inode(sb, 0xd)))
+	if (!(sb->rootdir = new_inode(sb, TUX_ROOTDIR_INO)))
 		goto nomem;
-	if (!(sb->atable = new_inode(sb, 0xa)))
+	if (!(sb->atable = new_inode(sb, TUX_ATABLE_INO)))
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;

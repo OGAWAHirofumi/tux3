@@ -26,16 +26,11 @@ static int fls(uint32_t v)
 	return bit;
 }
 
-#define TUX3_BITMAP_INO		0
-#define TUX3_VTABLE_INO		2
-#define TUX3_ATABLE_INO		10
-#define TUX3_ROOTDIR_INO	13
-
 static const char *dtree_names[] = {
-	[TUX3_BITMAP_INO]	= "bitmap",
-	[TUX3_VTABLE_INO]	= "vtable",
-	[TUX3_ATABLE_INO]	= "atable",
-	[TUX3_ROOTDIR_INO]	= "rootdir",
+	[TUX_BITMAP_INO]	= "bitmap",
+	[TUX_VTABLE_INO]	= "vtable",
+	[TUX_ATABLE_INO]	= "atable",
+	[TUX_ROOTDIR_INO]	= "rootdir",
 };
 
 static int verbose;
@@ -518,11 +513,11 @@ int main(int argc, const char *argv[])
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	if (!(sb->bitmap = new_inode(sb, 0)))
+	if (!(sb->bitmap = new_inode(sb, TUX_BITMAP_INO)))
 		goto eek;
-	if (!(sb->rootdir = new_inode(sb, 0xd)))
+	if (!(sb->rootdir = new_inode(sb, TUX_ROOTDIR_INO)))
 		goto eek;
-	if (!(sb->atable = new_inode(sb, 0xa)))
+	if (!(sb->atable = new_inode(sb, TUX_ATABLE_INO)))
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
