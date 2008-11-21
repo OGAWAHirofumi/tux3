@@ -90,13 +90,13 @@ static inline struct bnode *path_node(struct tux_path path[], int level)
 	return bufdata(path[level].buffer);
 }
 
-static void release_path(struct tux_path *path, int levels)
+static void release_path(struct tux_path path[], int levels)
 {
 	for (int i = 0; i < levels; i++)
 		brelse(path[i].buffer);
 }
 
-void show_path(struct tux_path *path, int levels)
+void show_path(struct tux_path path[], int levels)
 {
 	printf(">>> path %p/%i:", path, levels);
 	for (int i = 0; i < levels; i++)
@@ -109,12 +109,12 @@ struct tux_path *alloc_path(int levels)
 	return malloc(sizeof(struct tux_path) * levels);
 }
 
-void free_path(struct tux_path *path)
+void free_path(struct tux_path path[])
 {
 	free(path);
 }
 
-int probe(BTREE, tuxkey_t key, struct tux_path *path)
+int probe(BTREE, tuxkey_t key, struct tux_path path[])
 {
 	unsigned i, levels = btree->root.depth;
 	struct buffer_head *buffer = sb_bread(vfs_sb(btree->sb), btree->root.block);
@@ -148,7 +148,7 @@ static inline int level_finished(struct tux_path path[], int level)
 }
 // also write level_beginning!!!
 
-int advance(BTREE, struct tux_path *path)
+int advance(BTREE, struct tux_path path[])
 {
 	int levels = btree->root.depth, level = levels;
 	struct buffer_head *buffer = path[level].buffer;
@@ -177,7 +177,7 @@ eek:
  * all the way to the end of the index block, there we find the key that
  * separates the subtree we are in (a leaf) from the next subtree to the right.
  */
-be_u64 *next_keyp(struct tux_path *path, int levels)
+be_u64 *next_keyp(struct tux_path path[], int levels)
 {
 	for (int level = levels; level--;)
 		if (!level_finished(path, level))
@@ -185,7 +185,7 @@ be_u64 *next_keyp(struct tux_path *path, int levels)
 	return NULL;
 }
 
-tuxkey_t next_key(struct tux_path *path, int levels)
+tuxkey_t next_key(struct tux_path path[], int levels)
 {
 	be_u64 *keyp = next_keyp(path, levels);
 	return keyp ? from_be_u64(*keyp) : -1;

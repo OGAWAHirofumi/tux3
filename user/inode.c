@@ -42,7 +42,7 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
-int store_attrs(SB, struct tux_path *path, struct inode *inode)
+int store_attrs(SB, struct tux_path path[], struct inode *inode)
 {
 	unsigned size = encode_asize(inode->present) + encode_xsize(inode);
 	void *base = tree_expand(&sb->itable, inode->inum, size, path);

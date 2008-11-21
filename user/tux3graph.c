@@ -120,7 +120,7 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 	}
 }
 
-static void draw_path(struct graph_info *gi, BTREE, struct tux_path *path)
+static void draw_path(struct graph_info *gi, BTREE, struct tux_path path[])
 {
 	int level;
 	for (level = 0; level < btree->root.depth; level++)
@@ -128,7 +128,7 @@ static void draw_path(struct graph_info *gi, BTREE, struct tux_path *path)
 }
 
 static int draw_advance(struct graph_info *gi, struct map *map,
-			struct tux_path *path, int levels)
+			struct tux_path path[], int levels)
 {
 	int level = levels;
 	struct buffer_head *buffer = path[level].buffer;

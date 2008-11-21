@@ -557,9 +557,9 @@ block_t balloc_extent(SB, unsigned blocks);
 
 /* btree.c */
 struct tux_path *alloc_path(int);
-void free_path(struct tux_path *path);
-int probe(BTREE, tuxkey_t key, struct tux_path *path);
-tuxkey_t next_key(struct tux_path *path, int levels);
+void free_path(struct tux_path path[]);
+int probe(BTREE, tuxkey_t key, struct tux_path path[]);
+tuxkey_t next_key(struct tux_path path[], int levels);
 int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key);
 
 /* dir.c */
