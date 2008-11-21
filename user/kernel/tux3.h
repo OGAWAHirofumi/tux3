@@ -530,6 +530,14 @@ static inline struct ileaf *to_ileaf(vleaf *leaf)
 	return leaf;
 }
 
+/* for tree_chop */
+struct delete_info {
+	tuxkey_t key;
+	block_t blocks, freed;
+	block_t resume;
+	int create;
+};
+
 #ifdef __KERNEL__
 static inline void *bufdata(struct buffer_head *buffer)
 {
@@ -568,6 +576,8 @@ void free_path(struct tux_path path[]);
 int probe(BTREE, tuxkey_t key, struct tux_path path[]);
 int advance(BTREE, struct tux_path path[]);
 tuxkey_t next_key(struct tux_path path[], int levels);
+void show_tree_range(BTREE, tuxkey_t start, unsigned count);
+int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline);
 int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key);
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tux_path path[]);
 struct btree new_btree(SB, struct btree_ops *ops);
@@ -599,6 +609,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
 void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result);
 inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal);
 int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf);
+extern struct btree_ops itable_ops;
 
 /* inode.c */
 struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
@@ -606,6 +617,8 @@ struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
 /* xattr.c */
 int xcache_dump(struct inode *inode);
 struct xcache *new_xcache(unsigned maxsize);
+struct xattr *get_xattr(struct inode *inode, char *name, unsigned len);
+int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);

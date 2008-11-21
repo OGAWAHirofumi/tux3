@@ -259,8 +259,6 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count = to_be_u32(bcount(node) + bcount(node2));
 }
 
-struct delete_info { tuxkey_t key; block_t blocks, freed; block_t resume; int create; };
-
 int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 {
 	(btree->ops->leaf_chop)(btree, info->key, leaf);
