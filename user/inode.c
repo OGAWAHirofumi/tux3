@@ -9,10 +9,13 @@
  * the right to distribute those changes under any license.
  */
 
+#include "tux3.h"
+
 #ifndef trace
 #define trace trace_on
 #endif
 
+#ifndef __KERNEL__
 #define filemap_included
 #include "filemap.c"
 #undef main
@@ -41,11 +44,12 @@ void free_inode(struct inode *inode)
 		free(inode->xcache);
 	free(inode);
 }
+#endif /* !__KERNEL__ */
 
 int store_attrs(struct inode *inode, struct tux_path path[])
 {
-	unsigned size = encode_asize(inode->present) + encode_xsize(inode);
-	void *base = tree_expand(&inode->i_sb->itable, inode->inum, size, path);
+	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
+	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, path);
 	if (!base)
 		return -ENOMEM; // what was the actual error???
 	void *attr = encode_attrs(inode, base, size);
@@ -85,20 +89,20 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	if (!path)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, inode->inum, path))) {
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
 		free_path(path);
 		return err;
 	}
 	struct buffer_head *leafbuf = path[levels].buffer;
-	struct ileaf *leaf = to_ileaf(leafbuf->data);
+//	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
 
-	trace("create inode 0x%Lx", (L)inode->inum);
-	assert(!inode->btree.root.depth);
-	inum_t inum = inode->inum;
+	trace("create inode 0x%Lx", (L)tux_inode(inode)->inum);
+	assert(!tux_inode(inode)->btree.root.depth);
+	inum_t inum = tux_inode(inode)->inum;
 	assert(inum < next_key(path, levels));
 	while (1) {
-		printf("find empty inode in [%Lx] base %Lx\n", (L)leafbuf->index, (L)ibase(leaf));
-		inum = find_empty_inode(&sb->itable, leafbuf->data, (L)inum);
+//		printf("find empty inode in [%Lx] base %Lx\n", (L)bufindex(leafbuf), (L)ibase(leaf));
+		inum = find_empty_inode(&sb->itable, bufdata(leafbuf), (L)inum);
 		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
 		if (inum < next_key(path, levels))
 			break;
@@ -108,14 +112,14 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 			goto errout;
 	}
 
-	inode->inum = inum;
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
 	inode->i_nlink = 1;
-	inode->btree = new_btree(sb, &dtree_ops); // error???
-	inode->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
+	tux_inode(inode)->inum = inum;
+	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
+	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
 	if ((err = store_attrs(inode, path)))
 		goto eek;
 	release_path(path, levels + 1);
@@ -125,7 +129,7 @@ eek:
 	release_path(path, levels + 1);
 errout:
 	free_path(path);
-	warn("make_inode 0x%Lx failed (%s)", (L)inode->inum, strerror(-err));
+	warn("make_inode 0x%Lx failed (%d)", (L)tux_inode(inode)->inum, err);
 	return err;
 }
 
@@ -137,26 +141,26 @@ int open_inode(struct inode *inode)
 	if (!path)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, inode->inum, path))) {
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
 		free_path(path);
 		return err;
 	}
 	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size);
+	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size);
 	if (!attrs) {
 		err = -ENOENT;
 		goto eek;
 	}
-	trace("found inode 0x%Lx", (L)inode->inum);
+	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
 	//ileaf_dump(&sb->itable, path[levels].buffer->data);
 	//hexdump(attrs, size);
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;
-	if (!(inode->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
+	if (!(tux_inode(inode)->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
 		goto eek;
 	decode_attrs(inode, attrs, size); // error???
 	dump_attrs(inode);
-	if (inode->xcache)
+	if (tux_inode(inode)->xcache)
 		xcache_dump(inode);
 	err = 0;
 eek:
@@ -167,19 +171,19 @@ eek:
 
 int save_inode(struct inode *inode)
 {
-	trace("save inode 0x%Lx", (L)inode->inum);
+	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	SB = tux_sb(inode->i_sb);
 	int err, levels = sb->itable.root.depth;
 	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, inode->inum, path))) {
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
 		free_path(path);
 		return err;
 	}
 	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, inode->inum, path[levels].buffer->data, &size)))
+	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size)))
 		return -EINVAL;
 	err = store_attrs(inode, path);
 	release_path(path, levels + 1);
@@ -187,6 +191,23 @@ int save_inode(struct inode *inode)
 	return err;
 }
 
+int purge_inum(BTREE, inum_t inum)
+{
+	int err = -ENOENT, levels = btree->sb->itable.root.depth;
+	struct tux_path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if (!(err = probe(btree, inum, path))) {
+		struct ileaf *ileaf = to_ileaf(bufdata(path[levels].buffer));
+		err = ileaf_purge(btree, inum, ileaf);
+		release_path(path, levels + 1);
+	}
+	free_path(path);
+	return err;
+}
+
+#ifndef __KERNEL__
 int tuxio(struct file *file, char *data, unsigned len, int write)
 {
 	int err = 0;
@@ -214,11 +235,11 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			break;
 		}
 		if (write)
-			memcpy(buffer->data + from, data, some);
+			memcpy(bufdata(buffer) + from, data, some);
 		else
-			memcpy(data, buffer->data + from, some);
-		printf("transfer %u bytes, block 0x%Lx, buffer %p\n", some, (L)buffer->index, buffer);
-		hexdump(buffer->data + from, some);
+			memcpy(data, bufdata(buffer) + from, some);
+		printf("transfer %u bytes, block 0x%Lx, buffer %p\n", some, (L)bufindex(buffer), buffer);
+		hexdump(bufdata(buffer) + from, some);
 		set_buffer_dirty(buffer);
 		brelse(buffer);
 		tail -= some;
@@ -245,22 +266,6 @@ void tuxseek(struct file *file, loff_t pos)
 {
 	warn("seek to 0x%Lx", (L)pos);
 	file->f_pos = pos;
-}
-
-int purge_inum(BTREE, inum_t inum)
-{
-	int err = -ENOENT, levels = btree->sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if (!(err = probe(btree, inum, path))) {
-		struct ileaf *ileaf = to_ileaf(path[levels].buffer->data);
-		err = ileaf_purge(btree, inum, ileaf);
-		release_path(path, levels + 1);
-	}
-	free_path(path);
-	return err;
 }
 
 struct inode *tuxopen(struct inode *dir, const char *name, int len)
@@ -298,9 +303,9 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	int err = make_inode(inode, iattr);
 	if (err)
 		return NULL; // err ???
-	if (tux_create_entry(dir, name, len, inode->inum, iattr->mode) >= 0)
+	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
 		return inode;
-	purge_inum(&dir->i_sb->itable, inode->inum); // test me!!!
+	purge_inum(&tux_sb(dir->i_sb)->itable, inode->inum); // test me!!!
 	free_inode(inode);
 	inode = NULL;
 	return NULL; // err ???
@@ -517,3 +522,4 @@ eek:
 	return error("Eek! %s", strerror(errno));
 }
 #endif
+#endif /* !__KERNEL */

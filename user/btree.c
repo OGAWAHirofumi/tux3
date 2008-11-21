@@ -90,7 +90,7 @@ static inline struct bnode *path_node(struct tux_path path[], int level)
 	return bufdata(path[level].buffer);
 }
 
-static void release_path(struct tux_path path[], int levels)
+void release_path(struct tux_path path[], int levels)
 {
 	for (int i = 0; i < levels; i++)
 		brelse(path[i].buffer);

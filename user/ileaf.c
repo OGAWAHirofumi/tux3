@@ -42,11 +42,6 @@ static inline void add_idict(be_u16 *dict, int n)
 	*dict = to_be_u16(from_be_u16(*dict) + n);
 }
 
-static inline struct ileaf *to_ileaf(vleaf *leaf)
-{
-	return leaf;
-}
-
 static inline unsigned icount(struct ileaf *leaf)
 {
 	return from_be_u16(leaf->count);

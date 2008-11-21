@@ -524,6 +524,12 @@ static inline void *encode_kind(void *attrs, unsigned kind, unsigned version)
 	return encode16(attrs, (kind << 12) | version);
 }
 
+struct ileaf;
+static inline struct ileaf *to_ileaf(vleaf *leaf)
+{
+	return leaf;
+}
+
 #ifdef __KERNEL__
 static inline void *bufdata(struct buffer_head *buffer)
 {
@@ -556,11 +562,15 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 block_t balloc_extent(SB, unsigned blocks);
 
 /* btree.c */
+void release_path(struct tux_path path[], int levels);
 struct tux_path *alloc_path(int);
 void free_path(struct tux_path path[]);
 int probe(BTREE, tuxkey_t key, struct tux_path path[]);
+int advance(BTREE, struct tux_path path[]);
 tuxkey_t next_key(struct tux_path path[], int levels);
 int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key);
+void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tux_path path[]);
+struct btree new_btree(SB, struct btree_ops *ops);
 
 /* dir.c */
 loff_t tux_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode);
@@ -577,9 +587,28 @@ void dwalk_back(struct dwalk *walk);
 void dwalk_chop_after(struct dwalk *walk);
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent);
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent);
+extern struct btree_ops dtree_ops;
+
+/* iattr.c */
+unsigned encode_asize(unsigned bits);
+void dump_attrs(struct inode *inode);
+void *encode_attrs(struct inode *inode, void *attrs, unsigned size);
+void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
+
+/* ileaf.c */
+void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result);
+inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal);
+int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf);
 
 /* inode.c */
 struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
+
+/* xattr.c */
+int xcache_dump(struct inode *inode);
+struct xcache *new_xcache(unsigned maxsize);
+void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
+unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
+unsigned encode_xsize(struct inode *inode);
 #else /* !__KERNEL__ */
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
