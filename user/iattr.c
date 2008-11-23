@@ -137,6 +137,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	//printf("decode %u attr bytes\n", size);
 	u64 v64;
+	u32 v32;
 	struct xattr *xattr = tux_inode(inode)->xcache ? tux_inode(inode)->xcache->xattrs : NULL;
 	void *limit = attrs + size;
 	while (attrs < limit - 1) {
@@ -149,9 +150,12 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		}
 		switch (kind) {
 		case MODE_OWNER_ATTR:
-			attrs = decode32(attrs, &inode->i_mode);
-			attrs = decode32(attrs, &inode->i_uid);
-			attrs = decode32(attrs, &inode->i_gid);
+			attrs = decode32(attrs, &v32);
+			inode->i_mode = v32;
+			attrs = decode32(attrs, &v32);
+			inode->i_uid = v32;
+			attrs = decode32(attrs, &v32);
+			inode->i_gid = v32;
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = decode48(attrs, &v64);
