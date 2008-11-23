@@ -14,7 +14,12 @@
 #include <stddef.h>
 #include <errno.h>
 #include "hexdump.c"
+
+#ifndef iattr_notmain_from_inode
+static struct btree_ops dtree_ops;
 #endif
+#endif
+
 #include "tux3.h"
 
 /*
@@ -160,9 +165,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
 			tux_inode(inode)->btree = (struct btree){ .sb = tux_sb(inode->i_sb), .entries_per_leaf = 64, // !!! should depend on blocksize
-#ifdef iattr_notmain_from_inode
 				.ops = &dtree_ops,
-#endif
 				.root = { .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 } };
 			break;
 		case LINK_COUNT_ATTR:
