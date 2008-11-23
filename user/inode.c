@@ -133,7 +133,7 @@ errout:
 	return err;
 }
 
-int open_inode(struct inode *inode)
+static int open_inode(struct inode *inode)
 {
 	SB = tux_sb(inode->i_sb);
 	int err, levels = sb->itable.root.depth;
