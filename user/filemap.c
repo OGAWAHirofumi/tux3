@@ -133,7 +133,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent_block(*extent), extent_count(*extent));
 	printf("\n");
 
-	if (leaf_groups(leaf))
+	if (dleaf_groups(leaf))
 		printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)extent_block(*rewind.extent), extent_count(*rewind.extent));
 	*walk = rewind;
 
@@ -207,7 +207,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		}
 
 		*walk = rewind;
-		if (leaf_groups(leaf))
+		if (dleaf_groups(leaf))
 			dwalk_chop_after(walk);
 		for (i = 0, index = start - offset; i < segs; i++) {
 			trace("pack 0x%Lx => %Lx/%x", (L)index, (L)extent_block(seg[i]), extent_count(seg[i]));

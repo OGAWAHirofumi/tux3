@@ -400,17 +400,17 @@ static inline unsigned extent_version(struct extent extent)
 
 /* dleaf wrappers */
 
-static inline unsigned leaf_groups(struct dleaf *leaf)
+static inline unsigned dleaf_groups(struct dleaf *leaf)
 {
 	return from_be_u16(leaf->groups);
 }
 
-static inline void set_leaf_groups(struct dleaf *leaf, int n)
+static inline void set_dleaf_groups(struct dleaf *leaf, int n)
 {
 	leaf->groups = to_be_u16(n);
 }
 
-static inline void inc_leaf_groups(struct dleaf *leaf, int n)
+static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 {
 	leaf->groups = to_be_u16(from_be_u16(leaf->groups) + n);
 }

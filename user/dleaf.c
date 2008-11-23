@@ -105,7 +105,7 @@ unsigned dleaf_need(BTREE, struct dleaf *leaf)
 int dleaf_free2(BTREE, void *vleaf)
 {
 	struct dleaf *leaf = vleaf;
-	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - leaf_groups(leaf);
+	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gstop, *entry = edict;
 	struct extent *extents = leaf->table;
 	for (struct group *group = gdict; group-- > gstop;)
@@ -117,11 +117,11 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 {
 	unsigned blocksize = btree->sb->blocksize;
 	struct dleaf *leaf = vleaf;
-	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - leaf_groups(leaf);
+	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
 	struct extent *extents = leaf->table;
 
-	printf("%i entry groups:\n", leaf_groups(leaf));
+	printf("%i entry groups:\n", dleaf_groups(leaf));
 	for (struct group *group = groups; group > grbase; group--) {
 		printf("  %ti/%i:", groups - group, group_count(group));
 		//printf(" [%i]", extents - leaf->table);
@@ -171,11 +171,11 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 {
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *group = gdict;
-	struct entry *entry = (void *)(--group - leaf_groups(leaf));
-	struct group *gstop = group - leaf_groups(leaf);
+	struct entry *entry = (void *)(--group - dleaf_groups(leaf));
+	struct group *gstop = group - dleaf_groups(leaf);
 	struct entry *estop = entry - group_count(group);
 	unsigned extents = 0, start = 0, trunc = 0;
-	unsigned newgroups = leaf_groups(leaf);
+	unsigned newgroups = dleaf_groups(leaf);
 
 	if (!newgroups)
 		return 0;
@@ -202,10 +202,10 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 		estop = entry - group_count(group);
 		start = 0;
 	}
-	unsigned tamp = (leaf_groups(leaf) - newgroups) * sizeof(struct group);
+	unsigned tamp = (dleaf_groups(leaf) - newgroups) * sizeof(struct group);
 	unsigned tail = (void *)(gdict - newgroups) - ((void *)entry + tamp);
 	memmove((void *)entry + tamp, entry, tail);
-	set_leaf_groups(leaf, newgroups);
+	set_dleaf_groups(leaf, newgroups);
 	return 0;
 }
 
@@ -214,12 +214,12 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 	trace("probe for 0x%Lx", (L)key);
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 	struct group *gdict = (void *)leaf + blocksize;
-	struct entry *edict = (struct entry *)(gdict - leaf_groups(leaf));
-	struct group *gstop = gdict - leaf_groups(leaf), *group = gdict;
+	struct entry *edict = (struct entry *)(gdict - dleaf_groups(leaf));
+	struct group *gstop = gdict - dleaf_groups(leaf), *group = gdict;
 	struct entry *estop = edict, *entry;
 	struct extent *exbase = leaf->table;
 
-	if (leaf_groups(leaf))
+	if (dleaf_groups(leaf))
 		while (--group >= gstop) {
 			trace_off("group %i check %x = %x", gdict - group - 1, keyhi, group_keyhi(group));
 			estop -= group_count(group);
@@ -239,7 +239,7 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 
 	struct extent *extent = exbase, *exstop = exbase;
 	//trace("group %i entry %i of %i", gdict - 1 - group, estop + group_count(group) - 1 - entry, group_count(group));
-	if (!leaf_groups(leaf) || group < gstop)
+	if (!dleaf_groups(leaf) || group < gstop)
 		entry = estop;
 	else {
 		assert(group_keyhi(group) >= keyhi);
@@ -275,7 +275,7 @@ tuxkey_t dwalk_index(struct dwalk *walk)
 
 struct extent *dwalk_next(struct dwalk *walk)
 {
-	if (!leaf_groups(walk->leaf))
+	if (!dleaf_groups(walk->leaf))
 		return NULL;
 	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
 	if (walk->extent >= walk->exstop) {
@@ -327,23 +327,23 @@ void dwalk_chop_after(struct dwalk *walk)
 	struct entry *entry = walk->entry;
 	unsigned newgroups = walk->gdict - walk->group;
 	set_group_count(walk->group, ebase - entry);
-	trace_on("%i groups, %i entries in last", leaf_groups(leaf), group_count(walk->group));
-	void *free = (void *)entry + (leaf_groups(leaf) - newgroups) * sizeof(*gdict);
+	trace_on("%i groups, %i entries in last", dleaf_groups(leaf), group_count(walk->group));
+	void *free = (void *)entry + (dleaf_groups(leaf) - newgroups) * sizeof(*gdict);
 	memmove(free, entry, (void *)(gdict - newgroups) - free);
 	walk->estop = walk->entry = free;
 	walk->gstop = walk->group;
-	set_leaf_groups(leaf, newgroups);
+	set_dleaf_groups(leaf, newgroups);
 }
 
 void dwalk_chop(struct dwalk *walk) // do we ever need this?
 {
-	if (!leaf_groups(walk->leaf)) {
+	if (!dleaf_groups(walk->leaf)) {
 		trace("<<<<<<<<<<<<< dleaf empty");
 		return;
 	}
 	if (walk->group + 1 == walk->gdict && walk->entry + 1 == walk->estop + group_count(walk->group)) {
 		trace(">>>>>>>>>>>>> empty dleaf");
-		set_leaf_groups(walk->leaf, 0);
+		set_dleaf_groups(walk->leaf, 0);
 		return;
 	}
 	dwalk_back(walk);
@@ -358,7 +358,7 @@ void dwalk_chop(struct dwalk *walk) // do we ever need this?
 
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	if (!leaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
+	if (!dleaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 		if (!walk->mock.groups || group_keyhi(&walk->mock.group) != keyhi || group_count(&walk->mock.group) >= MAX_GROUP_ENTRIES) {
@@ -381,13 +381,13 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 {
-	trace("group %ti/%i", walk->gstop + leaf_groups(walk->leaf) - 1 - walk->group, leaf_groups(walk->leaf));
+	trace("group %ti/%i", walk->gstop + dleaf_groups(walk->leaf) - 1 - walk->group, dleaf_groups(walk->leaf));
 	//printf("at entry %ti/%i\n", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
-	if (!leaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
+	if (!dleaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
-		if (!leaf_groups(walk->leaf) || group_keyhi(walk->group) != keyhi || group_count(walk->group) >= MAX_GROUP_ENTRIES) {
-			trace("add group %i", leaf_groups(walk->leaf));
+		if (!dleaf_groups(walk->leaf) || group_keyhi(walk->group) != keyhi || group_count(walk->group) >= MAX_GROUP_ENTRIES) {
+			trace("add group %i", dleaf_groups(walk->leaf));
 			/* will it fit? */
 			assert(sizeof(struct entry) == sizeof(struct group));
 			assert(from_be_u16(walk->leaf->free) <= from_be_u16(walk->leaf->used) - sizeof(*walk->entry));
@@ -395,10 +395,10 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 			/* could preplan this to avoid move: need additional pack state */
 			vecmove(walk->entry - 1, walk->entry, (struct entry *)walk->group - walk->entry);
 			walk->entry--; /* adjust to moved position */
-			walk->exbase += leaf_groups(walk->leaf) ? entry_limit(walk->entry) : 0;
+			walk->exbase += dleaf_groups(walk->leaf) ? entry_limit(walk->entry) : 0;
 			*--walk->group = make_group(keyhi, 0);
 			walk->leaf->used = to_be_u16(from_be_u16(walk->leaf->used) - sizeof(struct group));
-			inc_leaf_groups(walk->leaf, 1);
+			inc_dleaf_groups(walk->leaf, 1);
 		}
 		assert(from_be_u16(walk->leaf->free) <= from_be_u16(walk->leaf->used) - sizeof(*walk->entry));
 		walk->leaf->used = to_be_u16(from_be_u16(walk->leaf->used) - sizeof(struct entry));
@@ -416,7 +416,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 
 int dleaf_check(BTREE, struct dleaf *leaf)
 {
-	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - leaf_groups(leaf);
+	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gstop, *entry = edict;
 	struct extent *extents = leaf->table;
 	unsigned excount = 0, encount = 0;
@@ -448,7 +448,7 @@ tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(dleaf_sniff(btree, from));
 	struct dleaf *leaf = from, *dest = into;
-	struct group *groups = from + btree->sb->blocksize, *grbase = groups - leaf_groups(leaf);
+	struct group *groups = from + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;
 	printf("split %p into %p\n", leaf, dest);
 	unsigned encount = 0, recount = 0, grsplit = 0, exsplit = 0;
@@ -478,36 +478,36 @@ tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 
 	/* copy groups */
 	struct group *destgroups = (void *)dest + btree->sb->blocksize;
-	set_leaf_groups(dest, leaf_groups(leaf) - grsplit);
-	veccopy(destgroups - leaf_groups(dest), grbase, leaf_groups(dest));
+	set_dleaf_groups(dest, dleaf_groups(leaf) - grsplit);
+	veccopy(destgroups - dleaf_groups(dest), grbase, dleaf_groups(dest));
 	inc_group_count(destgroups - 1, -cut);
-	set_leaf_groups(leaf, grsplit + !!cut);
-	grbase = groups - leaf_groups(leaf);
+	set_dleaf_groups(leaf, grsplit + !!cut);
+	grbase = groups - dleaf_groups(leaf);
 	if (cut)
-		set_group_count(groups - leaf_groups(leaf), cut);
+		set_group_count(groups - dleaf_groups(leaf), cut);
 
 	/* copy entries */
-	struct entry *destentries = (void *)(destgroups - leaf_groups(dest));
+	struct entry *destentries = (void *)(destgroups - dleaf_groups(dest));
 	struct entry *enbase = entries - encount;
 	unsigned encopy = encount - split;
 	veccopy(destentries - encopy, enbase, encopy);
 	if (cut)
 		for (int i = 1; i <= group_count((destgroups - 1)); i++)
 			inc_entry_limit(destentries - i, -entry_limit(entries - split));
-	vecmove(groups - leaf_groups(leaf) - split, entries - split, split);
+	vecmove(groups - dleaf_groups(leaf) - split, entries - split, split);
 
 	/* clean up */
 	leaf->free = to_be_u16((void *)(leaf->table + exsplit) - from);
 	dest->free = to_be_u16((void *)leaf->table + size - from);
 	leaf->used = to_be_u16((void *)(grbase - split) - from);
-	dest->used = to_be_u16((void *)(groups - leaf_groups(dest) - encount + split) - from);
+	dest->used = to_be_u16((void *)(groups - dleaf_groups(dest) - encount + split) - from);
 	memset(from + from_be_u16(leaf->free), 0, from_be_u16(leaf->used) - from_be_u16(leaf->free));
 	return (group_keyhi(destgroups - 1) << 24) | entry_keylo(destentries - 1);
 }
 
 void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 {
-	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf_groups(leaf);
+	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;
 	printf("merge %p into %p\n", from, leaf);
 	//assert(dleaf_need(from) <= dleaf_free(leaf));
@@ -519,11 +519,11 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 
 	/* merge last group (lowest) with first of from (highest)? */
 	struct group *fromgroups = (void *)from + btree->sb->blocksize;
-	int uncut = leaf_groups(leaf) && leaf_groups(from) && (group_keyhi(fromgroups - 1) == group_keyhi(grbase));
+	int uncut = dleaf_groups(leaf) && dleaf_groups(from) && (group_keyhi(fromgroups - 1) == group_keyhi(grbase));
 
 	/* make space and append groups except for possibly merged group */
-	unsigned addgroups = leaf_groups(from) - uncut;
-	struct group *grfrom = fromgroups - leaf_groups(from);
+	unsigned addgroups = dleaf_groups(from) - uncut;
+	struct group *grfrom = fromgroups - dleaf_groups(from);
 	struct entry *enfrom = (void *)from + from_be_u16(from->used);
 	struct entry *enbase = (void *)leaf + from_be_u16(leaf->used);
 	vecmove(enbase - addgroups, enbase, entries - enbase);
@@ -531,7 +531,7 @@ void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
 	enbase -= addgroups;
 	if (uncut)
 		inc_group_count(grbase + addgroups, group_count(fromgroups - 1));
-	inc_leaf_groups(leaf, addgroups);
+	inc_dleaf_groups(leaf, addgroups);
 
         /* append entries */
 	size = (void *)grfrom - (void *)enfrom;
@@ -582,7 +582,7 @@ void dleaf_destroy(BTREE, struct dleaf *leaf)
 
 void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 {
-	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - leaf_groups(leaf);
+	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;
 	struct extent *extents = leaf->table;
 	unsigned keylo = index & 0xffffff, keyhi = index >> 24;
@@ -618,7 +618,7 @@ int main(int argc, char *argv[])
 
 	for (int i = 1; i < 2; i++) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x3000055);
-		if ((walk->mock.groups = leaf_groups(walk->leaf))) {
+		if ((walk->mock.groups = dleaf_groups(walk->leaf))) {
 			walk->mock.group = *walk->group;
 			walk->mock.entry = *walk->entry;
 		}
