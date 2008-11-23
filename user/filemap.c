@@ -247,12 +247,14 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		index += count;
 		skip = 0;
 	}
+	release_path(path, levels + 1);
 	free_path(path);
 	return err;
 nospace:
 	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %d", err);
+	release_path(path, levels + 1);
 	free_path(path);
 	// free blocks and try to clean up ???
 	return -EIO;
