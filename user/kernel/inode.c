@@ -138,6 +138,44 @@ eek:
 	return err;
 }
 
+int save_inode(struct inode *inode)
+{
+	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
+	SB = tux_sb(inode->i_sb);
+	int err, levels = sb->itable.root.depth;
+	struct tux_path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
+		free_path(path);
+		return err;
+	}
+	unsigned size;
+	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size)))
+		return -EINVAL;
+	err = store_attrs(inode, path);
+	release_path(path, levels + 1);
+	free_path(path);
+	return err;
+}
+
+int purge_inum(BTREE, inum_t inum)
+{
+	int err = -ENOENT, levels = btree->sb->itable.root.depth;
+	struct tux_path *path = alloc_path(levels + 1);
+	if (!path)
+		return -ENOMEM;
+
+	if (!(err = probe(btree, inum, path))) {
+		struct ileaf *ileaf = to_ileaf(bufdata(path[levels].buffer));
+		err = ileaf_purge(btree, inum, ileaf);
+		release_path(path, levels + 1);
+	}
+	free_path(path);
+	return err;
+}
+
 #ifdef __KERNEL__
 void tux3_clear_inode(struct inode *inode)
 {
@@ -195,41 +233,3 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	return inode;
 }
 #endif /* !__KERNEL__ */
-
-int save_inode(struct inode *inode)
-{
-	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
-	SB = tux_sb(inode->i_sb);
-	int err, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
-		return err;
-	}
-	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size)))
-		return -EINVAL;
-	err = store_attrs(inode, path);
-	release_path(path, levels + 1);
-	free_path(path);
-	return err;
-}
-
-int purge_inum(BTREE, inum_t inum)
-{
-	int err = -ENOENT, levels = btree->sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if (!(err = probe(btree, inum, path))) {
-		struct ileaf *ileaf = to_ileaf(bufdata(path[levels].buffer));
-		err = ileaf_purge(btree, inum, ileaf);
-		release_path(path, levels + 1);
-	}
-	free_path(path);
-	return err;
-}
