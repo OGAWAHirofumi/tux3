@@ -586,6 +586,8 @@ struct btree new_btree(SB, struct btree_ops *ops);
 loff_t tux_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode);
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result);
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
+extern const struct file_operations tux_dir_fops;
+extern const struct inode_operations tux_dir_iops;
 
 /* dtree.c */
 unsigned dleaf_free(BTREE, vleaf *leaf);
@@ -612,7 +614,7 @@ int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf);
 extern struct btree_ops itable_ops;
 
 /* inode.c */
-struct inode *tux3_get_inode(struct super_block *sb, int mode, dev_t dev);
+struct inode *tux3_iget(struct super_block *sb, inum_t inum);
 
 /* xattr.c */
 int xcache_dump(struct inode *inode);
@@ -629,4 +631,20 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 }
 #endif /* !__KERNEL__ */
 
+struct buffer_head *blockread(struct address_space *mapping, block_t block);
+struct buffer_head *blockget(struct address_space *mapping, block_t block);
+
+static inline int buffer_empty(struct buffer_head *buffer)
+{
+	return 1;
+}
+
+static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
+{
+	return buffer;
+}
+
+static inline void brelse_dirty(struct buffer_head *buffer)
+{
+}
 #endif
