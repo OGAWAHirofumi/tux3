@@ -177,7 +177,7 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	case S_IFREG:
 //		inode->i_op = &tux_file_iops;
 //		inode->i_fop = &tux_file_fops;
-//		inode->i_mapping->a_ops = &tux_aops;
+		inode->i_mapping->a_ops = &tux_aops;
 		break;
 	case S_IFDIR:
 		inode->i_op = &tux_dir_iops;

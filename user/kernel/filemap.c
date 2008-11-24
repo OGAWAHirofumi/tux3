@@ -435,6 +435,17 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	return bh;
 }
 
+static int tux3_readpage(struct file *file, struct page *page)
+{
+	return mpage_readpage(page, tux3_get_block);
+}
+
+static int tux3_readpages(struct file *file, struct address_space *mapping,
+			  struct list_head *pages, unsigned nr_pages)
+{
+	return mpage_readpages(mapping, pages, nr_pages, tux3_get_block);
+}
+
 static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
 {
 	sector_t blocknr;
@@ -445,6 +456,22 @@ static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
 
 	return blocknr;
 }
+
+const struct address_space_operations tux_aops = {
+	.readpage		= tux3_readpage,
+	.readpages		= tux3_readpages,
+//	.writepage		= ext4_da_writepage,
+//	.writepages		= ext4_da_writepages,
+//	.sync_page		= block_sync_page,
+//	.write_begin		= ext4_da_write_begin,
+//	.write_end		= ext4_da_write_end,
+	.bmap			= tux3_bmap,
+//	.invalidatepage		= ext4_da_invalidatepage,
+//	.releasepage		= ext4_releasepage,
+//	.direct_IO		= ext4_direct_IO,
+//	.migratepage		= buffer_migrate_page,
+//	.is_partially_uptodate	= block_is_partially_uptodate,
+};
 
 static int tux3_dir_readpage(struct file *file, struct page *page)
 {
