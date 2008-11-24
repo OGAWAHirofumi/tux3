@@ -15,7 +15,6 @@
 #define trace trace_on
 #endif
 
-#ifndef __KERNEL__
 #define filemap_included
 #include "filemap.c"
 #undef main
@@ -44,170 +43,10 @@ void free_inode(struct inode *inode)
 		free(inode->xcache);
 	free(inode);
 }
-#endif /* !__KERNEL__ */
 
-int store_attrs(struct inode *inode, struct tux_path path[])
-{
-	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
-	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, path);
-	if (!base)
-		return -ENOMEM; // what was the actual error???
-	void *attr = encode_attrs(inode, base, size);
-	attr = encode_xattrs(inode, attr, base + size - attr);
-	assert(attr == base + size);
-	return 0;
-}
+#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
+#include "kernel/inode.c"
 
-/*
- * Inode table expansion algorithm
- *
- * First probe for the inode goal.  This retreives the rightmost leaf that
- * contains an inode less than or equal to the goal.  (We could in theory avoid
- * retrieving any leaf at all in some cases if we observe that the the goal must
- * fall into an unallocated gap between two index keys, for what that is worth.
- * Probably not very much.)
- *
- * If not at end then next key is greater than goal.  This block has the highest
- * ibase less than or equal to goal.  Ibase should be equal to btree key, so
- * assert.  Search block even if ibase is way too low.  If goal comes back equal
- * to next_key then there is no room to create more inodes in it, so advance to
- * the next block and repeat.
- *
- * Otherwise, expand the inum goal that came back.  If ibase was too low to
- * create the inode in that block then the low level split will fail and expand
- * will create a new inode table block with ibase at the goal.  We round the
- * goal down to some binary multiple in ileaf_split to reduce the chance of
- * creating inode table blocks with only a small number of inodes.  (Actually
- * we should only round down the split point, not the returned goal.)
- */
-
-int make_inode(struct inode *inode, struct tux_iattr *iattr)
-{
-	SB = tux_sb(inode->i_sb);
-	int err = -ENOENT, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
-		return err;
-	}
-	struct buffer_head *leafbuf = path[levels].buffer;
-//	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
-
-	trace("create inode 0x%Lx", (L)tux_inode(inode)->inum);
-	assert(!tux_inode(inode)->btree.root.depth);
-	inum_t inum = tux_inode(inode)->inum;
-	assert(inum < next_key(path, levels));
-	while (1) {
-//		printf("find empty inode in [%Lx] base %Lx\n", (L)bufindex(leafbuf), (L)ibase(leaf));
-		inum = find_empty_inode(&sb->itable, bufdata(leafbuf), (L)inum);
-		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
-		if (inum < next_key(path, levels))
-			break;
-		int more = advance(&sb->itable, path);
-		printf("no more inode space here, advance %i\n", more);
-		if (!more)
-			goto errout;
-	}
-
-	inode->i_mode = iattr->mode;
-	inode->i_uid = iattr->uid;
-	inode->i_gid = iattr->gid;
-	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
-	inode->i_nlink = 1;
-	tux_inode(inode)->inum = inum;
-	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
-	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
-	if ((err = store_attrs(inode, path)))
-		goto eek;
-	release_path(path, levels + 1);
-	free_path(path);
-	return 0;
-eek:
-	release_path(path, levels + 1);
-errout:
-	free_path(path);
-	warn("make_inode 0x%Lx failed (%d)", (L)tux_inode(inode)->inum, err);
-	return err;
-}
-
-static int open_inode(struct inode *inode)
-{
-	SB = tux_sb(inode->i_sb);
-	int err, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
-		return err;
-	}
-	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size);
-	if (!attrs) {
-		err = -ENOENT;
-		goto eek;
-	}
-	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(&sb->itable, path[levels].buffer->data);
-	//hexdump(attrs, size);
-	unsigned xsize = decode_xsize(inode, attrs, size);
-	err = -ENOMEM;
-	if (!(tux_inode(inode)->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
-		goto eek;
-	decode_attrs(inode, attrs, size); // error???
-	dump_attrs(inode);
-	if (tux_inode(inode)->xcache)
-		xcache_dump(inode);
-	err = 0;
-eek:
-	release_path(path, levels + 1);
-	free_path(path);
-	return err;
-}
-
-int save_inode(struct inode *inode)
-{
-	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
-	SB = tux_sb(inode->i_sb);
-	int err, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
-		return err;
-	}
-	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size)))
-		return -EINVAL;
-	err = store_attrs(inode, path);
-	release_path(path, levels + 1);
-	free_path(path);
-	return err;
-}
-
-int purge_inum(BTREE, inum_t inum)
-{
-	int err = -ENOENT, levels = btree->sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
-		return -ENOMEM;
-
-	if (!(err = probe(btree, inum, path))) {
-		struct ileaf *ileaf = to_ileaf(bufdata(path[levels].buffer));
-		err = ileaf_purge(btree, inum, ileaf);
-		release_path(path, levels + 1);
-	}
-	free_path(path);
-	return err;
-}
-
-#ifndef __KERNEL__
 int tuxio(struct file *file, char *data, unsigned len, int write)
 {
 	int err = 0;
@@ -522,4 +361,3 @@ eek:
 	return error("Eek! %s", strerror(errno));
 }
 #endif
-#endif /* !__KERNEL */
