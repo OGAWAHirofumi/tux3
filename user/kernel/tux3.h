@@ -599,6 +599,9 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent);
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent);
 extern struct btree_ops dtree_ops;
 
+/* filemap.c */
+extern const struct address_space_operations tux_dir_aops;
+
 /* iattr.c */
 unsigned encode_asize(unsigned bits);
 void dump_attrs(struct inode *inode);
@@ -625,8 +628,8 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
 
 /* temporary hack for buffer */
-struct buffer_head *blockread(struct address_space *mapping, block_t block);
-struct buffer_head *blockget(struct address_space *mapping, block_t block);
+struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
+struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 
 static inline int buffer_empty(struct buffer_head *buffer)
 {

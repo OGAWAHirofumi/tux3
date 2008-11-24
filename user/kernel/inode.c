@@ -182,6 +182,9 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	case S_IFDIR:
 		inode->i_op = &tux_dir_iops;
 		inode->i_fop = &tux_dir_fops;
+		inode->i_mapping->a_ops = &tux_dir_aops;
+//		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
+		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	case S_IFLNK:
 //		inode->i_op = &tux_symlink_iops;

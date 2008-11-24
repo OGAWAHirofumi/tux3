@@ -1,3 +1,7 @@
+#ifdef __KERNEL__
+#include <linux/fs.h>
+#include <linux/mpage.h>
+#endif
 #include "tux3.h"
 
 #ifndef trace
@@ -359,47 +363,96 @@ nospace:
 	return -EIO;
 }
 
-struct buffer_head *blockread(struct address_space *mapping, block_t block)
+struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 {
 	struct inode *inode = mapping->host;
-	struct buffer_head map_bh;
-	struct page page;
-	int err;
+	pgoff_t index;
+	struct page *page;
+	struct buffer_head *bh;
+	int offset;
 
-	printk("%s: ino %Lu, block %Lu\n", __func__, tux_inode(inode)->inum, block);
+	printk("%s: ==> ino %Lu, block %Lu\n", __func__, tux_inode(inode)->inum, iblock);
 
-	page.mapping = mapping;
-	map_bh.b_page = &page;
-	map_bh.b_state = 0;
-	map_bh.b_blocknr = 0;
-	map_bh.b_size = 1 << inode->i_blkbits;
+	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
+	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
 
-	err = tux3_get_block(mapping->host, block, &map_bh, 0);
-	if (err)
-		return NULL;
+	page = read_mapping_page(mapping, index, NULL);
+	if (!IS_ERR(page)) {
+		if (PageError(page))
+			goto error;
+	}
 
-	return sb_bread(inode->i_sb, map_bh.b_blocknr);
+	lock_page(page);
+
+	if (!page_has_buffers(page))
+		create_empty_buffers(page, tux_sb(inode->i_sb)->blocksize, 0);
+
+	bh = page_buffers(page);
+	while (offset--)
+		bh = bh->b_this_page;
+	get_bh(bh);
+
+	unlock_page(page);
+	page_cache_release(page);
+
+	printk("%s: <=== b_blocknr %Lu\n", __func__, (L)bh->b_blocknr);
+
+	return bh;
+
+error:
+	page_cache_release(page);
+	return NULL;
 }
 
-struct buffer_head *blockget(struct address_space *mapping, block_t block)
+struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 {
 	struct inode *inode = mapping->host;
-	struct buffer_head map_bh;
-	struct page page;
-	int err;
+	pgoff_t index;
+	struct page *page;
+	struct buffer_head *bh;
+	int offset;
 
-	printk("%s: ino %Lu, block %Lu\n", __func__, tux_inode(inode)->inum, block);
+	printk("%s: ino %Lu, block %Lu\n", __func__, tux_inode(inode)->inum, iblock);
 
-	page.mapping = mapping;
-	map_bh.b_page = &page;
-	map_bh.b_state = 0;
-	map_bh.b_blocknr = 0;
-	map_bh.b_size = 1 << inode->i_blkbits;
+	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
+	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
 
-	err = tux3_get_block(mapping->host, block, &map_bh, 0);
-	if (err)
+	page = grab_cache_page(mapping, index);
+	if (!page)
 		return NULL;
 
-	return sb_getblk(inode->i_sb, map_bh.b_blocknr);
+	if (!page_has_buffers(page))
+		create_empty_buffers(page, tux_sb(inode->i_sb)->blocksize, 0);
+
+	bh = page_buffers(page);
+	while (offset--)
+		bh = bh->b_this_page;
+	get_bh(bh);
+
+	unlock_page(page);
+	page_cache_release(page);
+
+	return bh;
 }
+
+static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
+{
+	sector_t blocknr;
+
+	mutex_lock(&mapping->host->i_mutex);
+	blocknr = generic_block_bmap(mapping, iblock, tux3_get_block);
+	mutex_unlock(&mapping->host->i_mutex);
+
+	return blocknr;
+}
+
+static int tux3_dir_readpage(struct file *file, struct page *page)
+{
+	return block_read_full_page(page, tux3_get_block);
+}
+
+const struct address_space_operations tux_dir_aops = {
+	.readpage	= tux3_dir_readpage,
+	.bmap		= tux3_bmap,
+};
 #endif /* __KERNEL__ */
