@@ -38,25 +38,6 @@
  * and moved here. AV
  */
 
-#ifndef __KERNEL__
-#include <stdio.h>
-#include <inttypes.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include "hexdump.c"
-
-#define mark_inode_dirty(x)
-typedef u16 le16;
-
-enum {DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
-typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
-#endif
-
 #include "tux3.h"
 
 #define TUX_DIR_PAD 3
@@ -202,24 +183,6 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 	return NULL;
 }
 
-static struct dentry *tux_lookup(struct inode *dir, struct dentry *dentry,
-				 struct nameidata *nd)
-{
-	struct buffer_head *buffer;
-	struct inode *inode = NULL;
-	tux_dirent *dirent;
-
-	dirent = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
-				&buffer);
-	if (dirent) {
-		inode = tux3_iget(dir->i_sb, from_be_u32(dirent->inum));
-		brelse(buffer);
-		if (IS_ERR(inode))
-			return ERR_CAST(inode);
-	}
-	return d_splice_alias(inode, dentry);
-}
-
 static unsigned char filetype[TUX_TYPES] = {
 	[TUX_UNKNOWN] = DT_UNKNOWN,
 	[TUX_REG] = DT_REG,
@@ -234,7 +197,11 @@ static unsigned char filetype[TUX_TYPES] = {
 static int tux_readdir(struct file *file, void *state, filldir_t filldir)
 {
 	loff_t pos = file->f_pos;
+#ifdef __KERNEL__
 	struct inode *dir = file->f_dentry->d_inode;
+#else
+	struct inode *dir = file->f_inode;
+#endif
 	int revalidate = file->f_version != dir->i_version;
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
 	unsigned blocksize = 1 << blockbits;
@@ -307,6 +274,25 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	return 0;
 }
 
+#ifdef __KERNEL__
+static struct dentry *tux_lookup(struct inode *dir, struct dentry *dentry,
+				 struct nameidata *nd)
+{
+	struct buffer_head *buffer;
+	struct inode *inode = NULL;
+	tux_dirent *dirent;
+
+	dirent = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
+				&buffer);
+	if (dirent) {
+		inode = tux3_iget(dir->i_sb, from_be_u32(dirent->inum));
+		brelse(buffer);
+		if (IS_ERR(inode))
+			return ERR_CAST(inode);
+	}
+	return d_splice_alias(inode, dentry);
+}
+
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -333,69 +319,4 @@ const struct inode_operations tux_dir_iops = {
 //	.fallocate	= ext4_fallocate,
 //	.fiemap		= ext4_fiemap,
 };
-
-#ifndef __KERNEL__
-void tux_dump_entries(struct buffer_head *buffer)
-{
-	unsigned blocksize = bufsize(buffer);
-	printf("entries <%Lx:%Lx>: ", (L)buffer->map->inode->inum, (L)bufindex(buffer));
-	tux_dirent *entry = (tux_dirent *)bufdata(buffer);
-	tux_dirent *limit = bufdata(buffer) + blocksize;
-	while (entry < limit) {
-		if (!entry->rec_len) {
-			warn("Zero length entry");
-			break;
-		}
-		if (!is_deleted(entry))
-			printf("%.*s (%x:%i) ",
-				entry->name_len,
-				entry->name,
-				entry->inum,
-				entry->type);
-		entry = next_entry(entry);
-	}
-	brelse(buffer);
-	printf("\n");
-}
-
-int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned inum, unsigned type)
-{
-	printf("\"%.*s\"\n", namelen, name);
-	return 0;
-}
-
-int main(int argc, char *argv[])
-{
-	struct dev *dev = &(struct dev){ .bits = 8 };
-	map_t *map = new_map(dev, NULL);
-	init_buffers(dev, 1 << 20);
-	struct buffer_head *buffer;
-	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
-	map->inode = &(struct inode){ .i_sb = sb, .map = map, .i_mode = S_IFDIR };
-	tux_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
-	tux_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
-	tux_dirent *entry = tux_find_entry(map->inode, "hello", 5, &buffer);
-	if (entry)
-		hexdump(entry, entry->name_len);
-	tux_dump_entries(blockget(map, 0));
-
-	if (!tux_delete_entry(buffer, entry)) {
-		show_buffers(map);
-		map->inode->i_ctime = map->inode->i_mtime = gettime();
-		mark_inode_dirty(map->inode);
-	}
-
-	tux_dump_entries(blockget(map, 0));
-	struct file *file = &(struct file){ .f_inode = map->inode };
-	for (int i = 0; i < 10; i++) {
-		char name[100];
-		sprintf(name, "file%i", i);
-		tux_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
-	}
-	tux_dump_entries(blockget(map, 0));
-	char dents[10000];
-	tux_readdir(file, dents, filldir);
-	show_buffers(map);
-	return 0;
-}
 #endif /* !__KERNEL__ */
