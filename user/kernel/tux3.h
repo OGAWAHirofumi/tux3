@@ -624,13 +624,8 @@ int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigne
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
-#else /* !__KERNEL__ */
-static inline struct inode *buffer_inode(struct buffer_head *buffer)
-{
-	return buffer->map->inode;
-}
-#endif /* !__KERNEL__ */
 
+/* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t block);
 struct buffer_head *blockget(struct address_space *mapping, block_t block);
 
@@ -647,4 +642,11 @@ static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 static inline void brelse_dirty(struct buffer_head *buffer)
 {
 }
+#else /* !__KERNEL__ */
+static inline struct inode *buffer_inode(struct buffer_head *buffer)
+{
+	return buffer->map->inode;
+}
+#endif /* !__KERNEL__ */
+
 #endif
