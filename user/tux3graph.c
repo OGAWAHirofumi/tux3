@@ -90,7 +90,7 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 	fprintf(gi->f,
 		"%s_bnode_%llu [\n"
 		"label = \"{ <bnode0> [bnode] | count %u |",
-		gi->bname, (L)blocknr, bnode->count);
+		gi->bname, (L)blocknr, bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
 		fprintf(gi->f,
 			" %c <f%u> key %llu, block %lld",
