@@ -164,43 +164,6 @@ error:
 	return err;
 }
 
-#if 0
-int save_sb(SB)
-{
-	struct disksuper *disk = &sb->super;
-	disk->blockbits = to_be_u16(sb->blockbits);
-	disk->volblocks = to_be_u64(sb->volblocks);
-	disk->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
-	disk->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
-	disk->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
-	disk->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
-	disk->iroot = to_be_u64((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
-	//hexdump(&sb->super, sizeof(sb->super));
-	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
-}
-
-int sync_super(SB)
-{
-	int err;
-	printf("sync bitmap\n");
-	if ((err = tuxsync(sb->bitmap)))
-		return err;
-	printf("sync rootdir\n");
-	if ((err = tuxsync(sb->rootdir)))
-		return err;
-	printf("sync atom table\n");
-	if ((err = tuxsync(sb->atable)))
-		return err;
-	printf("sync devmap\n");
-	if ((err = flush_buffers(sb->devmap)))
-		return err;
-	printf("sync super\n");
-	if ((err = save_sb(sb)))
-		return err;
-	return 0;
-}
-#endif
-
 static void tux3_put_super(struct super_block *sb)
 {
 	struct sb *sbi = tux_sb(sb);
