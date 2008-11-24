@@ -242,15 +242,14 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 		return -EIO;
 
 	struct sb *sbi = tux_sb(inode->i_sb);
-	int levels = tux_inode(inode)->btree.root.depth, i, err;
+	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
+	int levels = tux_inode(inode)->btree.root.depth, err;
 	if (!levels) {
 		trace("unmapped block %Lx", (L)iblock);
 		return 0;
 	}
 
-	bh_result->b_blocknr = iblock;
-
-	block_t start = iblock, limit = iblock + 1;
+	block_t start = iblock, limit = iblock + max_blocks;
 	struct extent seg[10];
 	struct tux_path *path = alloc_path(levels + 1);
 	if (!path)
@@ -279,19 +278,10 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 				dwalk_back(walk);
 			break;
 		}
-	struct dwalk rewind = *walk;
-	printf("prior extents:");
-	for (struct extent *extent; (extent = dwalk_next(walk));)
-		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent_block(*extent), extent_count(*extent));
-	printf("\n");
-
-	if (dleaf_groups(leaf))
-		printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)extent_block(*rewind.extent), extent_count(*rewind.extent));
-	*walk = rewind;
 
 	struct extent *next_extent = NULL;
 	block_t index = start, offset = 0;
-	while (index < limit) {
+	while (index < limit && segs < ARRAY_SIZE(seg)) {
 		trace("index %Lx, limit %Lx", (L)index, (L)limit);
 		if (next_extent) {
 			trace("emit %Lx/%x", (L)extent_block(*next_extent), extent_count(*next_extent));
@@ -312,55 +302,29 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 			}
 		}
 		if (index < next_index) {
-			int gap = next_index - index;
-			trace("index = %Lx, offset = %Li, next = %Lx, gap = %i", (L)index, (L)offset, (L)next_index, gap);
-			if (index + gap > limit)
-				gap = limit - index;
-			trace("fill gap at %Lx/%x", (L)index, gap);
-			block_t block = 0;
-			if (create) {
-				block = balloc_extent(sbi, gap); // goal ???
-				if (block == -1)
-					goto nospace; // clean up !!!
-			}
-			seg[segs++] = make_extent(block, gap);
-			index += gap;
+			/* there is gap (hole), so stop */
+			break;
 		}
 	}
 
-	printf("segs (offset = %Lx):", (L)offset);
-	for (i = 0, index = start; i < segs; i++) {
-		printf(" %Lx => %Lx/%x;", (L)index - offset, (L)extent_block(seg[i]), extent_count(seg[i]));
-		index += extent_count(seg[i]);
+	block_t block = extent_block(seg[0]) + offset;
+	size_t count = extent_count(seg[0]) - offset;
+	for (int i = 1; i < segs; i++) {
+		if (block + count != extent_block(seg[i]))
+			break;
+		count += extent_count(seg[i]);
 	}
-	printf(" (%i)\n", segs);
-
-
-	unsigned skip = offset;
-	for (i = 0, index = start - offset; !err && index < limit; i++) {
-		unsigned count = extent_count(seg[i]);
-		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)extent_block(seg[i]));
-		for (int j = skip; !err && j < count; j++) {
-			block_t block = extent_block(seg[i]) + j;
-			map_bh(bh_result, inode->i_sb, block);
-			goto out;
-		}
-		index += count;
-		skip = 0;
+	if (block) {
+		map_bh(bh_result, inode->i_sb, block);
+		bh_result->b_size = min(max_blocks, count) << sbi->blockbits;
 	}
-out:
+	trace("%s: block %Lu, size %zu", __func__,
+	      (L)bh_result->b_blocknr, bh_result->b_size);
+
 	release_path(path, levels + 1);
 	free_path(path);
 
 	return err;
-
-nospace:
-	err = -ENOSPC;
-	warn("could not add extent to tree: %d", err);
-	release_path(path, levels + 1);
-	free_path(path);
-	// free blocks and try to clean up ???
-	return -EIO;
 }
 
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
