@@ -9,17 +9,6 @@
  * the right to distribute those changes under any license.
  */
 
-#ifndef __KERNEL__
-#include <stdlib.h>
-#include <stddef.h>
-#include <errno.h>
-#include "hexdump.c"
-
-#ifndef iattr_notmain_from_inode
-static struct btree_ops dtree_ops;
-#endif
-#endif
-
 #include "tux3.h"
 
 /*
@@ -197,27 +186,3 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		inode->i_mtime = inode->i_ctime;
 	return attrs;
 }
-
-#ifndef __KERNEL__
-#ifndef iattr_included_from_ileaf
-int main(int argc, char *argv[])
-{
-	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
-	struct inode *inode = &(struct inode){ .i_sb = sb,
-		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
-		.i_size = 0x123456789ULL,
-		.i_ctime = spectime(0xdec0debeadULL),
-		.i_mtime = spectime(0xbadfaced00dULL) };
-
-	char attrs[1000] = { };
-	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
-	printf("need %i attr bytes\n", encode_asize(abits));
-	printf("decode %ti attr bytes\n", sizeof(attrs));
-	decode_attrs(inode, attrs, sizeof(attrs));
-	dump_attrs(inode);
-	return 0;
-}
-#endif
-#endif
