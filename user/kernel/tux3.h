@@ -7,8 +7,6 @@
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
 
-#define printf printk
-#define vprintf vprintk
 typedef loff_t block_t;
 
 #include "trace.h"
