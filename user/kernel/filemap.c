@@ -1,39 +1,10 @@
-#ifndef __KERNEL__
-#ifndef trace
-#define trace trace_off
-#endif
-
-#define main notmain0
-#include "balloc.c"
-#undef main
-
-#define main notmain1
-#include "dleaf.c"
-#undef main
-
-#define main notmain3
-#include "dir.c"
-#undef main
-
-#define main notmain2
-#include "xattr.c"
-#undef main
-
-#define iattr_notmain_from_inode
-#define main iattr_notmain_from_inode
-#include "ileaf.c"
-#undef main
-
-#define main notmain4
-#include "btree.c"
-#undef main
-#endif /* !__KERNEL */
-
 #include "tux3.h"
 
-#undef trace
+#ifndef trace
 #define trace trace_on
+#endif
 
+#ifndef __KERNEL__
 /*
  * Extrapolate from single buffer flush or blockread to opportunistic exent IO
  *
@@ -53,8 +24,7 @@ void guess_extent(struct buffer_head *buffer, block_t *start, block_t *limit, in
 	for (int up = !write; up < 2; up++) {
 		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
 			block_t next = ends[up] + (up ? 1 : -1);
-//			struct buffer_head *nextbuf = peekblk(buffer->map, next);
-			struct buffer_head *nextbuf = NULL;
+			struct buffer_head *nextbuf = peekblk(buffer->map, next);
 			if (!nextbuf) {
 				if (write)
 					break;
@@ -80,6 +50,8 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)tux_inode(inode)->inum, (L)bufindex(buffer));
 	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
+	struct dev *dev = sb->devmap->dev;
+	assert(dev->bits >= 8 && dev->fd);
 	int levels = tux_inode(inode)->btree.root.depth, try = 0, i, err;
 	if (!levels) {
 		if (!write) {
@@ -232,16 +204,16 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 			buffer = blockget(mapping(inode), index + j);
 			trace_on("block 0x%Lx => %Lx", (L)bufindex(buffer), (L)block);
 			if (write) {
-//				err = diskwrite(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
+				err = diskwrite(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			} else {
 				if (!block) { /* block zero is never allocated */
 					trace("zero fill buffer");
 					memset(bufdata(buffer), 0, sb->blocksize);
 					continue;
 				}
-//				err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
+				err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			}
-//			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
+			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
 		}
 		index += count;
 		skip = 0;
@@ -258,7 +230,7 @@ eek:
 	// free blocks and try to clean up ???
 	return -EIO;
 }
-
+#else /* __KERNEL__ */
 int tux3_get_block(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create)
 {
@@ -430,102 +402,4 @@ struct buffer_head *blockget(struct address_space *mapping, block_t block)
 
 	return sb_getblk(inode->i_sb, map_bh.b_blocknr);
 }
-
-#ifndef __KERNEL__
-int filemap_block_read(struct buffer_head *buffer)
-{
-	return filemap_extent_io(buffer, 0);
-}
-
-int filemap_block_write(struct buffer_head *buffer)
-{
-	return filemap_extent_io(buffer, 1);
-}
-
-struct map_ops filemap_ops = {
-	.blockread = filemap_block_read,
-	.blockwrite = filemap_block_write,
-};
-
-#ifndef filemap_included
-int main(int argc, char *argv[])
-{
-	if (argc < 2)
-		error("usage: %s <volname>", argv[0]);
-	char *name = argv[1];
-	fd_t fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
-	ftruncate(fd, 1 << 24);
-	u64 size = 0;
-	if (fdsize64(fd, &size))
-		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	struct dev *dev = &(struct dev){ fd, .bits = 8 };
-	SB = &(struct sb){
-		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
-		.blockbits = dev->bits,
-		.blocksize = 1 << dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
-		.volblocks = size >> dev->bits,
-	};
-	sb->bitmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) },
-	sb->bitmap->map->inode = sb->bitmap;
-	init_buffers(dev, 1 << 20);
-	struct inode *inode = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) };
-	inode->btree = new_btree(sb, &dtree_ops); // error???
-	inode->map->inode = inode;
-	inode = inode;
-
-#if 1
-	brelse_dirty(blockread(mapping(inode), 0));
-	brelse_dirty(blockread(mapping(inode), 1));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	filemap_extent_io(blockget(mapping(inode), 0), 0);
-	return 0;
-#endif
-
-#if 1
-	filemap_extent_io(blockget(mapping(inode), 5), 0);
-	return 0;
-#endif
-
-#if 0
-	for (int i = 0; i < 20; i++) {
-		brelse_dirty(blockget(mapping(inode), i));
-		printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	}
-	return 0;
-#endif
-
-#if 1
-	brelse_dirty(blockget(mapping(inode), 5));
-	brelse_dirty(blockget(mapping(inode), 6));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	brelse_dirty(blockget(mapping(inode), 6));
-	brelse_dirty(blockget(mapping(inode), 7));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	return 0;
-#endif
-
-	brelse_dirty(blockget(mapping(inode), 0));
-	brelse_dirty(blockget(mapping(inode), 1));
-	brelse_dirty(blockget(mapping(inode), 2));
-	brelse_dirty(blockget(mapping(inode), 3));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	brelse_dirty(blockget(mapping(inode), 0));
-	brelse_dirty(blockget(mapping(inode), 1));
-	brelse_dirty(blockget(mapping(inode), 2));
-	brelse_dirty(blockget(mapping(inode), 3));
-	brelse_dirty(blockget(mapping(inode), 4));
-	brelse_dirty(blockget(mapping(inode), 5));
-	brelse_dirty(blockget(mapping(inode), 6));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	//show_buffers(mapping(inode));
-	return 0;
-}
-#endif
-#endif /* !__KERNEL */
+#endif /* __KERNEL__ */
