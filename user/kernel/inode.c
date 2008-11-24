@@ -183,6 +183,38 @@ void tux3_clear_inode(struct inode *inode)
 		kfree(tux_inode(inode)->xcache);
 }
 
+static const struct file_operations tux_file_fops = {
+	.llseek		= generic_file_llseek,
+	.read		= do_sync_read,
+	.write		= do_sync_write,
+	.aio_read	= generic_file_aio_read,
+	.aio_write	= generic_file_aio_write,
+//	.unlocked_ioctl	= fat_generic_ioctl,
+#ifdef CONFIG_COMPAT
+//	.compat_ioctl	= fat_compat_dir_ioctl,
+#endif
+	.mmap		= generic_file_mmap,
+	.open		= generic_file_open,
+//	.fsync		= file_fsync,
+	.splice_read	= generic_file_splice_read,
+	.splice_write	= generic_file_splice_write,
+};
+
+static const struct inode_operations tux_file_iops = {
+//	.truncate	= ext4_truncate,
+//	.permission	= ext4_permission,
+//	.setattr	= ext4_setattr,
+//	.getattr	= ext4_getattr
+#ifdef CONFIG_EXT4DEV_FS_XATTR
+//	.setxattr	= generic_setxattr,
+//	.getxattr	= generic_getxattr,
+//	.listxattr	= ext4_listxattr,
+//	.removexattr	= generic_removexattr,
+#endif
+//	.fallocate	= ext4_fallocate,
+//	.fiemap		= ext4_fiemap,
+};
+
 struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 {
 	struct sb *sbi = tux_sb(sb);
@@ -213,8 +245,8 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 //		init_special_inode(inode, inode->i_mode, new_decode_dev(dev));
 		break;
 	case S_IFREG:
-//		inode->i_op = &tux_file_iops;
-//		inode->i_fop = &tux_file_fops;
+		inode->i_op = &tux_file_iops;
+		inode->i_fop = &tux_file_fops;
 		inode->i_mapping->a_ops = &tux_aops;
 		break;
 	case S_IFDIR:
