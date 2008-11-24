@@ -612,6 +612,7 @@ int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf);
 extern struct btree_ops itable_ops;
 
 /* inode.c */
+void tux3_clear_inode(struct inode *inode);
 struct inode *tux3_iget(struct super_block *sb, inum_t inum);
 
 /* xattr.c */

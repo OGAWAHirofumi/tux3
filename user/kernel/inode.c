@@ -139,6 +139,12 @@ eek:
 }
 
 #ifdef __KERNEL__
+void tux3_clear_inode(struct inode *inode)
+{
+	if (tux_inode(inode)->xcache)
+		kfree(tux_inode(inode)->xcache);
+}
+
 struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 {
 	struct sb *sbi = tux_sb(sb);
