@@ -61,10 +61,8 @@ static struct buffer_head *new_leaf(struct btree *btree)
 static struct buffer_head *new_node(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
-	if (buffer) {
+	if (buffer)
 		((struct bnode *)bufdata(buffer))->count = 0;
-		mark_buffer_dirty(buffer);
-	}
 	return buffer;
 }
 
