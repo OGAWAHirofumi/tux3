@@ -47,7 +47,6 @@ static struct buffer_head *new_block(struct btree *btree)
 	if (!buffer)
 		return NULL;
 	memset(bufdata(buffer), 0, bufsize(buffer));
-	mark_buffer_dirty(buffer);
 	return buffer;
 }
 
@@ -62,8 +61,10 @@ static struct buffer_head *new_leaf(struct btree *btree)
 static struct buffer_head *new_node(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
-	if (buffer)
+	if (buffer) {
 		((struct bnode *)bufdata(buffer))->count = 0;
+		mark_buffer_dirty(buffer);
+	}
 	return buffer;
 }
 
@@ -478,7 +479,6 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tu
 	for (int i = 0; i < 2; i++) {
 		struct buffer_head *leafbuf = path[btree->root.depth].buffer;
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
-		mark_buffer_dirty(leafbuf);
 		if (space)
 			return space;
 		assert(!i);

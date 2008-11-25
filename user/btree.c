@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
 		struct buffer_head *buffer = new_leaf(&btree);
 		for (int i = 0; i < 7; i++)
 			uleaf_insert(&btree, bufdata(buffer), i, i + 0x100);
+		mark_buffer_dirty(buffer);
 		uleaf_dump(&btree, bufdata(buffer));
 		return 0;
 	}
@@ -167,6 +168,7 @@ int main(int argc, char *argv[])
 			error("probe for %i failed", key);
 		struct uentry *entry = tree_expand(&btree, key, 1, path);
 		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
+		mark_buffer_dirty(path[btree.root.depth].buffer);
 		release_path(path, btree.root.depth + 1);
 	}
 	show_tree_range(&btree, 0, -1);

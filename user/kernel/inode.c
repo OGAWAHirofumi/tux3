@@ -24,6 +24,7 @@ int store_attrs(struct inode *inode, struct tux_path path[])
 	void *attr = encode_attrs(inode, base, size);
 	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
+	mark_buffer_dirty(path[tux_sb(inode->i_sb)->itable.root.depth].buffer);
 	return 0;
 }
 
