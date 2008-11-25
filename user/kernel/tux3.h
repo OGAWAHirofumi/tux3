@@ -646,6 +646,8 @@ static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 
 static inline void brelse_dirty(struct buffer_head *buffer)
 {
+	mark_buffer_dirty(buffer);
+	brelse(buffer);
 }
 #else /* !__KERNEL__ */
 static inline struct inode *buffer_inode(struct buffer_head *buffer)

@@ -125,7 +125,7 @@ static void remove_buffer_journaled(struct buffer_head *buffer)
 	journaled_count --;
 }
 
-struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)
+struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
 {
 	buftrace("set_buffer_dirty %Lx state = %u", buffer->index, buffer->state);
 	if (!buffer_dirty(buffer)) {
@@ -170,7 +170,7 @@ void brelse(struct buffer_head *buffer)
 void brelse_dirty(struct buffer_head *buffer)
 {
 	buftrace("Release dirty buffer %Lx", buffer->index);
-	set_buffer_dirty(buffer);
+	mark_buffer_dirty(buffer);
 	brelse(buffer);
 }
 
@@ -185,7 +185,7 @@ int write_buffer(struct buffer_head *buffer)
 	set_buffer_uptodate(buffer);
 	int err = write_buffer_to(buffer, buffer->index);
 	if (err)
-		set_buffer_dirty(buffer);
+		mark_buffer_dirty(buffer);
 	return err;
 }
 
@@ -502,7 +502,7 @@ int buffer_main(int argc, char *argv[])
 	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
 	show_dirty_buffers(map);
-	set_buffer_dirty(blockget(map, 1));
+	mark_buffer_dirty(blockget(map, 1));
 	show_dirty_buffers(map);
 	printf("get %p\n", blockget(map, 0));
 	printf("get %p\n", blockget(map, 1));

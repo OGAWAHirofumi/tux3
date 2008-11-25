@@ -190,7 +190,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		set_buffer_dirty(path[tux_inode(inode)->btree.root.depth].buffer);
+		mark_buffer_dirty(path[tux_inode(inode)->btree.root.depth].buffer);
 
 		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */

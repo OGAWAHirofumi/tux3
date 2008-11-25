@@ -204,8 +204,7 @@ block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned co
 				}
 				found -= run - 1;
 				set_bits(bufdata(buffer), found & mapmask, run);
-				set_buffer_dirty(buffer);
-				brelse(buffer);
+				brelse_dirty(buffer);
 				tux_sb(inode->i_sb)->nextalloc = found + run;
 				tux_sb(inode->i_sb)->freeblocks -= run;
 				//set_sb_dirty(sb);

@@ -79,8 +79,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			memcpy(data, bufdata(buffer) + from, some);
 		printf("transfer %u bytes, block 0x%Lx, buffer %p\n", some, (L)bufindex(buffer), buffer);
 		hexdump(bufdata(buffer) + from, some);
-		set_buffer_dirty(buffer);
-		brelse(buffer);
+		brelse_dirty(buffer);
 		tail -= some;
 		data += some;
 		pos += some;

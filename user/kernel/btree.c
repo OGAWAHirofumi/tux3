@@ -47,7 +47,7 @@ static struct buffer_head *new_block(struct btree *btree)
 	if (!buffer)
 		return NULL;
 	memset(bufdata(buffer), 0, bufsize(buffer));
-	set_buffer_dirty(buffer);
+	mark_buffer_dirty(buffer);
 	return buffer;
 }
 
@@ -221,7 +221,7 @@ static void remove_index(struct tux_path path[], int level)
 		(char *)&node->entries[count] - (char *)path[level].next);
 	node->count = to_be_u32(count - 1);
 	--(path[level].next);
-	set_buffer_dirty(path[level].buffer);
+	mark_buffer_dirty(path[level].buffer);
 
 	/* no separator for last entry */
 	if (level_finished(path, level))
@@ -239,7 +239,7 @@ static void remove_index(struct tux_path path[], int level)
 			if (!i)
 				return;
 		(path[i].next - 1)->key = sep;
-		set_buffer_dirty(path[i].buffer);
+		mark_buffer_dirty(path[i].buffer);
 	}
 }
 
@@ -273,7 +273,7 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 	/* leaf walk */
 	while (1) {
 		if (delete_from_leaf(btree, bufdata(leafbuf), info))
-			set_buffer_dirty(leafbuf);
+			mark_buffer_dirty(leafbuf);
 
 		/* try to merge this leaf with prev */
 		if (leafprev) {
@@ -286,7 +286,7 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
 				(ops->leaf_merge)(btree, that, this);
 				remove_index(path, level);
-				set_buffer_dirty(leafprev);
+				mark_buffer_dirty(leafprev);
 				brelse_free(sb, leafbuf);
 				//dirty_buffer_count_check(sb);
 				goto keep_prev_leaf;
@@ -317,7 +317,7 @@ keep_prev_leaf:
 					trace(">>> can merge node %p into node %p", this, that);
 					merge_nodes(that, this);
 					remove_index(path, level - 1);
-					set_buffer_dirty(prev[level].buffer);
+					mark_buffer_dirty(prev[level].buffer);
 					brelse_free(sb, path[level].buffer);
 					//dirty_buffer_count_check(sb);
 					goto keep_prev_node;
@@ -402,7 +402,7 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 		/* insert and exit if not full */
 		if (bcount(parent) < btree->sb->entries_per_node) {
 			add_child(parent, next, childblock, childkey);
-			set_buffer_dirty(parentbuf);
+			mark_buffer_dirty(parentbuf);
 			return 0;
 		}
 
@@ -420,12 +420,13 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 		/* if the path is in the new node, use that as the parent */
 		if (next > parent->entries + half) {
 			next = next - &parent->entries[half] + newnode->entries;
-			set_buffer_dirty(parentbuf);
+			mark_buffer_dirty(parentbuf);
 			parentbuf = newbuf;
 			parent = newnode;
-		} else set_buffer_dirty(newbuf);
+		} else
+			mark_buffer_dirty(newbuf);
 		add_child(parent, next, childblock, childkey);
-		set_buffer_dirty(parentbuf);
+		mark_buffer_dirty(parentbuf);
 		childkey = newkey;
 		childblock = bufindex(newbuf);
 		brelse(newbuf);
@@ -443,7 +444,7 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 	vecmove(path + 1, path, btree->root.depth++ + 1);
 	path[0] = (struct tux_path){ .buffer = newbuf }; // .next = ???
 	//set_sb_dirty(sb);
-	set_buffer_dirty(newbuf);
+	mark_buffer_dirty(newbuf);
 	return 0;
 eek:
 	release_path(path, levels + 1);
@@ -468,8 +469,7 @@ int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key)
 		leafbuf = path[btree->root.depth].buffer = newbuf;
 		newbuf = swap;
 	}
-	set_buffer_dirty(newbuf);
-	brelse(newbuf);
+	brelse_dirty(newbuf);
 	return insert_node(btree, newkey, childblock, path);
 }
 
@@ -478,7 +478,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tu
 	for (int i = 0; i < 2; i++) {
 		struct buffer_head *leafbuf = path[btree->root.depth].buffer;
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
-		set_buffer_dirty(leafbuf);
+		mark_buffer_dirty(leafbuf);
 		if (space)
 			return space;
 		assert(!i);
