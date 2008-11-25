@@ -221,14 +221,17 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	struct inode *inode;
 	int err;
 
-	inode = new_inode(sb);
+	/* FIXME: inum is 64bit, ino is unsigned long */
+	inode = iget_locked(sb, inum);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
+	if (!(inode->i_state & I_NEW))
+		return inode;
 
 	tux_inode(inode)->inum = inum;
 	err = open_inode(inode);
 	if (err) {
-		iput(inode);
+		iget_failed(inode);
 		return ERR_PTR(err);
 	}
 
@@ -262,6 +265,7 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 		break;
 	}
 
+	unlock_new_inode(inode);
 	return inode;
 }
 #endif /* !__KERNEL__ */
