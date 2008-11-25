@@ -10,7 +10,7 @@
 #include <linux/bio.h>
 #include <linux/fs.h>
 #include <linux/statfs.h>
-#include <linux/tux3.h>
+
 #include "tux3.h"
 
 static struct kmem_cache *tux_inode_cachep;
