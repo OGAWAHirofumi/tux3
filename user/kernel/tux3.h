@@ -445,7 +445,7 @@ static inline u32 high32(fixed32 val)
 
 static inline unsigned billionths(fixed32 val)
 {
-	return (((val & 0xffffffff) * 1000000000ULL) + 0x80000000) >> 32;
+	return (((val & 0xffffffff) * 1000000000) + 0x80000000) >> 32;
 }
 
 static inline struct timespec spectime(fixed32 time)
@@ -455,7 +455,7 @@ static inline struct timespec spectime(fixed32 time)
 
 static inline fixed32 tuxtime(struct timespec time)
 {
-	return ((u64)time.tv_sec << 32) + ((u64)time.tv_nsec << 32) / 1000000000ULL;
+	return ((u64)time.tv_sec << 32) + ((u64)time.tv_nsec << 32) / 1000000000;
 }
 
 static inline struct timespec gettime(void)
