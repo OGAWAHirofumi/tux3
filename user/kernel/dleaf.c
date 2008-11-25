@@ -342,10 +342,10 @@ void dwalk_chop(struct dwalk *walk) // do we ever need this?
 	dwalk_chop_after(walk);
 }
 
-#ifndef main
-#define MAX_GROUP_ENTRIES 7
-#else
+#if defined(main) || defined(__KERNEL__)
 #define MAX_GROUP_ENTRIES 255
+#else
+#define MAX_GROUP_ENTRIES 7
 #endif
 
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
