@@ -43,7 +43,6 @@
 #define TUX_DIR_PAD 3
 #define TUX_REC_LEN(name_len) (((name_len) + 8 + TUX_DIR_PAD) & ~TUX_DIR_PAD)
 #define TUX_MAX_REC_LEN ((1<<16)-1)
-#define TUX_NAME_LEN 255
 
 static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
 {

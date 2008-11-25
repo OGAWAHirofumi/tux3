@@ -296,6 +296,8 @@ static inline map_t *mapping(struct inode *inode)
 }
 #endif /* !__KERNEL__ */
 
+#define TUX_NAME_LEN 255
+
 /* directory entry */
 typedef struct {
 	be_u32 inum;

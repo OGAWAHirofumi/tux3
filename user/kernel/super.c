@@ -132,9 +132,9 @@ static int tux3_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_ffree = buf->f_blocks << (sbi->clus_bits - EXFAT_CHUNK_BITS) / 3;
 	buf->f_fsid.val[0] = sbi->serial_number;
 	/*buf->f_fsid.val[1];*/
-	buf->f_namelen = TUX_NAME_LEN;
-	buf->f_frsize = sbi->blocksize;
 #endif
+	buf->f_namelen = TUX_NAME_LEN;
+//	buf->f_frsize = sbi->blocksize;
 
 	return 0;
 }
