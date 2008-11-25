@@ -184,6 +184,11 @@ void tux3_clear_inode(struct inode *inode)
 		kfree(tux_inode(inode)->xcache);
 }
 
+int tux3_write_inode(struct inode *inode, int do_sync)
+{
+	return save_inode(inode);
+}
+
 static const struct file_operations tux_file_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= do_sync_read,

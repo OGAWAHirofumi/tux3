@@ -145,6 +145,7 @@ static const struct super_operations tux3_super_ops = {
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,
 	.clear_inode	= tux3_clear_inode,
+	.write_inode	= tux3_write_inode,
 };
 
 static int tux3_fill_super(struct super_block *sb, void *data, int silent)

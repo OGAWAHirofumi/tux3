@@ -619,6 +619,7 @@ extern struct btree_ops itable_ops;
 
 /* inode.c */
 void tux3_clear_inode(struct inode *inode);
+int tux3_write_inode(struct inode *inode, int do_sync);
 struct inode *tux3_iget(struct super_block *sb, inum_t inum);
 
 /* xattr.c */
