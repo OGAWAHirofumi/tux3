@@ -216,7 +216,7 @@ static inline struct extent *dleaf_extents(struct dleaf *dleaf,
 	}
 	if (ent) {
 		entries = dleaf_entries(dleaf, groups, i);
-		extents += entry_limit(dleaf_entry(entries, ent));
+		extents += entry_limit(dleaf_entry(entries, ent - 1));
 	}
 
 	return extents;
