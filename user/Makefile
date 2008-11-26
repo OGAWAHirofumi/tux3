@@ -18,21 +18,41 @@ VG=valgrind --error-exitcode=200 --leak-check=full
 
 TESTDIR = .
 
-binaries = vfs.o balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 \
-	tux3graph
+binaries = balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
 endif
 
-basedeps = Makefile vfs.o trace.h tux3.h kernel/tux3.h
-lowdeps = $(basedeps) iattr.c dir.c btree.c ileaf.c balloc.c dleaf.c xattr.c
-fsdeps = $(lowdeps) filemap.c inode.c
+basedeps	= Makefile err.h buffer.h diskio.h list.h trace.h \
+	kernel/trace.h tux3.h kernel/tux3.h hexdump.c kernel/hexdump.c
+ballocdeps	= balloc.c kernel/balloc.c
+btreedeps	= btree.c kernel/btree.c
+dirdeps		= dir.c kernel/dir.c
+dleafdeps	= dleaf.c kernel/dleaf.c
+filemapdeps	= $(ballocdeps) $(dleafdeps) $(dirdeps) $(xattrdeps) \
+	$(ileafdeps) filemap.c kernel/filemap.c
+iattrdeps	= iattr.c kernel/iattr.c
+ileafdeps	= ileaf.c kernel/ileaf.c
+inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c kernel/super.c
+vfsdeps		= vfs.c buffer.c diskio.c
+xattrdeps	= $(ballocdeps) $(dirdeps) $(ileafdeps) xattr.c kernel/xattr.c
 
 all: $(binaries)
 tests: balloctest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
 
-vfs.o: Makefile buffer.h trace.h buffer.c diskio.c vfs.c
+balloc.o: $(basedeps) $(ballocdeps)
+btree.o: $(basedeps) $(bteedeps)
+dir.o: $(basedeps) $(dirdeps)
+dleaf.o: $(basedeps) $(dleafdeps)
+filemap.o: $(basedeps) $(filemapdeps)
+iattr.o: $(basedeps) $(iattrdeps)
+ileaf.o: $(basedeps) $(ileafdeps)
+inode.o: $(basedeps) $(inodedeps)
+tux3.o:$(basedeps) $(inodedeps)
+tux3graph.o:$(basedeps) $(inodedeps)
+vfs.o: $(basedeps) $(vfsdeps)
+xattr.o:$(basedeps) $(xattrdeps)
 
 .c.o:
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -40,61 +60,61 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
 endif
 
-balloc: $(basedeps) balloc.o
+balloc: vfs.o balloc.o
 	$(CC) $(CFLAGS) vfs.o balloc.o -o balloc
 balloctest: balloc
 	$(VG) ./balloc
 
-dleaf: $(basedeps) dleaf.o
+dleaf: vfs.o dleaf.o
 	$(CC) $(CFLAGS) vfs.o dleaf.o -o dleaf
 dleaftest: dleaf
 	$(VG) ./dleaf
 
-ileaf: $(basedeps) ileaf.o
+ileaf: vfs.o ileaf.o
 	$(CC) $(CFLAGS) vfs.o ileaf.o -o ileaf
 ileaftest: ileaf
 	$(VG) ./ileaf
 
-btree: $(basedeps) btree.o dleaf.c
+btree: vfs.o btree.o
 	$(CC) $(CFLAGS) vfs.o btree.o -o btree
 btreetest: btree
 	$(VG) ./btree foodev
 
-dir: $(basedeps) dir.o dleaf.c
+dir: vfs.o dir.o
 	$(CC) $(CFLAGS) vfs.o dir.o -o dir
 dirtest: dir
 	$(VG) ./dir
 
-iattr: $(basedeps) iattr.o
+iattr: vfs.o iattr.o
 	$(CC) $(CFLAGS) vfs.o iattr.o -o iattr
 iattrtest: iattr
 	$(VG) ./iattr
 
-xattr: $(lowdeps) xattr.o
+xattr: vfs.o xattr.o
 	$(CC) $(CFLAGS) vfs.o xattr.o -o xattr
 xattrtest: xattr
 	$(VG) ./xattr foodev
 
-filemap: $(lowdeps) filemap.o
+filemap: vfs.o filemap.o
 	$(CC) $(CFLAGS) vfs.o filemap.o -o filemap
 filemaptest: filemap
 	$(VG) ./filemap foodev
 
-inode: $(fsdeps) inode.o
+inode: vfs.o inode.o
 	$(CC) $(CFLAGS) vfs.o inode.o -o inode
 inodetest: inode
 	$(VG) ./inode foodev
 
-tux3: $(fsdeps) tux3.o
+tux3: vfs.o tux3.o
 	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
 
-tux3fuse: $(fsdeps) tux3fuse.c
+tux3fuse: $(basedeps) $(inodedeps) vfs.o
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
 
-tux3graph: $(fsdeps) tux3graph.o
+tux3graph: vfs.o tux3graph.o
 	$(CC) $(CFLAGS) vfs.o tux3graph.o -lpopt -o $@
 
 makefs mkfs: tux3
