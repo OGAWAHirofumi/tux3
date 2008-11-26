@@ -75,10 +75,14 @@ int main(int argc, char *argv[])
 	inode = inode;
 
 #if 1
-	brelse_dirty(blockread(mapping(inode), 0));
-	brelse_dirty(blockread(mapping(inode), 1));
+	sb->nextalloc = 0x10;
+	balloc(sb);
+	sb->nextalloc = 0xf;
+	brelse_dirty(blockread(mapping(inode), 0x0));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	filemap_extent_io(blockget(mapping(inode), 0), 0);
+	brelse_dirty(blockread(mapping(inode), 0x1));
+	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
+	filemap_extent_io(blockget(mapping(inode), 1), 0);
 	return 0;
 #endif
 
