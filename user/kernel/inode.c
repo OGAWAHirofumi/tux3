@@ -186,6 +186,9 @@ void tux3_clear_inode(struct inode *inode)
 
 int tux3_write_inode(struct inode *inode, int do_sync)
 {
+	BUG_ON(tux_inode(inode)->inum == TUX_BITMAP_INO ||
+	       tux_inode(inode)->inum == TUX_VTABLE_INO ||
+	       tux_inode(inode)->inum == TUX_ATABLE_INO);
 	return save_inode(inode);
 }
 
@@ -268,6 +271,14 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	case S_IFLNK:
 //		inode->i_op = &tux_symlink_iops;
 //		inode->i_mapping->a_ops = &tux_aops;
+		break;
+	case 0:
+		/* FIXME: bitmap, vtable, atable doesn't have S_IFMT */
+		/* set fake i_size to escape the check of read/writepage */
+		inode->i_size = MAX_LFS_FILESIZE;
+		inode->i_mapping->a_ops = &tux_dir_aops;
+//		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
+		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	}
 

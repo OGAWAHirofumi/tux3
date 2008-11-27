@@ -479,8 +479,16 @@ static int tux3_dir_readpage(struct file *file, struct page *page)
 	return block_read_full_page(page, tux3_get_block);
 }
 
+static int tux3_dir_writepage(struct page *page, struct writeback_control *wbc)
+{
+	return block_write_full_page(page, tux3_get_block, wbc);
+}
+
 const struct address_space_operations tux_dir_aops = {
 	.readpage	= tux3_dir_readpage,
+	.writepage	= tux3_dir_writepage,
+	.writepages	= tux3_writepages,
+	.sync_page	= block_sync_page,
 	.bmap		= tux3_bmap,
 };
 #endif /* __KERNEL__ */
