@@ -15,16 +15,16 @@
 #define trace trace_on
 #endif
 
-int store_attrs(struct inode *inode, struct tux_path path[])
+int store_attrs(struct inode *inode, struct cursor cursor[])
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
-	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, path);
+	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, cursor);
 	if (!base)
 		return -ENOMEM; // what was the actual error???
 	void *attr = encode_attrs(inode, base, size);
 	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
-	mark_buffer_dirty(path[tux_sb(inode->i_sb)->itable.root.depth].buffer);
+	mark_buffer_dirty(cursor[tux_sb(inode->i_sb)->itable.root.depth].buffer);
 	return 0;
 }
 
@@ -54,29 +54,29 @@ int store_attrs(struct inode *inode, struct tux_path path[])
 int make_inode(struct inode *inode, struct tux_iattr *iattr)
 {
 	SB = tux_sb(inode->i_sb);
-	int err = -ENOENT, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
+	int err = -ENOENT, depth = sb->itable.root.depth;
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
+		free_cursor(cursor);
 		return err;
 	}
-	struct buffer_head *leafbuf = path[levels].buffer;
+	struct buffer_head *leafbuf = cursor[depth].buffer;
 //	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
 
 	trace("create inode 0x%Lx", (L)tux_inode(inode)->inum);
 	assert(!tux_inode(inode)->btree.root.depth);
 	inum_t inum = tux_inode(inode)->inum;
-	assert(inum < next_key(path, levels));
+	assert(inum < next_key(cursor, depth));
 	while (1) {
 //		printf("find empty inode in [%Lx] base %Lx\n", (L)bufindex(leafbuf), (L)ibase(leaf));
 		inum = find_empty_inode(&sb->itable, bufdata(leafbuf), (L)inum);
-		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(path, levels));
-		if (inum < next_key(path, levels))
+		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(cursor, depth));
+		if (inum < next_key(cursor, depth))
 			break;
-		int more = advance(&sb->itable, path);
+		int more = advance(&sb->itable, cursor);
 		printf("no more inode space here, advance %i\n", more);
 		if (!more)
 			goto errout;
@@ -90,15 +90,15 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	tux_inode(inode)->inum = inum;
 	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
 	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
-	if ((err = store_attrs(inode, path)))
+	if ((err = store_attrs(inode, cursor)))
 		goto eek;
-	release_path(path, levels + 1);
-	free_path(path);
+	release_cursor(cursor, depth + 1);
+	free_cursor(cursor);
 	return 0;
 eek:
-	release_path(path, levels + 1);
+	release_cursor(cursor, depth + 1);
 errout:
-	free_path(path);
+	free_cursor(cursor);
 	warn("make_inode 0x%Lx failed (%d)", (L)tux_inode(inode)->inum, err);
 	return err;
 }
@@ -106,23 +106,23 @@ errout:
 static int open_inode(struct inode *inode)
 {
 	SB = tux_sb(inode->i_sb);
-	int err, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
+	int err, depth = sb->itable.root.depth;
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
+		free_cursor(cursor);
 		return err;
 	}
 	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size);
+	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor[depth].buffer), &size);
 	if (!attrs) {
 		err = -ENOENT;
 		goto eek;
 	}
 	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(&sb->itable, path[levels].buffer->data);
+	//ileaf_dump(&sb->itable, cursor[depth].buffer->data);
 	//hexdump(attrs, size);
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;
@@ -134,8 +134,8 @@ static int open_inode(struct inode *inode)
 		xcache_dump(inode);
 	err = 0;
 eek:
-	release_path(path, levels + 1);
-	free_path(path);
+	release_cursor(cursor, depth + 1);
+	free_cursor(cursor);
 	return err;
 }
 
@@ -143,37 +143,37 @@ int save_inode(struct inode *inode)
 {
 	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	SB = tux_sb(inode->i_sb);
-	int err, levels = sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
+	int err, depth = sb->itable.root.depth;
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, path))) {
-		free_path(path);
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
+		free_cursor(cursor);
 		return err;
 	}
 	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(path[levels].buffer), &size)))
+	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor[depth].buffer), &size)))
 		return -EINVAL;
-	err = store_attrs(inode, path);
-	release_path(path, levels + 1);
-	free_path(path);
+	err = store_attrs(inode, cursor);
+	release_cursor(cursor, depth + 1);
+	free_cursor(cursor);
 	return err;
 }
 
 int purge_inum(BTREE, inum_t inum)
 {
-	int err = -ENOENT, levels = btree->sb->itable.root.depth;
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
+	int err = -ENOENT, depth = btree->sb->itable.root.depth;
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
 		return -ENOMEM;
 
-	if (!(err = probe(btree, inum, path))) {
-		struct ileaf *ileaf = to_ileaf(bufdata(path[levels].buffer));
+	if (!(err = probe(btree, inum, cursor))) {
+		struct ileaf *ileaf = to_ileaf(bufdata(cursor[depth].buffer));
 		err = ileaf_purge(btree, inum, ileaf);
-		release_path(path, levels + 1);
+		release_cursor(cursor, depth + 1);
 	}
-	free_path(path);
+	free_cursor(cursor);
 	return err;
 }
 

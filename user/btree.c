@@ -162,14 +162,14 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
-	struct tux_path path[30];
+	struct cursor cursor[30];
 	for (int key = 0; key < 30; key++) {
-		if (probe(&btree, key, path))
+		if (probe(&btree, key, cursor))
 			error("probe for %i failed", key);
-		struct uentry *entry = tree_expand(&btree, key, 1, path);
+		struct uentry *entry = tree_expand(&btree, key, 1, cursor);
 		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
-		mark_buffer_dirty(path[btree.root.depth].buffer);
-		release_path(path, btree.root.depth + 1);
+		mark_buffer_dirty(cursor[btree.root.depth].buffer);
+		release_cursor(cursor, btree.root.depth + 1);
 	}
 	show_tree_range(&btree, 0, -1);
 	show_buffers(sb->devmap);

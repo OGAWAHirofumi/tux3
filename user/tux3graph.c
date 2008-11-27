@@ -79,7 +79,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		gi->bname, (L)sb->itable.root.block);
 }
 
-static void draw_bnode(struct graph_info *gi, int levels, int level,
+static void draw_bnode(struct graph_info *gi, int depth, int level,
 		       struct buffer_head *buffer)
 {
 	struct bnode *bnode = buffer->data;
@@ -102,7 +102,7 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 		"shape = record\n"
 		"];\n");
 
-	if (level == levels - 1) {
+	if (level == depth - 1) {
 		for (n = 0; n < bcount(bnode); n++) {
 			fprintf(gi->f,
 				"%s_bnode_%llu:f%u -> %s_%llu:%s0;\n",
@@ -120,55 +120,55 @@ static void draw_bnode(struct graph_info *gi, int levels, int level,
 	}
 }
 
-static void draw_path(struct graph_info *gi, BTREE, struct tux_path path[])
+static void draw_cursor(struct graph_info *gi, BTREE, struct cursor cursor[])
 {
 	int level;
 	for (level = 0; level < btree->root.depth; level++)
-		draw_bnode(gi, btree->root.depth, level, path[level].buffer);
+		draw_bnode(gi, btree->root.depth, level, cursor[level].buffer);
 }
 
 static int draw_advance(struct graph_info *gi, struct map *map,
-			struct tux_path path[], int levels)
+			struct cursor cursor[], int depth)
 {
-	int level = levels;
-	struct buffer_head *buffer = path[level].buffer;
+	int level = depth;
+	struct buffer_head *buffer = cursor[level].buffer;
 	struct bnode *node;
 	do {
 		brelse(buffer);
 		if (!level)
 			return 0;
-		node = (buffer = path[--level].buffer)->data;
-	} while (level_finished(path, level));
+		node = (buffer = cursor[--level].buffer)->data;
+	} while (level_finished(cursor, level));
 	do {
-		if (!(buffer = blockread(map, from_be_u64(path[level].next++->block))))
+		if (!(buffer = blockread(map, from_be_u64(cursor[level].next++->block))))
 			goto eek;
-		path[++level] = (struct tux_path){
+		cursor[++level] = (struct cursor){
 			.buffer = buffer,
 			.next = ((struct bnode *)buffer->data)->entries
 		};
-		if (level < levels)
-			draw_bnode(gi, levels, level, buffer);
-	} while (level < levels);
+		if (level < depth)
+			draw_bnode(gi, depth, level, buffer);
+	} while (level < depth);
 	return 1;
 eek:
-	release_path(path, level);
+	release_cursor(cursor, level);
 	return -EIO;
 }
 
 static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 {
-	struct tux_path path[30]; // check for overflow!!!
+	struct cursor cursor[30]; // check for overflow!!!
 	struct buffer_head *buffer;
 
-	if (probe(btree, 0, path))
+	if (probe(btree, 0, cursor))
 		error("tell me why!!!");
 
-	draw_path(gi, btree, path);
+	draw_cursor(gi, btree, cursor);
 
 	do {
-		buffer = path[btree->root.depth].buffer;
+		buffer = cursor[btree->root.depth].buffer;
 		draw_leaf(gi, btree, buffer);
-	} while (draw_advance(gi, buffer->map, path, btree->root.depth));
+	} while (draw_advance(gi, buffer->map, cursor, btree->root.depth));
 }
 
 static inline struct group *dleaf_groups_ptr(BTREE, struct dleaf *dleaf)

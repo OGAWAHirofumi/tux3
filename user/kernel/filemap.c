@@ -57,8 +57,8 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 		return -EIO;
 	struct dev *dev = sb->devmap->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	int levels = tux_inode(inode)->btree.root.depth, try = 0, i, err;
-	if (!levels) {
+	int depth = tux_inode(inode)->btree.root.depth, try = 0, i, err;
+	if (!depth) {
 		if (!write) {
 			trace("unmapped block %Lx", (L)bufindex(buffer));
 			memset(bufdata(buffer), 0, sb->blocksize);
@@ -76,21 +76,21 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 	struct extent seg[1000];
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&tux_inode(inode)->btree, start, path))) {
-		free_path(path);
+	if ((err = probe(&tux_inode(inode)->btree, start, cursor))) {
+		free_cursor(cursor);
 		return err;
 	}
 retry:
-	//assert(start >= this_key(path, levels))
+	//assert(start >= this_key(cursor, depth))
 	/* do not overlap next leaf */
-	if (limit > next_key(path, levels))
-		limit = next_key(path, levels);
+	if (limit > next_key(cursor, depth))
+		limit = next_key(cursor, depth);
 	unsigned segs = 0;
-	struct dleaf *leaf = bufdata(path[levels].buffer);
+	struct dleaf *leaf = bufdata(cursor[depth].buffer);
 	struct dwalk *walk = &(struct dwalk){ };
 dleaf_dump(&tux_inode(inode)->btree, leaf);
 	/* Probe below io start to include overlapping extents */
@@ -176,7 +176,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		if (dleaf_free(&tux_inode(inode)->btree, leaf) <= walk->mock.free - walk->mock.used) {
 			trace_on("--------- split leaf ---------");
 			assert(!try);
-			if ((err = btree_leaf_split(&tux_inode(inode)->btree, path, 0)))
+			if ((err = btree_leaf_split(&tux_inode(inode)->btree, cursor, 0)))
 				goto eek;
 			try = 1;
 			goto retry;
@@ -190,7 +190,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		mark_buffer_dirty(path[tux_inode(inode)->btree.root.depth].buffer);
+		mark_buffer_dirty(cursor[tux_inode(inode)->btree.root.depth].buffer);
 
 		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */
@@ -223,15 +223,15 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		index += count;
 		skip = 0;
 	}
-	release_path(path, levels + 1);
-	free_path(path);
+	release_cursor(cursor, depth + 1);
+	free_cursor(cursor);
 	return err;
 nospace:
 	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %d", err);
-	release_path(path, levels + 1);
-	free_path(path);
+	release_cursor(cursor, depth + 1);
+	free_cursor(cursor);
 	// free blocks and try to clean up ???
 	return -EIO;
 }
@@ -249,29 +249,29 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 
 	struct sb *sbi = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
-	int levels = tux_inode(inode)->btree.root.depth, err;
-	if (!levels) {
+	int depth = tux_inode(inode)->btree.root.depth, err;
+	if (!depth) {
 		trace("unmapped block %Lx", (L)iblock);
 		return 0;
 	}
 
 	block_t start = iblock, limit = iblock + max_blocks;
 	struct extent seg[10];
-	struct tux_path *path = alloc_path(levels + 1);
-	if (!path)
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&tux_inode(inode)->btree, start, path))) {
-		free_path(path);
+	if ((err = probe(&tux_inode(inode)->btree, start, cursor))) {
+		free_cursor(cursor);
 		return err;
 	}
 
-	//assert(start >= this_key(path, levels))
+	//assert(start >= this_key(cursor, depth))
 	/* do not overlap next leaf */
-	if (limit > next_key(path, levels))
-		limit = next_key(path, levels);
+	if (limit > next_key(cursor, depth))
+		limit = next_key(cursor, depth);
 	unsigned segs = 0;
-	struct dleaf *leaf = bufdata(path[levels].buffer);
+	struct dleaf *leaf = bufdata(cursor[depth].buffer);
 	struct dwalk *walk = &(struct dwalk){ };
 	dleaf_dump(&tux_inode(inode)->btree, leaf);
 	/* Probe below io start to include overlapping extents */
@@ -327,8 +327,8 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	trace("%s: block %Lu, size %zu", __func__,
 	      (L)bh_result->b_blocknr, bh_result->b_size);
 
-	release_path(path, levels + 1);
-	free_path(path);
+	release_cursor(cursor, depth + 1);
+	free_cursor(cursor);
 
 	return err;
 }

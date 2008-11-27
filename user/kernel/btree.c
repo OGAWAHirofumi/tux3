@@ -67,116 +67,116 @@ static struct buffer_head *new_node(struct btree *btree)
 }
 
 /*
- * A btree path has n + 1 entries for a btree of depth n, with the first n
+ * A btree cursor has n + 1 entries for a btree of depth n, with the first n
  * entries pointing at internal nodes and entry n + 1 pointing at a leaf.
  * The next field points at the next index entry that will be loaded in a left
  * to right tree traversal, not the current entry.  The next pointer is null
  * for the leaf, which has its own specialized traversal algorithms.
  */
 
-static inline struct bnode *path_node(struct tux_path path[], int level)
+static inline struct bnode *cursor_node(struct cursor cursor[], int level)
 {
-	return bufdata(path[level].buffer);
+	return bufdata(cursor[level].buffer);
 }
 
-void release_path(struct tux_path path[], int levels)
+void release_cursor(struct cursor cursor[], int depth)
 {
-	for (int i = 0; i < levels; i++)
-		brelse(path[i].buffer);
+	for (int i = 0; i < depth; i++)
+		brelse(cursor[i].buffer);
 }
 
-void show_path(struct tux_path path[], int levels)
+void show_cursor(struct cursor cursor[], int depth)
 {
-	printf(">>> path %p/%i:", path, levels);
-	for (int i = 0; i < levels; i++)
-		printf(" [%Lx/%i]", (L)bufindex(path[i].buffer), bufcount(path[i].buffer));
+	printf(">>> cursor %p/%i:", cursor, depth);
+	for (int i = 0; i < depth; i++)
+		printf(" [%Lx/%i]", (L)bufindex(cursor[i].buffer), bufcount(cursor[i].buffer));
 	printf("\n");
 }
 
-struct tux_path *alloc_path(int levels)
+struct cursor *alloc_cursor(int depth)
 {
-	return malloc(sizeof(struct tux_path) * levels);
+	return malloc(sizeof(struct cursor) * depth);
 }
 
-void free_path(struct tux_path path[])
+void free_cursor(struct cursor cursor[])
 {
-	free(path);
+	free(cursor);
 }
 
-int probe(BTREE, tuxkey_t key, struct tux_path path[])
+int probe(BTREE, tuxkey_t key, struct cursor cursor[])
 {
-	unsigned i, levels = btree->root.depth;
+	unsigned i, depth = btree->root.depth;
 	struct buffer_head *buffer = sb_bread(vfs_sb(btree->sb), btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = bufdata(buffer);
 
-	for (i = 0; i < levels; i++) {
+	for (i = 0; i < depth; i++) {
 		struct index_entry *next = node->entries, *top = next + bcount(node);
 		while (++next < top) /* binary search goes here */
 			if (from_be_u64(next->key) > key)
 				break;
 		//printf("probe level %i, %ti of %i\n", i, next - node->entries, bcount(node));
-		path[i] = (struct tux_path){ buffer, next };
+		cursor[i] = (struct cursor){ buffer, next };
 		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64((next - 1)->block))))
 			goto eek;
 		node = (struct bnode *)bufdata(buffer);
 	}
 	assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
-	path[levels] = (struct tux_path){ buffer };
+	cursor[depth] = (struct cursor){ buffer };
 	return 0;
 eek:
-	release_path(path, i - 1);
+	release_cursor(cursor, i - 1);
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
-static inline int level_finished(struct tux_path path[], int level)
+static inline int level_finished(struct cursor cursor[], int level)
 {
-	struct bnode *node = path_node(path, level);
-	return path[level].next == node->entries + bcount(node);
+	struct bnode *node = cursor_node(cursor, level);
+	return cursor[level].next == node->entries + bcount(node);
 }
 // also write level_beginning!!!
 
-int advance(BTREE, struct tux_path path[])
+int advance(BTREE, struct cursor cursor[])
 {
-	int levels = btree->root.depth, level = levels;
-	struct buffer_head *buffer = path[level].buffer;
+	int depth = btree->root.depth, level = depth;
+	struct buffer_head *buffer = cursor[level].buffer;
 	struct bnode *node;
 	do {
 		brelse(buffer);
 		if (!level)
 			return 0;
-		node = bufdata(buffer = path[--level].buffer);
-		//printf("pop to level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
-	} while (level_finished(path, level));
+		node = bufdata(buffer = cursor[--level].buffer);
+		//printf("pop to level %i, %tx of %x\n", level, cursor[level].next - node->entries, bcount(node));
+	} while (level_finished(cursor, level));
 	do {
-		//printf("push from level %i, %tx of %x\n", level, path[level].next - node->entries, bcount(node));
-		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(path[level].next++->block))))
+		//printf("push from level %i, %tx of %x\n", level, cursor[level].next - node->entries, bcount(node));
+		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor[level].next++->block))))
 			goto eek;
-		path[++level] = (struct tux_path){ .buffer = buffer, .next = (node = bufdata(buffer))->entries };
-	} while (level < levels);
+		cursor[++level] = (struct cursor){ .buffer = buffer, .next = (node = bufdata(buffer))->entries };
+	} while (level < depth);
 	return 1;
 eek:
-	release_path(path, level);
+	release_cursor(cursor, level);
 	return -EIO;
 }
 
 /*
- * Climb up the path until we find the first level where we have not yet read
+ * Climb up the cursor until we find the first level where we have not yet read
  * all the way to the end of the index block, there we find the key that
  * separates the subtree we are in (a leaf) from the next subtree to the right.
  */
-be_u64 *next_keyp(struct tux_path path[], int levels)
+be_u64 *next_keyp(struct cursor cursor[], int depth)
 {
-	for (int level = levels; level--;)
-		if (!level_finished(path, level))
-			return &path[level].next->key;
+	for (int level = depth; level--;)
+		if (!level_finished(cursor, level))
+			return &cursor[level].next->key;
 	return NULL;
 }
 
-tuxkey_t next_key(struct tux_path path[], int levels)
+tuxkey_t next_key(struct cursor cursor[], int depth)
 {
-	be_u64 *keyp = next_keyp(path, levels);
+	be_u64 *keyp = next_keyp(cursor, depth);
 	return keyp ? from_be_u64(*keyp) : -1;
 }
 // also write this_key!!!
@@ -184,17 +184,17 @@ tuxkey_t next_key(struct tux_path path[], int levels)
 void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
-	struct tux_path path[30]; // check for overflow!!!
-	if (probe(btree, start, path))
+	struct cursor cursor[30]; // check for overflow!!!
+	if (probe(btree, start, cursor))
 		error("tell me why!!!");
 	struct buffer_head *buffer;
 	do {
-		buffer = path[btree->root.depth].buffer;
+		buffer = cursor[btree->root.depth].buffer;
 		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
-		//tuxkey_t *next = pnext_key(path, btree->levels);
+		//tuxkey_t *next = pnext_key(cursor, btree->depth);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
-	} while (--count && advance(btree, path));
+	} while (--count && advance(btree, cursor));
 }
 
 /* Deletion */
@@ -210,35 +210,35 @@ static void brelse_free(SB, struct buffer_head *buffer)
 	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
 
-static void remove_index(struct tux_path path[], int level)
+static void remove_index(struct cursor cursor[], int level)
 {
-	struct bnode *node = path_node(path, level);
+	struct bnode *node = cursor_node(cursor, level);
 	int count = bcount(node), i;
 
 	/* stomps the node count (if 0th key holds count) */
-	memmove(path[level].next - 1, path[level].next,
-		(char *)&node->entries[count] - (char *)path[level].next);
+	memmove(cursor[level].next - 1, cursor[level].next,
+		(char *)&node->entries[count] - (char *)cursor[level].next);
 	node->count = to_be_u32(count - 1);
-	--(path[level].next);
-	mark_buffer_dirty(path[level].buffer);
+	--(cursor[level].next);
+	mark_buffer_dirty(cursor[level].buffer);
 
 	/* no separator for last entry */
-	if (level_finished(path, level))
+	if (level_finished(cursor, level))
 		return;
 	/*
 	 * Climb up to common parent and set separating key to deleted key.
 	 * What if index is now empty?  (no deleted key)
 	 * Then some key above is going to be deleted and used to set sep
-	 * Climb the path while at first entry, bail out at root
+	 * Climb the cursor while at first entry, bail out at root
 	 * find the node with the old sep, set it to deleted key
 	 */
-	if (path[level].next == node->entries && level) {
-		be_u64 sep = (path[level].next)->key;
-		for (i = level - 1; path[i].next - 1 == path_node(path, i)->entries; i--)
+	if (cursor[level].next == node->entries && level) {
+		be_u64 sep = (cursor[level].next)->key;
+		for (i = level - 1; cursor[i].next - 1 == cursor_node(cursor, i)->entries; i--)
 			if (!i)
 				return;
-		(path[i].next - 1)->key = sep;
-		mark_buffer_dirty(path[i].buffer);
+		(cursor[i].next - 1)->key = sep;
+		mark_buffer_dirty(cursor[i].buffer);
 	}
 }
 
@@ -256,18 +256,18 @@ int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 
 int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 {
-	int levels = btree->root.depth, level = levels - 1, suspend = 0;
-	struct tux_path *path, *prev;
+	int depth = btree->root.depth, level = depth - 1, suspend = 0;
+	struct cursor *cursor, *prev;
 	struct buffer_head *leafbuf, *leafprev = NULL;
 	struct btree_ops *ops = btree->ops;
 	struct sb *sb = btree->sb;
 
-	path = alloc_path(levels + 1);
-	prev = alloc_path(levels + 1);
-	memset(prev, 0, sizeof(struct tux_path) * (levels + 1));
+	cursor = alloc_cursor(depth + 1);
+	prev = alloc_cursor(depth + 1);
+	memset(prev, 0, sizeof(struct cursor) * (depth + 1));
 
-	probe(btree, info->resume, path);
-	leafbuf = path[levels].buffer;
+	probe(btree, info->resume, cursor);
+	leafbuf = cursor[depth].buffer;
 
 	/* leaf walk */
 	while (1) {
@@ -284,7 +284,7 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 			if ((ops->leaf_need)(btree, this) <= (ops->leaf_free)(btree, that)) {
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
 				(ops->leaf_merge)(btree, that, this);
-				remove_index(path, level);
+				remove_index(cursor, level);
 				mark_buffer_dirty(leafprev);
 				brelse_free(sb, leafbuf);
 				//dirty_buffer_count_check(sb);
@@ -303,77 +303,77 @@ keep_prev_leaf:
 			suspend = -1;
 
 		/* pop and try to merge finished nodes */
-		while (suspend || level_finished(path, level)) {
+		while (suspend || level_finished(cursor, level)) {
 			/* try to merge node with prev */
 			if (prev[level].buffer) {
 				assert(level); /* node has no prev */
-				struct bnode *this = path_node(path, level);
-				struct bnode *that = path_node(prev, level);
+				struct bnode *this = cursor_node(cursor, level);
+				struct bnode *that = cursor_node(prev, level);
 				trace_off("check node %p against %p", this, that);
 				trace_off("this count = %i prev count = %i", bcount(this), bcount(that));
 				/* try to merge with node to left */
 				if (bcount(this) <= sb->entries_per_node - bcount(that)) {
 					trace(">>> can merge node %p into node %p", this, that);
 					merge_nodes(that, this);
-					remove_index(path, level - 1);
+					remove_index(cursor, level - 1);
 					mark_buffer_dirty(prev[level].buffer);
-					brelse_free(sb, path[level].buffer);
+					brelse_free(sb, cursor[level].buffer);
 					//dirty_buffer_count_check(sb);
 					goto keep_prev_node;
 				}
 				brelse(prev[level].buffer);
 			}
-			prev[level].buffer = path[level].buffer;
+			prev[level].buffer = cursor[level].buffer;
 keep_prev_node:
 
-			/* deepest key in the path is the resume address */
-			if (suspend == -1 && !level_finished(path, level)) {
+			/* deepest key in the cursor is the resume address */
+			if (suspend == -1 && !level_finished(cursor, level)) {
 				suspend = 1; /* only set resume once */
-				info->resume = from_be_u64((path[level].next)->key);
+				info->resume = from_be_u64((cursor[level].next)->key);
 			}
-			if (!level) { /* remove levels if possible */
-				while (levels > 1 && bcount(path_node(prev, 0)) == 1) {
+			if (!level) { /* remove depth if possible */
+				while (depth > 1 && bcount(cursor_node(prev, 0)) == 1) {
 					trace("drop btree level");
 					btree->root.block = bufindex(prev[1].buffer);
 					brelse_free(sb, prev[0].buffer);
 					//dirty_buffer_count_check(sb);
-					levels = --btree->root.depth;
-					memcpy(prev, prev + 1, levels * sizeof(prev[0]));
+					depth = --btree->root.depth;
+					memcpy(prev, prev + 1, depth * sizeof(prev[0]));
 					//set_sb_dirty(sb);
 				}
 				brelse(leafprev);
-				release_path(prev, levels);
-				free_path(path);
-				free_path(prev);
+				release_cursor(prev, depth);
+				free_cursor(cursor);
+				free_cursor(prev);
 				//sb->snapmask &= ~snapmask; delete_snapshot_from_disk();
 				//set_sb_dirty(sb);
 				//save_sb(sb);
 				return suspend;
 			}
 			level--;
-			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, path[level].buffer->index, path[level].next - path_node(path, level)->entries, bcount(path_node(path, level))););
+			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, cursor[level].buffer->index, cursor[level].next - cursor_node(cursor, level)->entries, bcount(cursor_node(cursor, level))););
 		}
 
 		/* push back down to leaf level */
-		while (level < levels - 1) {
-			struct buffer_head *buffer = sb_bread(vfs_sb(sb), from_be_u64(path[level++].next++->block));
+		while (level < depth - 1) {
+			struct buffer_head *buffer = sb_bread(vfs_sb(sb), from_be_u64(cursor[level++].next++->block));
 			if (!buffer) {
 				brelse(leafprev);
-				release_path(path, level - 1);
-				free_path(path);
-				free_path(prev);
+				release_cursor(cursor, level - 1);
+				free_cursor(cursor);
+				free_cursor(prev);
 				return -ENOMEM;
 			}
-			path[level].buffer = buffer;
-			path[level].next = ((struct bnode *)bufdata(buffer))->entries;
-			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(path_node(path, level))););
+			cursor[level].buffer = buffer;
+			cursor[level].next = ((struct bnode *)bufdata(buffer))->entries;
+			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(cursor_node(cursor, level))););
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
-		if (!(leafbuf = sb_bread(vfs_sb(sb), from_be_u64(path[level].next++->block)))) {
-			release_path(path, level);
-			free_path(path);
-			free_path(prev);
+		if (!(leafbuf = sb_bread(vfs_sb(sb), from_be_u64(cursor[level].next++->block)))) {
+			release_cursor(cursor, level);
+			free_cursor(cursor);
+			free_cursor(prev);
 			return -ENOMEM;
 		}
 	}
@@ -389,13 +389,13 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count = to_be_u32(bcount(node) + 1);
 }
 
-int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tux_path path[])
+int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor cursor[])
 {
 	trace("insert node 0x%Lx key 0x%Lx into node 0x%Lx", (L)childblock, (L)childkey, (L)btree->root.block);
-	int levels = btree->root.depth;
-	while (levels--) {
-		struct index_entry *next = path[levels].next;
-		struct buffer_head *parentbuf = path[levels].buffer;
+	int depth = btree->root.depth;
+	while (depth--) {
+		struct index_entry *next = cursor[depth].next;
+		struct buffer_head *parentbuf = cursor[depth].buffer;
 		struct bnode *parent = bufdata(parentbuf);
 
 		/* insert and exit if not full */
@@ -416,7 +416,7 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 		memcpy(&newnode->entries[0], &parent->entries[half], bcount(newnode) * sizeof(struct index_entry));
 		parent->count = to_be_u32(half);
 
-		/* if the path is in the new node, use that as the parent */
+		/* if the cursor is in the new node, use that as the parent */
 		if (next > parent->entries + half) {
 			next = next - &parent->entries[half] + newnode->entries;
 			mark_buffer_dirty(parentbuf);
@@ -440,24 +440,24 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct tu
 	newroot->entries[1].key = to_be_u64(childkey);
 	newroot->entries[1].block = to_be_u64(childblock);
 	btree->root.block = bufindex(newbuf);
-	vecmove(path + 1, path, btree->root.depth++ + 1);
-	path[0] = (struct tux_path){ .buffer = newbuf }; // .next = ???
+	vecmove(cursor + 1, cursor, btree->root.depth++ + 1);
+	cursor[0] = (struct cursor){ .buffer = newbuf }; // .next = ???
 	//set_sb_dirty(sb);
 	mark_buffer_dirty(newbuf);
 	return 0;
 eek:
-	release_path(path, levels + 1);
+	release_cursor(cursor, depth + 1);
 	return -ENOMEM;
 }
 
-int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key)
+int btree_leaf_split(struct btree *btree, struct cursor cursor[], tuxkey_t key)
 {
 	trace("split leaf");
-	struct buffer_head *leafbuf = path[btree->root.depth].buffer;
+	struct buffer_head *leafbuf = cursor[btree->root.depth].buffer;
 	struct buffer_head *newbuf = new_leaf(btree);
 	if (!newbuf) {
-		/* the rule: release path at point of error */
-		release_path(path, btree->root.depth);
+		/* the rule: release cursor at point of error */
+		release_cursor(cursor, btree->root.depth);
 		return -ENOMEM;
 	}
 	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
@@ -465,22 +465,22 @@ int btree_leaf_split(struct btree *btree, struct tux_path path[], tuxkey_t key)
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
 		struct buffer_head *swap = leafbuf;
-		leafbuf = path[btree->root.depth].buffer = newbuf;
+		leafbuf = cursor[btree->root.depth].buffer = newbuf;
 		newbuf = swap;
 	}
 	brelse_dirty(newbuf);
-	return insert_node(btree, newkey, childblock, path);
+	return insert_node(btree, newkey, childblock, cursor);
 }
 
-void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct tux_path path[])
+void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor cursor[])
 {
 	for (int i = 0; i < 2; i++) {
-		struct buffer_head *leafbuf = path[btree->root.depth].buffer;
+		struct buffer_head *leafbuf = cursor[btree->root.depth].buffer;
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
 		if (space)
 			return space;
 		assert(!i);
-		int err = btree_leaf_split(btree, path, key);
+		int err = btree_leaf_split(btree, cursor, key);
 		if (err) {
 			warn("insert_node failed (%d)", err);
 			break;
