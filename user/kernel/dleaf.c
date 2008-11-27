@@ -342,6 +342,40 @@ struct btree_ops dtree_ops = {
 	.bfree = bfree,
 };
 
+/*
+ * dleaf format and dwalk structure
+ *
+ *         min address +--------------------------+
+ *                     |     dleaf header         |
+ *                   | | extent <0> (gr 0, ent 0) | __ walk->exbase
+ * growing downwards | | extent <0> (gr 1, ent 0) | __ walk->extent, walk->estop
+ *                   | | extent <1> (gr 1, ent 1) |
+ *                   V | extent <2> (gr 1, ent 2) |
+ *                     |                          |
+ *                     |        .......           |
+ *                     |                          | __ walk->estop
+ *                     | entry <2> (gr 1)         |
+ *                     | entry <1> (gr 1)         | __ walk->entry
+ *                   ^ | entry <0> (gr 1)         |
+ *                   | | entry <0> (gr 0)         | __ walk->group, walk->gstop
+ * growing upwards   | | group <1>                |
+ *                   | | group <0>                |
+ *         max address +--------------------------+ __ walk->gdict
+ *
+ * The above is dleaf format, and now dwalk_next() was called 2 times.
+ *
+ *      ->gdict is the end of dleaf.
+ *      ->group is the current group (group <1>)
+ *      ->gstop is the last group in this dleaf
+ *      ->entry is the current entry (entry <0> (gr 1))
+ *      ->estop is the last entry in current group
+ *      ->exbase is the first extent in current entry
+ *      ->extent is the next extent (extent <1> (gr1, ent 1)).
+ *        NOTE: ->extent is using as cursor, so it already points to next one.
+ *              So, dwalk_next() returns current extent.
+ *      ->exstop is the address that dwalk_next() has to update to next entry.
+ */
+
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key)
 {
 	trace("probe for 0x%Lx", (L)key);
@@ -406,6 +440,12 @@ tuxkey_t dwalk_index(struct dwalk *walk)
 	return get_index(walk->group, walk->entry);
 }
 
+/*
+ * Return the current extent, then set cursor to next.
+ *
+ * NOTE: ->group and ->entry is still not updated, so dwalk_index() will
+ * return the index for the returned extent.
+ */
 struct extent *dwalk_next(struct dwalk *walk)
 {
 	if (!dleaf_groups(walk->leaf))
@@ -431,6 +471,7 @@ struct extent *dwalk_next(struct dwalk *walk)
 	return walk->extent++; // also return key
 }
 
+/* Back to the previous extent. (i.e. rewind the previous dwalk_next()) */
 void dwalk_back(struct dwalk *walk)
 {
 	assert(dleaf_groups(walk->leaf));
