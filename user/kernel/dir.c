@@ -211,9 +211,9 @@ static int tux_readdir(struct file *file, void *state, filldir_t filldir)
 	unsigned offset = pos & blockmask;
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
-		void *base = bufdata(buffer);
 		if (!buffer)
 			return -EIO;
+		void *base = bufdata(buffer);
 		if (revalidate) {
 			if (offset) {
 				tux_dirent *entry = base + offset;
