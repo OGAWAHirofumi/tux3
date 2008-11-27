@@ -163,7 +163,7 @@ int save_inode(struct inode *inode)
 
 int purge_inum(BTREE, inum_t inum)
 {
-	int err = -ENOENT, depth = btree->sb->itable.root.depth;
+	int err = -ENOENT, depth = btree->root.depth;
 	struct cursor *cursor = alloc_cursor(depth + 1);
 	if (!cursor)
 		return -ENOMEM;
