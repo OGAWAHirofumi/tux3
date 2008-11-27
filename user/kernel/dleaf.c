@@ -292,23 +292,31 @@ struct extent *dwalk_next(struct dwalk *walk)
 
 void dwalk_back(struct dwalk *walk)
 {
-	trace("back one entry");
-	if (++walk->entry == walk->estop + group_count(walk->group)) {
-		trace("back one group");
-		if (++walk->group == walk->gdict) {
-			trace("at start");
-			--walk->group;
-			walk->exstop = walk->extent = walk->exbase = walk->leaf->table;
-			return;
+	assert(dleaf_groups(walk->leaf));
+	assert(walk->extent <= walk->exstop);
+
+	/* caller is using at beginning of extent (disallow for now) */
+	assert(walk->extent > walk->exbase);
+
+	trace("back one extent");
+	if (walk->extent-- == walk->exstop) {
+		trace("back one entry");
+		if (++walk->entry == walk->estop + group_count(walk->group)) {
+			trace("back one group");
+			if (++walk->group == walk->gdict) {
+				trace("at start");
+				--walk->group;
+				walk->exstop = walk->extent = walk->exbase = walk->leaf->table;
+				return;
+			}
+			walk->exbase -= entry_limit(walk->entry);
+			walk->estop = walk->entry;
+			trace("exbase => %Lx", (L)extent_block(*walk->exbase));
+			trace("entry offset = %ti", walk->estop + group_count(walk->group) - 1 - walk->entry);
 		}
-		walk->exbase -= entry_limit(walk->entry);
-		walk->estop = walk->entry;
-		trace("exbase => %Lx", (L)extent_block(*walk->exbase));
-		trace("entry offset = %ti", walk->estop + group_count(walk->group) - 1 - walk->entry);
+		walk->exstop = walk->exbase + entry_limit(walk->entry);
+		trace("exstop => %Lx", (L)extent_block(*walk->exstop));
 	}
-	walk->extent = walk->exbase + (walk->estop + group_count(walk->group) - 1 - walk->entry);
-	walk->exstop = walk->exbase + entry_limit(walk->entry);
-	trace("exstop => %Lx", (L)extent_block(*walk->exstop));
 }
 
 void dwalk_chop_after(struct dwalk *walk)
