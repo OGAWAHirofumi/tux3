@@ -104,7 +104,7 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
-loff_t tux_create_entry(struct inode *dir, const char *name, int len, unsigned inum, unsigned mode)
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
 {
 	tux_dirent *entry;
 	struct buffer_head *buffer;
