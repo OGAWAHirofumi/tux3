@@ -457,7 +457,7 @@ int btree_leaf_split(struct btree *btree, struct cursor cursor[], tuxkey_t key)
 	struct buffer_head *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release cursor at point of error */
-		release_cursor(cursor, btree->root.depth);
+		release_cursor(cursor, btree->root.depth + 1);
 		return -ENOMEM;
 	}
 	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
