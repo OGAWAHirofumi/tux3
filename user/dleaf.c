@@ -23,12 +23,6 @@
 #include "kernel/dleaf.c"
 
 #ifndef main
-#define MAX_GROUP_ENTRIES 7
-#else
-#define MAX_GROUP_ENTRIES 255
-#endif
-
-#ifndef main
 block_t balloc(SB)
 {
 	return sb->nextalloc++;
