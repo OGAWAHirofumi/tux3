@@ -201,6 +201,147 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 	return 0;
 }
 
+int dleaf_check(BTREE, struct dleaf *leaf)
+{
+	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
+	struct entry *edict = (void *)gstop, *entry = edict;
+	struct extent *extents = leaf->table;
+	unsigned excount = 0, encount = 0;
+	char *why;
+
+	for (struct group *group = gdict - 1; group >= gstop; group--) {
+		entry -= group_count(group);
+		excount += entry_limit(entry);
+		encount += group_count(group);
+	}
+	//printf("encount = %i, excount = %i, \n", encount, excount);
+	why = "used count wrong";
+	if (from_be_u16(leaf->used) != (void *)(edict - encount) - (void *)leaf)
+		goto eek;
+	why = "free count wrong";
+	if (from_be_u16(leaf->free) != (void *)(extents + excount) - (void *)leaf)
+		goto eek;
+	why = "free check mismatch";
+	if (from_be_u16(leaf->used) - from_be_u16(leaf->free) != dleaf_free2(btree, leaf))
+		goto eek;
+	return 0;
+eek:
+	printf("free %i, used %i\n", from_be_u16(leaf->free), from_be_u16(leaf->used));
+	printf("%s!\n", why);
+	return -1;
+}
+
+tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
+{
+	assert(dleaf_sniff(btree, from));
+	struct dleaf *leaf = from, *dest = into;
+	struct group *groups = from + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
+	struct entry *entries = (void *)grbase;
+	printf("split %p into %p\n", leaf, dest);
+	unsigned encount = 0, recount = 0, grsplit = 0, exsplit = 0;
+
+	/* find middle in terms of entries - may be unbalanced in extents */
+	for (struct group *group = groups - 1; group >= grbase; group--)
+		encount += group_count(group);
+	unsigned split = encount / 2;
+	for (struct group *group = groups - 1; group >= grbase; group--, grsplit++) {
+		if (recount + group_count(group) > split)
+			break;
+		entries -= group_count(group);
+		exsplit += entry_limit(entries);
+		recount += group_count(group);
+	}
+
+	/* have to split a group? */
+	unsigned cut = split - recount;
+	if (cut)
+		exsplit += entry_limit(entries - cut);
+	entries = (void *)grbase; /* restore it */
+	printf("split %i entries at group %i, entry %x\n", encount, grsplit, cut);
+	printf("split extents at %i\n", exsplit);
+	/* copy extents */
+	unsigned size = from + from_be_u16(leaf->free) - (void *)(leaf->table + exsplit);
+	memcpy(dest->table, leaf->table + exsplit, size);
+
+	/* copy groups */
+	struct group *destgroups = (void *)dest + btree->sb->blocksize;
+	set_dleaf_groups(dest, dleaf_groups(leaf) - grsplit);
+	veccopy(destgroups - dleaf_groups(dest), grbase, dleaf_groups(dest));
+	inc_group_count(destgroups - 1, -cut);
+	set_dleaf_groups(leaf, grsplit + !!cut);
+	grbase = groups - dleaf_groups(leaf);
+	if (cut)
+		set_group_count(groups - dleaf_groups(leaf), cut);
+
+	/* copy entries */
+	struct entry *destentries = (void *)(destgroups - dleaf_groups(dest));
+	struct entry *enbase = entries - encount;
+	unsigned encopy = encount - split;
+	veccopy(destentries - encopy, enbase, encopy);
+	if (cut)
+		for (int i = 1; i <= group_count((destgroups - 1)); i++)
+			inc_entry_limit(destentries - i, -entry_limit(entries - split));
+	vecmove(groups - dleaf_groups(leaf) - split, entries - split, split);
+
+	/* clean up */
+	leaf->free = to_be_u16((void *)(leaf->table + exsplit) - from);
+	dest->free = to_be_u16((void *)leaf->table + size - from);
+	leaf->used = to_be_u16((void *)(grbase - split) - from);
+	dest->used = to_be_u16((void *)(groups - dleaf_groups(dest) - encount + split) - from);
+	memset(from + from_be_u16(leaf->free), 0, from_be_u16(leaf->used) - from_be_u16(leaf->free));
+	return get_index(destgroups - 1, destentries - 1);
+}
+
+void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
+{
+	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
+	struct entry *entries = (void *)grbase;
+	printf("merge %p into %p\n", from, leaf);
+	//assert(dleaf_need(from) <= dleaf_free(leaf));
+
+	/* append extents */
+	unsigned size = from_be_u16(from->free) - sizeof(struct dleaf);
+	memcpy((void *)leaf + from_be_u16(leaf->free), from->table, size);
+	leaf->free = to_be_u16(from_be_u16(leaf->free) + size);
+
+	/* merge last group (lowest) with first of from (highest)? */
+	struct group *fromgroups = (void *)from + btree->sb->blocksize;
+	int uncut = dleaf_groups(leaf) && dleaf_groups(from) && (group_keyhi(fromgroups - 1) == group_keyhi(grbase));
+
+	/* make space and append groups except for possibly merged group */
+	unsigned addgroups = dleaf_groups(from) - uncut;
+	struct group *grfrom = fromgroups - dleaf_groups(from);
+	struct entry *enfrom = (void *)from + from_be_u16(from->used);
+	struct entry *enbase = (void *)leaf + from_be_u16(leaf->used);
+	vecmove(enbase - addgroups, enbase, entries - enbase);
+	veccopy(grbase -= addgroups, grfrom, addgroups);
+	enbase -= addgroups;
+	if (uncut)
+		inc_group_count(grbase + addgroups, group_count(fromgroups - 1));
+	inc_dleaf_groups(leaf, addgroups);
+
+	/* append entries */
+	size = (void *)grfrom - (void *)enfrom;
+	memcpy((void *)enbase - size, enfrom, size);
+	leaf->used = to_be_u16((void *)enbase - size - (void *)leaf);
+
+	/* adjust entry limits for merged group */
+	if (uncut)
+		for (int i = 1; i <= group_count((fromgroups - 1)); i++)
+			inc_entry_limit(enbase - i, entry_limit(enbase));
+}
+
+struct btree_ops dtree_ops = {
+	.leaf_sniff = dleaf_sniff,
+	.leaf_init = dleaf_init,
+	.leaf_dump = dleaf_dump,
+	.leaf_split = dleaf_split,
+//	.leaf_resize = dleaf_resize,
+	.leaf_chop = dleaf_chop,
+	.balloc = balloc,
+	.bfree = bfree,
+};
+
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key)
 {
 	trace("probe for 0x%Lx", (L)key);
@@ -413,144 +554,3 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
 	inc_entry_limit(walk->entry, 1);
 	return 0; // extent out of order??? leaf full???
 }
-
-int dleaf_check(BTREE, struct dleaf *leaf)
-{
-	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
-	struct entry *edict = (void *)gstop, *entry = edict;
-	struct extent *extents = leaf->table;
-	unsigned excount = 0, encount = 0;
-	char *why;
-
-	for (struct group *group = gdict - 1; group >= gstop; group--) {
-		entry -= group_count(group);
-		excount += entry_limit(entry);
-		encount += group_count(group);
-	}
-	//printf("encount = %i, excount = %i, \n", encount, excount);
-	why = "used count wrong";
-	if (from_be_u16(leaf->used) != (void *)(edict - encount) - (void *)leaf)
-		goto eek;
-	why = "free count wrong";
-	if (from_be_u16(leaf->free) != (void *)(extents + excount) - (void *)leaf)
-		goto eek;
-	why = "free check mismatch";
-	if (from_be_u16(leaf->used) - from_be_u16(leaf->free) != dleaf_free2(btree, leaf))
-		goto eek;
-	return 0;
-eek:
-	printf("free %i, used %i\n", from_be_u16(leaf->free), from_be_u16(leaf->used));
-	printf("%s!\n", why);
-	return -1;
-}
-
-tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
-{
-	assert(dleaf_sniff(btree, from));
-	struct dleaf *leaf = from, *dest = into;
-	struct group *groups = from + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
-	struct entry *entries = (void *)grbase;
-	printf("split %p into %p\n", leaf, dest);
-	unsigned encount = 0, recount = 0, grsplit = 0, exsplit = 0;
-
-	/* find middle in terms of entries - may be unbalanced in extents */
-	for (struct group *group = groups - 1; group >= grbase; group--)
-		encount += group_count(group);
-	unsigned split = encount / 2;
-	for (struct group *group = groups - 1; group >= grbase; group--, grsplit++) {
-		if (recount + group_count(group) > split)
-			break;
-		entries -= group_count(group);
-		exsplit += entry_limit(entries);
-		recount += group_count(group);
-	}
-
-	/* have to split a group? */
-	unsigned cut = split - recount;
-	if (cut)
-		exsplit += entry_limit(entries - cut);
-	entries = (void *)grbase; /* restore it */
-	printf("split %i entries at group %i, entry %x\n", encount, grsplit, cut);
-	printf("split extents at %i\n", exsplit);
-	/* copy extents */
-	unsigned size = from + from_be_u16(leaf->free) - (void *)(leaf->table + exsplit);
-	memcpy(dest->table, leaf->table + exsplit, size);
-
-	/* copy groups */
-	struct group *destgroups = (void *)dest + btree->sb->blocksize;
-	set_dleaf_groups(dest, dleaf_groups(leaf) - grsplit);
-	veccopy(destgroups - dleaf_groups(dest), grbase, dleaf_groups(dest));
-	inc_group_count(destgroups - 1, -cut);
-	set_dleaf_groups(leaf, grsplit + !!cut);
-	grbase = groups - dleaf_groups(leaf);
-	if (cut)
-		set_group_count(groups - dleaf_groups(leaf), cut);
-
-	/* copy entries */
-	struct entry *destentries = (void *)(destgroups - dleaf_groups(dest));
-	struct entry *enbase = entries - encount;
-	unsigned encopy = encount - split;
-	veccopy(destentries - encopy, enbase, encopy);
-	if (cut)
-		for (int i = 1; i <= group_count((destgroups - 1)); i++)
-			inc_entry_limit(destentries - i, -entry_limit(entries - split));
-	vecmove(groups - dleaf_groups(leaf) - split, entries - split, split);
-
-	/* clean up */
-	leaf->free = to_be_u16((void *)(leaf->table + exsplit) - from);
-	dest->free = to_be_u16((void *)leaf->table + size - from);
-	leaf->used = to_be_u16((void *)(grbase - split) - from);
-	dest->used = to_be_u16((void *)(groups - dleaf_groups(dest) - encount + split) - from);
-	memset(from + from_be_u16(leaf->free), 0, from_be_u16(leaf->used) - from_be_u16(leaf->free));
-	return get_index(destgroups - 1, destentries - 1);
-}
-
-void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
-{
-	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
-	struct entry *entries = (void *)grbase;
-	printf("merge %p into %p\n", from, leaf);
-	//assert(dleaf_need(from) <= dleaf_free(leaf));
-
-	/* append extents */
-	unsigned size = from_be_u16(from->free) - sizeof(struct dleaf);
-	memcpy((void *)leaf + from_be_u16(leaf->free), from->table, size);
-	leaf->free = to_be_u16(from_be_u16(leaf->free) + size);
-
-	/* merge last group (lowest) with first of from (highest)? */
-	struct group *fromgroups = (void *)from + btree->sb->blocksize;
-	int uncut = dleaf_groups(leaf) && dleaf_groups(from) && (group_keyhi(fromgroups - 1) == group_keyhi(grbase));
-
-	/* make space and append groups except for possibly merged group */
-	unsigned addgroups = dleaf_groups(from) - uncut;
-	struct group *grfrom = fromgroups - dleaf_groups(from);
-	struct entry *enfrom = (void *)from + from_be_u16(from->used);
-	struct entry *enbase = (void *)leaf + from_be_u16(leaf->used);
-	vecmove(enbase - addgroups, enbase, entries - enbase);
-	veccopy(grbase -= addgroups, grfrom, addgroups);
-	enbase -= addgroups;
-	if (uncut)
-		inc_group_count(grbase + addgroups, group_count(fromgroups - 1));
-	inc_dleaf_groups(leaf, addgroups);
-
-	/* append entries */
-	size = (void *)grfrom - (void *)enfrom;
-	memcpy((void *)enbase - size, enfrom, size);
-	leaf->used = to_be_u16((void *)enbase - size - (void *)leaf);
-
-	/* adjust entry limits for merged group */
-	if (uncut)
-		for (int i = 1; i <= group_count((fromgroups - 1)); i++)
-			inc_entry_limit(enbase - i, entry_limit(enbase));
-}
-
-struct btree_ops dtree_ops = {
-	.leaf_sniff = dleaf_sniff,
-	.leaf_init = dleaf_init,
-	.leaf_dump = dleaf_dump,
-	.leaf_split = dleaf_split,
-//	.leaf_resize = dleaf_resize,
-	.leaf_chop = dleaf_chop,
-	.balloc = balloc,
-	.bfree = bfree,
-};

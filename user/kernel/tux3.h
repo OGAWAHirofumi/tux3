@@ -598,6 +598,7 @@ extern const struct inode_operations tux_dir_iops;
 /* dtree.c */
 unsigned dleaf_free(BTREE, vleaf *leaf);
 void dleaf_dump(BTREE, vleaf *vleaf);
+extern struct btree_ops dtree_ops;
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
 tuxkey_t dwalk_index(struct dwalk *walk);
 struct extent *dwalk_next(struct dwalk *walk);
@@ -605,7 +606,6 @@ void dwalk_back(struct dwalk *walk);
 void dwalk_chop_after(struct dwalk *walk);
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent);
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent);
-extern struct btree_ops dtree_ops;
 
 /* filemap.c */
 extern const struct address_space_operations tux_aops;
