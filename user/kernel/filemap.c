@@ -445,13 +445,18 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	pgoff_t index;
 	struct page *page;
 	struct buffer_head *bh;
-	int offset;
+	void *fsdata;
+	int err, offset;
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
 	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
 
-	page = grab_cache_page(mapping, index);
-	if (!page)
+	err = mapping->a_ops->write_begin(NULL, mapping,
+					  iblock << inode->i_blkbits,
+					  1 << inode->i_blkbits,
+					  AOP_FLAG_UNINTERRUPTIBLE,
+					  &page, &fsdata);
+	if (err)
 		return NULL;
 
 	if (!page_has_buffers(page))
@@ -551,6 +556,7 @@ const struct address_space_operations tux_blk_aops = {
 	.writepage	= tux3_blk_writepage,
 	.writepages	= tux3_writepages,
 	.sync_page	= block_sync_page,
+	.write_begin	= tux3_write_begin,
 	.bmap		= tux3_bmap,
 };
 #endif /* __KERNEL__ */
