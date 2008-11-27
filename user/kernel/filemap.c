@@ -347,10 +347,10 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
 
 	page = read_mapping_page(mapping, index, NULL);
-	if (!IS_ERR(page)) {
-		if (PageError(page))
-			goto error;
-	}
+	if (IS_ERR(page))
+		goto error;
+	if (PageError(page))
+		goto error_page;
 
 	lock_page(page);
 
@@ -369,8 +369,9 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 
 	return bh;
 
-error:
+error_page:
 	page_cache_release(page);
+error:
 	return NULL;
 }
 
