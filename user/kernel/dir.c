@@ -112,14 +112,16 @@ loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inu
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
 	unsigned blocks = dir->i_size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
-		buffer = blockget(mapping(dir), block);
+		buffer = blockread(mapping(dir), block);
+		if (!buffer)
+			return -EIO;
 		entry = bufdata(buffer);
 		tux_dirent *limit = bufdata(buffer) + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				warn("zero-length directory entry");
 				brelse(buffer);
-				return -1;
+				return -EIO;
 			}
 			name_len = TUX_REC_LEN(entry->name_len);
 			rec_len = tux_rec_len_from_disk(entry->rec_len);
