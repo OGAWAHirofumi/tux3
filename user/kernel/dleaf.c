@@ -122,7 +122,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 			--entry;
 			unsigned offset = entry == entries - 1 ? 0 : entry_limit(entry + 1);
 			int count = entry_limit(entry) - offset;
-			printf(" %Lx =>", ((L)group_keyhi(group) << 24) + entry_keylo(entry));
+			printf(" %Lx =>", (L)get_index(group, entry));
 			//printf(" %p (%i)", entry, entry_limit(entry));
 			if (count < 0)
 				printf(" <corrupt>");
@@ -174,7 +174,7 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 
 	while (1) {
 		unsigned count = entry_limit(entry) - start;
-		tuxkey_t key = ((tuxkey_t)group_keyhi(group) << 24) | entry_keylo(entry);
+		tuxkey_t key = get_index(group, entry);
 		if (key >= chop) {
 			if (!trunc) {
 				int removed = entry - estop, remaining = group_count(group) - removed;
@@ -262,7 +262,7 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 
 tuxkey_t dwalk_index(struct dwalk *walk)
 {
-	return (group_keyhi(walk->group) << 24) | entry_keylo(walk->entry);
+	return get_index(walk->group, walk->entry);
 }
 
 struct extent *dwalk_next(struct dwalk *walk)
@@ -502,7 +502,7 @@ tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	leaf->used = to_be_u16((void *)(grbase - split) - from);
 	dest->used = to_be_u16((void *)(groups - dleaf_groups(dest) - encount + split) - from);
 	memset(from + from_be_u16(leaf->free), 0, from_be_u16(leaf->used) - from_be_u16(leaf->free));
-	return (group_keyhi(destgroups - 1) << 24) | entry_keylo(destentries - 1);
+	return get_index(destgroups - 1, destentries - 1);
 }
 
 void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)

@@ -284,7 +284,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 				" (entry %u, count %u, iblock %llu)",
 				gr, ent, entry_limit(entry), entry_keylo(entry),
 				ent, dleaf_extent_count(entries, ent),
-				(L)(group_keyhi(group) << 24 | entry_keylo(entry)));
+				(L)get_index(group, entry));
 		}
 	}
 
