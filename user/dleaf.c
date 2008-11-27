@@ -105,6 +105,35 @@ int main(int argc, char *argv[])
 	}
 	dleaf_dump(btree, leaf);
 	dleaf_check(btree, leaf);
+
+	if (1) {
+		/* test for dwalk_next and dwalk_back */
+		struct dleaf *leaf1 = dleaf_create(btree);
+		struct dwalk *walk1 = &(struct dwalk){ };
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_pack(walk1, 0x3001000001ULL, make_extent(0x1, 1));
+		dwalk_pack(walk1, 0x3001000002ULL, make_extent(0x2, 1));
+		dwalk_pack(walk1, 0x3001000003ULL, make_extent(0x3, 1));
+		dwalk_pack(walk1, 0x3001000004ULL, make_extent(0x4, 1));
+		dwalk_pack(walk1, 0x3001000005ULL, make_extent(0x5, 1));
+		dwalk_pack(walk1, 0x3002000000ULL, make_extent(0xa, 1));
+		dwalk_pack(walk1, 0x3002000001ULL, make_extent(0xb, 1));
+#define NR	7
+		struct dwalk w1[NR + 1], w2[NR + 1];
+		int i;
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		for (i = 0; i < NR; i++) {
+			w1[i] = *walk1;
+			dwalk_next(walk1);
+		}
+		for (i = NR - 1; i >= 0; i--) {
+			dwalk_back(walk1);
+			w2[i] = *walk1;
+		}
+		for (i = 0; i < NR; i++)
+			assert(memcmp(&w2[i], &w2[i], sizeof(w1[0])) == 0);
+		dleaf_destroy(btree, leaf1);
+	}
 exit(0); // valgrind happiness
 	if (1) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
