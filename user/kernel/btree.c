@@ -47,6 +47,8 @@ static struct buffer_head *new_block(struct btree *btree)
 	if (!buffer)
 		return NULL;
 	memset(bufdata(buffer), 0, bufsize(buffer));
+	/* FIXME */
+	set_buffer_uptodate(buffer);
 	return buffer;
 }
 

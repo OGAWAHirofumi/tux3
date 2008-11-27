@@ -44,6 +44,10 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	tuxi = (struct tux_inode *)kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
 	if (!tuxi)
 		return NULL;
+	tuxi->btree = (struct btree){};
+	tuxi->inum = 0;
+	tuxi->present = 0;
+	tuxi->xcache = NULL;
 	return &tuxi->vfs_inode;
 }
 

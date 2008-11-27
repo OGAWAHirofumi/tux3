@@ -224,27 +224,12 @@ static const struct inode_operations tux_file_iops = {
 //	.fiemap		= ext4_fiemap,
 };
 
-struct inode *tux3_iget(struct super_block *sb, inum_t inum)
+static void tux3_setup_inode(struct inode *inode)
 {
-	struct sb *sbi = tux_sb(sb);
-	struct inode *inode;
-	int err;
+	struct sb *sbi = tux_sb(inode->i_sb);
 
-	/* FIXME: inum is 64bit, ino is unsigned long */
-	inode = iget_locked(sb, inum);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
-	if (!(inode->i_state & I_NEW))
-		return inode;
-
-	tux_inode(inode)->inum = inum;
-	err = open_inode(inode);
-	if (err) {
-		iget_failed(inode);
-		return ERR_PTR(err);
-	}
-
-	inode->i_ino = inum; /* FIXME: will overflow on 32bit arch */
+	/* FIXME: will overflow on 32bit arch */
+	inode->i_ino = tux_inode(inode)->inum;
 	inode->i_version = 1;
 	inode->i_blocks = ((inode->i_size + sbi->blockmask)
 			   & ~(loff_t)sbi->blockmask) >> 9;
@@ -281,6 +266,54 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	}
+}
+
+struct inode *tux_create_inode(struct inode *dir, int mode)
+{
+	struct inode *inode = new_inode(dir->i_sb);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+	tux_inode(inode)->inum = tux_sb(dir->i_sb)->nextalloc;
+
+	struct tux_iattr iattr;
+	iattr.mode = mode;
+	iattr.uid = current->fsuid;
+	if (dir->i_mode & S_ISGID) {
+		iattr.gid = dir->i_gid;
+		if (S_ISDIR(iattr.mode))
+			iattr.mode |= S_ISGID;
+	} else
+		iattr.gid = current->fsgid;
+	iattr.ctime = iattr.mtime = iattr.atime = gettime();
+
+	int err = make_inode(inode, &iattr);
+	if (err)
+		return ERR_PTR(err);
+	tux3_setup_inode(inode);
+	insert_inode_hash(inode);
+	return inode;
+}
+
+struct inode *tux3_iget(struct super_block *sb, inum_t inum)
+{
+	struct inode *inode;
+	int err;
+
+	/* FIXME: inum is 64bit, ino is unsigned long */
+	inode = iget_locked(sb, inum);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+	if (!(inode->i_state & I_NEW))
+		return inode;
+
+	tux_inode(inode)->inum = inum;
+	err = open_inode(inode);
+	if (err) {
+		iget_failed(inode);
+		return ERR_PTR(err);
+	}
+
+	tux3_setup_inode(inode);
 
 	unlock_new_inode(inode);
 	return inode;

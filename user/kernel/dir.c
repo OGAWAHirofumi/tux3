@@ -294,6 +294,36 @@ static struct dentry *tux_lookup(struct inode *dir, struct dentry *dentry,
 	return d_splice_alias(inode, dentry);
 }
 
+static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
+		       struct nameidata *nd)
+{
+	struct inode *inode;
+	loff_t where;
+	int err;
+
+	inode = tux_create_inode(dir, mode);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto error;
+	}
+
+	where = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
+				 tux_inode(inode)->inum, mode);
+	if (where < 0) {
+		err = where;
+		goto error;
+	}
+
+	d_instantiate(dentry, inode);
+	return 0;
+
+error:
+	/* FIXME: we may want to call purge_inum() here */
+	inode_dec_link_count(inode);
+	iput(inode);
+	return err;
+}
+
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -301,7 +331,7 @@ const struct file_operations tux_dir_fops = {
 };
 
 const struct inode_operations tux_dir_iops = {
-//	.create		= ext3_create,
+	.create		= tux3_create,
 	.lookup		= tux_lookup,
 //	.link		= ext3_link,
 //	.unlink		= ext3_unlink,
