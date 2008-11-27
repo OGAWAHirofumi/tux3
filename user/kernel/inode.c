@@ -264,7 +264,7 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	case S_IFDIR:
 		inode->i_op = &tux_dir_iops;
 		inode->i_fop = &tux_dir_fops;
-		inode->i_mapping->a_ops = &tux_dir_aops;
+		inode->i_mapping->a_ops = &tux_blk_aops;
 //		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
@@ -276,7 +276,7 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 		/* FIXME: bitmap, vtable, atable doesn't have S_IFMT */
 		/* set fake i_size to escape the check of read/writepage */
 		inode->i_size = MAX_LFS_FILESIZE;
-		inode->i_mapping->a_ops = &tux_dir_aops;
+		inode->i_mapping->a_ops = &tux_blk_aops;
 //		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;

@@ -609,7 +609,7 @@ int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent);
 
 /* filemap.c */
 extern const struct address_space_operations tux_aops;
-extern const struct address_space_operations tux_dir_aops;
+extern const struct address_space_operations tux_blk_aops;
 
 /* iattr.c */
 unsigned encode_asize(unsigned bits);
