@@ -83,12 +83,12 @@ int main(int argc, char *argv[])
 	brelse_dirty(blockread(mapping(inode), 0x1));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 	filemap_extent_io(blockget(mapping(inode), 1), 0);
-	return 0;
+	exit(0);
 #endif
 
 #if 1
 	filemap_extent_io(blockget(mapping(inode), 5), 0);
-	return 0;
+	exit(0);
 #endif
 
 #if 0
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 	brelse_dirty(blockget(mapping(inode), 7));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 
-	return 0;
+	exit(0);
 #endif
 
 	brelse_dirty(blockget(mapping(inode), 0));
@@ -127,6 +127,7 @@ int main(int argc, char *argv[])
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 
 	//show_buffers(mapping(inode));
-	return 0;
+	
+	exit(0);
 }
 #endif

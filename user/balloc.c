@@ -99,6 +99,6 @@ int main(int argc, char *argv[])
 	bfree(sb, 0x7e);
 	bfree(sb, 0x80);
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
-	return 0;
+	exit(0);
 }
 #endif

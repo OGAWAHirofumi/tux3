@@ -910,7 +910,7 @@ int main(int argc, char *argv[])
 	fuzz_test(sb, argc > 1 ? atoi(argv[1]) : 10000);
 //	same_test(sb, 3, 4);
 //	show_heirs(sb, 22);
-	return 0;
+	exit(0);
 #endif
 
 	tag_t nexttag = 1001;
@@ -919,7 +919,7 @@ int main(int argc, char *argv[])
 	label_t v3 = v3 = new_version(sb, v2, nexttag++);
 	extract_children(sb);
 	show_tree(sb);
-	return 0;
+	exit(0);
 #if 0
 	show_table();
 	extract_children();
@@ -981,7 +981,7 @@ int main(int argc, char *argv[])
 	show_elements(sb);
 	printf("data = 0x%x, orgdata = 0x%x\n", snapshot_read(sb, 1002), orgdata);
 	hexdump(sb->child_index, 16);
-	return 0;
+	exit(0);
 
 	label_t v4 = v4 = new_version(sb, v1, nexttag++);
 	label_t v5 = v5 = new_version(sb, v4, nexttag++);

@@ -123,5 +123,5 @@ int main(int argc, char *argv[])
 	char dents[10000];
 	tux_readdir(file, dents, filldir);
 	show_buffers(map);
-	return 0;
+	exit(0);
 }

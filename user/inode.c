@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
 	trace("create file");
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
 	if (!inode)
-		return 1;
+		exit(1);
 	tux_dump_entries(blockget(mapping(sb->rootdir), 0));
 
 	trace(">>> write file");
@@ -230,7 +230,7 @@ int main(int argc, char *argv[])
 	int got = tuxread(file, buf, sizeof(buf));
 	trace_off("got %x bytes", got);
 	if (got < 0)
-		return 1;
+		exit(1);
 	hexdump(buf, got);
 	trace(">>> show state");
 	show_buffers(mapping(file->f_inode));
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 	show_buffers(sb->devmap);
 	bitmap_dump(sb->bitmap, 0, sb->volblocks);
 	show_tree_range(&sb->itable, 0, -1);
-	return 0;
+	exit(0);
 eek:
 	return error("Eek! %s", strerror(errno));
 }

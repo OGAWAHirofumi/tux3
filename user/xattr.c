@@ -141,6 +141,6 @@ int main(int argc, char *argv[])
 		show_buffers(map);
 	}
 	free(inode->xcache); // happy valgrind
-	return 0;
+	exit(0);
 }
 #endif

@@ -98,6 +98,6 @@ hexdump(leaf, 16);
 	ileaf_dump(btree, leaf);
 	ileaf_destroy(btree, leaf);
 	ileaf_destroy(btree, dest);
-	return 0;
+	exit(0);
 }
 #endif

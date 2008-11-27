@@ -43,6 +43,6 @@ int main(int argc, char *argv[])
 	printf("decode %ti attr bytes\n", sizeof(attrs));
 	decode_attrs(inode, attrs, sizeof(attrs));
 	dump_attrs(inode);
-	return 0;
+	exit(0);
 }
 #endif

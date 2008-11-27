@@ -508,5 +508,5 @@ int buffer_main(int argc, char *argv[])
 	printf("get %p\n", blockget(map, 1));
 	printf("get %p\n", blockget(map, 2));
 	printf("get %p\n", blockget(map, 1));
-	return 0;
+	exit(0);
 }

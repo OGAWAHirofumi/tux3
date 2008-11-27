@@ -254,14 +254,15 @@ int main(int argc, const char *argv[])
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->devmap);
 	poptFreeContext(popt);
+	exit(0);
 	return 0;
 eek:
 	fprintf(stderr, "%s!\n", strerror(errno));
-	return 1;
+	exit(1);
 usage:
 	poptPrintUsage(popt, stderr, 0);
-	return 1;
+	exit(1);
 badopt:
 	fprintf(stderr, "%s: %s\n", poptBadOption(popt, POPT_BADOPTION_NOALIAS), poptStrerror(c));
-	return 1;
+	exit(1);
 }

@@ -128,20 +128,20 @@ int main(int argc, char *argv[])
 			assert(memcmp(&w2[i], &w2[i], sizeof(w1[0])) == 0);
 		dleaf_destroy(btree, leaf1);
 	}
-exit(0); // valgrind happiness
+	exit(0);
 	if (1) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
 		dwalk_back(walk);
 		dwalk_back(walk);
 		for (struct extent *extent; (extent = dwalk_next(walk));)
 			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent_block(*extent));
-		return 0;
+		exit(0);
 	}
 	if (1) {
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1c01c);
 		dwalk_chop(walk);
 		dleaf_dump(btree, leaf);
-		return 0;
+		exit(0);
 	}
 	dleaf_dump(btree, leaf);
 	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
@@ -166,6 +166,6 @@ exit(0); // valgrind happiness
 	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
-	return 0;
+	exit(0);
 }
 #endif

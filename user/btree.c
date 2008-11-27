@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 			uleaf_insert(&btree, bufdata(buffer), i, i + 0x100);
 		mark_buffer_dirty(buffer);
 		uleaf_dump(&btree, bufdata(buffer));
-		return 0;
+		exit(0);
 	}
 
 	struct cursor cursor[30];
@@ -175,6 +175,6 @@ int main(int argc, char *argv[])
 	show_buffers(sb->devmap);
 	tree_chop(&btree, &(struct delete_info){ .key = 0x10 }, -1);
 	show_tree_range(&btree, 0, -1);
-	return 0;
+	exit(0);
 }
 #endif
