@@ -230,7 +230,7 @@ nospace:
 	err = -ENOSPC;
 eek:
 	warn("could not add extent to tree: %d", err);
-	release_cursor(cursor, depth + 1);
+	/* release_cursor() was already called at error point */
 	free_cursor(cursor);
 	// free blocks and try to clean up ???
 	return -EIO;
