@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
 	err = xcache_update(inode, 0x666, "hello", 5);
 	err = xcache_update(inode, 0x777, "world!", 6);
 	xcache_dump(inode);
-	struct xattr *xattr = xcache_lookup(inode, 0x777, &err);
+	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, 0x777, &err);
 	if (xattr)
 		printf("atom %x => %.*s\n", xattr->atom, xattr->size, xattr->body);
 	err = xcache_update(inode, 0x111, "class", 5);
@@ -108,8 +108,8 @@ int main(int argc, char *argv[])
 	inode->xcache = NULL;
 	warn("---- test high level ops ----");
 	set_xattr(inode, "hello", 5, "world!", 6);
+	set_xattr(inode, "empty", 3, "zot", 0);
 	set_xattr(inode, "foo", 3, "foobar", 6);
-	set_xattr(inode, "bar", 3, "foobar", 6);
 	xcache_dump(inode);
 	for (int i = 0, len; i < 3; i++) {
 		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];

@@ -219,7 +219,6 @@ struct tux_inode {
 	inum_t inum;
 	unsigned present;
 	struct xcache *xcache;
-
 	struct inode vfs_inode;
 };
 
@@ -261,7 +260,6 @@ struct inode {
 	inum_t inum;
 	unsigned present;
 	struct xcache *xcache;
-
 	struct sb *i_sb;
 	map_t *map;
 	u64 i_size;
