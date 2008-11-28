@@ -466,6 +466,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	while (offset--)
 		bh = bh->b_this_page;
 	get_bh(bh);
+	set_buffer_uptodate(bh);
 
 	unlock_page(page);
 	page_cache_release(page);
