@@ -110,9 +110,36 @@ error:
 	return err;
 }
 
+static void tux3_write_super(struct super_block *sb)
+{
+	struct sb *sbi = tux_sb(sb);
+	struct buffer_head *bh;
+
+	bh = sb_bread(sb, SB_LOC >> sb->s_blocksize_bits);
+	if (!bh) {
+		printk(KERN_ERR "TUX3: unable to read superblock\n");
+		return;
+	}
+
+	struct disksuper *disk = bufdata(bh);
+	disk->blockbits = to_be_u16(sbi->blockbits);
+	disk->volblocks = to_be_u64(sbi->volblocks);
+	disk->nextalloc = to_be_u64(sbi->nextalloc); // probably does not belong here
+	disk->freeatom = to_be_u32(sbi->freeatom); // probably does not belong here
+	disk->atomgen = to_be_u32(sbi->atomgen); // probably does not belong here
+	disk->freeblocks = to_be_u64(sbi->freeblocks); // probably does not belong here
+	disk->iroot = to_be_u64((u64)sbi->itable.root.depth << 48 | sbi->itable.root.block);
+	brelse_dirty(bh);
+
+	sb->s_dirt = 0;
+}
+
 static void tux3_put_super(struct super_block *sb)
 {
 	struct sb *sbi = tux_sb(sb);
+
+	/* FIXME: remove this, then use sb->s_dirt instead */
+	tux3_write_super(sb);
 
 	iput(sbi->atable);
 	iput(sbi->bitmap);
@@ -146,6 +173,7 @@ static int tux3_statfs(struct dentry *dentry, struct kstatfs *buf)
 static const struct super_operations tux3_super_ops = {
 	.alloc_inode	= tux3_alloc_inode,
 	.destroy_inode	= tux3_destroy_inode,
+	.write_super	= tux3_write_super,
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,
 	.clear_inode	= tux3_clear_inode,
