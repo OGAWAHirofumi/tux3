@@ -72,14 +72,20 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	assert(inum < next_key(cursor, depth));
 	while (1) {
 //		printf("find empty inode in [%Lx] base %Lx\n", (L)bufindex(leafbuf), (L)ibase(leaf));
-		inum = find_empty_inode(&sb->itable, bufdata(leafbuf), (L)inum);
+		inum = find_empty_inode(&sb->itable, bufdata(leafbuf), inum);
 		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(cursor, depth));
 		if (inum < next_key(cursor, depth))
 			break;
 		int more = advance(&sb->itable, cursor);
-		printf("no more inode space here, advance %i\n", more);
-		if (!more)
+		if (more < 0) {
+			err = more;
 			goto errout;
+		}
+		printf("no more inode space here, advance %i\n", more);
+		if (!more) {
+			err = -ENOSPC;
+			goto errout;
+		}
 	}
 
 	inode->i_mode = iattr->mode;
