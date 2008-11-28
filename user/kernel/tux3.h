@@ -308,18 +308,18 @@ typedef struct {
 } tux_dirent;
 
 /* version:10, count:6, block:48 */
-struct extent { be_u64 block_count_version; };
+struct diskextent { be_u64 block_count_version; };
 /* count:8, keyhi:24 */
 struct group { be_u32 count_and_keyhi; };
 /* limit:8, keylo:24 */
 struct entry { be_u32 limit_and_keylo; };
-struct dleaf { be_u16 magic, groups, free, used; struct extent table[]; };
+struct dleaf { be_u16 magic, groups, free, used; struct diskextent table[]; };
 
 struct dwalk {
 	struct dleaf *leaf;
 	struct group *group, *gstop, *gdict;
 	struct entry *entry, *estop;
-	struct extent *exbase, *extent, *exstop;
+	struct diskextent *exbase, *extent, *exstop;
 	struct {
 		struct group group;
 		struct entry entry;
@@ -378,23 +378,23 @@ static inline void inc_entry_limit(struct entry *entry, int n)
 
 /* extent wrappers */
 
-static inline struct extent make_extent(block_t block, unsigned count)
+static inline struct diskextent make_extent(block_t block, unsigned count)
 {
 	assert(block < (1ULL << 48) && count - 1 < (1 << 6));
-	return (struct extent){ to_be_u64(((u64)(count - 1) << 48) | block) };
+	return (struct diskextent){ to_be_u64(((u64)(count - 1) << 48) | block) };
 }
 
-static inline unsigned extent_block(struct extent extent)
+static inline unsigned extent_block(struct diskextent extent)
 {
 	return from_be_u64(*(be_u64 *)&extent) & ~(-1LL << 48);
 }
 
-static inline unsigned extent_count(struct extent extent)
+static inline unsigned extent_count(struct diskextent extent)
 {
 	return ((from_be_u64(*(be_u64 *)&extent) >> 48) & 0x3f) + 1;
 }
 
-static inline unsigned extent_version(struct extent extent)
+static inline unsigned extent_version(struct diskextent extent)
 {
 	return from_be_u64(*(be_u64 *)&extent) >> 54;
 }
@@ -602,11 +602,11 @@ void dleaf_dump(BTREE, vleaf *vleaf);
 extern struct btree_ops dtree_ops;
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
 tuxkey_t dwalk_index(struct dwalk *walk);
-struct extent *dwalk_next(struct dwalk *walk);
+struct diskextent *dwalk_next(struct dwalk *walk);
 void dwalk_back(struct dwalk *walk);
 void dwalk_chop_after(struct dwalk *walk);
-int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent);
-int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent);
+int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
+int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 
 /* filemap.c */
 extern const struct address_space_operations tux_aops;

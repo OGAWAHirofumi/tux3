@@ -50,7 +50,7 @@ void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;
-	struct extent *extents = leaf->table;
+	struct diskextent *extents = leaf->table;
 	unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 
 	for (struct group *group = groups - 1; group >= grbase; group--) {
@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 			walk->mock.group = *walk->group;
 			walk->mock.entry = *walk->entry;
 		}
-		int (*try)(struct dwalk *walk, tuxkey_t key, struct extent extent) = i ? dwalk_pack: dwalk_mock;
+		int (*try)(struct dwalk *walk, tuxkey_t key, struct diskextent extent) = i ? dwalk_pack: dwalk_mock;
 		try(walk, 0x3001001, make_extent(0x1, 1));
 		try(walk, 0x3001002, make_extent(0x2, 1));
 		try(walk, 0x3001003, make_extent(0x3, 1));
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
 		dwalk_back(walk);
 		dwalk_back(walk);
-		for (struct extent *extent; (extent = dwalk_next(walk));)
+		for (struct diskextent *extent; (extent = dwalk_next(walk));)
 			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent_block(*extent));
 		exit(0);
 	}

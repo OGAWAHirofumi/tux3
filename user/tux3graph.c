@@ -200,11 +200,11 @@ static inline int dleaf_extent_count(struct entry *entries, int ent)
 	return entry_limit(dleaf_entry(entries, ent)) - offset;
 }
 
-static inline struct extent *dleaf_extents(struct dleaf *dleaf,
+static inline struct diskextent *dleaf_extents(struct dleaf *dleaf,
 					   struct group *groups,
 					   int gr, int ent)
 {
-	struct extent *extents = dleaf->table;
+	struct diskextent *extents = dleaf->table;
 	struct group *group;
 	struct entry *entries;
 	int i;
@@ -222,7 +222,7 @@ static inline struct extent *dleaf_extents(struct dleaf *dleaf,
 	return extents;
 }
 
-static inline struct extent *dleaf_extent(struct extent *extents, int ex)
+static inline struct diskextent *dleaf_extent(struct diskextent *extents, int ex)
 {
 	return extents + ex;
 }
@@ -232,7 +232,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 	struct dleaf *leaf = buffer->data;
 	block_t blocknr = buffer->index;
 	struct group *groups = dleaf_groups_ptr(btree, leaf);
-	struct extent *extents;
+	struct diskextent *extents;
 	int gr;
 
 	if (!verbose && (drawn & DRAWN_DLEAF))

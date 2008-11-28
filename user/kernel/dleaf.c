@@ -99,7 +99,7 @@ int dleaf_free2(BTREE, void *vleaf)
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gstop, *entry = edict;
-	struct extent *extents = leaf->table;
+	struct diskextent *extents = leaf->table;
 	for (struct group *group = gdict; group-- > gstop;)
 		extents += entry_limit(entry -= group_count(group));
 	return (void *)entry - (void *)extents;
@@ -111,7 +111,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 	struct dleaf *leaf = vleaf;
 	struct group *groups = (void *)leaf + blocksize, *grbase = --groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)(grbase + 1), *entry = entries;
-	struct extent *extents = leaf->table;
+	struct diskextent *extents = leaf->table;
 
 	printf("%i entry groups:\n", dleaf_groups(leaf));
 	for (struct group *group = groups; group > grbase; group--) {
@@ -127,7 +127,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
 			if (count < 0)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++) {
-				struct extent extent = extents[offset + i];
+				struct diskextent extent = extents[offset + i];
 				printf(" %Lx", (L)extent_block(extent));
 				if (extent_count(extent))
 					printf("/%x", extent_count(extent));
@@ -205,7 +205,7 @@ int dleaf_check(BTREE, struct dleaf *leaf)
 {
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gstop, *entry = edict;
-	struct extent *extents = leaf->table;
+	struct diskextent *extents = leaf->table;
 	unsigned excount = 0, encount = 0;
 	char *why;
 
@@ -384,7 +384,7 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 	struct entry *edict = (struct entry *)(gdict - dleaf_groups(leaf));
 	struct group *gstop = gdict - dleaf_groups(leaf), *group = gdict;
 	struct entry *estop = edict, *entry;
-	struct extent *exbase = leaf->table;
+	struct diskextent *exbase = leaf->table;
 
 	if (dleaf_groups(leaf))
 		while (--group >= gstop) {
@@ -404,7 +404,7 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 			exbase += entry_limit(estop);
 		}
 
-	struct extent *extent = exbase, *exstop = exbase;
+	struct diskextent *extent = exbase, *exstop = exbase;
 	//trace("group %i entry %i of %i", gdict - 1 - group, estop + group_count(group) - 1 - entry, group_count(group));
 	if (!dleaf_groups(leaf) || group < gstop)
 		entry = estop;
@@ -446,7 +446,7 @@ tuxkey_t dwalk_index(struct dwalk *walk)
  * NOTE: ->group and ->entry is still not updated, so dwalk_index() will
  * return the index for the returned extent.
  */
-struct extent *dwalk_next(struct dwalk *walk)
+struct diskextent *dwalk_next(struct dwalk *walk)
 {
 	if (!dleaf_groups(walk->leaf))
 		return NULL;
@@ -538,7 +538,7 @@ void dwalk_chop(struct dwalk *walk) // do we ever need this?
 #define MAX_GROUP_ENTRIES 7
 #endif
 
-int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
+int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 {
 	if (!dleaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
 		trace("add entry 0x%Lx", (L)index);
@@ -561,7 +561,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct extent extent)
 	return 0;
 }
 
-int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct extent extent)
+int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 {
 	trace("group %ti/%i", walk->gstop + dleaf_groups(walk->leaf) - 1 - walk->group, dleaf_groups(walk->leaf));
 	//printf("at entry %ti/%i\n", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));

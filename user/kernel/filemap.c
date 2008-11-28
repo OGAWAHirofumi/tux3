@@ -95,7 +95,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
 	/* skip extents below start */
-	for (struct extent *extent; (extent = dwalk_next(walk));)
+	for (struct diskextent *extent; (extent = dwalk_next(walk));)
 		if (dwalk_index(walk) + extent_count(*extent) > start) {
 			if (dwalk_index(walk) <= start)
 				dwalk_back(walk);
@@ -103,7 +103,7 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		}
 	struct dwalk rewind = *walk;
 	printf("prior extents:");
-	for (struct extent *extent; (extent = dwalk_next(walk));)
+	for (struct diskextent *extent; (extent = dwalk_next(walk));)
 		printf(" 0x%Lx => %Lx/%x;", (L)dwalk_index(walk), (L)extent_block(*extent), extent_count(*extent));
 	printf("\n");
 
@@ -111,9 +111,9 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 		printf("---- rewind to 0x%Lx => %Lx/%x ----\n", (L)dwalk_index(&rewind), (L)extent_block(*rewind.extent), extent_count(*rewind.extent));
 	*walk = rewind;
 
-	struct extent *next_extent = NULL;
+	struct diskextent *next_extent = NULL;
 	block_t index = start, offset = 0;
-	struct extent seg[1000];
+	struct diskextent seg[1000];
 	unsigned segs = 0;
 	while (index < limit) {
 		trace("index %Lx, limit %Lx", (L)index, (L)limit);
@@ -272,7 +272,7 @@ retry:
 	dwalk_probe(leaf, sbi->blocksize, walk, 0); // start at beginning of leaf just for now
 
 	/* skip extents below start */
-	for (struct extent *extent; (extent = dwalk_next(walk));)
+	for (struct diskextent *extent; (extent = dwalk_next(walk));)
 		if (dwalk_index(walk) + extent_count(*extent) > start) {
 			if (dwalk_index(walk) <= start)
 				dwalk_back(walk);
@@ -280,9 +280,9 @@ retry:
 		}
 
 	struct dwalk rewind = *walk;
-	struct extent *next_extent = NULL;
+	struct diskextent *next_extent = NULL;
 	block_t index = start, offset = 0;
-	struct extent seg[10];
+	struct diskextent seg[10];
 	unsigned segs = 0, update_dtree = 0;
 	while (index < limit && segs < ARRAY_SIZE(seg)) {
 		trace("index %Lx, limit %Lx", (L)index, (L)limit);
