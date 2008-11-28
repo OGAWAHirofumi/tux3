@@ -340,8 +340,26 @@ int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigne
 {
 	atom_t atom = make_atom(tux_sb(inode->i_sb)->atable, name, len);
 	if (atom == -1)
-		return -ENOENT;
+		return -ENOATTR;
 	return xcache_update(inode, atom, data, size);
+}
+
+int del_xattr(struct inode *inode, char *name, unsigned len)
+{
+	int err = 0;
+	atom_t atom = find_atom(tux_sb(inode->i_sb)->atable, name, len);
+	if (atom == -1)
+		return -ENOATTR;
+	struct xcache *xcache = tux_inode(inode)->xcache;
+	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom, &err);
+	if (err)
+		return err;
+	if (!xattr)
+		return -ENOATTR;
+	int used = remove_old(xcache, xattr);
+	if (used)
+		use_atom(tux_sb(inode->i_sb)->atable, atom, -used);
+	return err;
 }
 
 /* Xattr encode/decode */

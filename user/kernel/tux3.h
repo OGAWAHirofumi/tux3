@@ -511,6 +511,10 @@ enum atbit {
 
 extern unsigned atsize[MAX_ATTRS];
 
+#ifndef ENOATTR
+#define ENOATTR ENOENT
+#endif
+
 struct xattr { u16 atom, size; char body[]; };
 struct xcache { u16 size, maxsize; struct xattr xattrs[]; };
 

@@ -106,11 +106,15 @@ int main(int argc, char *argv[])
 	xcache_dump(inode);
 	free(inode->xcache);
 	inode->xcache = NULL;
-	warn("---- test high level ops ----");
+	warn("---- xattr update ----");
 	set_xattr(inode, "hello", 5, "world!", 6);
 	set_xattr(inode, "empty", 3, "zot", 0);
 	set_xattr(inode, "foo", 3, "foobar", 6);
 	xcache_dump(inode);
+	warn("---- xattr remove ----");
+	del_xattr(inode, "hello", 5);
+	xcache_dump(inode);
+	warn("---- xattr lookup ----");
 	for (int i = 0, len; i < 3; i++) {
 		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
 		if ((xattr = get_xattr(inode, name, len = strlen(name))))
@@ -118,7 +122,7 @@ int main(int argc, char *argv[])
 		else
 			printf("xattr %.*s not found\n", len, name);
 	}
-	warn("---- test atom reverse map ----");
+	warn("---- atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
 		unsigned atom = i, offset;
 		struct buffer_head *buffer = blockread_unatom(inode, atom, &offset);
@@ -129,7 +133,7 @@ int main(int argc, char *argv[])
 		hexdump(bufdata(buffer) + (where & sb->blockmask), 16);
 		brelse(buffer);
 	}
-	warn("---- test atom recovery ----");
+	warn("---- atom recycle ----");
 	set_xattr(inode, "hello", 5, NULL, 0);
 	show_freeatoms(sb);
 	printf("got free atom %x\n", get_freeatom(inode));
