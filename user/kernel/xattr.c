@@ -381,7 +381,7 @@ int del_xattr(struct inode *inode, char *name, unsigned len)
 	return err;
 }
 
-int xattr_list(struct inode *inode, char *text, size_t size, char *prefix, unsigned bogus)
+int xattr_list(struct inode *inode, char *text, size_t size)
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;
@@ -392,17 +392,14 @@ int xattr_list(struct inode *inode, char *text, size_t size, char *prefix, unsig
 	while (xattr < limit) {
 		atom_t atom = xattr->atom;
 		if (size) {
-			int tail = top - text - bogus;
-			if (tail < 0)
-				goto full;
-			int len = unatom(atable, atom, text + bogus, tail);
+			int tail = top - text;
+			int len = unatom(atable, atom, text, tail);
 			if (len < 0 || len == tail)
 				goto full;
-			memcpy(text, prefix, bogus);
-			*(text += bogus + len) = 0;
+			*(text += len) = 0;
 			text++;
 		} else
-			text += bogus + unatom(atable, atom, NULL, 0) + 1;
+			text += unatom(atable, atom, NULL, 0) + 1;
 		if ((xattr = xcache_next(xattr)) > limit)
 			goto fail;
 	}
