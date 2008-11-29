@@ -206,7 +206,7 @@ int main(int argc, const char *argv[])
 			unsigned len;
 			len = read(0, text, sizeof(text));
 			printf("got %i bytes\n", len);
-			if ((errno = -set_xattr(inode, "foo", 3, "foobar", 6)))
+			if ((errno = -set_xattr(inode, "foo", 3, "foobar", 6, 0)))
 				goto eek;
 			tuxsync(inode);
 			if ((errno = -sync_super(sb)))

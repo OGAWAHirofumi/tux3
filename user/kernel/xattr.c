@@ -305,13 +305,18 @@ static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
  *
  *  * Should expand by binary factor
  */
-int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len)
+int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, unsigned flags)
 {
 	int err = 0, use = 0;
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache_lookup(xcache, atom, &err);
-	if (xattr)
+	if (xattr) {
+		if (flags & XATTR_CREATE)
+			return -EEXIST;
 		use -= remove_old(xcache, xattr);
+	} else if (flags & XATTR_REPLACE)
+		return -ENOATTR;
+
 	/* Insert new */
 	unsigned more = sizeof(*xattr) + len;
 	if (!xcache || xcache->size + more > xcache->maxsize) {
@@ -348,12 +353,12 @@ struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
 	return xcache_lookup(tux_inode(inode)->xcache, atom, &err); // and what about the err???
 }
 
-int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size)
+int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size, unsigned flags)
 {
 	atom_t atom = make_atom(tux_sb(inode->i_sb)->atable, name, len);
 	if (atom == -1)
-		return -ENOATTR;
-	return xcache_update(inode, atom, data, size);
+		return -EINVAL;
+	return xcache_update(inode, atom, data, size, flags);
 }
 
 int del_xattr(struct inode *inode, char *name, unsigned len)
@@ -374,7 +379,7 @@ int del_xattr(struct inode *inode, char *name, unsigned len)
 	return err;
 }
 
-int list_xattrs(struct inode *inode, char *text, size_t size, char *prefix, unsigned bogus)
+int xattr_list(struct inode *inode, char *text, size_t size, char *prefix, unsigned bogus)
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;

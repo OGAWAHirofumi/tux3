@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 #endif
 #if 1
 	trace(">>> close file <<<");
-	set_xattr(inode, "foo", 5, "hello world!", 12);
+	set_xattr(inode, "foo", 5, "hello world!", 12, 0);
 	save_inode(inode);
 	tuxclose(inode);
 	trace(">>> open file");

@@ -83,15 +83,15 @@ int main(int argc, char *argv[])
 
 	warn("---- test inode xattr cache ----");
 	int err = 0;
-	err = xcache_update(inode, 0x666, "hello", 5);
-	err = xcache_update(inode, 0x777, "world!", 6);
+	err = xcache_update(inode, 0x666, "hello", 5, 0);
+	err = xcache_update(inode, 0x777, "world!", 6, 0);
 	xcache_dump(inode);
 	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, 0x777, &err);
 	if (xattr)
 		printf("atom %x => %.*s\n", xattr->atom, xattr->size, xattr->body);
-	err = xcache_update(inode, 0x111, "class", 5);
-	err = xcache_update(inode, 0x666, NULL, 0);
-	err = xcache_update(inode, 0x222, "boooyah", 7);
+	err = xcache_update(inode, 0x111, "class", 5, 0);
+	err = xcache_update(inode, 0x666, NULL, 0, 0);
+	err = xcache_update(inode, 0x222, "boooyah", 7, 0);
 	xcache_dump(inode);
 
 	warn("---- test xattr inode table encode and decode ----");
@@ -107,9 +107,9 @@ int main(int argc, char *argv[])
 	free(inode->xcache);
 	inode->xcache = NULL;
 	warn("---- xattr update ----");
-	set_xattr(inode, "hello", 5, "world!", 6);
-	set_xattr(inode, "empty", 5, "zot", 0);
-	set_xattr(inode, "foo", 3, "foobar", 6);
+	set_xattr(inode, "hello", 5, "world!", 6, 0);
+	set_xattr(inode, "empty", 5, "zot", 0, 0);
+	set_xattr(inode, "foo", 3, "foobar", 6, 0);
 	xcache_dump(inode);
 	warn("---- xattr remove ----");
 //	del_xattr(inode, "hello", 5);
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 			printf("xattr %.*s not found\n", len, name);
 	}
 	warn("---- list xattrs ----");
-	list_xattrs(inode, attrs, sizeof(attrs), "user.", 5);
+	xattr_list(inode, attrs, sizeof(attrs), "user.", 5);
 
 	warn("---- atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
 		brelse(buffer);
 	}
 	warn("---- atom recycle ----");
-	set_xattr(inode, "hello", 5, NULL, 0);
+	set_xattr(inode, "hello", 5, NULL, 0, 0);
 	show_freeatoms(sb);
 	printf("got free atom %x\n", get_freeatom(inode));
 	printf("got free atom %x\n", get_freeatom(inode));

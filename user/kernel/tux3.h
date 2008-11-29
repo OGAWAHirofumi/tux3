@@ -515,6 +515,11 @@ extern unsigned atsize[MAX_ATTRS];
 #define ENOATTR ENOENT
 #endif
 
+#ifndef XATTR_CREATE
+#define XATTR_CREATE 1 // fail if xattr already exists
+#define XATTR_REPLACE 2 // fail if xattr does not exist
+#endif
+
 struct xattr { u16 atom, size; char body[]; };
 struct xcache { u16 size, maxsize; struct xattr xattrs[]; };
 

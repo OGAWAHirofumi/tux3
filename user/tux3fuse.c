@@ -40,7 +40,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <sys/xattr.h>
+//#include <sys/xattr.h>
 #include <sys/types.h>
 #include "trace.h"
 #include "tux3.h"
@@ -577,7 +577,7 @@ static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		fuse_reply_err(req, ENODATA);
 	} else {
 		int err;
-		err = -set_xattr(inode, (char *)name, strlen(name), (void *)value, size);
+		err = -set_xattr(inode, (char *)name, strlen(name), (void *)value, size, flags);
 		if (!err) {
 			tuxsync(inode);
 			sync_super(sb);
