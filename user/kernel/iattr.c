@@ -57,6 +57,7 @@ int attr_check(void *attrs, unsigned size)
 void dump_attrs(struct inode *inode)
 {
 	//printf("present = %x\n", inode->present);
+	tuxnode_t *tuxnode = tux_inode(inode);
 	for (int kind = 0; kind < 32; kind++) {
 		if (!(tux_inode(inode)->present & (1 << kind)))
 			continue;
@@ -65,7 +66,7 @@ void dump_attrs(struct inode *inode)
 			printf("mode 0%.6o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case DATA_BTREE_ATTR:
-			printf("root %Lx:%u ", (L)tux_inode(inode)->btree.root.block, tux_inode(inode)->btree.root.depth);
+			printf("root %Lx:%u ", (L)tuxnode->btree.root.block, tuxnode->btree.root.depth);
 			break;
 		case CTIME_SIZE_ATTR:
 			printf("ctime %Lx size %Lx ", (L)tuxtime(inode->i_ctime), (L)inode->i_size);
@@ -89,10 +90,11 @@ void dump_attrs(struct inode *inode)
 
 void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
-	//printf("encode %u attr bytes\n", size);
+	trace_off("encode %u attr bytes", size);
+	tuxnode_t *tuxnode = tux_inode(inode);
 	void *limit = attrs + size - 3;
 	for (int kind = MIN_ATTR; kind < VAR_ATTRS; kind++) {
-		if (!(tux_inode(inode)->present & (1 << kind)))
+		if (!(tuxnode->present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
 			break;
@@ -111,7 +113,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = encode48(attrs, tuxtime(inode->i_mtime) >> TIME_ATTR_SHIFT);
 			break;
 		case DATA_BTREE_ATTR:;
-			struct root *root = &tux_inode(inode)->btree.root;
+			struct root *root = &tuxnode->btree.root;
 			attrs = encode64(attrs, ((u64)root->depth << 48) | root->block);
 			break;
 		case LINK_COUNT_ATTR:
@@ -124,10 +126,11 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 
 void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
-	//printf("decode %u attr bytes\n", size);
+	trace_off("decode %u attr bytes", size);
 	u64 v64;
 	u32 v32;
-	struct xattr *xattr = tux_inode(inode)->xcache ? tux_inode(inode)->xcache->xattrs : NULL;
+	tuxnode_t *tuxnode = tux_inode(inode);
+	struct xattr *xattr = tuxnode->xcache ? tuxnode->xcache->xattrs : NULL;
 	void *limit = attrs + size;
 	while (attrs < limit - 1) {
 		unsigned head;
@@ -157,7 +160,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			tux_inode(inode)->btree = (struct btree){ .sb = tux_sb(inode->i_sb), .entries_per_leaf = 64, // !!! should depend on blocksize
+			tuxnode->btree = (struct btree){ .sb = tux_sb(inode->i_sb), .entries_per_leaf = 64, // !!! should depend on blocksize
 				.ops = &dtree_ops,
 				.root = { .block = v64 & (-1ULL >> 16), .depth = v64 >> 48 } };
 			break;
@@ -171,18 +174,18 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode16(attrs, &atom);
 			*xattr = (struct xattr){ .atom = atom, .size = bytes - 2 };
 			unsigned xsize = sizeof(struct xattr) + xattr->size;
-			assert((void *)xattr + xsize <= (void *)tux_inode(inode)->xcache + tux_inode(inode)->xcache->maxsize);
+			assert((void *)xattr + xsize <= (void *)tuxnode->xcache + tuxnode->xcache->maxsize);
 			memcpy(xattr->body, attrs, xattr->size);
 			attrs += xattr->size;
-			tux_inode(inode)->xcache->size += xsize;
+			tuxnode->xcache->size += xsize;
 			xattr = xcache_next(xattr); // check limit!!!
 			break;
 		default:
 			return NULL;
 		}
-		tux_inode(inode)->present |= 1 << kind;
+		tuxnode->present |= 1 << kind;
 	}
-	if (!(tux_inode(inode)->present & MTIME_BIT))
+	if (!(tuxnode->present & MTIME_BIT))
 		inode->i_mtime = inode->i_ctime;
 	return attrs;
 }

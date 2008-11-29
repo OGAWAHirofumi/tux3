@@ -214,13 +214,13 @@ struct sb {
 };
 
 #ifdef __KERNEL__
-struct tux_inode {
+typedef struct {
 	struct btree btree;
 	inum_t inum;
 	unsigned present;
 	struct xcache *xcache;
 	struct inode vfs_inode;
-};
+} tuxnode_t;
 
 static inline struct sb *tux_sb(struct super_block *sb)
 {
@@ -232,9 +232,9 @@ static inline struct super_block *vfs_sb(struct sb *sb)
 	return sb->vfs_sb;
 }
 
-static inline struct tux_inode *tux_inode(struct inode *inode)
+static inline tuxnode_t *tux_inode(struct inode *inode)
 {
-	return container_of(inode, struct tux_inode, vfs_inode);
+	return container_of(inode, tuxnode_t, vfs_inode);
 }
 
 typedef struct address_space map_t;
@@ -255,7 +255,7 @@ static inline void free(void *ptr)
 	kfree(ptr);
 }
 #else
-struct inode {
+typedef struct inode {
 	struct btree btree;
 	inum_t inum;
 	unsigned present;
@@ -266,7 +266,7 @@ struct inode {
 	unsigned i_version;
 	struct timespec i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_nlink;
-};
+} tuxnode_t;
 
 struct file {
 	struct inode *f_inode;
@@ -641,7 +641,7 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum);
 int xcache_dump(struct inode *inode);
 struct xcache *new_xcache(unsigned maxsize);
 struct xattr *get_xattr(struct inode *inode, char *name, unsigned len);
-int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size);
+int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size, unsigned flags);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);

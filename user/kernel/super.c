@@ -15,19 +15,16 @@
 
 static struct kmem_cache *tux_inode_cachep;
 
-static void tux3_inode_init_once(struct kmem_cache *cachep, void *foo)
+static void tux3_inode_init_once(struct kmem_cache *cachep, void *mem)
 {
-	struct tux_inode *tuxi = (struct tux_inode *)foo;
-	inode_init_once(&tuxi->vfs_inode);
+	inode_init_once(&((tuxnode_t *)mem)->vfs_inode);
 }
 
 static int __init tux3_init_inodecache(void)
 {
 	tux_inode_cachep = kmem_cache_create("tux_inode_cache",
-					     sizeof(struct tux_inode),
-					     0, (SLAB_RECLAIM_ACCOUNT|
-						SLAB_MEM_SPREAD),
-					     tux3_inode_init_once);
+		sizeof(tuxnode_t), 0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
+		tux3_inode_init_once);
 	if (tux_inode_cachep == NULL)
 		return -ENOMEM;
 	return 0;
@@ -40,8 +37,7 @@ static void __exit tux3_destroy_inodecache(void)
 
 static struct inode *tux3_alloc_inode(struct super_block *sb)
 {
-	struct tux_inode *tuxi;
-	tuxi = (struct tux_inode *)kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
+	tuxnode_t *tuxi = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
 	if (!tuxi)
 		return NULL;
 	tuxi->btree = (struct btree){};
