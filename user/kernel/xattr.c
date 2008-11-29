@@ -52,6 +52,33 @@ struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned
 	return blockread(mapping(atable), tux_sb(atable->i_sb)->unatom_base + (atom >> shift));
 }
 
+int get_atom_name(struct inode *atable, atom_t atom, char *name, unsigned maxlen)
+{
+	unsigned offset;
+	SB = tux_sb(atable->i_sb);
+	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
+	if (!buffer)
+		return -ENOMEM;
+	u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
+	brelse(buffer);
+	buffer = blockread(mapping(atable), where >> sb->blockbits);
+	if (!buffer)
+		return -ENOMEM;
+	tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
+	if (entry_atom(entry) != atom) {
+		warn("atom %x reverse entry broken", atom);
+		return -EINVAL;
+	}
+	unsigned len = entry->name_len;
+	if (len > maxlen) {
+		brelse(buffer);
+		return -ERANGE;
+	}
+	memcpy(name, entry->name, len);
+	brelse(buffer);
+	return len;
+}
+
 void dump_atoms(struct inode *atable)
 {
 	SB = tux_sb(atable->i_sb);
@@ -69,29 +96,18 @@ void dump_atoms(struct inode *atable)
 			if (!refs)
 				continue;
 			atom_t atom = i;
-			unsigned offset;
-			struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
-			if (!buffer)
+			char name[100];
+			int len = get_atom_name(atable, atom, name, sizeof(name));
+			if (len < 0)
 				goto eek;
-			u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-			brelse(buffer);
-			buffer = blockread(mapping(atable), where >> sb->blockbits);
-			if (!buffer)
-				goto eek;
-			tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
-			if (entry_atom(entry) != atom) {
-				warn("atom %x reverse entry broken", atom);
-				continue;
-			}
-			printf("{%.*s} = %x\n", entry->name_len, entry->name, atom);
-			brelse(buffer);
+			printf("%.*s = %x\n", len, name, atom);
 		}
 		brelse(lobuf);
 		brelse(hibuf);
 	}
 	return;
 eek:
-	warn("something broke");
+	warn("atom name lookup failed");
 	return;
 }
 
@@ -219,23 +235,21 @@ int xcache_dump(struct inode *inode)
 	if (!tux_inode(inode)->xcache)
 		return 0;
 	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
-	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
-	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
+	struct xcache *xcache = tux_inode(inode)->xcache;
+	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
 	while (xattr < limit) {
 		if (xattr->size > tux_sb(inode->i_sb)->blocksize)
-			goto barf;
+			goto bail;
 		printf("atom %.3x => ", xattr->atom);
 		xattr->size ? hexdump(xattr->body, xattr->size) : printf("<empty>\n");
-		struct xattr *xnext = xcache_next(xattr);
-		if (xnext > limit)
-			goto over;
-		xattr = xnext;
+		if ((xattr = xcache_next(xattr)) > limit)
+			goto fail;
 	}
 	assert(xattr == limit);
 	return 0;
-over:
+fail:
 	error("corrupt xattrs");
-barf:
+bail:
 	error("xattr too big");
 	return -1;
 }
@@ -249,15 +263,13 @@ struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom, int *err)
 	while (xattr < limit) {
 		if (xattr->atom == atom)
 			return xattr;
-		struct xattr *xnext = xcache_next(xattr);
-		if (xnext > limit)
-			goto over;
-		xattr = xnext;
+		if ((xattr = xcache_next(xattr)) > limit)
+			goto fail;
 	}
 	assert(xattr == limit);
 null:
 	return NULL;
-over:
+fail:
 	*err = EINVAL;
 	error("corrupt xattrs");
 	goto null;
@@ -351,7 +363,7 @@ int del_xattr(struct inode *inode, char *name, unsigned len)
 	if (atom == -1)
 		return -ENOATTR;
 	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom, &err);
+	struct xattr *xattr = xcache_lookup(xcache, atom, &err);
 	if (err)
 		return err;
 	if (!xattr)
@@ -360,6 +372,35 @@ int del_xattr(struct inode *inode, char *name, unsigned len)
 	if (used)
 		use_atom(tux_sb(inode->i_sb)->atable, atom, -used);
 	return err;
+}
+
+int list_xattrs(struct inode *inode, char *text, size_t size, char *prefix, unsigned bogus)
+{
+	if (!tux_inode(inode)->xcache)
+		return 0;
+	struct xcache *xcache = tux_inode(inode)->xcache;
+	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
+	char *base = text, *top = text + size;
+	while (xattr < limit) {
+		int tail = top - text - bogus;
+		if (tail < 0)
+			goto full;
+		int len = get_atom_name(tux_sb(inode->i_sb)->atable, xattr->atom, text + bogus, tail);
+		if (len < 0 || len == tail)
+			goto full;
+		trace_off("emit %.*s", len, text + bogus);
+		memcpy(text, prefix, bogus);
+		*(text += bogus + len) = 0;
+		text++;
+		if ((xattr = xcache_next(xattr)) > limit)
+			goto fail;
+	}
+	assert(xattr == limit);
+	hexdump(base, text - base);
+full:
+	return text - base;
+fail:
+	return -EINVAL;
 }
 
 /* Xattr encode/decode */

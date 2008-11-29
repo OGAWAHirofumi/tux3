@@ -108,11 +108,11 @@ int main(int argc, char *argv[])
 	inode->xcache = NULL;
 	warn("---- xattr update ----");
 	set_xattr(inode, "hello", 5, "world!", 6);
-	set_xattr(inode, "empty", 3, "zot", 0);
+	set_xattr(inode, "empty", 5, "zot", 0);
 	set_xattr(inode, "foo", 3, "foobar", 6);
 	xcache_dump(inode);
 	warn("---- xattr remove ----");
-	del_xattr(inode, "hello", 5);
+//	del_xattr(inode, "hello", 5);
 	xcache_dump(inode);
 	warn("---- xattr lookup ----");
 	for (int i = 0, len; i < 3; i++) {
@@ -122,6 +122,9 @@ int main(int argc, char *argv[])
 		else
 			printf("xattr %.*s not found\n", len, name);
 	}
+	warn("---- list xattrs ----");
+	list_xattrs(inode, attrs, sizeof(attrs), "user.", 5);
+
 	warn("---- atom reverse map ----");
 	for (int i = 0; i < 5; i++) {
 		unsigned atom = i, offset;
@@ -140,11 +143,9 @@ int main(int argc, char *argv[])
 	printf("got free atom %x\n", get_freeatom(inode));
 	printf("got free atom %x\n", get_freeatom(inode));
 
-	if (1) {
-		dump_atoms(inode);
-		show_buffers(map);
-	}
-	free(inode->xcache); // happy valgrind
+	warn("---- dump atom table ----");
+	dump_atoms(inode);
+	show_buffers(map);
 	exit(0);
 }
 #endif
