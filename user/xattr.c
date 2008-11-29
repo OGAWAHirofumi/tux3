@@ -123,7 +123,9 @@ int main(int argc, char *argv[])
 			printf("xattr %.*s not found\n", len, name);
 	}
 	warn("---- list xattrs ----");
-	xattr_list(inode, attrs, sizeof(attrs), "user.", 5);
+	int len = xattr_list(inode, attrs, sizeof(attrs) * 0, "user.", 5);
+	printf("xattr list length = %i\n", xattr_list(inode, NULL, 0, "user.", 5));
+	hexdump(attrs, len);
 
 	warn("---- atom reverse map ----");
 	for (int i = 0; i < 5; i++) {

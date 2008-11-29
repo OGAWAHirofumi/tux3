@@ -52,7 +52,7 @@ struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned
 	return blockread(mapping(atable), tux_sb(atable->i_sb)->unatom_base + (atom >> shift));
 }
 
-int get_atom_name(struct inode *atable, atom_t atom, char *name, unsigned maxlen)
+static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 {
 	unsigned offset;
 	SB = tux_sb(atable->i_sb);
@@ -70,11 +70,13 @@ int get_atom_name(struct inode *atable, atom_t atom, char *name, unsigned maxlen
 		return -EINVAL;
 	}
 	unsigned len = entry->name_len;
-	if (len > maxlen) {
-		brelse(buffer);
-		return -ERANGE;
+	if (size) {
+		if (len > size) {
+			brelse(buffer);
+			return -ERANGE;
+		}
+		memcpy(name, entry->name, len);
 	}
-	memcpy(name, entry->name, len);
 	brelse(buffer);
 	return len;
 }
@@ -97,7 +99,7 @@ void dump_atoms(struct inode *atable)
 				continue;
 			atom_t atom = i;
 			char name[100];
-			int len = get_atom_name(atable, atom, name, sizeof(name));
+			int len = unatom(atable, atom, name, sizeof(name));
 			if (len < 0)
 				goto eek;
 			printf("%.*s = %x\n", len, name, atom);
@@ -383,25 +385,28 @@ int xattr_list(struct inode *inode, char *text, size_t size, char *prefix, unsig
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;
+	struct inode *atable = tux_sb(inode->i_sb)->atable;
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
 	char *base = text, *top = text + size;
 	while (xattr < limit) {
-		int tail = top - text - bogus;
-		if (tail < 0)
-			goto full;
-		int len = get_atom_name(tux_sb(inode->i_sb)->atable, xattr->atom, text + bogus, tail);
-		if (len < 0 || len == tail)
-			goto full;
-		trace_off("emit %.*s", len, text + bogus);
-		memcpy(text, prefix, bogus);
-		*(text += bogus + len) = 0;
-		text++;
+		atom_t atom = xattr->atom;
+		if (size) {
+			int tail = top - text - bogus;
+			if (tail < 0)
+				goto full;
+			int len = unatom(atable, atom, text + bogus, tail);
+			if (len < 0 || len == tail)
+				goto full;
+			memcpy(text, prefix, bogus);
+			*(text += bogus + len) = 0;
+			text++;
+		} else
+			text += bogus + unatom(atable, atom, NULL, 0) + 1;
 		if ((xattr = xcache_next(xattr)) > limit)
 			goto fail;
 	}
 	assert(xattr == limit);
-	hexdump(base, text - base);
 full:
 	return text - base;
 fail:
