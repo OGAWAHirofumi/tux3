@@ -38,12 +38,57 @@ static int verbose;
 #define DRAWN_DLEAF	(1 << 1)
 #define DRAWN_ILEAF	(1 << 2)
 static int drawn;
+static LIST_HEAD(tmpfile_head);
 
 struct graph_info {
 	FILE *f;
+	char subgraph[32];	/* subgraph name */
+	char filedata[32];	/* filedata name */
 	const char *bname;	/* btree name */
 	const char *lname;	/* leaf name */
+	struct list_head link_head;
 };
+
+struct link_info {
+	char link[256];
+	struct list_head list;
+};
+#define link_entry(x)		list_entry(x, struct link_info, list)
+
+struct dtree_info {
+	FILE *f;
+	struct list_head list;
+};
+#define dtree_entry(x)		list_entry(x, struct dtree_info, list)
+
+static void add_link(struct graph_info *gi, const char *fmt, ...)
+{
+	struct link_info *linfo;
+	va_list ap;
+
+	linfo = malloc(sizeof(*linfo));
+	if (!linfo)
+		error("out of memory");
+	INIT_LIST_HEAD(&linfo->list);
+	list_add_tail(&linfo->list, &gi->link_head);
+
+	va_start(ap, fmt);
+	vsnprintf(linfo->link, sizeof(linfo->link), fmt, ap);
+	va_end(ap);
+}
+
+static void write_link(struct graph_info *gi)
+{
+	if (!list_empty(&gi->link_head)) {
+		fprintf(gi->f, "\n");
+		while (!list_empty(&gi->link_head)) {
+			struct link_info *l = link_entry(gi->link_head.next);
+			list_del(&l->list);
+			fputs(l->link, gi->f);
+			free(l);
+		}
+	}
+}
 
 typedef void (*draw_leaf_t)(struct graph_info *, BTREE, struct buffer_head *);
 
@@ -52,6 +97,8 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 	struct disksuper *txsb = &sb->super;
 
 	fprintf(gi->f,
+		"subgraph cluster_disksuper {\n"
+		"label = \"disksuper\"\n"
 		"tux3_sb [\n"
 		"label = \"{ [disksuper] (blocknr %llu)"
 		" | magic %.4s, 0x%02x, 0x%02x, 0x%02x, 0x%02x"
@@ -61,7 +108,8 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | freeblocks %llu | nextalloc %llu"
 		" | freeatom %u | atomgen %u }\"\n"
 		"shape = record\n"
-		"];\n",
+		"];\n"
+		"}\n\n",
 		(L)SB_LOC >> sb->blockbits,
 		txsb->magic,
 		(u8)txsb->magic[4], (u8)txsb->magic[5],
@@ -75,7 +123,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(L)from_be_u64(txsb->nextalloc),
 		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen));
 
-	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n",
+	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
 		gi->bname, (L)sb->itable.root.block);
 }
 
@@ -160,6 +208,12 @@ static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 	struct cursor *cursor;
 	struct buffer_head *buffer;
 
+	snprintf(gi->subgraph, sizeof(gi->subgraph), "cluster_%s", gi->bname);
+	fprintf(gi->f,
+		"subgraph %s {\n"
+		"label = \"%s\"\n",
+		gi->subgraph, gi->bname);
+
 	cursor = alloc_cursor(btree->root.depth + 1);
 	if (!cursor)
 		error("out of memory");
@@ -175,6 +229,78 @@ static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 	} while (draw_advance(gi, buffer->map, cursor, btree->root.depth));
 
 	free_cursor(cursor);
+
+	fprintf(gi->f, "}\n");
+
+	/* add external link for this tree */
+	write_link(gi);
+}
+
+typedef void (*draw_data_t)(struct graph_info *, BTREE);
+
+static void draw_bitmap(struct graph_info *gi, BTREE)
+{
+	fprintf(gi->f,
+		"subgraph cluster_%s {\n"
+		"label = \"%s\"\n"
+		"%s [\n"
+		"label = \"free bitmap:\\n"
+		"1 - used block\\n"
+		"0 - free block\"\n"
+		"]\n"
+		"}\n",
+		gi->lname, gi->lname, gi->lname);
+}
+
+static void draw_vtable(struct graph_info *gi, BTREE)
+{
+	fprintf(gi->f,
+		"subgraph cluster_%s {\n"
+		"label = \"%s\"\n"
+		"%s [\n"
+		"label = \"version table\"\n"
+		"]\n"
+		"}\n",
+		gi->lname, gi->lname, gi->lname);
+}
+
+static void draw_atable(struct graph_info *gi, BTREE)
+{
+	fprintf(gi->f,
+		"subgraph cluster_%s {\n"
+		"label = \"%s\"\n"
+		"%s [\n"
+		"label = \"xattr table\"\n"
+		"]\n"
+		"}\n",
+		gi->lname, gi->lname, gi->lname);
+}
+
+static void draw_dir(struct graph_info *gi, BTREE)
+{
+	fprintf(gi->f,
+		"subgraph cluster_%s {\n"
+		"label = \"%s\"\n"
+		"%s [\n"
+		"label = \"directory entries:\\n"
+		"(filename, inum, etc.)\\n"
+		"inum is used as key to search\\n"
+		" inode in itable\"\n"
+		"]\n"
+		"}\n",
+		gi->lname, gi->lname, gi->lname);
+}
+
+static void draw_file(struct graph_info *gi, BTREE)
+{
+	fprintf(gi->f,
+		"subgraph cluster_%s {\n"
+		"label = \"%s\"\n"
+		"%s [\n"
+		"label = \"file data\"\n"
+		"]\n"
+		"}\n",
+		gi->lname, gi->lname, gi->lname);
 }
 
 static inline struct group *dleaf_groups_ptr(BTREE, struct dleaf *dleaf)
@@ -239,17 +365,20 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 	block_t blocknr = buffer->index;
 	struct group *groups = dleaf_groups_ptr(btree, leaf);
 	struct diskextent *extents;
+	char dleaf_name[32];
 	int gr;
 
 	if (!verbose && (drawn & DRAWN_DLEAF))
 		return;
 	drawn |= DRAWN_DLEAF;
 
+	snprintf(dleaf_name, sizeof(dleaf_name), "%s_%llu",
+		 gi->lname, (L)blocknr);
 	fprintf(gi->f,
-		"%s_%llu [\n"
+		"%s [\n"
 		"label = \"{ <%s0> [%s]"
 		" | magic 0x%04x, free %u, used %u, groups %u",
-		gi->lname, (L)blocknr,
+		dleaf_name,
 		gi->lname, gi->lname,
 		from_be_u16(leaf->magic), from_be_u16(leaf->free), from_be_u16(leaf->used), dleaf_groups(leaf));
 
@@ -311,17 +440,21 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group_ptr(groups, gr);
 		fprintf(gi->f,
-			"%s_%llu:gr%u:w -> %s_%llu:gr%uent%u:w;\n",
-			gi->lname, (L)blocknr, gr,
-			gi->lname, (L)blocknr, gr, 0);
+			"%s:gr%u:w -> %s:gr%uent%u:w;\n",
+			dleaf_name, gr,
+			dleaf_name, gr, 0);
 		for (int ent = 0; ent < group_count(group); ent++) {
 			fprintf(gi->f,
-				"%s_%llu:gr%uent%u:w"
-				" -> %s_%llu:gr%uent%uex%u:w;\n",
-				gi->lname, (L)blocknr, gr, ent,
-				gi->lname, (L)blocknr, gr, ent, 0);
+				"%s:gr%uent%u:w -> %s:gr%uent%uex%u:w;\n",
+				dleaf_name, gr, ent,
+				dleaf_name, gr, ent, 0);
 		}
 	}
+
+	/* write link: dtree -> file data */
+	snprintf(gi->filedata, sizeof(gi->filedata), "%s_data", gi->bname);
+	add_link(gi, "%s:s -> %s [ltail=%s, lhead=cluster_%s];\n",
+		 dleaf_name, gi->filedata, gi->subgraph, gi->filedata);
 }
 
 static inline be_u16 *ileaf_dict(BTREE, struct ileaf *ileaf)
@@ -347,16 +480,19 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 	struct ileaf *ileaf = bufdata(buffer);
 	block_t blocknr = buffer->index;
 	be_u16 *dict = ileaf_dict(btree, ileaf);
+	char ileaf_name[32];
 	int at;
 
 	if (!verbose && (drawn & DRAWN_ILEAF))
 		return;
 	drawn |= DRAWN_ILEAF;
 
+	snprintf(ileaf_name, sizeof(ileaf_name), "%s_%llu",
+		 gi->lname, (L)blocknr);
 	fprintf(gi->f,
-		"%s_%llu [\n"
+		"%s [\n"
 		"label = \"{ <%s0> [%s] | magic 0x%04x, count %u, ibase %llu",
-		gi->lname, (L)blocknr, gi->lname,
+		ileaf_name, gi->lname,
 		gi->lname, ileaf->magic, icount(ileaf), (L)ibase(ileaf));
 
 	/* draw inode attributes */
@@ -404,9 +540,9 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 			continue;
 
 		fprintf(gi->f,
-			"%s_%llu:o%d:w -> %s_%llu:a%d:w;\n",
-			gi->lname, (L)blocknr, at,
-			gi->lname, (L)blocknr, at);
+			"%s:o%d:w -> %s:a%d:w;\n",
+			ileaf_name, at,
+			ileaf_name, at);
 	}
 
 	/* draw inode's dtree */
@@ -426,24 +562,104 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 		else
 			sprintf(name, "ino%llu_dtree", (L)ino);
 
-		if (verbose || !(drawn & DRAWN_DTREE)) {
-			drawn |= DRAWN_DTREE;
+		/* write link: ileaf -> dtree root bnode */
+		add_link(gi, "%s:a%d:e -> %s_bnode_%llu:n;\n",
+			 ileaf_name, at, name,
+			 (L)inode.btree.root.block);
 
-			fprintf(gi->f,
-				"subgraph cluster_%s {"
-				"label = \"%s\"\n",
-				name, name);
-			struct graph_info ginfo = {
-				.f = gi->f,
-				.bname = name,
-				.lname = "dleaf",
-			};
-			draw_tree(&ginfo, &inode.btree, draw_dleaf);
-			fprintf(gi->f, "}\n");
+		draw_data_t draw_data;
+		switch (ino) {
+		case TUX_BITMAP_INO:
+			draw_data = draw_bitmap;
+			break;
+		case TUX_VTABLE_INO:
+			draw_data = draw_vtable;
+			break;
+		case TUX_ATABLE_INO:
+			draw_data = draw_atable;
+			break;
+		case TUX_ROOTDIR_INO:
+			draw_data = draw_dir;
+			break;
+		default:
+			switch (inode.i_mode & S_IFMT) {
+			case S_IFREG:
+				draw_data = draw_file;
+				break;
+			case S_IFDIR:
+				draw_data = draw_dir;
+				break;
+			default:
+				draw_data = draw_file;
+				break;
+			}
+			/* draw dtree */
+			if (verbose || !(drawn & DRAWN_DTREE)) {
+				drawn |= DRAWN_DTREE;
+				break;
+			}
+			continue;
 		}
-		fprintf(gi->f, "%s_%llu:a%d:e -> %s_bnode_%llu:n;\n",
-			gi->lname, (L)blocknr, at, name,
-			(L)inode.btree.root.block);
+
+		struct dtree_info *dinfo;
+		/* draw dtree */
+		dinfo = malloc(sizeof(*dinfo));
+		if (!dinfo)
+			error("out of memory");
+		INIT_LIST_HEAD(&dinfo->list);
+		list_add_tail(&dinfo->list, &tmpfile_head);
+		dinfo->f = tmpfile64();
+		struct graph_info ginfo_dtree = {
+			.f = dinfo->f,
+			.bname = name,
+			.lname = "dleaf",
+			.link_head = LIST_HEAD_INIT(ginfo_dtree.link_head),
+		};
+		draw_tree(&ginfo_dtree, &inode.btree, draw_dleaf);
+		/* draw at least one dleaf */
+		drawn &= ~DRAWN_DLEAF;
+
+		/* draw file data */
+		dinfo = malloc(sizeof(*dinfo));
+		if (!dinfo)
+			error("out of memory");
+		INIT_LIST_HEAD(&dinfo->list);
+		list_add_tail(&dinfo->list, &tmpfile_head);
+		dinfo->f = tmpfile64();
+		struct graph_info ginfo_data = {
+			.f = dinfo->f,
+			.bname = ginfo_dtree.filedata,
+			.lname = ginfo_dtree.filedata,
+			.link_head = LIST_HEAD_INIT(ginfo_data.link_head),
+		};
+		draw_data(&ginfo_data, &inode.btree);
+	}
+}
+
+static void merge_file(FILE *dst, FILE *src)
+{
+	static char buf[4096];
+	ssize_t size;
+	int fd;
+
+	fputc('\n', dst);
+
+	fflush(src);
+	fd = fileno(src);
+	lseek(fd, 0, SEEK_SET);
+	while ((size = read(fd, buf, sizeof(buf))) > 0) {
+		fwrite(buf, size, 1, dst);
+	}
+}
+
+static void merge_tmpfiles(struct graph_info *gi)
+{
+	while (!list_empty(&tmpfile_head)) {
+		struct dtree_info *info = dtree_entry(tmpfile_head.next);
+		list_del(&info->list);
+		merge_file(gi->f, info->f);
+		fclose(info->f);
+		free(info);
 	}
 }
 
@@ -533,24 +749,20 @@ int main(int argc, const char *argv[])
 	if (!file)
 		error("coundn't open: %s\n", filename);
 
-	ginfo.f = file;
-	fprintf(ginfo.f, "digraph tux3_g {\n");
+	fprintf(file,
+		"digraph tux3_g {\n"
+		"graph [compound = true];\n"
+		"\n");
 
-	ginfo.bname = "itable";
-	ginfo.lname = "ileaf";
+	ginfo = (struct graph_info){
+		.f = file,
+		.bname = "itable",
+		.lname = "ileaf",
+		.link_head = LIST_HEAD_INIT(ginfo.link_head),
+	};
 	draw_sb(&ginfo, sb);
 	draw_tree(&ginfo, &sb->itable, draw_ileaf);
-#if 0
-	ginfo.bname = "bitmap_dtree";
-	ginfo.lname = "dleaf";
-	draw_tree(&ginfo, &sb->bitmap->btree, draw_dleaf);
-	ginfo.bname = "rootdir_dtree";
-	ginfo.lname = "dleaf";
-	draw_tree(&ginfo, &sb->rootdir->btree, draw_dleaf);
-	ginfo.bname = "atable_dtree";
-	ginfo.lname = "dleaf";
-	draw_tree(&ginfo, &sb->atable->btree, draw_dleaf);
-#endif
+	merge_tmpfiles(&ginfo);
 
 	fprintf(ginfo.f, "}\n");
 	fclose(ginfo.f);
