@@ -243,7 +243,10 @@ int xcache_dump(struct inode *inode)
 		if (xattr->size > tux_sb(inode->i_sb)->blocksize)
 			goto bail;
 		printf("atom %.3x => ", xattr->atom);
-		xattr->size ? hexdump(xattr->body, xattr->size) : printf("<empty>\n");
+		if (xattr->size)
+			hexdump(xattr->body, xattr->size);
+		else
+			printf("<empty>\n");
 		if ((xattr = xcache_next(xattr)) > limit)
 			goto fail;
 	}
