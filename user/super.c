@@ -15,43 +15,25 @@
 #define trace trace_on
 #endif
 
+#include "kernel/super.c"
+
 int load_sb(SB)
 {
-	int err = diskread(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
+	struct disksuper *super = &sb->super;
+	int err = diskread(sb->devmap->dev->fd, super, sizeof(*super), SB_LOC);
 	if (err)
 		return err;
-	struct disksuper *disk = &sb->super;
-	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
-		warn("invalid superblock [%Lx]", (L)from_be_u64(*(be_u64 *)disk->magic));
-		return -ENOENT;
-	}
-	int blockbits = from_be_u16(disk->blockbits);
-	sb->volblocks = from_be_u64(disk->volblocks);
-	sb->nextalloc = from_be_u64(disk->nextalloc);
-	sb->atomgen = from_be_u32(disk->atomgen);
-	sb->freeatom = from_be_u32(disk->freeatom);
-	sb->freeblocks = from_be_u64(disk->freeblocks);
-	u64 iroot = from_be_u64(disk->iroot);
-	sb->itable.root = (struct root){ .depth = iroot >> 48, .block = iroot & (-1ULL >> 16) };
-	sb->blockbits = blockbits;
-	sb->blocksize = 1 << blockbits;
-	sb->blockmask = (1 << blockbits) - 1;
-	//hexdump(&sb->super, sizeof(sb->super));
+	err = unpack_sb(sb, super, 0);
+	if (err)
+		return err;
 	return 0;
 }
 
 int save_sb(SB)
 {
-	struct disksuper *disk = &sb->super;
-	disk->blockbits = to_be_u16(sb->blockbits);
-	disk->volblocks = to_be_u64(sb->volblocks);
-	disk->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
-	disk->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
-	disk->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
-	disk->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
-	disk->iroot = to_be_u64((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
-	//hexdump(&sb->super, sizeof(sb->super));
-	return diskwrite(sb->devmap->dev->fd, &sb->super, sizeof(struct disksuper), SB_LOC);
+	struct disksuper *super = &sb->super;
+	pack_sb(sb, super);
+	return diskwrite(sb->devmap->dev->fd, super, sizeof(*super), SB_LOC);
 }
 
 int sync_super(SB)

@@ -502,13 +502,6 @@ int main(int argc, const char *argv[])
 		.blockbits		= dev->bits,
 		.blocksize		= 1 << dev->bits,
 		.blockmask		= (1 << dev->bits) - 1,
-		.volblocks		= volsize >> dev->bits,
-		.freeblocks		= volsize >> dev->bits,
-		.itable = (struct btree){
-			.sb			= sb,
-			.ops			= &itable_ops,
-			.entries_per_leaf	= 1 << (dev->bits - 6)
-		}
 	};
 
 	if ((errno = -load_sb(sb)))

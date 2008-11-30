@@ -4,15 +4,63 @@
  * Portions copyright (c) 2008, Maciej Zenczykowski
  */
 
+#ifdef __KERNEL__
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/pagemap.h>
 #include <linux/bio.h>
 #include <linux/fs.h>
 #include <linux/statfs.h>
+#endif
 
 #include "tux3.h"
 
+static int unpack_sb(SB, struct disksuper *super, int silent)
+{
+	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic))) {
+		if (!silent)
+			printf("invalid superblock [%Lx]\n",
+			       (L)from_be_u64(*(be_u64 *)super->magic));
+		return -EINVAL;
+	}
+
+	int blockbits = from_be_u16(super->blockbits);
+	u64 iroot = from_be_u64(super->iroot);
+
+	sb->itable = (struct btree){
+		.sb	= sb,
+		.ops	= &itable_ops,
+		.root	= (struct root){
+			.depth = iroot >> 48,
+			.block = iroot & (-1ULL >> 16)
+		},
+		.entries_per_leaf = 1 << (blockbits - 6),
+	};
+//	sb->rootbuf;
+	sb->blockbits = blockbits;
+	sb->blocksize = 1 << blockbits;
+	sb->blockmask = (1 << blockbits) - 1;
+	sb->volblocks = from_be_u64(super->volblocks);
+	sb->freeblocks = from_be_u64(super->freeblocks);
+	sb->nextalloc = from_be_u64(super->nextalloc);
+	sb->atomgen = from_be_u32(super->atomgen);
+	sb->freeatom = from_be_u32(super->freeatom);
+
+	return 0;
+}
+
+static void pack_sb(SB, struct disksuper *super)
+{
+	super->blockbits = to_be_u16(sb->blockbits);
+	super->volblocks = to_be_u64(sb->volblocks);
+	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
+	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
+	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
+	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
+	super->iroot = to_be_u64((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
+}
+
+#ifdef __KERNEL__
 static struct kmem_cache *tux_inode_cachep;
 
 static void tux3_inode_init_once(struct kmem_cache *cachep, void *mem)
@@ -54,79 +102,36 @@ static void tux3_destroy_inode(struct inode *inode)
 
 static int tux_load_sb(struct super_block *sb, int silent)
 {
-	struct sb *sbi = tux_sb(sb);
-	struct buffer_head *bh = NULL;
+	struct buffer_head *bh;
 	int err;
 
-	err = -EIO;
+	BUG_ON(SB_LOC < sb->s_blocksize);
 	bh = sb_bread(sb, SB_LOC >> sb->s_blocksize_bits);
 	if (!bh) {
 		if (!silent)
 			printk(KERN_ERR "TUX3: unable to read superblock\n");
-		goto error;
+		return -EIO;
 	}
-
-	err = -EINVAL;
-	struct disksuper *disk = (struct disksuper *)bh->b_data;
-	if (memcmp(disk->magic, (char[])SB_MAGIC, sizeof(disk->magic))) {
-		if (!silent)
-			printk(KERN_ERR "TUX3: invalid superblock [%Lx]",
-			       (L)from_be_u64(*(be_u64 *)disk->magic));
-		goto error;
-	}
-
-	int blockbits = from_be_u16(disk->blockbits);
-	u64 iroot = from_be_u64(disk->iroot);
-
-	sbi->itable = (struct btree){
-		.sb	= sbi,
-		.ops	= &itable_ops,
-		.root	= (struct root){
-			.depth = iroot >> 48,
-			.block = iroot & (-1ULL >> 16)
-		},
-		.entries_per_leaf = 1 << (blockbits - 6),
-	};
-//	sbi->rootbuf;
-	sbi->blockbits = blockbits;
-	sbi->blocksize = 1 << blockbits;
-	sbi->blockmask = (1 << blockbits) - 1;
-	sbi->volblocks = from_be_u64(disk->volblocks);
-	sbi->freeblocks = from_be_u64(disk->freeblocks);
-	sbi->nextalloc = from_be_u64(disk->nextalloc);
-	sbi->atomgen = from_be_u32(disk->atomgen);
-	sbi->freeatom = from_be_u32(disk->freeatom);
-
+	err = unpack_sb(tux_sb(sb), bufdata(bh), silent);
+	/* FIXME: this is needed? */
+	memcpy(&tux_sb(sb)->super, bufdata(bh), sizeof(tux_sb(sb)->super));
 	brelse(bh);
 
-	return 0;
-
-error:
-	brelse(bh);
 	return err;
 }
 
 static void tux3_write_super(struct super_block *sb)
 {
-	struct sb *sbi = tux_sb(sb);
 	struct buffer_head *bh;
 
+	BUG_ON(SB_LOC < sb->s_blocksize);
 	bh = sb_bread(sb, SB_LOC >> sb->s_blocksize_bits);
 	if (!bh) {
 		printk(KERN_ERR "TUX3: unable to read superblock\n");
 		return;
 	}
-
-	struct disksuper *disk = bufdata(bh);
-	disk->blockbits = to_be_u16(sbi->blockbits);
-	disk->volblocks = to_be_u64(sbi->volblocks);
-	disk->nextalloc = to_be_u64(sbi->nextalloc); // probably does not belong here
-	disk->freeatom = to_be_u32(sbi->freeatom); // probably does not belong here
-	disk->atomgen = to_be_u32(sbi->atomgen); // probably does not belong here
-	disk->freeblocks = to_be_u64(sbi->freeblocks); // probably does not belong here
-	disk->iroot = to_be_u64((u64)sbi->itable.root.depth << 48 | sbi->itable.root.block);
+	pack_sb(tux_sb(sb), bufdata(bh));
 	brelse_dirty(bh);
-
 	sb->s_dirt = 0;
 }
 
@@ -294,3 +299,4 @@ static void __exit exit_tux3(void)
 module_init(init_tux3)
 module_exit(exit_tux3)
 MODULE_LICENSE("GPL");
+#endif /* !__KERNEL__ */
