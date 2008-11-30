@@ -186,7 +186,9 @@ tuxkey_t next_key(struct cursor cursor[], int depth)
 void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
-	struct cursor cursor[30]; // check for overflow!!!
+	struct cursor *cursor = alloc_cursor(btree->root.depth + 1);
+	if (!cursor)
+		error("out of memory");
 	if (probe(btree, start, cursor))
 		error("tell me why!!!");
 	struct buffer_head *buffer;
@@ -197,6 +199,7 @@ void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 		//tuxkey_t *next = pnext_key(cursor, btree->depth);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
 	} while (--count && advance(btree, cursor));
+	free_cursor(cursor);
 }
 
 /* Deletion */

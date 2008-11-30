@@ -157,8 +157,12 @@ eek:
 
 static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 {
-	struct cursor cursor[30]; // check for overflow!!!
+	struct cursor *cursor;
 	struct buffer_head *buffer;
+
+	cursor = alloc_cursor(btree->root.depth + 1);
+	if (!cursor)
+		error("out of memory");
 
 	if (probe(btree, 0, cursor))
 		error("tell me why!!!");
@@ -169,6 +173,8 @@ static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 		buffer = cursor[btree->root.depth].buffer;
 		draw_leaf(gi, btree, buffer);
 	} while (draw_advance(gi, buffer->map, cursor, btree->root.depth));
+
+	free_cursor(cursor);
 }
 
 static inline struct group *dleaf_groups_ptr(BTREE, struct dleaf *dleaf)
