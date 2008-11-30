@@ -82,7 +82,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 static void draw_bnode(struct graph_info *gi, int depth, int level,
 		       struct buffer_head *buffer)
 {
-	struct bnode *bnode = buffer->data;
+	struct bnode *bnode = bufdata(buffer);
 	block_t blocknr = buffer->index;
 	struct index_entry *index = bnode->entries;
 	int n;
@@ -137,14 +137,14 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 		brelse(buffer);
 		if (!level)
 			return 0;
-		node = (buffer = cursor[--level].buffer)->data;
+		node = bufdata(buffer = cursor[--level].buffer);
 	} while (level_finished(cursor, level));
 	do {
 		if (!(buffer = blockread(map, from_be_u64(cursor[level].next++->block))))
 			goto eek;
 		cursor[++level] = (struct cursor){
 			.buffer = buffer,
-			.next = ((struct bnode *)buffer->data)->entries
+			.next = ((struct bnode *)bufdata(buffer))->entries
 		};
 		if (level < depth)
 			draw_bnode(gi, depth, level, buffer);
@@ -229,7 +229,7 @@ static inline struct diskextent *dleaf_extent(struct diskextent *extents, int ex
 
 static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 {
-	struct dleaf *leaf = buffer->data;
+	struct dleaf *leaf = bufdata(buffer);
 	block_t blocknr = buffer->index;
 	struct group *groups = dleaf_groups_ptr(btree, leaf);
 	struct diskextent *extents;
@@ -338,7 +338,7 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 
 static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 {
-	struct ileaf *ileaf = buffer->data;
+	struct ileaf *ileaf = bufdata(buffer);
 	block_t blocknr = buffer->index;
 	be_u16 *dict = ileaf_dict(btree, ileaf);
 	int at;

@@ -128,7 +128,7 @@ static int open_inode(struct inode *inode)
 		goto eek;
 	}
 	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(&sb->itable, cursor[depth].buffer->data);
+	//ileaf_dump(&sb->itable, bufdata(cursor[depth].buffer));
 	//hexdump(attrs, size);
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;

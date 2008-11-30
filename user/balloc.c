@@ -80,9 +80,9 @@ int main(int argc, char *argv[])
 		block_t block = balloc_from_range(bitmap, 121, 10);
 		printf("%Li\n", (L)block);
 	}
-	hexdump(blockget(map, 0)->data, dumpsize);
-	hexdump(blockget(map, 1)->data, dumpsize);
-	hexdump(blockget(map, 2)->data, dumpsize);
+	hexdump(bufdata(blockget(map, 0)), dumpsize);
+	hexdump(bufdata(blockget(map, 1)), dumpsize);
+	hexdump(bufdata(blockget(map, 2)), dumpsize);
 
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 1; i++)
@@ -90,9 +90,9 @@ int main(int argc, char *argv[])
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 10; i++)
 		balloc(sb);
-	hexdump(blockget(map, 0)->data, dumpsize);
-	hexdump(blockget(map, 1)->data, dumpsize);
-	hexdump(blockget(map, 2)->data, dumpsize);
+	hexdump(bufdata(blockget(map, 0)), dumpsize);
+	hexdump(bufdata(blockget(map, 1)), dumpsize);
+	hexdump(bufdata(blockget(map, 2)), dumpsize);
 
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, from_be_u64(sb->super.volblocks)), (L)sb->freeblocks);
