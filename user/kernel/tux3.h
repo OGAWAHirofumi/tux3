@@ -193,6 +193,16 @@ struct btree {
 	u16 entries_per_leaf;
 };
 
+static inline u64 pack_root(struct root *root)
+{
+	return (u64)root->depth << 48 | root->block;
+}
+
+static inline struct root unpack_root(u64 v)
+{
+	return (struct root){ .depth = v >> 48, .block = v & (-1ULL >> 16), };
+}
+
 struct cursor { struct buffer_head *buffer; struct index_entry *next; };
 
 struct sb {

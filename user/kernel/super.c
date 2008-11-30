@@ -25,15 +25,11 @@ static int unpack_sb(SB, struct disksuper *super, int silent)
 	}
 
 	int blockbits = from_be_u16(super->blockbits);
-	u64 iroot = from_be_u64(super->iroot);
 
 	sb->itable = (struct btree){
 		.sb	= sb,
 		.ops	= &itable_ops,
-		.root	= (struct root){
-			.depth = iroot >> 48,
-			.block = iroot & (-1ULL >> 16)
-		},
+		.root	= unpack_root(from_be_u64(super->iroot)),
 		.entries_per_leaf = 1 << (blockbits - 6),
 	};
 //	sb->rootbuf;
@@ -57,7 +53,7 @@ static void pack_sb(SB, struct disksuper *super)
 	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
 	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
 	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
-	super->iroot = to_be_u64((u64)sb->itable.root.depth << 48 | sb->itable.root.block);
+	super->iroot = to_be_u64(pack_root(&sb->itable.root));
 }
 
 #ifdef __KERNEL__
