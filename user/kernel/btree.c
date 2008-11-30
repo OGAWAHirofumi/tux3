@@ -76,7 +76,7 @@ static struct buffer_head *new_node(struct btree *btree)
  * for the leaf, which has its own specialized traversal algorithms.
  */
 
-static inline struct bnode *cursor_node(struct cursor cursor[], int level)
+static inline struct bnode *cursor_bnode(struct cursor cursor[], int level)
 {
 	return bufdata(cursor[level].buffer);
 }
@@ -134,7 +134,7 @@ eek:
 
 static inline int level_finished(struct cursor cursor[], int level)
 {
-	struct bnode *node = cursor_node(cursor, level);
+	struct bnode *node = cursor_bnode(cursor, level);
 	return cursor[level].next == node->entries + bcount(node);
 }
 // also write level_beginning!!!
@@ -214,7 +214,7 @@ static void brelse_free(SB, struct buffer_head *buffer)
 
 static void remove_index(struct cursor cursor[], int level)
 {
-	struct bnode *node = cursor_node(cursor, level);
+	struct bnode *node = cursor_bnode(cursor, level);
 	int count = bcount(node), i;
 
 	/* stomps the node count (if 0th key holds count) */
@@ -236,7 +236,7 @@ static void remove_index(struct cursor cursor[], int level)
 	 */
 	if (cursor[level].next == node->entries && level) {
 		be_u64 sep = (cursor[level].next)->key;
-		for (i = level - 1; cursor[i].next - 1 == cursor_node(cursor, i)->entries; i--)
+		for (i = level - 1; cursor[i].next - 1 == cursor_bnode(cursor, i)->entries; i--)
 			if (!i)
 				return;
 		(cursor[i].next - 1)->key = sep;
@@ -309,8 +309,8 @@ keep_prev_leaf:
 			/* try to merge node with prev */
 			if (prev[level].buffer) {
 				assert(level); /* node has no prev */
-				struct bnode *this = cursor_node(cursor, level);
-				struct bnode *that = cursor_node(prev, level);
+				struct bnode *this = cursor_bnode(cursor, level);
+				struct bnode *that = cursor_bnode(prev, level);
 				trace_off("check node %p against %p", this, that);
 				trace_off("this count = %i prev count = %i", bcount(this), bcount(that));
 				/* try to merge with node to left */
@@ -334,7 +334,7 @@ keep_prev_node:
 				info->resume = from_be_u64((cursor[level].next)->key);
 			}
 			if (!level) { /* remove depth if possible */
-				while (depth > 1 && bcount(cursor_node(prev, 0)) == 1) {
+				while (depth > 1 && bcount(cursor_bnode(prev, 0)) == 1) {
 					trace("drop btree level");
 					btree->root.block = bufindex(prev[1].buffer);
 					brelse_free(sb, prev[0].buffer);
@@ -353,7 +353,7 @@ keep_prev_node:
 				return suspend;
 			}
 			level--;
-			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, cursor[level].buffer->index, cursor[level].next - cursor_node(cursor, level)->entries, bcount(cursor_node(cursor, level))););
+			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, cursor[level].buffer->index, cursor[level].next - cursor_bnode(cursor, level)->entries, bcount(cursor_bnode(cursor, level))););
 		}
 
 		/* push back down to leaf level */
@@ -368,7 +368,7 @@ keep_prev_node:
 			}
 			cursor[level].buffer = buffer;
 			cursor[level].next = ((struct bnode *)bufdata(buffer))->entries;
-			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(cursor_node(cursor, level))););
+			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(cursor_bnode(cursor, level))););
 		};
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
