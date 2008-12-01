@@ -613,8 +613,25 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 
 static void tux3_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	fprintf(stderr, "tux3_listxattr(%Lx/%u)\n", (L)ino, size);
+	
+	struct inode *inode = open_fuse_ino(ino);
+	if(!inode) {
+		fuse_reply_err(req,ENOENT);
+		return;
+	}
+
+	char *buf = malloc(size);
+	if (!buf) {
+		fuse_reply_err(req, ENOMEM);
+		return;
+	}
+
+	int len = xattr_list(inode, buf, size);
+	fprintf(stderr, "listxattr-buffer:%s\n", buf);
+	fuse_reply_buf(req, buf, len);
+	free(buf);
+	return;
 }
 
 static void tux3_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
