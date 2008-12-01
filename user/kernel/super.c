@@ -41,6 +41,8 @@ static int unpack_sb(SB, struct disksuper *super, int silent)
 	sb->nextalloc = from_be_u64(super->nextalloc);
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
+	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
+	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 
 	return 0;
 }

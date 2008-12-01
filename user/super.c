@@ -93,7 +93,7 @@ int make_tux3(SB, int fd)
 	if (!(sb->atable = new_inode(sb, TUX_ATABLE_INO)))
 		goto eek;
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
-	sb->unatom_base = sb->unatom_base + (1 << (34 - sb->blockbits));
+	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
 	if (make_inode(sb->atable, &(struct tux_iattr){ }))
 		goto eek;
