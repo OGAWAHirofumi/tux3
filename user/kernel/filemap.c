@@ -90,7 +90,7 @@ retry:
 		limit = next_key(cursor, depth);
 	struct dleaf *leaf = bufdata(cursor[depth].buffer);
 	struct dwalk *walk = &(struct dwalk){ };
-dleaf_dump(&tux_inode(inode)->btree, leaf);
+	dleaf_dump(&tux_inode(inode)->btree, leaf);
 	/* Probe below io start to include overlapping extents */
 	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
 
@@ -125,6 +125,8 @@ dleaf_dump(&tux_inode(inode)->btree, leaf);
 			if (start > dwalk_index(walk))
 				count -= start - dwalk_index(walk);
 			index += count;
+			next_extent = NULL;
+			continue;
 		}
 		block_t next_index = limit;
 		if ((next_extent = dwalk_next(walk))) {
