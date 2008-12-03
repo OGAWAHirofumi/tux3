@@ -607,7 +607,7 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 block_t balloc_extent(SB, unsigned blocks);
 
 /* btree.c */
-void release_cursor(struct cursor *cursor, int depth);
+void release_cursor(struct cursor *cursor);
 struct cursor *alloc_cursor(int);
 void free_cursor(struct cursor *cursor);
 int probe(BTREE, tuxkey_t key, struct cursor *cursor);

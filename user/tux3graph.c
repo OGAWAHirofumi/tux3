@@ -197,7 +197,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 	} while (level < depth);
 	return 1;
 eek:
-	release_cursor(cursor, level);
+	release_cursor(cursor);
 	return -EIO;
 }
 

@@ -98,11 +98,11 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
 	if ((err = store_attrs(inode, cursor)))
 		goto eek;
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 	free_cursor(cursor);
 	return 0;
 eek:
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 errout:
 	free_cursor(cursor);
 	warn("make_inode 0x%Lx failed (%d)", (L)tux_inode(inode)->inum, err);
@@ -140,7 +140,7 @@ static int open_inode(struct inode *inode)
 		xcache_dump(inode);
 	err = 0;
 eek:
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 	free_cursor(cursor);
 	return err;
 }
@@ -162,7 +162,7 @@ int save_inode(struct inode *inode)
 	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor->path[depth].buffer), &size)))
 		return -EINVAL;
 	err = store_attrs(inode, cursor);
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 	free_cursor(cursor);
 	return err;
 }
@@ -177,7 +177,7 @@ int purge_inum(BTREE, inum_t inum)
 	if (!(err = probe(btree, inum, cursor))) {
 		struct ileaf *ileaf = to_ileaf(bufdata(cursor->path[depth].buffer));
 		err = ileaf_purge(btree, inum, ileaf);
-		release_cursor(cursor, depth + 1);
+		release_cursor(cursor);
 	}
 	free_cursor(cursor);
 	return err;

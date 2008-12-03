@@ -226,7 +226,7 @@ retry:
 		index += count;
 		skip = 0;
 	}
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 	free_cursor(cursor);
 	return err;
 nospace:
@@ -388,7 +388,7 @@ out:
 	      (L)tux_inode(inode)->inum, buffer_mapped(bh_result),
 	      (L)bh_result->b_blocknr, bh_result->b_size);
 
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 	free_cursor(cursor);
 
 	return err;

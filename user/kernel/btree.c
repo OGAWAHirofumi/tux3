@@ -128,9 +128,9 @@ static void level_pop_brelse(struct cursor *cursor)
 	brelse(level_pop(cursor));
 }
 
-void release_cursor(struct cursor *cursor, int depth)
+void release_cursor(struct cursor *cursor)
 {
-	for (int i = 0; i < depth; i++)
+	while (cursor->len)
 		level_pop_brelse(cursor);
 }
 
@@ -194,7 +194,7 @@ int probe(BTREE, tuxkey_t key, struct cursor *cursor)
 	level_push(cursor, buffer, NULL);
 	return 0;
 eek:
-	release_cursor(cursor, i - 1);
+	release_cursor(cursor);
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
@@ -226,7 +226,7 @@ int advance(BTREE, struct cursor *cursor)
 	} while (level < depth);
 	return 1;
 eek:
-	release_cursor(cursor, level);
+	release_cursor(cursor);
 	return -EIO;
 }
 
@@ -450,7 +450,7 @@ out:
 	for (int i = 0; i < btree->root.depth; i++)
 		brelse(prev[i]);
 	free(prev);
-	release_cursor(cursor, 0);
+	release_cursor(cursor);
 	free_cursor(cursor);
 	return ret;
 }
@@ -522,7 +522,7 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 	mark_buffer_dirty(newbuf);
 	return 0;
 eek:
-	release_cursor(cursor, depth + 1);
+	release_cursor(cursor);
 	return -ENOMEM;
 }
 
@@ -533,7 +533,7 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 	struct buffer_head *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release cursor at point of error */
-		release_cursor(cursor, btree->root.depth + 1);
+		release_cursor(cursor);
 		return -ENOMEM;
 	}
 	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));

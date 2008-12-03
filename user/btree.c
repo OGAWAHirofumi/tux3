@@ -171,13 +171,13 @@ int main(int argc, char *argv[])
 		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
 		mark_buffer_dirty(cursor->path[btree.root.depth].buffer);
 		block_t block = bufindex(cursor->path[btree.root.depth].buffer);
-		release_cursor(cursor, btree.root.depth + 1);
+		release_cursor(cursor);
 
 		/* probe added key: buffer should be same */
 		if (probe(&btree, key, cursor))
 			error("probe for %i failed", key);
 		assert(block == bufindex(cursor->path[btree.root.depth].buffer));
-		release_cursor(cursor, btree.root.depth + 1);
+		release_cursor(cursor);
 	}
 	free_cursor(cursor);
 	show_tree_range(&btree, 0, -1);
