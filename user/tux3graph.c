@@ -783,9 +783,11 @@ int main(int argc, const char *argv[])
 	free_map(sb->devmap);
 
 out:
+#if 0 /* older version of popt doesn't return malloc memory */
 	/* damn, popt doesn't free str returned by poptGetArg() */
 	if (volname)
 		free((char *)volname);
+#endif
 	poptFreeContext(popt);
 	return ret;
 
