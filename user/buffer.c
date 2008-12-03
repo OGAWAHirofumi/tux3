@@ -161,10 +161,12 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 
 void brelse(struct buffer_head *buffer)
 {
-	buftrace("Release buffer %Lx, count = %i, state = %i", buffer->index, buffer->count, buffer->state);
-	assert(buffer->count);
-	if (!--buffer->count)
-		trace_off("Free buffer %Lx", buffer->index);
+	if (buffer) {
+		buftrace("Release buffer %Lx, count = %i, state = %i", buffer->index, buffer->count, buffer->state);
+		assert(buffer->count);
+		if (!--buffer->count)
+			trace_off("Free buffer %Lx", buffer->index);
+	}
 }
 
 void brelse_dirty(struct buffer_head *buffer)
