@@ -181,6 +181,7 @@ retry:
 			assert(!try);
 			if ((err = btree_leaf_split(&tux_inode(inode)->btree, cursor, 0)))
 				goto eek;
+			depth = tux_inode(inode)->btree.root.depth;
 			try = 1;
 			goto retry;
 		}
@@ -193,7 +194,7 @@ retry:
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		mark_buffer_dirty(cursor->path[tux_inode(inode)->btree.root.depth].buffer);
+		mark_buffer_dirty(cursor->path[depth].buffer);
 
 		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */
@@ -349,6 +350,7 @@ retry:
 			assert(!try);
 			if ((err = btree_leaf_split(&tux_inode(inode)->btree, cursor, 0)))
 				goto eek;
+			depth = tux_inode(inode)->btree.root.depth;
 			try = 1;
 			goto retry;
 		}
@@ -361,7 +363,7 @@ retry:
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		mark_buffer_dirty(cursor->path[tux_inode(inode)->btree.root.depth].buffer);
+		mark_buffer_dirty(cursor->path[depth].buffer);
 
 		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */
