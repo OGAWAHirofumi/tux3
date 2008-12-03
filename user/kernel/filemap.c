@@ -75,7 +75,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	block_t start, limit;
 	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
-	struct cursor *cursor = alloc_cursor(depth + 1);
+	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -254,7 +254,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 
 	block_t start = iblock, limit = iblock + max_blocks;
-	struct cursor *cursor = alloc_cursor(depth + 1);
+	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 

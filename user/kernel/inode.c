@@ -55,7 +55,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 {
 	SB = tux_sb(inode->i_sb);
 	int err = -ENOENT, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 1);
+	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for now depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -150,7 +150,7 @@ int save_inode(struct inode *inode)
 	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	SB = tux_sb(inode->i_sb);
 	int err, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 1);
+	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 
