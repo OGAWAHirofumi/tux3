@@ -501,16 +501,21 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 		if (!size)
 			continue;
 
-		void *attrs = ileaf->table + atdict(dict, at);
-		struct inode inode = { .i_sb = btree->sb };
-		decode_attrs(&inode, attrs, size);
+		inum_t inum = ibase(ileaf) + at;
+		struct inode *inode = new_inode(btree->sb, inum);
+		if (!inode)
+			error("out of memory");
+		if (open_inode(inode) < 0)
+			error("inode couldn't open: inum %Lu", (L)inum);
 
 		fprintf(gi->f,
 			" | <a%d> attrs (ino %llu, size %u,"
 			" block %llu, depth %d)",
-			at, (L)ibase(ileaf) + at, size,
-			(L)inode.btree.root.block,
-			inode.btree.root.depth);
+			at, (L)inum, size,
+			(L)inode->btree.root.block,
+			inode->btree.root.depth);
+
+		free_inode(inode);
 	}
 	fprintf(gi->f,
 		" | .....");
@@ -551,24 +556,26 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 		if (!size)
 			continue;
 
-		void *attrs = ileaf->table + atdict(dict, at);
-		struct inode inode = { .i_sb = btree->sb };
-		decode_attrs(&inode, attrs, size);
+		inum_t inum = ibase(ileaf) + at;
+		struct inode *inode = new_inode(btree->sb, inum);
+		if (!inode)
+			error("out of memory");
+		if (open_inode(inode) < 0)
+			error("inode couldn't open: inum %Lu", (L)inum);
 
 		char name[64];
-		inum_t ino = ibase(ileaf) + at;
-		if (ino < ARRAY_SIZE(dtree_names) && dtree_names[ino])
-			sprintf(name, "%s_dtree", dtree_names[ino]);
+		if (inum < ARRAY_SIZE(dtree_names) && dtree_names[inum])
+			sprintf(name, "%s_dtree", dtree_names[inum]);
 		else
-			sprintf(name, "ino%llu_dtree", (L)ino);
+			sprintf(name, "ino%llu_dtree", (L)inum);
 
 		/* write link: ileaf -> dtree root bnode */
 		add_link(gi, "%s:a%d:e -> %s_bnode_%llu:n;\n",
 			 ileaf_name, at, name,
-			 (L)inode.btree.root.block);
+			 (L)inode->btree.root.block);
 
 		draw_data_t draw_data;
-		switch (ino) {
+		switch (inum) {
 		case TUX_BITMAP_INO:
 			draw_data = draw_bitmap;
 			break;
@@ -582,7 +589,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 			draw_data = draw_dir;
 			break;
 		default:
-			switch (inode.i_mode & S_IFMT) {
+			switch (inode->i_mode & S_IFMT) {
 			case S_IFREG:
 				draw_data = draw_file;
 				break;
@@ -598,6 +605,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 				drawn |= DRAWN_DTREE;
 				break;
 			}
+			free_inode(inode);
 			continue;
 		}
 
@@ -615,7 +623,7 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 			.lname = "dleaf",
 			.link_head = LIST_HEAD_INIT(ginfo_dtree.link_head),
 		};
-		draw_tree(&ginfo_dtree, &inode.btree, draw_dleaf);
+		draw_tree(&ginfo_dtree, &inode->btree, draw_dleaf);
 		/* draw at least one dleaf */
 		drawn &= ~DRAWN_DLEAF;
 
@@ -632,7 +640,9 @@ static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 			.lname = ginfo_dtree.filedata,
 			.link_head = LIST_HEAD_INIT(ginfo_data.link_head),
 		};
-		draw_data(&ginfo_data, &inode.btree);
+		draw_data(&ginfo_data, &inode->btree);
+
+		free_inode(inode);
 	}
 }
 
