@@ -162,15 +162,24 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	struct cursor cursor[30];
-	for (int key = 0; key < 30; key++) {
+	struct cursor *cursor = alloc_cursor(btree.root.depth + 2); /* +1 for new depth */
+	int until_new_depth = sb->entries_per_node * btree.entries_per_leaf + 1;
+	for (int key = 0; key < until_new_depth; key++) {
 		if (probe(&btree, key, cursor))
 			error("probe for %i failed", key);
 		struct uentry *entry = tree_expand(&btree, key, 1, cursor);
 		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
 		mark_buffer_dirty(cursor[btree.root.depth].buffer);
+		block_t block = bufindex(cursor[btree.root.depth].buffer);
+		release_cursor(cursor, btree.root.depth + 1);
+
+		/* probe added key: buffer should be same */
+		if (probe(&btree, key, cursor))
+			error("probe for %i failed", key);
+		assert(block == bufindex(cursor[btree.root.depth].buffer));
 		release_cursor(cursor, btree.root.depth + 1);
 	}
+	free_cursor(cursor);
 	show_tree_range(&btree, 0, -1);
 	show_buffers(sb->devmap);
 	tree_chop(&btree, &(struct delete_info){ .key = 0x10 }, -1);
