@@ -41,33 +41,33 @@ static inline tuxkey_t ibase(struct ileaf *leaf)
 	return from_be_u64(leaf->ibase);
 }
 
-int ileaf_init(BTREE, vleaf *leaf)
+int ileaf_init(struct btree *btree, vleaf *leaf)
 {
 	printf("initialize inode leaf %p\n", leaf);
 	*(struct ileaf *)leaf = (struct ileaf){ to_be_u16(0x90de) };
 	return 0;
 }
 
-int ileaf_sniff(BTREE, vleaf *leaf)
+int ileaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return ((struct ileaf *)leaf)->magic == to_be_u16(0x90de);
 }
 
-unsigned ileaf_need(BTREE, vleaf *vleaf)
+unsigned ileaf_need(struct btree *btree, vleaf *vleaf)
 {
 	be_u16 *dict = vleaf + btree->sb->blocksize;
 	unsigned count = icount(to_ileaf(vleaf));
 	return atdict(dict, count) + count * sizeof(*dict);
 }
 
-unsigned ileaf_free(BTREE, vleaf *leaf)
+unsigned ileaf_free(struct btree *btree, vleaf *leaf)
 {
 	return btree->sb->blocksize - ileaf_need(btree, leaf) - sizeof(struct ileaf);
 }
 
-void ileaf_dump(BTREE, vleaf *vleaf)
+void ileaf_dump(struct btree *btree, vleaf *vleaf)
 {
-	SB = btree->sb;
+	struct sb *sb = btree->sb;
 	struct ileaf *leaf = vleaf;
 	inum_t inum = ibase(leaf);
 	be_u16 *dict = vleaf + sb->blocksize;
@@ -99,7 +99,7 @@ void ileaf_dump(BTREE, vleaf *vleaf)
 	}
 }
 
-void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
+void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= ibase(leaf));
 	assert(inum < ibase(leaf) + btree->entries_per_leaf);
@@ -116,7 +116,7 @@ void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result)
 	return attrs;
 }
 
-int isinorder(BTREE, struct ileaf *leaf)
+int isinorder(struct btree *btree, struct ileaf *leaf)
 {
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	for (int i = 0, offset = 0, limit; --i >= -icount(leaf); offset = limit)
@@ -125,7 +125,7 @@ int isinorder(BTREE, struct ileaf *leaf)
 	return 1;
 }
 
-int ileaf_check(BTREE, struct ileaf *leaf)
+int ileaf_check(struct btree *btree, struct ileaf *leaf)
 {
 	char *why;
 	why = "not an inode table leaf";
@@ -140,7 +140,7 @@ eek:
 	return -1;
 }
 
-void ileaf_trim(BTREE, struct ileaf *leaf) {
+void ileaf_trim(struct btree *btree, struct ileaf *leaf) {
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	while (icount(leaf) > 1 && *(dict - icount(leaf)) == *(dict - icount(leaf) + 1))
 		leaf->count = to_be_u16(from_be_u16(leaf->count) - 1);
@@ -150,7 +150,7 @@ void ileaf_trim(BTREE, struct ileaf *leaf) {
 
 #define SPLIT_AT_INUM
 
-tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
+tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vleaf *into)
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
@@ -194,7 +194,7 @@ tuxkey_t ileaf_split(BTREE, tuxkey_t inum, vleaf *from, vleaf *into)
 	return ibase(dest);
 }
 
-void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
+void ileaf_merge(struct btree *btree, struct ileaf *leaf, struct ileaf *from)
 {
 	if (!icount(from))
 		return;
@@ -209,7 +209,7 @@ void ileaf_merge(BTREE, struct ileaf *leaf, struct ileaf *from)
 		add_idict(dict - i, from_be_u16(*(dict - at)));
 }
 
-void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
+void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsigned newsize)
 {
 	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
@@ -240,7 +240,7 @@ void *ileaf_resize(BTREE, tuxkey_t inum, vleaf *base, unsigned newsize)
 	return attrs;
 }
 
-inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal)
+inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 {
 	assert(goal >= ibase(leaf));
 	goal -= ibase(leaf);
@@ -256,7 +256,7 @@ inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal)
 	return i + ibase(leaf);
 }
 
-int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf)
+int ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 {
 	if (inum < ibase(leaf) || inum - ibase(leaf) >= btree->entries_per_leaf)
 		return -EINVAL;

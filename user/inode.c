@@ -19,7 +19,7 @@
 #include "filemap.c"
 #undef main
 
-struct inode *new_inode(SB, inum_t inum)
+struct inode *new_inode(struct sb *sb, inum_t inum)
 {
 	map_t *map = new_map(sb->devmap->dev, &filemap_ops);
 	if (!map)
@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	init_buffers(dev, 1 << 20);
-	SB = &(struct sb){
+	struct sb *sb = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.devmap = new_map(dev, NULL),

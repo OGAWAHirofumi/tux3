@@ -26,20 +26,20 @@
 #include "kernel/ileaf.c"
 
 #ifndef main
-struct ileaf *ileaf_create(BTREE)
+struct ileaf *ileaf_create(struct btree *btree)
 {
 	struct ileaf *leaf = malloc(btree->sb->blocksize);
 	ileaf_init(btree, leaf);
 	return leaf;
 }
 
-void ileaf_destroy(BTREE, struct ileaf *leaf)
+void ileaf_destroy(struct btree *btree, struct ileaf *leaf)
 {
 	assert(ileaf_sniff(btree, leaf));
 	free(leaf);
 }
 
-void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
+void test_append(struct btree *btree, struct ileaf *leaf, inum_t inum, int more, char fill)
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
@@ -48,7 +48,7 @@ void test_append(BTREE, struct ileaf *leaf, inum_t inum, int more, char fill)
 	memset(attrs + size, fill, more);
 }
 
-void test_remove(BTREE, struct ileaf *leaf, inum_t inum, int less)
+void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, int less)
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
@@ -56,7 +56,7 @@ void test_remove(BTREE, struct ileaf *leaf, inum_t inum, int less)
 	attrs = ileaf_resize(btree, inum, leaf, size - less);
 }
 
-block_t balloc(SB)
+block_t balloc(struct sb *sb)
 {
 	return sb->nextalloc++;
 }
@@ -64,7 +64,7 @@ block_t balloc(SB)
 int main(int argc, char *argv[])
 {
 	printf("--- test inode table leaf methods ---\n");
-	SB = &(struct sb){ .blocksize = 4096 };
+	struct sb *sb = &(struct sb){ .blocksize = 4096 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &itable_ops };
 	btree->entries_per_leaf = 64; // !!! should depend on blocksize
 	struct ileaf *leaf = ileaf_create(btree);

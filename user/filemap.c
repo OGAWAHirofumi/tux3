@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ fd, .bits = 8 };
-	SB = &(struct sb){
+	struct sb *sb = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.devmap = new_map(dev, NULL),

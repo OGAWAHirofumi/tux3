@@ -34,7 +34,7 @@ static inline unsigned bcount(struct bnode *node)
 	return from_be_u32(node->count);
 }
 
-static void free_block(SB, block_t block)
+static void free_block(struct sb *sb, block_t block)
 {
 }
 
@@ -171,7 +171,7 @@ void free_cursor(struct cursor *cursor)
 	free(cursor);
 }
 
-int probe(BTREE, tuxkey_t key, struct cursor *cursor)
+int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor)
 {
 	unsigned i, depth = btree->root.depth;
 	struct buffer_head *buffer = sb_bread(vfs_sb(btree->sb), btree->root.block);
@@ -205,7 +205,7 @@ static inline int level_finished(struct cursor *cursor, int level)
 }
 // also write level_beginning!!!
 
-int advance(BTREE, struct cursor *cursor)
+int advance(struct btree *btree, struct cursor *cursor)
 {
 	int depth = btree->root.depth, level = depth;
 	struct buffer_head *buffer = cursor->path[level].buffer;
@@ -250,7 +250,7 @@ tuxkey_t next_key(struct cursor *cursor, int depth)
 }
 // also write this_key!!!
 
-void show_tree_range(BTREE, tuxkey_t start, unsigned count)
+void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
 	struct cursor *cursor = alloc_cursor(btree->root.depth + 1);
@@ -271,7 +271,7 @@ void show_tree_range(BTREE, tuxkey_t start, unsigned count)
 
 /* Deletion */
 
-static void brelse_free(SB, struct buffer_head *buffer)
+static void brelse_free(struct sb *sb, struct buffer_head *buffer)
 {
 	brelse(buffer);
 	if (bufcount(buffer)) {
@@ -320,12 +320,12 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count = to_be_u32(bcount(node) + bcount(node2));
 }
 
-int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
+int delete_from_leaf(struct btree *btree, vleaf *leaf, struct delete_info *info)
 {
 	return (btree->ops->leaf_chop)(btree, info->key, leaf);
 }
 
-int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
+int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline)
 {
 	int depth = btree->root.depth, level = depth - 1, suspend = 0;
 	struct cursor *cursor;
@@ -565,7 +565,7 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cu
 	return NULL;
 }
 
-struct btree new_btree(SB, struct btree_ops *ops)
+struct btree new_btree(struct sb *sb, struct btree_ops *ops)
 {
 	struct btree btree = { .sb = sb, .ops = ops };
 	struct buffer_head *rootbuf = new_node(&btree);

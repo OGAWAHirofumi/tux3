@@ -55,7 +55,7 @@ struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned
 static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 {
 	unsigned offset;
-	SB = tux_sb(atable->i_sb);
+	struct sb *sb = tux_sb(atable->i_sb);
 	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
 		return -ENOMEM;
@@ -83,7 +83,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 
 void dump_atoms(struct inode *atable)
 {
-	SB = tux_sb(atable->i_sb);
+	struct sb *sb = tux_sb(atable->i_sb);
 	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
@@ -113,7 +113,7 @@ eek:
 	return;
 }
 
-void show_freeatoms(SB)
+void show_freeatoms(struct sb *sb)
 {
 	struct inode *atable = sb->atable;
 	atom_t atom = sb->freeatom;
@@ -136,7 +136,7 @@ eek:
 
 atom_t get_freeatom(struct inode *atable)
 {
-	SB = tux_sb(atable->i_sb);
+	struct sb *sb = tux_sb(atable->i_sb);
 	atom_t atom = sb->freeatom;
 	if (!atom)
 		return sb->atomgen++;
@@ -157,7 +157,7 @@ eek:
 
 int use_atom(struct inode *atable, atom_t atom, int use)
 {
-	SB = tux_sb(atable->i_sb);
+	struct sb *sb = tux_sb(atable->i_sb);
 	unsigned shift = sb->blockbits - 1;
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
@@ -439,7 +439,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 {
-	SB = tux_sb(inode->i_sb);
+	struct sb *sb = tux_sb(inode->i_sb);
 	unsigned total = 0, bytes;
 	void *limit = attrs + size;
 	while (attrs < limit - 1) {

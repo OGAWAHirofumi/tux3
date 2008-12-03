@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
 	ftruncate(dev->fd, 1 << 24);
 	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
-	SB = &(struct sb){
+	struct sb *sb = &(struct sb){
 		.version = 0, .atable = map->inode,
 		.blockbits = dev->bits, 
 		.blocksize = 1 << dev->bits, 

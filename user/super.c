@@ -17,7 +17,7 @@
 
 #include "kernel/super.c"
 
-int load_sb(SB)
+int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 	int err = diskread(sb->devmap->dev->fd, super, sizeof(*super), SB_LOC);
@@ -29,14 +29,14 @@ int load_sb(SB)
 	return 0;
 }
 
-int save_sb(SB)
+int save_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 	pack_sb(sb, super);
 	return diskwrite(sb->devmap->dev->fd, super, sizeof(*super), SB_LOC);
 }
 
-int sync_super(SB)
+int sync_super(struct sb *sb)
 {
 	int err;
 	printf("sync bitmap\n");
@@ -57,7 +57,7 @@ int sync_super(SB)
 	return 0;
 }
 
-int make_tux3(SB, int fd)
+int make_tux3(struct sb *sb, int fd)
 {
 	int err = 0;
 	trace("create bitmap");

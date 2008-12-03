@@ -146,7 +146,7 @@ static inline void *decode48(void *at, u64 *val)
 }
 
 /* Tux3 disk format */
-#define SB_MAGIC_SIZE	8
+#define SB_MAGIC_SIZE 8
 #define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x09, 0x06 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
@@ -162,7 +162,6 @@ static inline void *decode48(void *at, u64 *val)
 #define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
 #define MAX_EXTENT (1 << 6)
 #define SB_LOC (1 << 12)
-#define SB struct sb *sb
 
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
@@ -444,21 +443,19 @@ static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 
 typedef void vleaf;
 
-#define BTREE struct btree *btree
-
 struct btree_ops {
-	int (*leaf_sniff)(BTREE, vleaf *leaf);
-	int (*leaf_init)(BTREE, vleaf *leaf);
-	tuxkey_t (*leaf_split)(BTREE, tuxkey_t key, vleaf *from, vleaf *into);
-	void *(*leaf_resize)(BTREE, tuxkey_t key, vleaf *leaf, unsigned size);
-	void (*leaf_dump)(BTREE, vleaf *leaf);
-	unsigned (*leaf_need)(BTREE, vleaf *leaf);
-	unsigned (*leaf_free)(BTREE, vleaf *leaf);
+	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
+	int (*leaf_init)(struct btree *btree, vleaf *leaf);
+	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into);
+	void *(*leaf_resize)(struct btree *btree, tuxkey_t key, vleaf *leaf, unsigned size);
+	void (*leaf_dump)(struct btree *btree, vleaf *leaf);
+	unsigned (*leaf_need)(struct btree *btree, vleaf *leaf);
+	unsigned (*leaf_free)(struct btree *btree, vleaf *leaf);
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
-	int (*leaf_chop)(BTREE, tuxkey_t key, vleaf *leaf);
-	void (*leaf_merge)(BTREE, vleaf *into, vleaf *from);
-	block_t (*balloc)(SB);
-	void (*bfree)(SB, block_t block);
+	int (*leaf_chop)(struct btree *btree, tuxkey_t key, vleaf *leaf);
+	void (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
+	block_t (*balloc)(struct sb *sb);
+	void (*bfree)(struct sb *sb, block_t block);
 };
 
 /*
@@ -506,8 +503,8 @@ struct tux_iattr {
 };
 
 void hexdump(void *data, unsigned size);
-block_t balloc(SB);
-void bfree(SB, block_t block);
+block_t balloc(struct sb *sb);
+void bfree(struct sb *sb, block_t block);
 
 enum atkind {
 	MIN_ATTR = 6,
@@ -604,20 +601,20 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 }
 
 /* balloc.c */
-block_t balloc_extent(SB, unsigned blocks);
+block_t balloc_extent(struct sb *sb, unsigned blocks);
 
 /* btree.c */
 void release_cursor(struct cursor *cursor);
 struct cursor *alloc_cursor(int);
 void free_cursor(struct cursor *cursor);
-int probe(BTREE, tuxkey_t key, struct cursor *cursor);
-int advance(BTREE, struct cursor *cursor);
+int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor);
+int advance(struct btree *btree, struct cursor *cursor);
 tuxkey_t next_key(struct cursor *cursor, int depth);
-void show_tree_range(BTREE, tuxkey_t start, unsigned count);
-int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline);
+void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
+int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline);
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key);
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor);
-struct btree new_btree(SB, struct btree_ops *ops);
+struct btree new_btree(struct sb *sb, struct btree_ops *ops);
 
 /* dir.c */
 loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
@@ -627,8 +624,8 @@ extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
 
 /* dtree.c */
-unsigned dleaf_free(BTREE, vleaf *leaf);
-void dleaf_dump(BTREE, vleaf *vleaf);
+unsigned dleaf_free(struct btree *btree, vleaf *leaf);
+void dleaf_dump(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
 tuxkey_t dwalk_index(struct dwalk *walk);
@@ -649,9 +646,9 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size);
 void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
 
 /* ileaf.c */
-void *ileaf_lookup(BTREE, inum_t inum, struct ileaf *leaf, unsigned *result);
-inum_t find_empty_inode(BTREE, struct ileaf *leaf, inum_t goal);
-int ileaf_purge(BTREE, inum_t inum, struct ileaf *leaf);
+void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
+inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal);
+int ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf);
 extern struct btree_ops itable_ops;
 
 /* inode.c */

@@ -15,7 +15,7 @@
 
 #include "tux3.h"
 
-static int unpack_sb(SB, struct disksuper *super, int silent)
+static int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
 {
 	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic))) {
 		if (!silent)
@@ -51,7 +51,7 @@ static int unpack_sb(SB, struct disksuper *super, int silent)
 	return 0;
 }
 
-static void pack_sb(SB, struct disksuper *super)
+static void pack_sb(struct sb *sb, struct disksuper *super)
 {
 	super->blockbits = to_be_u16(sb->blockbits);
 	super->volblocks = to_be_u64(sb->volblocks);

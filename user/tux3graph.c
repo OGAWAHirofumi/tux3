@@ -90,7 +90,7 @@ static void write_link(struct graph_info *gi)
 	}
 }
 
-typedef void (*draw_leaf_t)(struct graph_info *, BTREE, struct buffer_head *);
+typedef void (*draw_leaf_t)(struct graph_info *, struct btree *btree, struct buffer_head *);
 
 static void draw_sb(struct graph_info *gi, struct sb *sb)
 {
@@ -168,7 +168,7 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 	}
 }
 
-static void draw_cursor(struct graph_info *gi, BTREE, struct cursor *cursor)
+static void draw_cursor(struct graph_info *gi, struct btree *btree, struct cursor *cursor)
 {
 	int level;
 	for (level = 0; level < btree->root.depth; level++)
@@ -201,7 +201,7 @@ eek:
 	return -EIO;
 }
 
-static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
+static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t draw_leaf)
 {
 	struct cursor *cursor;
 	struct buffer_head *buffer;
@@ -234,9 +234,9 @@ static void draw_tree(struct graph_info *gi, BTREE, draw_leaf_t draw_leaf)
 	write_link(gi);
 }
 
-typedef void (*draw_data_t)(struct graph_info *, BTREE);
+typedef void (*draw_data_t)(struct graph_info *, struct btree *btree);
 
-static void draw_bitmap(struct graph_info *gi, BTREE)
+static void draw_bitmap(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"subgraph cluster_%s {\n"
@@ -250,7 +250,7 @@ static void draw_bitmap(struct graph_info *gi, BTREE)
 		gi->lname, gi->lname, gi->lname);
 }
 
-static void draw_vtable(struct graph_info *gi, BTREE)
+static void draw_vtable(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"subgraph cluster_%s {\n"
@@ -262,7 +262,7 @@ static void draw_vtable(struct graph_info *gi, BTREE)
 		gi->lname, gi->lname, gi->lname);
 }
 
-static void draw_atable(struct graph_info *gi, BTREE)
+static void draw_atable(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"subgraph cluster_%s {\n"
@@ -274,7 +274,7 @@ static void draw_atable(struct graph_info *gi, BTREE)
 		gi->lname, gi->lname, gi->lname);
 }
 
-static void draw_dir(struct graph_info *gi, BTREE)
+static void draw_dir(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"subgraph cluster_%s {\n"
@@ -289,7 +289,7 @@ static void draw_dir(struct graph_info *gi, BTREE)
 		gi->lname, gi->lname, gi->lname);
 }
 
-static void draw_file(struct graph_info *gi, BTREE)
+static void draw_file(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"subgraph cluster_%s {\n"
@@ -301,7 +301,7 @@ static void draw_file(struct graph_info *gi, BTREE)
 		gi->lname, gi->lname, gi->lname);
 }
 
-static inline struct group *dleaf_groups_ptr(BTREE, struct dleaf *dleaf)
+static inline struct group *dleaf_groups_ptr(struct btree *btree, struct dleaf *dleaf)
 {
 	return (void *)dleaf + btree->sb->blocksize;
 }
@@ -357,7 +357,7 @@ static inline struct diskextent *dleaf_extent(struct diskextent *extents, int ex
 	return extents + ex;
 }
 
-static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
+static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
 {
 	struct dleaf *leaf = bufdata(buffer);
 	block_t blocknr = buffer->index;
@@ -455,7 +455,7 @@ static void draw_dleaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
 		 dleaf_name, gi->filedata, gi->subgraph, gi->filedata);
 }
 
-static inline be_u16 *ileaf_dict(BTREE, struct ileaf *ileaf)
+static inline be_u16 *ileaf_dict(struct btree *btree, struct ileaf *ileaf)
 {
 	return (void *)ileaf + btree->sb->blocksize;
 }
@@ -473,7 +473,7 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 	return size;
 }
 
-static void draw_ileaf(struct graph_info *gi, BTREE, struct buffer_head *buffer)
+static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
 {
 	struct ileaf *ileaf = bufdata(buffer);
 	block_t blocknr = buffer->index;

@@ -23,30 +23,30 @@
 #include "kernel/dleaf.c"
 
 #ifndef main
-block_t balloc(SB)
+block_t balloc(struct sb *sb)
 {
 	return sb->nextalloc++;
 }
 
-void bfree(SB, block_t block)
+void bfree(struct sb *sb, block_t block)
 {
 	printf(" free %Lx\n", (L)block);
 }
 
-struct dleaf *dleaf_create(BTREE)
+struct dleaf *dleaf_create(struct btree *btree)
 {
 	struct dleaf *leaf = malloc(btree->sb->blocksize);
 	dleaf_init(btree, leaf);
 	return leaf;
 }
 
-void dleaf_destroy(BTREE, struct dleaf *leaf)
+void dleaf_destroy(struct btree *btree, struct dleaf *leaf)
 {
 	assert(dleaf_sniff(btree, leaf));
 	free(leaf);
 }
 
-void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
+void *dleaf_lookup(struct btree *btree, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;
@@ -73,7 +73,7 @@ void *dleaf_lookup(BTREE, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 int main(int argc, char *argv[])
 {
 	printf("--- leaf test ---\n");
-	SB = &(struct sb){ .blocksize = 1 << 10 };
+	struct sb *sb = &(struct sb){ .blocksize = 1 << 10 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = dleaf_create(btree);
 	dleaf_chop(btree, 0x14014LL, leaf);

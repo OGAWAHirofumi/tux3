@@ -68,7 +68,7 @@ static inline struct dleaf *to_dleaf(vleaf *leaf)
 	return leaf;
 }
 
-int dleaf_init(BTREE, vleaf *leaf)
+int dleaf_init(struct btree *btree, vleaf *leaf)
 {
 	if (!leaf)
 		return -1;
@@ -79,22 +79,22 @@ int dleaf_init(BTREE, vleaf *leaf)
 	return 0;
 }
 
-int dleaf_sniff(BTREE, vleaf *leaf)
+int dleaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return from_be_u16(to_dleaf(leaf)->magic) == 0x1eaf;
 }
 
-unsigned dleaf_free(BTREE, vleaf *leaf)
+unsigned dleaf_free(struct btree *btree, vleaf *leaf)
 {
 	return from_be_u16(to_dleaf(leaf)->used) - from_be_u16(to_dleaf(leaf)->free);
 }
 
-unsigned dleaf_need(BTREE, struct dleaf *leaf)
+unsigned dleaf_need(struct btree *btree, struct dleaf *leaf)
 {
 	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
-int dleaf_free2(BTREE, void *vleaf)
+int dleaf_free2(struct btree *btree, void *vleaf)
 {
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
@@ -105,7 +105,7 @@ int dleaf_free2(BTREE, void *vleaf)
 	return (void *)entry - (void *)extents;
 }
 
-void dleaf_dump(BTREE, vleaf *vleaf)
+void dleaf_dump(struct btree *btree, vleaf *vleaf)
 {
 	unsigned blocksize = btree->sb->blocksize;
 	struct dleaf *leaf = vleaf;
@@ -159,7 +159,7 @@ void dleaf_dump(BTREE, vleaf *vleaf)
  * But it does truncate so it is getting checked in just for now.
  */
 
-int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
+int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 {
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *group = gdict;
@@ -208,7 +208,7 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 	return 1;
 }
 
-int dleaf_check(BTREE, struct dleaf *leaf)
+int dleaf_check(struct btree *btree, struct dleaf *leaf)
 {
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gstop, *entry = edict;
@@ -238,7 +238,7 @@ eek:
 	return -1;
 }
 
-tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
+tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(dleaf_sniff(btree, from));
 	struct dleaf *leaf = from, *dest = into;
@@ -299,7 +299,7 @@ tuxkey_t dleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	return get_index(destgroups - 1, destentries - 1);
 }
 
-void dleaf_merge(BTREE, struct dleaf *leaf, struct dleaf *from)
+void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;

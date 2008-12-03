@@ -33,28 +33,28 @@ static inline struct uleaf *to_uleaf(vleaf *leaf)
 	return leaf;
 }
 
-int uleaf_sniff(BTREE, vleaf *leaf)
+int uleaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return to_uleaf(leaf)->magic == 0xc0de;
 }
 
-int uleaf_init(BTREE, vleaf *leaf)
+int uleaf_init(struct btree *btree, vleaf *leaf)
 {
 	*to_uleaf(leaf) = (struct uleaf){ .magic = 0xc0de };
 	return 0;
 }
 
-unsigned uleaf_need(BTREE, vleaf *leaf)
+unsigned uleaf_need(struct btree *btree, vleaf *leaf)
 {
 	return to_uleaf(leaf)->count;
 }
 
-unsigned uleaf_free(BTREE, vleaf *leaf)
+unsigned uleaf_free(struct btree *btree, vleaf *leaf)
 {
 	return btree->entries_per_leaf - to_uleaf(leaf)->count;
 }
 
-void uleaf_dump(BTREE, vleaf *data)
+void uleaf_dump(struct btree *btree, vleaf *data)
 {
 	struct uleaf *leaf = data;
 	printf("leaf %p/%i", leaf, leaf->count);
@@ -64,7 +64,7 @@ void uleaf_dump(BTREE, vleaf *data)
 	printf(" (%x free)\n", uleaf_free(btree, leaf));
 }
 
-tuxkey_t uleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
+tuxkey_t uleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(uleaf_sniff(btree, from));
 	struct uleaf *leaf = from;
@@ -79,7 +79,7 @@ tuxkey_t uleaf_split(BTREE, tuxkey_t key, vleaf *from, vleaf *into)
 	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
 }
 
-unsigned uleaf_seek(BTREE, tuxkey_t key, struct uleaf *leaf)
+unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)
 {
 	unsigned at = 0;
 	while (at < leaf->count && leaf->entries[at].key < key)
@@ -87,7 +87,7 @@ unsigned uleaf_seek(BTREE, tuxkey_t key, struct uleaf *leaf)
 	return at;
 }
 
-int uleaf_chop(BTREE, tuxkey_t key, vleaf *vleaf)
+int uleaf_chop(struct btree *btree, tuxkey_t key, vleaf *vleaf)
 {
 	struct uleaf *leaf = vleaf;
 	unsigned at = uleaf_seek(btree, key, leaf);
@@ -95,7 +95,7 @@ int uleaf_chop(BTREE, tuxkey_t key, vleaf *vleaf)
 	return 1;
 }
 
-void *uleaf_resize(BTREE, tuxkey_t key, vleaf *data, unsigned one)
+void *uleaf_resize(struct btree *btree, tuxkey_t key, vleaf *data, unsigned one)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;
@@ -107,7 +107,7 @@ void *uleaf_resize(BTREE, tuxkey_t key, vleaf *data, unsigned one)
 	return leaf->entries + at;
 }
 
-void uleaf_merge(BTREE, vleaf *into, vleaf *from)
+void uleaf_merge(struct btree *btree, vleaf *into, vleaf *from)
 {
 }
 
@@ -124,13 +124,13 @@ struct btree_ops ops = {
 	.balloc = balloc,
 };
 
-block_t balloc(SB)
+block_t balloc(struct sb *sb)
 {
 	printf("-> %Lx\n", (L)sb->nextalloc);
 	return sb->nextalloc++;
 }
 
-int uleaf_insert(BTREE, struct uleaf *leaf, unsigned key, unsigned val)
+int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
 	struct uentry *entry = uleaf_resize(btree, key, leaf, 1);
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	map_t *map = new_map(dev, NULL);
-	SB = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
+	struct sb *sb = &(struct sb){ .devmap = map, .blocksize = 1 << dev->bits };
 	map->inode = &(struct inode){ .i_sb = sb, .map = map };
 	init_buffers(dev, 1 << 20);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);

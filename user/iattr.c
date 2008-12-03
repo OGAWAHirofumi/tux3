@@ -29,7 +29,7 @@ static struct btree_ops dtree_ops;
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	SB = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
+	struct sb *sb = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
 	struct inode *inode = &(struct inode){ .i_sb = sb,
 		.present = abits, .i_mode = 0x666, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },

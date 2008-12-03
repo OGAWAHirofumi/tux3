@@ -225,7 +225,7 @@ block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
 	return balloc_extent_from_range(inode, start, count, 1);
 }
 
-block_t balloc(SB)
+block_t balloc(struct sb *sb)
 {
 	trace_off("balloc block at goal %Lx", (L)sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
@@ -239,7 +239,7 @@ found:
 	return block;
 }
 
-block_t balloc_extent(SB, unsigned blocks)
+block_t balloc_extent(struct sb *sb, unsigned blocks)
 {
 	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
@@ -253,7 +253,7 @@ found:
 	return block;
 }
 
-void bfree_extent(SB, block_t start, unsigned count)
+void bfree_extent(struct sb *sb, block_t start, unsigned count)
 {
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
@@ -277,7 +277,7 @@ eek:
 	warn("extent 0x%Lx %s!\n", (L)start, why);
 }
 
-void bfree(SB, block_t block)
+void bfree(struct sb *sb, block_t block)
 {
 	bfree_extent(sb, block, 1);
 }

@@ -56,12 +56,12 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 #include "kernel/tux3.h"
 
 /* wrappers for buffer cache */
-static inline struct buffer_head *sb_getblk(SB, block_t block)
+static inline struct buffer_head *sb_getblk(struct sb *sb, block_t block)
 {
 	return blockget(sb->devmap, block);
 }
 
-static inline struct buffer_head *sb_bread(SB, block_t block)
+static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 {
 	return blockread(sb->devmap, block);
 }
