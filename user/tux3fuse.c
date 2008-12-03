@@ -613,7 +613,7 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 
 static void tux3_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	fprintf(stderr, "tux3_listxattr(%Lx/%u)\n", (L)ino, size);
+	fprintf(stderr, "tux3_listxattr(%Lx/%zu)\n", (L)ino, size);
 	
 	struct inode *inode = open_fuse_ino(ino);
 	if(!inode) {
