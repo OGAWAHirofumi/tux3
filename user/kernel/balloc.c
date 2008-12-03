@@ -167,6 +167,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
 {
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
+	assert(blocks > 0);
 	block_t limit = start + count;
 	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
 	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
