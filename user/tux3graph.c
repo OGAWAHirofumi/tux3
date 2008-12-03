@@ -728,8 +728,6 @@ int main(int argc, const char *argv[])
 
 	struct sb *sb = &(struct sb){ };
 	*sb = (struct sb){
-		.max_inodes_per_block	= 64,
-		.entries_per_node	= 20,
 		.devmap			= new_map(dev, NULL),
 		.blockbits		= dev->bits,
 		.blocksize		= 1 << dev->bits,

@@ -36,13 +36,17 @@ static int unpack_sb(SB, struct disksuper *super, int silent)
 	sb->blockbits = blockbits;
 	sb->blocksize = 1 << blockbits;
 	sb->blockmask = (1 << blockbits) - 1;
+	/* FIXME: those should be initialized based on blocksize. */
+	sb->entries_per_node = 20;
+	sb->max_inodes_per_block = 64;
+//	sb->version;
+	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
+	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 	sb->volblocks = from_be_u64(super->volblocks);
 	sb->freeblocks = from_be_u64(super->freeblocks);
 	sb->nextalloc = from_be_u64(super->nextalloc);
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
-	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
-	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 
 	return 0;
 }
@@ -195,11 +199,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_time_gran = 1;
 
 	sbi->vfs_sb = sb;
-	sbi->entries_per_node = 20;
-//	sbi->max_inodes_per_block = 64;
-//	sbi->version;
-//	sbi->atomref_base;
-//	sbi->unatom_base;
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);
