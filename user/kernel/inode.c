@@ -15,7 +15,7 @@
 #define trace trace_on
 #endif
 
-int store_attrs(struct inode *inode, struct cursor cursor[])
+int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
 	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, cursor);
@@ -24,7 +24,7 @@ int store_attrs(struct inode *inode, struct cursor cursor[])
 	void *attr = encode_attrs(inode, base, size);
 	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
-	mark_buffer_dirty(cursor[tux_sb(inode->i_sb)->itable.root.depth].buffer);
+	mark_buffer_dirty(cursor->path[tux_sb(inode->i_sb)->itable.root.depth].buffer);
 	return 0;
 }
 
@@ -63,7 +63,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 		free_cursor(cursor);
 		return err;
 	}
-	struct buffer_head *leafbuf = cursor[depth].buffer;
+	struct buffer_head *leafbuf = cursor->path[depth].buffer;
 //	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
 
 	trace("create inode 0x%Lx", (L)tux_inode(inode)->inum);
@@ -122,7 +122,7 @@ static int open_inode(struct inode *inode)
 		return err;
 	}
 	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor[depth].buffer), &size);
+	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor->path[depth].buffer), &size);
 	if (!attrs) {
 		err = -ENOENT;
 		goto eek;
@@ -159,7 +159,7 @@ int save_inode(struct inode *inode)
 		return err;
 	}
 	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor[depth].buffer), &size)))
+	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor->path[depth].buffer), &size)))
 		return -EINVAL;
 	err = store_attrs(inode, cursor);
 	release_cursor(cursor, depth + 1);
@@ -175,7 +175,7 @@ int purge_inum(BTREE, inum_t inum)
 		return -ENOMEM;
 
 	if (!(err = probe(btree, inum, cursor))) {
-		struct ileaf *ileaf = to_ileaf(bufdata(cursor[depth].buffer));
+		struct ileaf *ileaf = to_ileaf(bufdata(cursor->path[depth].buffer));
 		err = ileaf_purge(btree, inum, ileaf);
 		release_cursor(cursor, depth + 1);
 	}

@@ -203,7 +203,13 @@ static inline struct root unpack_root(u64 v)
 	return (struct root){ .depth = v >> 48, .block = v & (-1ULL >> 16), };
 }
 
-struct cursor { struct buffer_head *buffer; struct index_entry *next; };
+struct cursor {
+	int len;
+	struct path_level {
+		struct buffer_head *buffer;
+		struct index_entry *next;
+	} path[];
+};
 
 struct sb {
 	struct disksuper super;
@@ -594,16 +600,16 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 block_t balloc_extent(SB, unsigned blocks);
 
 /* btree.c */
-void release_cursor(struct cursor cursor[], int depth);
+void release_cursor(struct cursor *cursor, int depth);
 struct cursor *alloc_cursor(int);
-void free_cursor(struct cursor cursor[]);
-int probe(BTREE, tuxkey_t key, struct cursor cursor[]);
-int advance(BTREE, struct cursor cursor[]);
-tuxkey_t next_key(struct cursor cursor[], int depth);
+void free_cursor(struct cursor *cursor);
+int probe(BTREE, tuxkey_t key, struct cursor *cursor);
+int advance(BTREE, struct cursor *cursor);
+tuxkey_t next_key(struct cursor *cursor, int depth);
 void show_tree_range(BTREE, tuxkey_t start, unsigned count);
 int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline);
-int btree_leaf_split(struct btree *btree, struct cursor cursor[], tuxkey_t key);
-void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor cursor[]);
+int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key);
+void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor);
 struct btree new_btree(SB, struct btree_ops *ops);
 
 /* dir.c */
