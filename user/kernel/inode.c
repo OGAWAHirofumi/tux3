@@ -97,13 +97,13 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
 	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
 	if ((err = store_attrs(inode, cursor)))
-		goto eek;
+		goto errout;
 	release_cursor(cursor);
 	free_cursor(cursor);
 	return 0;
-eek:
-	release_cursor(cursor);
+
 errout:
+	/* release_cursor() was already called at error point */
 	free_cursor(cursor);
 	warn("make_inode 0x%Lx failed (%d)", (L)tux_inode(inode)->inum, err);
 	return err;
@@ -162,7 +162,11 @@ int save_inode(struct inode *inode)
 	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor->path[depth].buffer), &size)))
 		return -EINVAL;
 	err = store_attrs(inode, cursor);
+	if (err)
+		goto error;
+	/* release_cursor() was already called at error point */
 	release_cursor(cursor);
+error:
 	free_cursor(cursor);
 	return err;
 }
