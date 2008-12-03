@@ -92,7 +92,7 @@ int uleaf_chop(BTREE, tuxkey_t key, vleaf *vleaf)
 	struct uleaf *leaf = vleaf;
 	unsigned at = uleaf_seek(btree, key, leaf);
 	leaf->count = at;
-	return 0;
+	return 1;
 }
 
 void *uleaf_resize(BTREE, tuxkey_t key, vleaf *data, unsigned one)

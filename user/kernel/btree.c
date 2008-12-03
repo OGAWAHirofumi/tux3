@@ -322,8 +322,7 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 
 int delete_from_leaf(BTREE, vleaf *leaf, struct delete_info *info)
 {
-	(btree->ops->leaf_chop)(btree, info->key, leaf);
-	return 0;
+	return (btree->ops->leaf_chop)(btree, info->key, leaf);
 }
 
 int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
@@ -343,10 +342,13 @@ int tree_chop(BTREE, struct delete_info *info, millisecond_t deadline)
 	leafbuf = level_pop(cursor);
 
 	/* leaf walk */
-	ret = -EIO;
 	while (1) {
-		if (delete_from_leaf(btree, bufdata(leafbuf), info))
+		ret = delete_from_leaf(btree, bufdata(leafbuf), info);
+		if (ret) {
 			mark_buffer_dirty(leafbuf);
+			if (ret < 0)
+				goto out;
+		}
 
 		/* try to merge this leaf with prev */
 		if (leafprev) {
@@ -428,15 +430,19 @@ keep_prev_node:
 		/* push back down to leaf level */
 		while (level < depth - 1) {
 			struct buffer_head *buffer = sb_bread(vfs_sb(sb), from_be_u64(cursor->path[level++].next++->block));
-			if (!buffer)
+			if (!buffer) {
+				ret = -EIO;
 				goto out;
+			}
 			level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(cursor_bnode(cursor, level))););
 		}
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
-		if (!(leafbuf = sb_bread(vfs_sb(sb), from_be_u64(cursor->path[level].next++->block))))
+		if (!(leafbuf = sb_bread(vfs_sb(sb), from_be_u64(cursor->path[level].next++->block)))) {
+			ret = -EIO;
 			goto out;
+		}
 	}
 
 out:

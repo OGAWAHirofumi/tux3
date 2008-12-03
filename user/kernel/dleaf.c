@@ -165,7 +165,7 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *group = gdict;
 	struct entry *entry = (void *)(--group - dleaf_groups(leaf));
 	struct group *gstop = group - dleaf_groups(leaf);
-	struct entry *estop = entry - group_count(group);
+	struct entry *estop = entry - group_count(group), *eend = NULL;
 	unsigned extents = 0, start = 0, trunc = 0;
 	unsigned newgroups = dleaf_groups(leaf);
 
@@ -175,11 +175,13 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 	while (1) {
 		unsigned count = entry_limit(entry) - start;
 		tuxkey_t key = get_index(group, entry);
+		/* FIXME: even if key < chop, we may truncate partially */
 		if (key >= chop) {
 			if (!trunc) {
 				int removed = entry - estop, remaining = group_count(group) - removed;
 				newgroups = gdict - group - !remaining;
 				inc_group_count(group, - removed);
+				eend = entry + 1;
 				trunc = 1;
 			}
 			for (int i = 0; i < count; i++)
@@ -194,11 +196,16 @@ int dleaf_chop(BTREE, tuxkey_t chop, vleaf *vleaf)
 		estop = entry - group_count(group);
 		start = 0;
 	}
+	if (!trunc)
+		return 0;
+
 	unsigned tamp = (dleaf_groups(leaf) - newgroups) * sizeof(struct group);
 	unsigned tail = (void *)(gdict - newgroups) - ((void *)entry + tamp);
 	memmove((void *)entry + tamp, entry, tail);
 	set_dleaf_groups(leaf, newgroups);
-	return 0;
+	leaf->free = to_be_u16(from_be_u16(leaf->free) - extents * sizeof(struct diskextent));
+	leaf->used = to_be_u16(tamp + ((void *)eend - (void *)leaf));
+	return 1;
 }
 
 int dleaf_check(BTREE, struct dleaf *leaf)

@@ -454,6 +454,7 @@ struct btree_ops {
 	void (*leaf_dump)(BTREE, vleaf *leaf);
 	unsigned (*leaf_need)(BTREE, vleaf *leaf);
 	unsigned (*leaf_free)(BTREE, vleaf *leaf);
+	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(BTREE, tuxkey_t key, vleaf *leaf);
 	void (*leaf_merge)(BTREE, vleaf *into, vleaf *from);
 	block_t (*balloc)(SB);
