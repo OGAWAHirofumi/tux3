@@ -171,26 +171,35 @@ static inline void *decode48(void *at, u64 *val)
 
 struct disksuper
 {
+	/* Update magic on any incompatible format change */
 	char magic[SB_MAGIC_SIZE];
-	be_u64 birthdate;
-	be_u64 flags;
-	be_u64 iroot;
-	be_u64 aroot;
-	be_u16 blockbits;
-	be_u16 unused1;
-	be_u32 unused2;
-	be_u64 volblocks, freeblocks, nextalloc;
+	be_u64 birthdate;	/* Volume creation date */
+	be_u64 flags;		/* Need to assign some flags */
+	be_u64 iroot;		/* Root of the inode table btree */
+	be_u64 aroot;		/* The atime table is a file now, delete on next format rev */
+	be_u16 blockbits;	/* Shift to get volume block size */
+	be_u16 unused1;		/* Throw away on next format rev */
+	be_u32 unused2;		/* Throw away on next format rev */
+	be_u64 volblocks;	/* Volume size */
+	/* The rest should be moved to a "metablock" that is updated frequently */
+	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
+	be_u64 nextalloc;	/* Get rid of this when we have a real allocation policy */
 	be_u32 freeatom, atomgen;
 };
 
-struct root { u64 depth:16, block:48; };
+struct root {
+	unsigned depth; /* btree levels not including leaf level */
+	block_t block; /* disk location of btree root */
+};
 
 struct btree {
-	struct sb *sb;
-	struct btree_ops *ops;
-	struct root root;
-	u16 entries_per_leaf;
+	struct sb *sb;		/* Convenience to reduce parameter list size */
+	struct btree_ops *ops;	/* Generic btree low level operations */
+	struct root root;	/* Cached description of btree root */
+	u16 entries_per_leaf;	/* Used in btree leaf splitting */
 };
+
+/* Define layout of btree root on disk, endian conversion is elsewhere. */
 
 static inline u64 pack_root(struct root *root)
 {
@@ -201,6 +210,8 @@ static inline struct root unpack_root(u64 v)
 {
 	return (struct root){ .depth = v >> 48, .block = v & (-1ULL >> 16), };
 }
+
+/* Path cursor for btree traversal */
 
 struct cursor {
 #define CURSOR_DEBUG
@@ -216,31 +227,47 @@ struct cursor {
 	} path[];
 };
 
+/* Tux3-specific sb is a handle for the entire volume state */
+
 struct sb {
 	struct disksuper super;
-
-	struct btree itable;
-	struct buffer_head *rootbuf;
-	struct inode *bitmap, *rootdir, *vtable, *atable;
+	struct btree itable;	/* Cached root of the inode table */
+	struct inode *bitmap;	/* allocation bitmap special file */
+	struct inode *rootdir;	/* root directory special file */
+	struct inode *vtable;	/* version table special file */
+	struct inode *atable;	/* xattr atom special file */
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
-	unsigned entries_per_node, max_inodes_per_block;
-	unsigned version, atomref_base, unatom_base;
-	unsigned freeatom, atomgen;
+	unsigned entries_per_node; /* must be per-btree type, get rid of this */
+	unsigned max_inodes_per_block; /* get rid of this and use entries per leaf */
+	unsigned version;	/* Currently mounted volume version view */
+	unsigned atomref_base, unatom_base; /* layout of atom table */
+	unsigned freeatom;	/* Start of free atom list in atom table */
+	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 #ifdef __KERNEL__
-	struct super_block *vfs_sb;
+	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
-	map_t *devmap;
+	map_t *devmap; /* Userspace device block cache */
 #endif
 };
 
 #ifdef __KERNEL__
+/*
+ * In kernel an inode has a generic part and a filesystem-specific part
+ * with conversions between them, in order to support multiple different
+ * kinds of filesystem.  In userspace there is only one kind of filesystem,
+ * Tux3, so no need for two kinds of inodes, and a big pain to initialize
+ * inodes for testing if there were.  We use a typedef here so that the
+ * filesystem-specific type can be transparently aliased to the generic
+ * inode type in userspace and be a separate type in kernel.
+ */
+
 typedef struct {
 	struct btree btree;
-	inum_t inum;
-	unsigned present;
-	struct xcache *xcache;
-	struct inode vfs_inode;
+	inum_t inum;		/* Inode number.  Fixme: also in generic inode */
+	unsigned present;	/* Attributes decoded from or to be encoded to inode table */
+	struct xcache *xcache;	/* Extended attribute cache */
+	struct inode vfs_inode;	/* Generic kernel inode */
 } tuxnode_t;
 
 static inline struct sb *tux_sb(struct super_block *sb)
