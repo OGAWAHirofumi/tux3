@@ -250,6 +250,30 @@ int main(int argc, const char *argv[])
 		tux_dump_entries(blockread(sb->rootdir->map, 0));
 	}
 
+	if (!strcmp(command, "truncate")) {
+		/*
+		 * FIXME: error path may be wrong, we may invalidate
+		 * buffers which truncated range, etc.
+		 */
+		printf("---- truncate file ----\n");
+		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+		if (!inode) {
+			errno = ENOENT;
+			goto eek;
+		}
+		u64 seek = 0;
+		if (seekarg)
+			seek = strtoull(seekarg, NULL, 0);
+		printf("---- new size %Lu ----\n", (L)seek);
+		inode->i_size = seek;
+		block_t index = (seek + sb->blockmask) >> sb->blockbits;
+		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = index }, 0)))
+			goto eek;
+		tuxsync(inode);
+		if ((errno = -sync_super(sb)))
+			goto eek;
+	}
+
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->devmap);
