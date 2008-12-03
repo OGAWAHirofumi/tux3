@@ -182,7 +182,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 	struct buffer_head *buffer = cursor->path[level].buffer;
 	struct bnode *node;
 	do {
-		brelse(buffer);
+		level_pop_brelse(cursor);
 		if (!level)
 			return 0;
 		node = bufdata(buffer = cursor->path[--level].buffer);
@@ -190,10 +190,8 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 	do {
 		if (!(buffer = blockread(map, from_be_u64(cursor->path[level].next++->block))))
 			goto eek;
-		cursor->path[++level] = (struct path_level){
-			.buffer = buffer,
-			.next = ((struct bnode *)bufdata(buffer))->entries
-		};
+		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
+		level++;
 		if (level < depth)
 			draw_bnode(gi, depth, level, buffer);
 	} while (level < depth);

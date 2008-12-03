@@ -204,6 +204,12 @@ static inline struct root unpack_root(u64 v)
 }
 
 struct cursor {
+#define CURSOR_DEBUG
+#ifdef CURSOR_DEBUG
+#define FREE_BUFFER	((void *)0xdbc06505)
+#define FREE_NEXT	((void *)0xdbc06507)
+	int maxlen;
+#endif
 	int len;
 	struct path_level {
 		struct buffer_head *buffer;

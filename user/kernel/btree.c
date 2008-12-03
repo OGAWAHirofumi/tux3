@@ -81,10 +81,50 @@ static inline struct bnode *cursor_bnode(struct cursor *cursor, int level)
 	return bufdata(cursor->path[level].buffer);
 }
 
+static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
+			   struct index_entry *next)
+{
+#ifdef CURSOR_DEBUG
+	assert(cursor->len < cursor->maxlen);
+	assert(cursor->path[cursor->len].buffer == FREE_BUFFER);
+	assert(cursor->path[cursor->len].next == FREE_NEXT);
+#endif
+	vecmove(cursor->path + 1, cursor->path, cursor->len);
+	cursor->len++;
+	cursor->path[0].buffer = buffer;
+	cursor->path[0].next = next;
+}
+
+static void level_push(struct cursor *cursor, struct buffer_head *buffer,
+		       struct index_entry *next)
+{
+#ifdef CURSOR_DEBUG
+	assert(cursor->len < cursor->maxlen);
+	assert(cursor->path[cursor->len].buffer == FREE_BUFFER);
+	assert(cursor->path[cursor->len].next == FREE_NEXT);
+#endif
+	cursor->path[cursor->len].buffer = buffer;
+	cursor->path[cursor->len].next = next;
+	cursor->len++;
+}
+
+static void level_pop_brelse(struct cursor *cursor)
+{
+#ifdef CURSOR_DEBUG
+	assert(cursor->len > 0);
+#endif
+	cursor->len--;
+	brelse(cursor->path[cursor->len].buffer);
+#ifdef CURSOR_DEBUG
+	cursor->path[cursor->len].buffer = FREE_BUFFER;
+	cursor->path[cursor->len].next = FREE_NEXT;
+#endif
+}
+
 void release_cursor(struct cursor *cursor, int depth)
 {
 	for (int i = 0; i < depth; i++)
-		brelse(cursor->path[i].buffer);
+		level_pop_brelse(cursor);
 }
 
 void show_cursor(struct cursor *cursor, int depth)
@@ -103,8 +143,16 @@ static inline int alloc_cursor_size(int depth)
 struct cursor *alloc_cursor(int depth)
 {
 	struct cursor *cursor = malloc(alloc_cursor_size(depth));
-	if (cursor)
+	if (cursor) {
 		cursor->len = 0;
+#ifdef CURSOR_DEBUG
+		cursor->maxlen = depth;
+		for (int i = 0; i < depth; i++) {
+			cursor->path[i].buffer = FREE_BUFFER; /* for debug */
+			cursor->path[i].next = FREE_NEXT; /* for debug */
+		}
+#endif
+	}
 	return cursor;
 }
 
@@ -112,13 +160,20 @@ static struct cursor *zalloc_cursor(int depth)
 {
 	int size = alloc_cursor_size(depth);
 	struct cursor *cursor = malloc(size);
-	if (cursor)
+	if (cursor) {
 		memset(cursor, 0, size);
+#ifdef CURSOR_DEBUG
+		cursor->maxlen = depth;
+#endif
+	}
 	return cursor;
 }
 
 void free_cursor(struct cursor *cursor)
 {
+#ifdef CURSOR_DEBUG
+	assert(cursor->len == 0);
+#endif
 	free(cursor);
 }
 
@@ -136,13 +191,13 @@ int probe(BTREE, tuxkey_t key, struct cursor *cursor)
 			if (from_be_u64(next->key) > key)
 				break;
 		//printf("probe level %i, %ti of %i\n", i, next - node->entries, bcount(node));
-		cursor->path[i] = (struct path_level){ .buffer = buffer, .next = next };
+		level_push(cursor, buffer, next);
 		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64((next - 1)->block))))
 			goto eek;
 		node = (struct bnode *)bufdata(buffer);
 	}
 	assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
-	cursor->path[depth] = (struct path_level){ .buffer = buffer };
+	level_push(cursor, buffer, NULL);
 	return 0;
 eek:
 	release_cursor(cursor, i - 1);
@@ -162,7 +217,7 @@ int advance(BTREE, struct cursor *cursor)
 	struct buffer_head *buffer = cursor->path[level].buffer;
 	struct bnode *node;
 	do {
-		brelse(buffer);
+		level_pop_brelse(cursor);
 		if (!level)
 			return 0;
 		node = bufdata(buffer = cursor->path[--level].buffer);
@@ -172,7 +227,8 @@ int advance(BTREE, struct cursor *cursor)
 		//printf("push from level %i, %tx of %x\n", level, cursor->path[level].next - node->entries, bcount(node));
 		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next++->block))))
 			goto eek;
-		cursor->path[++level] = (struct path_level){ .buffer = buffer, .next = (node = bufdata(buffer))->entries };
+		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
+		level++;
 	} while (level < depth);
 	return 1;
 eek:
@@ -461,8 +517,8 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 	newroot->entries[1].key = to_be_u64(childkey);
 	newroot->entries[1].block = to_be_u64(childblock);
 	btree->root.block = bufindex(newbuf);
-	vecmove(cursor->path + 1, cursor->path, btree->root.depth++ + 1);
-	cursor->path[0] = (struct path_level){ .buffer = newbuf }; // .next = ???
+	btree->root.depth++;
+	level_root_add(cursor, newbuf, NULL); // .next = ???
 	//set_sb_dirty(sb);
 	mark_buffer_dirty(newbuf);
 	return 0;
