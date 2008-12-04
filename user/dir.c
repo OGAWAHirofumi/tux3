@@ -99,6 +99,7 @@ int main(int argc, char *argv[])
 	struct buffer_head *buffer;
 	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
 	map->inode = &(struct inode){ .i_sb = sb, .map = map, .i_mode = S_IFDIR };
+	printf("empty = %i\n", tux_dir_is_empty(map->inode));
 	tux_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
 	tux_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
 	tux_dirent *entry = tux_find_entry(map->inode, "hello", 5, &buffer);
@@ -112,6 +113,7 @@ int main(int argc, char *argv[])
 		mark_inode_dirty(map->inode);
 	}
 
+	printf("empty = %i\n", tux_dir_is_empty(map->inode));
 	tux_dump_entries(blockget(map, 0));
 	struct file *file = &(struct file){ .f_inode = map->inode };
 	for (int i = 0; i < 10; i++) {

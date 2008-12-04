@@ -275,6 +275,45 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	return 0;
 }
 
+int tux_dir_is_empty(struct inode *dir)
+{
+	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
+	unsigned blocks = dir->i_size >> blockbits, blocksize = 1 << blockbits;
+	u64 self = to_be_u64((u64)tux_inode(dir)->inum);
+	struct buffer_head *buffer;
+
+	for (unsigned block = 0; block < blocks; block++) {
+		buffer = blockread(mapping(dir), block);
+		if (!buffer)
+			return -EIO;
+
+		tux_dirent *entry = bufdata(buffer);
+		tux_dirent *limit = bufdata(buffer) + blocksize - TUX_REC_LEN(1);
+		for (; entry <= limit; entry = next_entry(entry)) {
+			if (!entry->rec_len) {
+				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				goto not_empty;
+			}
+			if (is_deleted(entry))
+				continue;
+			if (entry->name[0] != '.')
+				goto not_empty;
+			if (entry->name_len > 2)
+				goto not_empty;
+			if (entry->name_len < 2) {
+				if (entry->inum != self)
+					goto not_empty;
+			} else if (entry->name[1] != '.')
+				goto not_empty;
+		}
+		brelse(buffer);
+	}
+	return 1;
+not_empty:
+	brelse(buffer);
+	return 0;
+}
+
 #ifdef __KERNEL__
 static struct dentry *tux_lookup(struct inode *dir, struct dentry *dentry,
 				 struct nameidata *nd)
