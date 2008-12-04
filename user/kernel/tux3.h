@@ -644,9 +644,10 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cu
 struct btree new_btree(struct sb *sb, struct btree_ops *ops);
 
 /* dir.c */
-loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result);
+int tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
+int tux_readdir(struct file *file, void *state, filldir_t filldir);
 extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
 
