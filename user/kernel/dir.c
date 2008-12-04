@@ -104,7 +104,7 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
-loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
+int tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
 {
 	tux_dirent *entry;
 	struct buffer_head *buffer;
@@ -154,7 +154,7 @@ create:
 	mark_inode_dirty(dir);
 	offset = (void *)entry - bufdata(buffer);
 	brelse_dirty(buffer);
-	return (block << blockbits) + offset;
+	return 0;
 }
 
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
@@ -346,18 +346,14 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
 		goto error;
 	}
 
-	where = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
-				 tux_inode(inode)->inum, mode);
-	if (where < 0) {
-		err = where;
+	if ((err = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
+	    tux_inode(inode)->inum, mode)))
 		goto error;
-	}
 
 	d_instantiate(dentry, inode);
 	return 0;
 
 error:
-	/* FIXME: we may want to call purge_inum() here */
 	inode_dec_link_count(inode);
 	iput(inode);
 	return err;
