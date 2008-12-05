@@ -81,6 +81,12 @@ static inline struct bnode *cursor_node(struct cursor *cursor, int level)
 	return bufdata(cursor->path[level].buffer);
 }
 
+struct buffer_head *cursor_leafbuf(struct cursor *cursor)
+{
+	assert(cursor->len >= 2); /* root-bnode + leaf >= 2 */
+	return cursor->path[cursor->len - 1].buffer;
+}
+
 static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
 			   struct index_entry *next)
 {
@@ -208,19 +214,18 @@ static inline int level_finished(struct cursor *cursor, int level)
 int advance(struct btree *btree, struct cursor *cursor)
 {
 	int depth = btree->root.depth, level = depth;
-	struct buffer_head *buffer = cursor->path[level].buffer;
-	struct bnode *node;
+	struct buffer_head *buffer;
 	do {
 		level_pop_brelse(cursor);
 		if (!level)
 			return 0;
-		node = bufdata(buffer = cursor->path[--level].buffer);
-		//printf("pop to level %i, %tx of %x\n", level, cursor->path[level].next - node->entries, bcount(node));
+		level--;
 	} while (level_finished(cursor, level));
 	do {
-		//printf("push from level %i, %tx of %x\n", level, cursor->path[level].next - node->entries, bcount(node));
-		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next++->block))))
+		buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next->block));
+		if (!buffer)
 			goto eek;
+		cursor->path[level].next++;
 		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 		level++;
 	} while (level < depth);
@@ -260,7 +265,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 		error("tell me why!!!");
 	struct buffer_head *buffer;
 	do {
-		buffer = cursor->path[btree->root.depth].buffer;
+		buffer = cursor_leafbuf(cursor);
 		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 		//tuxkey_t *next = pnext_key(cursor, btree->depth);
@@ -424,7 +429,7 @@ keep_prev_node:
 				goto out;
 			}
 			level--;
-			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, cursor->path[level].buffer->index, cursor->path[level].next - cursor_node(cursor, level)->entries, bcount(cursor_node(cursor, level))););
+			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, bufindex(cursor->path[level].buffer), cursor->path[level].next - cursor_node(cursor, level)->entries, bcount(cursor_node(cursor, level))););
 		}
 
 		/* push back down to leaf level */
@@ -446,9 +451,12 @@ keep_prev_node:
 	}
 
 out:
-	brelse(leafprev);
-	for (int i = 0; i < btree->root.depth; i++)
-		brelse(prev[i]);
+	if (leafprev)
+		brelse(leafprev);
+	for (int i = 0; i < btree->root.depth; i++) {
+		if (prev[i])
+			brelse(prev[i]);
+	}
 	free(prev);
 	release_cursor(cursor);
 	free_cursor(cursor);
@@ -529,29 +537,29 @@ eek:
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 {
 	trace("split leaf");
-	struct buffer_head *leafbuf = cursor->path[btree->root.depth].buffer;
 	struct buffer_head *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release cursor at point of error */
 		release_cursor(cursor);
 		return -ENOMEM;
 	}
+	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
 	block_t childblock = bufindex(newbuf);
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
-		struct buffer_head *swap = leafbuf;
-		leafbuf = cursor->path[btree->root.depth].buffer = newbuf;
-		newbuf = swap;
-	}
-	brelse_dirty(newbuf);
+		mark_buffer_dirty(leafbuf);
+		level_pop_brelse(cursor);
+		level_push(cursor, newbuf, NULL);
+	} else
+		brelse_dirty(newbuf);
 	return insert_node(btree, newkey, childblock, cursor);
 }
 
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor)
 {
 	for (int i = 0; i < 2; i++) {
-		struct buffer_head *leafbuf = cursor->path[btree->root.depth].buffer;
+		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
 		if (space)
 			return space;
