@@ -175,21 +175,22 @@ static void draw_cursor(struct graph_info *gi, struct btree *btree, struct curso
 		draw_bnode(gi, btree->root.depth, level, cursor->path[level].buffer);
 }
 
-static int draw_advance(struct graph_info *gi, struct map *map,
-			struct cursor *cursor, int depth)
+static int draw_advance(struct graph_info *gi, struct btree *btree,
+			struct cursor *cursor)
 {
-	int level = depth;
-	struct buffer_head *buffer = cursor_leafbuf(cursor);
-	struct bnode *node;
+	int depth = btree->root.depth, level = depth;
+	struct buffer_head *buffer;
 	do {
 		level_pop_brelse(cursor);
 		if (!level)
 			return 0;
-		node = bufdata(buffer = cursor->path[--level].buffer);
+		level--;
 	} while (level_finished(cursor, level));
 	do {
-		if (!(buffer = blockread(map, from_be_u64(cursor->path[level].next++->block))))
+		buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next->block));
+		if (!buffer)
 			goto eek;
+		cursor->path[level].next++;
 		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 		level++;
 		if (level < depth)
@@ -224,7 +225,7 @@ static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t dr
 	do {
 		buffer = cursor_leafbuf(cursor);
 		draw_leaf(gi, btree, buffer);
-	} while (draw_advance(gi, buffer->map, cursor, btree->root.depth));
+	} while (draw_advance(gi, btree, cursor));
 
 	free_cursor(cursor);
 

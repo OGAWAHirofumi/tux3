@@ -214,19 +214,18 @@ static inline int level_finished(struct cursor *cursor, int level)
 int advance(struct btree *btree, struct cursor *cursor)
 {
 	int depth = btree->root.depth, level = depth;
-	struct buffer_head *buffer = cursor_leafbuf(cursor);
-	struct bnode *node;
+	struct buffer_head *buffer;
 	do {
 		level_pop_brelse(cursor);
 		if (!level)
 			return 0;
-		node = bufdata(buffer = cursor->path[--level].buffer);
-		//printf("pop to level %i, %tx of %x\n", level, cursor->path[level].next - node->entries, bcount(node));
+		level--;
 	} while (level_finished(cursor, level));
 	do {
-		//printf("push from level %i, %tx of %x\n", level, cursor->path[level].next - node->entries, bcount(node));
-		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next++->block))))
+		buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next->block));
+		if (!buffer)
 			goto eek;
+		cursor->path[level].next++;
 		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 		level++;
 	} while (level < depth);
