@@ -279,7 +279,8 @@ int tux_dir_is_empty(struct inode *dir)
 {
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
 	unsigned blocks = dir->i_size >> blockbits, blocksize = 1 << blockbits;
-	inum_t self = tux_inode(dir)->inum;
+	/* FIXME: will overflow on 32bit arch */
+	be_u32 self = to_be_u32(tux_inode(dir)->inum);
 	struct buffer_head *buffer;
 
 	for (unsigned block = 0; block < blocks; block++) {
@@ -301,7 +302,7 @@ int tux_dir_is_empty(struct inode *dir)
 			if (entry->name_len > 2)
 				goto not_empty;
 			if (entry->name_len < 2) {
-				if (from_be_u32(entry->inum) != self)
+				if (entry->inum != self)
 					goto not_empty;
 			} else if (entry->name[1] != '.')
 				goto not_empty;
