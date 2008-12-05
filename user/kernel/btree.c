@@ -81,6 +81,12 @@ static inline struct bnode *cursor_bnode(struct cursor *cursor, int level)
 	return bufdata(cursor->path[level].buffer);
 }
 
+struct buffer_head *cursor_leafbuf(struct cursor *cursor)
+{
+	assert(cursor->len >= 2); /* root-bnode + leaf >= 2 */
+	return cursor->path[cursor->len - 1].buffer;
+}
+
 static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
 			   struct index_entry *next)
 {
@@ -208,7 +214,7 @@ static inline int level_finished(struct cursor *cursor, int level)
 int advance(struct btree *btree, struct cursor *cursor)
 {
 	int depth = btree->root.depth, level = depth;
-	struct buffer_head *buffer = cursor->path[level].buffer;
+	struct buffer_head *buffer = cursor_leafbuf(cursor);
 	struct bnode *node;
 	do {
 		level_pop_brelse(cursor);
@@ -260,7 +266,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 		error("tell me why!!!");
 	struct buffer_head *buffer;
 	do {
-		buffer = cursor->path[btree->root.depth].buffer;
+		buffer = cursor_leafbuf(cursor);
 		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 		//tuxkey_t *next = pnext_key(cursor, btree->depth);
@@ -424,7 +430,7 @@ keep_prev_node:
 				goto out;
 			}
 			level--;
-			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, cursor->path[level].buffer->index, cursor->path[level].next - cursor_bnode(cursor, level)->entries, bcount(cursor_bnode(cursor, level))););
+			trace_off(printf("pop to level %i, block %Lx, %i of %i nodes\n", level, bufindex(cursor->path[level].buffer), cursor->path[level].next - cursor_bnode(cursor, level)->entries, bcount(cursor_bnode(cursor, level))););
 		}
 
 		/* push back down to leaf level */
@@ -554,7 +560,7 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor)
 {
 	for (int i = 0; i < 2; i++) {
-		struct buffer_head *leafbuf = cursor->path[btree->root.depth].buffer;
+		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
 		if (space)
 			return space;

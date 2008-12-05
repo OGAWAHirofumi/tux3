@@ -631,6 +631,7 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 block_t balloc_extent(struct sb *sb, unsigned blocks);
 
 /* btree.c */
+struct buffer_head *cursor_leafbuf(struct cursor *cursor);
 void release_cursor(struct cursor *cursor);
 struct cursor *alloc_cursor(int);
 void free_cursor(struct cursor *cursor);

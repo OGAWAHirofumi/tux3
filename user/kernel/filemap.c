@@ -88,7 +88,7 @@ retry:
 	/* do not overlap next leaf */
 	if (limit > next_key(cursor, depth))
 		limit = next_key(cursor, depth);
-	struct dleaf *leaf = bufdata(cursor->path[depth].buffer);
+	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	struct dwalk *walk = &(struct dwalk){ };
 	dleaf_dump(&tux_inode(inode)->btree, leaf);
 	/* Probe below io start to include overlapping extents */
@@ -194,7 +194,7 @@ retry:
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		mark_buffer_dirty(cursor->path[depth].buffer);
+		mark_buffer_dirty(cursor_leafbuf(cursor));
 
 		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */
@@ -268,7 +268,7 @@ retry:
 	/* do not overlap next leaf */
 	if (limit > next_key(cursor, depth))
 		limit = next_key(cursor, depth);
-	struct dleaf *leaf = bufdata(cursor->path[depth].buffer);
+	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	struct dwalk *walk = &(struct dwalk){ };
 	dleaf_dump(&tux_inode(inode)->btree, leaf);
 	/* Probe below io start to include overlapping extents */
@@ -363,7 +363,7 @@ retry:
 			dwalk_pack(walk, index, make_extent(extent_block(seg[i]), extent_count(seg[i])));
 			index += extent_count(seg[i]);
 		}
-		mark_buffer_dirty(cursor->path[depth].buffer);
+		mark_buffer_dirty(cursor_leafbuf(cursor));
 
 		//dleaf_dump(&tux_inode(inode)->btree, leaf);
 		/* assert we used exactly the expected space */

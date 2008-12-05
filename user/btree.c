@@ -169,14 +169,14 @@ int main(int argc, char *argv[])
 			error("probe for %i failed", key);
 		struct uentry *entry = tree_expand(&btree, key, 1, cursor);
 		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
-		mark_buffer_dirty(cursor->path[btree.root.depth].buffer);
-		block_t block = bufindex(cursor->path[btree.root.depth].buffer);
+		mark_buffer_dirty(cursor_leafbuf(cursor));
+		block_t block = bufindex(cursor_leafbuf(cursor));
 		release_cursor(cursor);
 
 		/* probe added key: buffer should be same */
 		if (probe(&btree, key, cursor))
 			error("probe for %i failed", key);
-		assert(block == bufindex(cursor->path[btree.root.depth].buffer));
+		assert(block == bufindex(cursor_leafbuf(cursor)));
 		release_cursor(cursor);
 	}
 	free_cursor(cursor);

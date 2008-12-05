@@ -179,7 +179,7 @@ static int draw_advance(struct graph_info *gi, struct map *map,
 			struct cursor *cursor, int depth)
 {
 	int level = depth;
-	struct buffer_head *buffer = cursor->path[level].buffer;
+	struct buffer_head *buffer = cursor_leafbuf(cursor);
 	struct bnode *node;
 	do {
 		level_pop_brelse(cursor);
@@ -222,7 +222,7 @@ static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t dr
 	draw_cursor(gi, btree, cursor);
 
 	do {
-		buffer = cursor->path[btree->root.depth].buffer;
+		buffer = cursor_leafbuf(cursor);
 		draw_leaf(gi, btree, buffer);
 	} while (draw_advance(gi, buffer->map, cursor, btree->root.depth));
 
