@@ -31,7 +31,7 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
 	}
 
 	if ((err = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
-	    tux_inode(inode)->inum, mode)))
+	    tux_inode(inode)->inum, mode)) < 0)
 		goto error;
 
 	d_instantiate(dentry, inode);

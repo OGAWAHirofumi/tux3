@@ -104,7 +104,7 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
-int tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
 {
 	tux_dirent *entry;
 	struct buffer_head *buffer;
@@ -154,7 +154,7 @@ create:
 	mark_inode_dirty(dir);
 	offset = (void *)entry - bufdata(buffer);
 	brelse_dirty(buffer);
-	return 0;
+	return (block << blockbits) + offset; /* only needed for xattr create */
 }
 
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
