@@ -446,9 +446,12 @@ keep_prev_node:
 	}
 
 out:
-	brelse(leafprev);
-	for (int i = 0; i < btree->root.depth; i++)
-		brelse(prev[i]);
+	if (leafprev)
+		brelse(leafprev);
+	for (int i = 0; i < btree->root.depth; i++) {
+		if (prev[i])
+			brelse(prev[i]);
+	}
 	free(prev);
 	release_cursor(cursor);
 	free_cursor(cursor);
