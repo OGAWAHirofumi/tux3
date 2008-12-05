@@ -537,22 +537,22 @@ eek:
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 {
 	trace("split leaf");
-	struct buffer_head *leafbuf = cursor->path[btree->root.depth].buffer;
 	struct buffer_head *newbuf = new_leaf(btree);
 	if (!newbuf) {
 		/* the rule: release cursor at point of error */
 		release_cursor(cursor);
 		return -ENOMEM;
 	}
+	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
 	block_t childblock = bufindex(newbuf);
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
-		struct buffer_head *swap = leafbuf;
-		leafbuf = cursor->path[btree->root.depth].buffer = newbuf;
-		newbuf = swap;
-	}
-	brelse_dirty(newbuf);
+		mark_buffer_dirty(leafbuf);
+		level_pop_brelse(cursor);
+		level_push(cursor, newbuf, NULL);
+	} else
+		brelse_dirty(newbuf);
 	return insert_node(btree, newkey, childblock, cursor);
 }
 
