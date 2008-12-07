@@ -332,6 +332,7 @@ retry:
 			seg[segs++] = make_extent(block, gap);
 			update_dtree = 1;
 
+			inode->i_blocks += 1 << (sbi->blockbits - 9);
 			set_buffer_new(bh_result);
 			map_bh(bh_result, inode->i_sb, block);
 			break;
