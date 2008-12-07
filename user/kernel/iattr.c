@@ -111,7 +111,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case MTIME_ATTR:
 			attrs = encode48(attrs, tuxtime(inode->i_mtime) >> TIME_ATTR_SHIFT);
 			break;
-		case DATA_BTREE_ATTR:;
+		case DATA_BTREE_ATTR:
 			attrs = encode64(attrs, pack_root(&tuxnode->btree.root));
 			break;
 		case LINK_COUNT_ATTR:
