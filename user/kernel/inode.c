@@ -94,7 +94,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	inode->i_nlink = 1;
 	tux_inode(inode)->inum = inum;
 	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
-	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT;
+	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
 	if ((err = store_attrs(inode, cursor)))
 		goto errout;
 	release_cursor(cursor);

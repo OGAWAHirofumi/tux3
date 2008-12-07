@@ -54,6 +54,26 @@ static int tux3_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	return tux3_create(dir, dentry, S_IFDIR | mode, NULL);
 }
 
+static int tux3_link(struct dentry *old_dentry, struct inode *dir,
+		     struct dentry *dentry)
+{
+	struct inode *inode = old_dentry->d_inode;
+	int err;
+
+	if (inode->i_nlink >= TUX_LINK_MAX)
+		return -EMLINK;
+
+	inode->i_ctime = gettime();
+	inode_inc_link_count(inode);
+	atomic_inc(&inode->i_count);
+	err = tux_add_dirent(dir, dentry, inode);
+	if (err) {
+		inode_dec_link_count(inode);
+		iput(inode);
+	}
+	return err;
+}
+
 static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 			const char *symname)
 {
@@ -104,7 +124,7 @@ const struct file_operations tux_dir_fops = {
 const struct inode_operations tux_dir_iops = {
 	.create		= tux3_create,
 	.lookup		= tux3_lookup,
-//	.link		= ext3_link,
+	.link		= tux3_link,
 	.unlink		= tux3_unlink,
 	.symlink	= tux3_symlink,
 	.mkdir		= tux3_mkdir,
