@@ -296,8 +296,11 @@ struct inode *tux_create_inode(struct inode *dir, int mode)
 	iattr.ctime = iattr.mtime = iattr.atime = gettime();
 
 	int err = make_inode(inode, &iattr);
-	if (err)
+	if (err) {
+		make_bad_inode(inode);
+		iput(inode);
 		return ERR_PTR(err);
+	}
 	tux3_setup_inode(inode);
 	insert_inode_hash(inode);
 	return inode;
