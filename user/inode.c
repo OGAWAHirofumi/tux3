@@ -139,10 +139,11 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 		return NULL; // err ???
 	int err = make_inode(inode, iattr);
 	if (err)
-		return NULL; // err ???
+		goto error; // err ???
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
 		return inode;
 	purge_inum(&tux_sb(dir->i_sb)->itable, inode->inum); // test me!!!
+error:
 	free_inode(inode);
 	inode = NULL;
 	return NULL; // err ???
