@@ -220,6 +220,26 @@ static void tux3_truncate(struct inode *inode)
 	mark_inode_dirty(inode);
 }
 
+void tux3_delete_inode(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	inum_t inum = tux_inode(inode)->inum;
+
+	truncate_inode_pages(&inode->i_data, 0);
+	if (is_bad_inode(inode)) {
+		clear_inode(inode);
+		return;
+	}
+	inode->i_size = 0;
+	if (inode->i_blocks)
+		tux3_truncate(inode);
+
+	/* clear_inode() before freeing this ino. */
+	clear_inode(inode);
+
+	purge_inum(&sb->itable, inum);
+}
+
 void tux3_clear_inode(struct inode *inode)
 {
 	if (tux_inode(inode)->xcache)

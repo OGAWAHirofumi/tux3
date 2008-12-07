@@ -176,11 +176,12 @@ static int tux3_statfs(struct dentry *dentry, struct kstatfs *buf)
 static const struct super_operations tux3_super_ops = {
 	.alloc_inode	= tux3_alloc_inode,
 	.destroy_inode	= tux3_destroy_inode,
+	.delete_inode	= tux3_delete_inode,
+	.clear_inode	= tux3_clear_inode,
+	.write_inode	= tux3_write_inode,
 	.write_super	= tux3_write_super,
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,
-	.clear_inode	= tux3_clear_inode,
-	.write_inode	= tux3_write_inode,
 };
 
 static int tux3_fill_super(struct super_block *sb, void *data, int silent)
