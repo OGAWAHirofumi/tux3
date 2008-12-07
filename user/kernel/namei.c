@@ -25,10 +25,8 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
 	int err;
 
 	inode = tux_create_inode(dir, mode);
-	if (IS_ERR(inode)) {
-		err = PTR_ERR(inode);
-		goto error;
-	}
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
 
 	if ((err = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
 	    tux_inode(inode)->inum, mode)) < 0)
