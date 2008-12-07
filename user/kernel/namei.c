@@ -43,6 +43,11 @@ error:
 	return err;
 }
 
+static int tux3_mkdir(struct inode *dir, struct dentry *dentry, int mode)
+{
+	return tux3_create(dir, dentry, S_IFDIR | mode, NULL);
+}
+
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -55,7 +60,7 @@ const struct inode_operations tux_dir_iops = {
 //	.link		= ext3_link,
 //	.unlink		= ext3_unlink,
 //	.symlink	= ext3_symlink,
-//	.mkdir		= ext3_mkdir,
+	.mkdir		= tux3_mkdir,
 //	.rmdir		= ext3_rmdir,
 //	.mknod		= ext3_mknod,
 //	.rename		= ext3_rename,
