@@ -263,8 +263,8 @@ static void tux3_setup_inode(struct inode *inode)
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	case S_IFLNK:
-//		inode->i_op = &tux_symlink_iops;
-//		inode->i_mapping->a_ops = &tux_aops;
+		inode->i_op = &page_symlink_inode_operations;
+		inode->i_mapping->a_ops = &tux_aops;
 		break;
 	case 0:
 		/* FIXME: bitmap, vtable, atable doesn't have S_IFMT */

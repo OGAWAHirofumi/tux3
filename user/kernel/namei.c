@@ -54,6 +54,27 @@ static int tux3_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 	return tux3_create(dir, dentry, S_IFDIR | mode, NULL);
 }
 
+static int tux3_symlink(struct inode *dir, struct dentry *dentry,
+			const char *symname)
+{
+	struct inode *inode;
+	int err;
+
+	inode = tux_create_inode(dir, S_IFLNK | S_IRWXUGO);
+	err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		err = page_symlink(inode, symname, strlen(symname) + 1);
+		if (!err) {
+			err = tux_add_dirent(dir, dentry, inode);
+			if (!err)
+				return 0;
+		}
+		inode_dec_link_count(inode);
+		iput(inode);
+	}
+	return err;
+}
+
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -65,7 +86,7 @@ const struct inode_operations tux_dir_iops = {
 	.lookup		= tux3_lookup,
 //	.link		= ext3_link,
 //	.unlink		= ext3_unlink,
-//	.symlink	= ext3_symlink,
+	.symlink	= tux3_symlink,
 	.mkdir		= tux3_mkdir,
 //	.rmdir		= ext3_rmdir,
 //	.mknod		= ext3_mknod,
