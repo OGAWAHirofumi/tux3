@@ -302,6 +302,31 @@ static void draw_file(struct graph_info *gi, struct btree *btree)
 		gi->lname, gi->lname, gi->lname);
 }
 
+static void draw_symlink(struct graph_info *gi, struct btree *btree)
+{
+	fprintf(gi->f,
+		"subgraph cluster_%s {\n"
+		"label = \"%s\"\n"
+		"%s [\n"
+		"label = \"symlink data\"\n"
+		"]\n"
+		"}\n",
+		gi->lname, gi->lname, gi->lname);
+}
+
+#define S_SHIFT 12
+static draw_data_t draw_data_table[S_IFMT >> S_SHIFT] = {
+	[S_IFREG >> S_SHIFT]	= draw_file,
+	[S_IFDIR >> S_SHIFT]	= draw_dir,
+#if 0
+	[S_IFCHR >> S_SHIFT]	= draw_special,
+	[S_IFBLK >> S_SHIFT]	= draw_special,
+	[S_IFIFO >> S_SHIFT]	= draw_special,
+	[S_IFSOCK >> S_SHIFT]	= draw_special,
+#endif
+	[S_IFLNK >> S_SHIFT]	= draw_symlink,
+};
+
 static inline struct group *dleaf_groups_ptr(struct btree *btree, struct dleaf *dleaf)
 {
 	return (void *)dleaf + btree->sb->blocksize;
@@ -588,17 +613,8 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			draw_data = draw_dir;
 			break;
 		default:
-			switch (inode->i_mode & S_IFMT) {
-			case S_IFREG:
-				draw_data = draw_file;
-				break;
-			case S_IFDIR:
-				draw_data = draw_dir;
-				break;
-			default:
-				draw_data = draw_file;
-				break;
-			}
+			draw_data = draw_data_table[(inode->i_mode & S_IFMT) >> S_SHIFT];
+			assert(draw_data);
 			/* draw dtree */
 			if (verbose || !(drawn & DRAWN_DTREE)) {
 				drawn |= DRAWN_DTREE;
