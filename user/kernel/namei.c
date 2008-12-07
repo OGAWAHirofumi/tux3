@@ -1,6 +1,6 @@
 #include "tux3.h"
 
-static struct dentry *tux_lookup(struct inode *dir, struct dentry *dentry,
+static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 				 struct nameidata *nd)
 {
 	struct buffer_head *buffer;
@@ -62,7 +62,7 @@ const struct file_operations tux_dir_fops = {
 
 const struct inode_operations tux_dir_iops = {
 	.create		= tux3_create,
-	.lookup		= tux_lookup,
+	.lookup		= tux3_lookup,
 //	.link		= ext3_link,
 //	.unlink		= ext3_unlink,
 //	.symlink	= ext3_symlink,
