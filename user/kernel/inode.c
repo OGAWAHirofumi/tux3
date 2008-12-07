@@ -187,6 +187,39 @@ int purge_inum(struct btree *btree, inum_t inum)
 }
 
 #ifdef __KERNEL__
+static int tux_can_truncate(struct inode *inode)
+{
+	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
+		return 0;
+	if (S_ISREG(inode->i_mode))
+		return 1;
+	if (S_ISDIR(inode->i_mode))
+		return 1;
+	if (S_ISLNK(inode->i_mode))
+		return 1;
+	return 0;
+}
+
+static void tux3_truncate(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct delete_info del_info = {
+		.key = (inode->i_size + sb->blockmask) >> sb->blockbits,
+	};
+	int err;
+
+	if (!tux_can_truncate(inode))
+		return;
+	/* FIXME: must fix dleaf_chop bug, and expand size */
+	WARN_ON(inode->i_size);
+	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
+	err = tree_chop(&tux_inode(inode)->btree, &del_info, 0);
+	inode->i_blocks = ((inode->i_size + sb->blockmask)
+			   & ~(loff_t)sb->blockmask) >> 9;
+	inode->i_mtime = inode->i_ctime = gettime();
+	mark_inode_dirty(inode);
+}
+
 void tux3_clear_inode(struct inode *inode)
 {
 	if (tux_inode(inode)->xcache)
@@ -219,7 +252,7 @@ static const struct file_operations tux_file_fops = {
 };
 
 static const struct inode_operations tux_file_iops = {
-//	.truncate	= ext4_truncate,
+	.truncate	= tux3_truncate,
 //	.permission	= ext4_permission,
 //	.setattr	= ext4_setattr,
 //	.getattr	= ext4_getattr

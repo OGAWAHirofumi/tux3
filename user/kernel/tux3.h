@@ -665,6 +665,8 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 
 /* filemap.c */
+int tux3_get_block(struct inode *inode, sector_t iblock,
+		   struct buffer_head *bh_result, int create);
 extern const struct address_space_operations tux_aops;
 extern const struct address_space_operations tux_blk_aops;
 
