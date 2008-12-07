@@ -75,6 +75,26 @@ static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 	return err;
 }
 
+static int tux3_unlink(struct inode *dir, struct dentry *dentry)
+{
+	struct inode *inode = dentry->d_inode;
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+	int err = -ENOENT;
+
+	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
+			       &buffer);
+	if (entry) {
+		err = tux_delete_entry(buffer, entry);
+		if (!err) {
+			inode->i_ctime = dir->i_ctime;
+			inode_dec_link_count(inode);
+			err = 0;
+		}
+	}
+	return err;
+}
+
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -85,7 +105,7 @@ const struct inode_operations tux_dir_iops = {
 	.create		= tux3_create,
 	.lookup		= tux3_lookup,
 //	.link		= ext3_link,
-//	.unlink		= ext3_unlink,
+	.unlink		= tux3_unlink,
 	.symlink	= tux3_symlink,
 	.mkdir		= tux3_mkdir,
 //	.rmdir		= ext3_rmdir,

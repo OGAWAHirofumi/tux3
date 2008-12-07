@@ -255,6 +255,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 {
+	struct inode *dir = buffer_inode(buffer);
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
@@ -271,7 +272,9 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	memset(entry->name, 0, entry->name_len);
 	entry->name_len = entry->type = 0;
 	entry->inum = to_be_u32(0);
-	brelse(buffer);
+	brelse_dirty(buffer);
+	dir->i_ctime = dir->i_mtime = gettime();
+	mark_inode_dirty(dir);
 	return 0;
 }
 
