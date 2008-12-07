@@ -170,7 +170,7 @@ error:
 	return err;
 }
 
-int purge_inum(struct btree *btree, inum_t inum)
+static int purge_inum(struct btree *btree, inum_t inum)
 {
 	int err = -ENOENT, depth = btree->root.depth;
 	struct cursor *cursor = alloc_cursor(depth + 1);
@@ -178,8 +178,12 @@ int purge_inum(struct btree *btree, inum_t inum)
 		return -ENOMEM;
 
 	if (!(err = probe(btree, inum, cursor))) {
-		struct ileaf *ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
+		/* FIXME: truncate the bnode and leaf if empty. */
+		struct buffer_head *ileafbuf = cursor_leafbuf(cursor);
+		struct ileaf *ileaf = to_ileaf(bufdata(ileafbuf));
 		err = ileaf_purge(btree, inum, ileaf);
+		if (!err)
+			mark_buffer_dirty(ileafbuf);
 		release_cursor(cursor);
 	}
 	free_cursor(cursor);
