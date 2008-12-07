@@ -18,6 +18,19 @@ static struct dentry *tux_lookup(struct inode *dir, struct dentry *dentry,
 	return d_splice_alias(inode, dentry);
 }
 
+static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
+			  struct inode *inode)
+{
+	loff_t where;
+
+	where = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
+				 tux_inode(inode)->inum, inode->i_mode);
+	if (where < 0)
+		return where;
+	d_instantiate(dentry, inode);
+	return 0;
+}
+
 static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
 		       struct nameidata *nd)
 {
@@ -25,19 +38,14 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
 	int err;
 
 	inode = tux_create_inode(dir, mode);
-	if (IS_ERR(inode))
-		return PTR_ERR(inode);
-
-	if ((err = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
-	    tux_inode(inode)->inum, mode)) < 0)
-		goto error;
-
-	d_instantiate(dentry, inode);
-	return 0;
-
-error:
-	inode_dec_link_count(inode);
-	iput(inode);
+	err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		err = tux_add_dirent(dir, dentry, inode);
+		if (!err)
+			return 0;
+		inode_dec_link_count(inode);
+		iput(inode);
+	}
 	return err;
 }
 
