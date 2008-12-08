@@ -115,6 +115,79 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 	return err;
 }
 
+static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
+		       struct inode *new_dir, struct dentry *new_dentry)
+{
+	struct inode *old_inode = old_dentry->d_inode;
+	struct inode *new_inode = new_dentry->d_inode;
+	struct buffer_head *old_buffer, *new_buffer;
+	tux_dirent *old_de, *new_de = NULL;
+
+	int err = -ENOENT;
+	old_de = tux_find_entry(old_dir, old_dentry->d_name.name,
+		old_dentry->d_name.len, &old_buffer);
+	if (!old_de)
+		goto out;
+
+	if (new_inode) {
+		err = -ENOTEMPTY;
+		if (!tux_dir_is_empty(new_inode))
+			goto out;
+
+		err = -ENOENT;
+		new_de = tux_find_entry(new_dir, new_dentry->d_name.name,
+			new_dentry->d_name.len, &new_buffer);
+		if (!new_de)
+			goto out;
+
+		if (tux_delete_entry(new_buffer, new_de) < 0)
+			goto out;
+
+		new_inode->i_ctime = new_dentry->d_parent->d_inode->i_ctime;
+		inode_dec_link_count(new_inode);
+		err = tux_create_entry(new_dentry->d_parent->d_inode,
+				       new_dentry->d_name.name,
+				       new_dentry->d_name.len,
+				       tux_inode(old_inode)->inum,
+				       old_inode->i_mode);
+
+		if (err < 0)
+			goto out;
+
+	} else {
+		inode_inc_link_count(old_inode);
+		err = tux_add_dirent(new_dentry->d_parent->d_inode, new_dentry, old_inode);
+		if (err < 0) {
+			inode_dec_link_count(old_inode);
+			goto out;
+		}
+	}
+	old_inode->i_ctime = CURRENT_TIME_SEC;
+	tux_delete_entry(old_buffer, old_de);
+	inode_dec_link_count(old_inode);
+out:
+	return err;
+}
+
+static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
+{
+	struct inode *inode = dentry->d_inode;
+	int err = -ENOTEMPTY;
+	struct buffer_head *buffer;
+	tux_dirent *de;
+	if (tux_dir_is_empty(inode)) {
+		de = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+		err = tux_delete_entry(buffer, de);
+
+		if (!err) {
+			inode->i_size = 0;
+			inode_dec_link_count(inode);
+			inode_dec_link_count(dir);
+		}
+	}
+	return err;
+}
+
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -128,9 +201,9 @@ const struct inode_operations tux_dir_iops = {
 	.unlink		= tux3_unlink,
 	.symlink	= tux3_symlink,
 	.mkdir		= tux3_mkdir,
-//	.rmdir		= ext3_rmdir,
+	.rmdir		= tux3_rmdir,
 //	.mknod		= ext3_mknod,
-//	.rename		= ext3_rename,
+	.rename		= tux3_rename,
 //	.setattr	= ext3_setattr,
 //	.setxattr	= generic_setxattr,
 //	.getxattr	= generic_getxattr,
