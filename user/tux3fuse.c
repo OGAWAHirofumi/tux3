@@ -345,8 +345,10 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	fprintf(stderr, "tux3_unlink(%Lx, '%s')\n", (L)parent, name);
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(sb->rootdir, name, strlen(name), &buffer);
-	if (!entry)
-		goto noent;
+	if (IS_ERR(entry)) {
+		errno = -PTR_ERR(entry);
+		goto eek;
+	}
 	inum_t inum = from_be_u32(entry->inum);
 	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
 	struct inode inode = { .i_sb = sb, .inum = inum };
@@ -360,8 +362,6 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	fuse_reply_err(req, 0);
 	return;
-noent:
-	errno = ENOENT;
 eek:
 	fprintf(stderr, "Eek! %s\n", strerror(errno));
 	fuse_reply_err(req, errno);

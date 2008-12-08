@@ -170,7 +170,7 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 			if (entry->rec_len == 0) {
 				brelse(buffer);
 				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
-				return NULL;
+				return ERR_PTR(-EINVAL);
 			}
 			if (tux_match(entry, name, len)) {
 				*result = buffer;
@@ -181,7 +181,7 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 		brelse(buffer);
 	}
 	*result = NULL;
-	return NULL;
+	return ERR_PTR(-ENOENT);
 }
 
 static unsigned char filetype[TUX_TYPES] = {

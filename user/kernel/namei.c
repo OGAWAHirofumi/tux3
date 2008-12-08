@@ -31,13 +31,8 @@ static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode
 static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry;
-	int err = -ENOENT;
-
-	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
-	if (entry)
-		err = tux_delete_entry(buffer, entry);
-	return err;
+	tux_dirent *entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_entry(buffer, entry);
 }
 
 static int tux3_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
@@ -123,25 +118,23 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct buffer_head *old_buffer, *new_buffer;
 	tux_dirent *old_de, *new_de = NULL;
 
-	int err = -ENOENT;
 	old_de = tux_find_entry(old_dir, old_dentry->d_name.name,
 		old_dentry->d_name.len, &old_buffer);
-	if (!old_de)
-		goto out;
+	if (IS_ERR(old_de))
+		return PTR_ERR(old_de);
 
 	if (new_inode) {
-		err = -ENOTEMPTY;
+		int err = -ENOTEMPTY;
 		if (!tux_dir_is_empty(new_inode))
-			goto out;
+			return err;
 
-		err = -ENOENT;
 		new_de = tux_find_entry(new_dir, new_dentry->d_name.name,
 			new_dentry->d_name.len, &new_buffer);
-		if (!new_de)
-			goto out;
+		if IS_ERR(new_de))
+			return PTR_ERR(old_de);
 
-		if (tux_delete_entry(new_buffer, new_de) < 0)
-			goto out;
+		if ((err = tux_delete_entry(new_buffer, new_de)))
+			return err;
 
 		new_inode->i_ctime = new_dentry->d_parent->d_inode->i_ctime;
 		inode_dec_link_count(new_inode);
@@ -151,20 +144,16 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 				       tux_inode(old_inode)->inum,
 				       old_inode->i_mode);
 
-		if (err < 0)
-			goto out;
+		if (err)
+			return err;
 
 	} else {
-		inode_inc_link_count(old_inode);
-		err = tux_add_dirent(new_dentry->d_parent->d_inode, new_dentry, old_inode);
-		if (err < 0) {
-			inode_dec_link_count(old_inode);
-			goto out;
-		}
+		int err = tux_add_dirent(new_dentry->d_parent->d_inode, new_dentry, old_inode);
+		if (err)
+			return err;
 	}
 	old_inode->i_ctime = CURRENT_TIME_SEC;
 	tux_delete_entry(old_buffer, old_de);
-	inode_dec_link_count(old_inode);
 out:
 	return err;
 }

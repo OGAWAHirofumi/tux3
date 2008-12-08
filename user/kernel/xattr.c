@@ -202,8 +202,8 @@ atom_t find_atom(struct inode *atable, char *name, unsigned len)
 {
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer);
-	if (!entry)
-		return -1;
+	if (IS_ERR(entry))
+		return PTR_ERR(entry);
 	atom_t atom = entry_atom(entry);
 	brelse(buffer);
 	return atom;

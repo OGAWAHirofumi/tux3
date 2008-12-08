@@ -217,8 +217,8 @@ int main(int argc, const char *argv[])
 		printf("---- stat file ----\n");
 		struct buffer_head *buffer;
 		tux_dirent *entry = tux_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-		if (!entry) {
-			errno = ENOENT;
+		if (IS_ERR(entry)) {
+			errno = -PTR_ERR(entry);
 			goto eek;
 		}
 		inum_t inum = from_be_u32(entry->inum);
@@ -233,8 +233,8 @@ int main(int argc, const char *argv[])
 		printf("---- delete file ----\n");
 		struct buffer_head *buffer;
 		tux_dirent *entry = tux_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-		if (!entry) {
-			errno = ENOENT;
+		if (IS_ERR(entry)) {
+			errno = -PTR_ERR(entry);
 			goto eek;
 		}
 		inum_t inum = from_be_u32(entry->inum);
