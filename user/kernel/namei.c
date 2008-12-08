@@ -31,6 +31,19 @@ static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
 	return 0;
 }
 
+static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
+{
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+	int err = -ENOENT;
+
+	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
+			       &buffer);
+	if (entry)
+		err = tux_delete_entry(buffer, entry);
+	return err;
+}
+
 static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
 		       struct nameidata *nd)
 {
@@ -98,19 +111,11 @@ static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	struct buffer_head *buffer;
-	tux_dirent *entry;
-	int err = -ENOENT;
+	int err = tux_del_dirent(dir, dentry);
 
-	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
-			       &buffer);
-	if (entry) {
-		err = tux_delete_entry(buffer, entry);
-		if (!err) {
-			inode->i_ctime = dir->i_ctime;
-			inode_dec_link_count(inode);
-			err = 0;
-		}
+	if (!err) {
+		inode->i_ctime = dir->i_ctime;
+		inode_dec_link_count(inode);
 	}
 	return err;
 }
@@ -173,13 +178,13 @@ static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	int err = -ENOTEMPTY;
-	struct buffer_head *buffer;
-	tux_dirent *de;
+
 	if (tux_dir_is_empty(inode)) {
-		de = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
-		err = tux_delete_entry(buffer, de);
+
+		err = tux_del_dirent(dir, dentry);
 
 		if (!err) {
+			inode->i_ctime = dir->i_ctime;
 			inode->i_size = 0;
 			inode_dec_link_count(inode);
 			inode_dec_link_count(dir);
