@@ -1,16 +1,14 @@
 #include "tux3.h"
 
-static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
-				 struct nameidata *nd)
+static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 {
 	struct buffer_head *buffer;
 	struct inode *inode = NULL;
-	tux_dirent *dirent;
+	tux_dirent *entry;
 
-	dirent = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
-				&buffer);
-	if (dirent) {
-		inode = tux3_iget(dir->i_sb, from_be_u32(dirent->inum));
+	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+	if (entry) {
+		inode = tux3_iget(dir->i_sb, from_be_u32(entry->inum));
 		brelse(buffer);
 		if (IS_ERR(inode))
 			return ERR_CAST(inode);
@@ -18,8 +16,7 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 	return d_splice_alias(inode, dentry);
 }
 
-static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
-			  struct inode *inode)
+static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
 	loff_t where;
 
@@ -37,15 +34,13 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 	tux_dirent *entry;
 	int err = -ENOENT;
 
-	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
-			       &buffer);
+	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
 	if (entry)
 		err = tux_delete_entry(buffer, entry);
 	return err;
 }
 
-static int tux3_create(struct inode *dir, struct dentry *dentry, int mode,
-		       struct nameidata *nd)
+static int tux3_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
 	struct inode *inode;
 	int err;
