@@ -172,7 +172,7 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 			if (entry->rec_len == 0) {
 				brelse(buffer);
 				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
-				return ERR_PTR(-EINVAL);
+				return ERR_PTR(-EIO);
 			}
 			if (tux_match(entry, name, len)) {
 				*result = buffer;
