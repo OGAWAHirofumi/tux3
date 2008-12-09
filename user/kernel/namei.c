@@ -154,7 +154,6 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 	old_inode->i_ctime = CURRENT_TIME_SEC;
 	tux_delete_entry(old_buffer, old_de);
-out:
 	return err;
 }
 

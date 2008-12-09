@@ -164,6 +164,8 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 	unsigned blocks = dir->i_size >> tux_sb(dir->i_sb)->blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
+		if (!buffer)
+			break; // need ERR_PTR for blockread!!!
 		tux_dirent *entry = bufdata(buffer);
 		tux_dirent *limit = (void *)entry + blocksize - reclen;
 		while (entry <= limit) {
