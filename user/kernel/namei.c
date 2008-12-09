@@ -117,6 +117,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct inode *new_inode = new_dentry->d_inode;
 	struct buffer_head *old_buffer, *new_buffer;
 	tux_dirent *old_de, *new_de = NULL;
+	int err = -ENOENT;
 
 	old_de = tux_find_entry(old_dir, old_dentry->d_name.name,
 		old_dentry->d_name.len, &old_buffer);
@@ -124,13 +125,13 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return PTR_ERR(old_de);
 
 	if (new_inode) {
-		int err = -ENOTEMPTY;
+		err = -ENOTEMPTY;
 		if (!tux_dir_is_empty(new_inode))
 			return err;
 
 		new_de = tux_find_entry(new_dir, new_dentry->d_name.name,
 			new_dentry->d_name.len, &new_buffer);
-		if IS_ERR(new_de))
+		if (IS_ERR(new_de))
 			return PTR_ERR(old_de);
 
 		if ((err = tux_delete_entry(new_buffer, new_de)))
@@ -152,7 +153,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		if (err)
 			return err;
 	}
-	old_inode->i_ctime = CURRENT_TIME_SEC;
+	old_inode->i_ctime = gettime();
 	tux_delete_entry(old_buffer, old_de);
 	return err;
 }
