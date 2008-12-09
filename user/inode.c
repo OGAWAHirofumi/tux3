@@ -109,8 +109,10 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 {
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
-	if (IS_ERR(entry))
+	if (IS_ERR(entry)) {
+		brelse(buffer);
 		return NULL; // ERR_PTR me!!!
+	}
 	inum_t inum = from_be_u32(entry->inum);
 	brelse(buffer);
 	struct inode *inode = new_inode(dir->i_sb, inum);
