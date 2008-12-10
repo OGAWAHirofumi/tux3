@@ -203,7 +203,7 @@ atom_t find_atom(struct inode *atable, char *name, unsigned len)
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer);
 	if (IS_ERR(entry))
-		return PTR_ERR(entry);
+		return -1; /* FIXME: return correct errno */
 	atom_t atom = entry_atom(entry);
 	brelse(buffer);
 	return atom;

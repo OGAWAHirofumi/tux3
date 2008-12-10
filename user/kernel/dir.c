@@ -162,17 +162,21 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 	unsigned reclen = TUX_REC_LEN(len);
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
 	unsigned blocks = dir->i_size >> tux_sb(dir->i_sb)->blockbits, block;
+	int err = -ENOENT;
 	for (block = 0; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
-		if (!buffer)
-			break; // need ERR_PTR for blockread!!!
+		if (!buffer) {
+			err = -EIO; // need ERR_PTR for blockread!!!
+			goto error;
+		}
 		tux_dirent *entry = bufdata(buffer);
 		tux_dirent *limit = (void *)entry + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
 				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
-				return ERR_PTR(-EIO);
+				err = -EIO;
+				goto error;
 			}
 			if (tux_match(entry, name, len)) {
 				*result = buffer;
@@ -182,8 +186,9 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 		}
 		brelse(buffer);
 	}
-	*result = NULL;
-	return ERR_PTR(-ENOENT);
+error:
+	*result = NULL;		/* for debug */
+	return ERR_PTR(err);
 }
 
 static unsigned char filetype[TUX_TYPES] = {

@@ -3,16 +3,21 @@
 static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
 {
 	struct buffer_head *buffer;
-	struct inode *inode = NULL;
+	struct inode *inode;
 	tux_dirent *entry;
 
 	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
-	if (entry) {
-		inode = tux3_iget(dir->i_sb, from_be_u32(entry->inum));
-		brelse(buffer);
-		if (IS_ERR(inode))
-			return ERR_CAST(inode);
+	if (IS_ERR(entry)) {
+		if (PTR_ERR(entry) != -ENOENT)
+			return ERR_CAST(entry);
+		inode = NULL;
+		goto out;
 	}
+	inode = tux3_iget(dir->i_sb, from_be_u32(entry->inum));
+	brelse(buffer);
+	if (IS_ERR(inode))
+		return ERR_CAST(inode);
+out:
 	return d_splice_alias(inode, dentry);
 }
 

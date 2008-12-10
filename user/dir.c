@@ -103,8 +103,8 @@ int main(int argc, char *argv[])
 	tux_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
 	tux_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
 	tux_dirent *entry = tux_find_entry(map->inode, "hello", 5, &buffer);
-	if (entry)
-		hexdump(entry, entry->name_len);
+	assert(!IS_ERR(entry));
+	hexdump(entry, entry->name_len);
 	tux_dump_entries(blockget(map, 0));
 
 	if (!tux_delete_entry(buffer, entry)) {
