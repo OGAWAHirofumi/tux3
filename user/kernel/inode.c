@@ -366,6 +366,18 @@ static const struct inode_operations tux_file_iops = {
 //	.fiemap		= ext4_fiemap,
 };
 
+static const struct inode_operations tux_special_iops = {
+//	.permission	= ext4_permission,
+//	.setattr	= ext4_setattr,
+//	.getattr	= ext4_getattr
+#ifdef CONFIG_EXT4DEV_FS_XATTR
+//	.setxattr	= generic_setxattr,
+//	.getxattr	= generic_getxattr,
+//	.listxattr	= ext4_listxattr,
+//	.removexattr	= generic_removexattr,
+#endif
+};
+
 static void tux_setup_inode(struct inode *inode, dev_t rdev)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
@@ -377,8 +389,8 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 
 	switch (inode->i_mode & S_IFMT) {
 	default:
-//		inode->i_op = &tux3_special_inode_operations;
-//		init_special_inode(inode, inode->i_mode, rdev);
+		inode->i_op = &tux_special_iops;
+		init_special_inode(inode, inode->i_mode, rdev);
 		break;
 	case S_IFREG:
 		inode->i_op = &tux_file_iops;
