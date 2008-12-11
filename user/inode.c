@@ -18,7 +18,7 @@
 #include "filemap.c"
 #undef main
 
-struct inode *new_inode(struct sb *sb, inum_t inum)
+struct inode *new_inode(struct sb *sb)
 {
 	map_t *map = new_map(sb->devmap->dev, &filemap_ops);
 	if (!map)
@@ -26,7 +26,7 @@ struct inode *new_inode(struct sb *sb, inum_t inum)
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto eek;
-	*inode = (struct inode){ .i_sb = sb, .map = map, .inum = inum };
+	*inode = (struct inode){ .i_sb = sb, .map = map, };
 	return inode->map->inode = inode;
 eek:
 	if (map)
@@ -45,6 +45,14 @@ void free_inode(struct inode *inode)
 
 #include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "kernel/inode.c"
+
+struct inode *iget(struct sb *sb, inum_t inum)
+{
+	struct inode *inode = new_inode(sb);
+	if (inode)
+		inode->inum = inum;
+	return inode;
+}
 
 int tuxio(struct file *file, char *data, unsigned len, int write)
 {
@@ -113,7 +121,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 		return NULL; // ERR_PTR me!!!
 	inum_t inum = from_be_u32(entry->inum);
 	brelse(buffer);
-	struct inode *inode = new_inode(dir->i_sb, inum);
+	struct inode *inode = iget(dir->i_sb, inum);
 	return open_inode(inode) ? NULL : inode;
 }
 
@@ -135,10 +143,11 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	 * file data belonging to those inodes provided somebody sets the block
 	 * allocation goal based on the directory the file will be in.
 	 */
-	struct inode *inode = new_inode(dir->i_sb, dir->i_sb->nextalloc);
+	struct inode *inode = new_inode(dir->i_sb);
 	if (!inode)
 		return NULL; // err ???
 	iattr->mtime = iattr->ctime = iattr->atime = gettime();
+	tux_inode(inode)->inum = dir->i_sb->nextalloc;
 	int err = make_inode(inode, iattr);
 	if (err)
 		goto error; // err ???

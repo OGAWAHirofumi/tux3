@@ -93,11 +93,11 @@ int main(int argc, const char *argv[])
 	}
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	if (!(sb->bitmap = new_inode(sb, TUX_BITMAP_INO)))
+	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto eek;
-	if (!(sb->rootdir = new_inode(sb, TUX_ROOTDIR_INO)))
+	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))
 		goto eek;
-	if (!(sb->atable = new_inode(sb, TUX_ATABLE_INO)))
+	if (!(sb->atable = iget(sb, TUX_ATABLE_INO)))
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
@@ -223,7 +223,7 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = from_be_u32(entry->inum);
 		brelse(buffer);
-		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum };
+		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum, };
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		dump_attrs(inode);
@@ -239,7 +239,7 @@ int main(int argc, const char *argv[])
 		}
 		inum_t inum = from_be_u32(entry->inum);
 		brelse(buffer);
-		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum };
+		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum, };
 		if ((errno = -open_inode(inode)))
 			goto eek;
 		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))

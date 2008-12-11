@@ -526,7 +526,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			continue;
 
 		inum_t inum = ibase(ileaf) + at;
-		struct inode *inode = new_inode(btree->sb, inum);
+		struct inode *inode = iget(btree->sb, inum);
 		if (!inode)
 			error("out of memory");
 		if (open_inode(inode) < 0)
@@ -581,7 +581,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			continue;
 
 		inum_t inum = ibase(ileaf) + at;
-		struct inode *inode = new_inode(btree->sb, inum);
+		struct inode *inode = iget(btree->sb, inum);
 		if (!inode)
 			error("out of memory");
 		if (open_inode(inode) < 0)
@@ -751,11 +751,11 @@ int main(int argc, const char *argv[])
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	if (!(sb->bitmap = new_inode(sb, TUX_BITMAP_INO)))
+	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto eek;
-	if (!(sb->rootdir = new_inode(sb, TUX_ROOTDIR_INO)))
+	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))
 		goto eek;
-	if (!(sb->atable = new_inode(sb, TUX_ATABLE_INO)))
+	if (!(sb->atable = iget(sb, TUX_ATABLE_INO)))
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;

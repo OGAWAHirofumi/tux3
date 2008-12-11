@@ -63,7 +63,7 @@ static struct inode *open_fuse_ino(fuse_ino_t ino)
 	if (ino == FUSE_ROOT_ID)
 		return sb->rootdir;
 
-	inode = new_inode(sb, ino);
+	inode = iget(sb, ino);
 	if (inode) {
 		if (!open_inode(inode))
 			return inode;
@@ -351,7 +351,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	}
 	inum_t inum = from_be_u32(entry->inum);
 	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
-	struct inode inode = { .i_sb = sb, .inum = inum };
+	struct inode inode = { .i_sb = sb, .inum = inum, };
 
 	if ((errno = -open_inode(&inode)))
 		goto eek;
@@ -390,11 +390,11 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
-	if (!(sb->bitmap = new_inode(sb, TUX_BITMAP_INO)))
+	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto nomem;
-	if (!(sb->rootdir = new_inode(sb, TUX_ROOTDIR_INO)))
+	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))
 		goto nomem;
-	if (!(sb->atable = new_inode(sb, TUX_ATABLE_INO)))
+	if (!(sb->atable = iget(sb, TUX_ATABLE_INO)))
 		goto eek;
 	if ((errno = -open_inode(sb->bitmap)))
 		goto eek;
