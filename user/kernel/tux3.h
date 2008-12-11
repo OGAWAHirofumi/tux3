@@ -691,8 +691,12 @@ extern struct btree_ops itable_ops;
 void tux3_delete_inode(struct inode *inode);
 void tux3_clear_inode(struct inode *inode);
 int tux3_write_inode(struct inode *inode, int do_sync);
+int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat);
 struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev);
 struct inode *tux3_iget(struct super_block *sb, inum_t inum);
+
+/* symlink.c */
+extern const struct inode_operations tux_symlink_iops;
 
 /* xattr.c */
 int xcache_dump(struct inode *inode);

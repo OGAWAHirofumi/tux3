@@ -50,6 +50,14 @@ static int check_present(struct inode *inode)
 	return 0;
 }
 
+static inline void tux_set_inum(struct inode *inode, inum_t inum)
+{
+#ifdef __KERNEL__
+	inode->i_ino = inum;
+#endif
+	tux_inode(inode)->inum = inum;
+}
+
 #ifdef __KERNEL__
 static void tux_setup_inode(struct inode *inode, dev_t rdev);
 #else
@@ -77,11 +85,7 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 	inode->i_mtime = inode->i_ctime = inode->i_atime = gettime();
 	if (S_ISDIR(inode->i_mode))
 		inode->i_nlink++;
-#ifdef __KERNEL__
-	/* FIXME: will overflow on 32bit arch */
-	inode->i_ino = TUX_INVALID_INO;
-#endif
-	tux_inode(inode)->inum = TUX_INVALID_INO;
+	tux_set_inum(inode, TUX_INVALID_INO);
 	tux_inode(inode)->present = CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
 	tux_setup_inode(inode, rdev);
 	return inode;
@@ -198,11 +202,7 @@ static int make_inode(struct inode *inode, inum_t goal)
 		}
 	}
 
-#ifdef __KERNEL__
-	/* FIXME: will overflow on 32bit arch */
-	inode->i_ino = goal;
-#endif
-	tux_inode(inode)->inum = goal;
+	tux_set_inum(inode, goal);
 	/* FIXME: is this right strategy? */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
 		tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
@@ -334,6 +334,14 @@ int tux3_write_inode(struct inode *inode, int do_sync)
 	return save_inode(inode);
 }
 
+int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
+{
+	struct inode *inode = dentry->d_inode;
+	generic_fillattr(inode, stat);
+	stat->ino = tux_inode(inode)->inum;
+	return 0;
+}
+
 static const struct file_operations tux_file_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= do_sync_read,
@@ -355,7 +363,7 @@ static const struct inode_operations tux_file_iops = {
 	.truncate	= tux3_truncate,
 //	.permission	= ext4_permission,
 //	.setattr	= ext4_setattr,
-//	.getattr	= ext4_getattr
+	.getattr	= tux3_getattr
 #ifdef CONFIG_EXT4DEV_FS_XATTR
 //	.setxattr	= generic_setxattr,
 //	.getxattr	= generic_getxattr,
@@ -369,7 +377,7 @@ static const struct inode_operations tux_file_iops = {
 static const struct inode_operations tux_special_iops = {
 //	.permission	= ext4_permission,
 //	.setattr	= ext4_setattr,
-//	.getattr	= ext4_getattr
+	.getattr	= tux3_getattr
 #ifdef CONFIG_EXT4DEV_FS_XATTR
 //	.setxattr	= generic_setxattr,
 //	.getxattr	= generic_getxattr,
@@ -405,7 +413,7 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	case S_IFLNK:
-		inode->i_op = &page_symlink_inode_operations;
+		inode->i_op = &tux_symlink_iops;
 		inode->i_mapping->a_ops = &tux_aops;
 		break;
 	case 0:
@@ -439,18 +447,27 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 	return inode;
 }
 
+static int tux_test(struct inode *inode, void *data)
+{
+	return tux_inode(inode)->inum == *(inum_t *)data;
+}
+
+static int tux_set(struct inode *inode, void *data)
+{
+	tux_set_inum(inode, *(inum_t *)data);
+	return 0;
+}
+
 struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 {
 	struct inode *inode;
 	int err;
 
-	/* FIXME: inum is 64bit, ino is unsigned long */
-	inode = iget_locked(sb, inum);
+	inode = iget5_locked(sb, inum, tux_test, tux_set, &inum);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 	if (!(inode->i_state & I_NEW))
 		return inode;
-	tux_inode(inode)->inum = inum;
 
 	err = open_inode(inode);
 	if (err) {

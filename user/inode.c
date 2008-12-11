@@ -50,7 +50,7 @@ struct inode *iget(struct sb *sb, inum_t inum)
 {
 	struct inode *inode = new_inode(sb);
 	if (inode)
-		inode->inum = inum;
+		tux_set_inum(inode, inum);
 	return inode;
 }
 
