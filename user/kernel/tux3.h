@@ -26,73 +26,42 @@ typedef u32 millisecond_t;
 typedef u64 inum_t;
 typedef u64 tuxkey_t;
 
-/* Endian support */
-
-typedef u16 __bitwise be_u16;
-typedef u32 __bitwise be_u32;
-typedef u64 __bitwise be_u64;
-
 #ifdef __KERNEL__
+/* Endian support */
+typedef __be16	be_u16;
+typedef __be32	be_u32;
+typedef __be64	be_u64;
+
 static inline u16 from_be_u16(be_u16 val)
 {
-	return __be16_to_cpu(val);
+	return be16_to_cpu(val);
 }
 
 static inline u32 from_be_u32(be_u32 val)
 {
-	return __be32_to_cpu(val);
+	return be32_to_cpu(val);
 }
 
 static inline u64 from_be_u64(be_u64 val)
 {
-	return __be64_to_cpu(val);
+	return be64_to_cpu(val);
 }
 
 static inline be_u16 to_be_u16(u16 val)
 {
-	return __cpu_to_be16(val);
+	return cpu_to_be16(val);
 }
 
 static inline be_u32 to_be_u32(u32 val)
 {
-	return __cpu_to_be32(val);
+	return cpu_to_be32(val);
 }
 
 static inline be_u64 to_be_u64(u64 val)
 {
-	return __cpu_to_be64(val);
+	return cpu_to_be64(val);
 }
-#else
-static inline u16 from_be_u16(be_u16 val)
-{
-	return bswap_16((__force u16)val);
-}
-
-static inline u32 from_be_u32(be_u32 val)
-{
-	return bswap_32((__force u32)val);
-}
-
-static inline u64 from_be_u64(be_u64 val)
-{
-	return bswap_64((__force u64)val);
-}
-
-static inline be_u16 to_be_u16(u16 val)
-{
-	return (__force be_u16)bswap_16(val);
-}
-
-static inline be_u32 to_be_u32(u32 val)
-{
-	return (__force be_u32)bswap_32(val);
-}
-
-static inline be_u64 to_be_u64(u64 val)
-{
-	return (__force be_u64)bswap_64(val);
-}
-#endif
+#endif /* !__KERNEL__ */
 
 static inline void *encode16(void *at, unsigned val)
 {
