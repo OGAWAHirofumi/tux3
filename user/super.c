@@ -64,7 +64,7 @@ int make_tux3(struct sb *sb, int fd)
 	};
 	int err = 0;
 	trace("create bitmap");
-	if (!(sb->bitmap = tux_new_inode(dir, &(struct tux_iattr){ })))
+	if (!(sb->bitmap = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
 
 	trace("reserve superblock");
@@ -85,17 +85,17 @@ int make_tux3(struct sb *sb, int fd)
 	if (make_inode(sb->bitmap, TUX_BITMAP_INO))
 		goto eek;
 	trace("create version table");
-	if (!(sb->vtable = tux_new_inode(dir, &(struct tux_iattr){ })))
+	if (!(sb->vtable = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
 	if (make_inode(sb->vtable, TUX_VTABLE_INO))
 		goto eek;
 	trace("create root directory");
-	if (!(sb->rootdir = tux_new_inode(dir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 })))
+	if (!(sb->rootdir = tux_new_inode(dir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }, 0)))
 		goto eek;
 	if (make_inode(sb->rootdir, TUX_ROOTDIR_INO))
 		goto eek;
 	trace("create atom dictionary");
-	if (!(sb->atable = tux_new_inode(dir, &(struct tux_iattr){ })))
+	if (!(sb->atable = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));

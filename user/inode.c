@@ -143,7 +143,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	 * file data belonging to those inodes provided somebody sets the block
 	 * allocation goal based on the directory the file will be in.
 	 */
-	struct inode *inode = tux_new_inode(dir, iattr);
+	struct inode *inode = tux_new_inode(dir, iattr, 0);
 	if (!inode)
 		return NULL; // err ???
 	int err = make_inode(inode, dir->i_sb->nextalloc);

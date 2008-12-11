@@ -15,14 +15,16 @@
 #endif
 
 #ifdef __KERNEL__
-static void tux_setup_inode(struct inode *inode);
+static void tux_setup_inode(struct inode *inode, dev_t rdev);
 #else
-static void tux_setup_inode(struct inode *inode)
+static void tux_setup_inode(struct inode *inode, dev_t rdev)
 {
+	inode->i_rdev = rdev;
 }
 #endif
 
-static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr)
+static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
+				   dev_t rdev)
 {
 	struct inode *inode = new_inode(dir->i_sb);
 	if (!inode)
@@ -45,7 +47,7 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr)
 #endif
 	tux_inode(inode)->inum = TUX_INVALID_INO;
 	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
-	tux_setup_inode(inode);
+	tux_setup_inode(inode, rdev);
 	return inode;
 }
 
@@ -78,7 +80,7 @@ static int open_inode(struct inode *inode)
 	dump_attrs(inode);
 	if (tux_inode(inode)->xcache)
 		xcache_dump(inode);
-	tux_setup_inode(inode);
+	tux_setup_inode(inode, inode->i_rdev);
 	err = 0;
 eek:
 	release_cursor(cursor);
@@ -327,7 +329,7 @@ static const struct inode_operations tux_file_iops = {
 //	.fiemap		= ext4_fiemap,
 };
 
-static void tux_setup_inode(struct inode *inode)
+static void tux_setup_inode(struct inode *inode, dev_t rdev)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
 
@@ -339,7 +341,7 @@ static void tux_setup_inode(struct inode *inode)
 	switch (inode->i_mode & S_IFMT) {
 	default:
 //		inode->i_op = &tux3_special_inode_operations;
-//		init_special_inode(inode, inode->i_mode, new_decode_dev(dev));
+//		init_special_inode(inode, inode->i_mode, rdev);
 		break;
 	case S_IFREG:
 		inode->i_op = &tux_file_iops;
@@ -368,14 +370,14 @@ static void tux_setup_inode(struct inode *inode)
 	}
 }
 
-struct inode *tux_create_inode(struct inode *dir, int mode)
+struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 {
 	struct tux_iattr iattr = {
 		.uid	= current->fsuid,
 		.gid	= current->fsgid,
 		.mode	= mode,
 	};
-	struct inode *inode = tux_new_inode(dir, &iattr);
+	struct inode *inode = tux_new_inode(dir, &iattr, rdev);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 	int err = make_inode(inode, tux_sb(dir->i_sb)->nextalloc);

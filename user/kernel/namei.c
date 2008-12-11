@@ -45,7 +45,7 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, int mode, struc
 	struct inode *inode;
 	int err;
 
-	inode = tux_create_inode(dir, mode);
+	inode = tux_create_inode(dir, mode, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = tux_add_dirent(dir, dentry, inode);
@@ -88,7 +88,7 @@ static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	int err;
 
-	inode = tux_create_inode(dir, S_IFLNK | S_IRWXUGO);
+	inode = tux_create_inode(dir, S_IFLNK | S_IRWXUGO, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = page_symlink(inode, symname, strlen(symname) + 1);
