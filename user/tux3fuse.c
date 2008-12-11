@@ -453,7 +453,6 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	if (to_set & FUSE_SET_ATTR_MTIME) {
 		printf("Setting mtime to %Lu\n", (L)attr->st_mtime);
 		inode->i_mtime = attr->st_mtim;
-		inode->present |= MTIME_BIT;
 	}
 
 	if (save_inode(inode))

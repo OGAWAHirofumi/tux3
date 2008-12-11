@@ -82,7 +82,7 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 	inode->i_ino = TUX_INVALID_INO;
 #endif
 	tux_inode(inode)->inum = TUX_INVALID_INO;
-	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
+	tux_inode(inode)->present = CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
 	tux_setup_inode(inode, rdev);
 	return inode;
 }
