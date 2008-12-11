@@ -59,7 +59,13 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, int mode, struc
 
 static int tux3_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
-	return tux3_create(dir, dentry, S_IFDIR | mode, NULL);
+	int err;
+	if (dir->i_nlink >= TUX_LINK_MAX)
+		return -EMLINK;
+	err = tux3_create(dir, dentry, S_IFDIR | mode, NULL);
+	if (!err)
+		inode_inc_link_count(dir);
+	return err;
 }
 
 static int tux3_link(struct dentry *old_dentry, struct inode *dir,
