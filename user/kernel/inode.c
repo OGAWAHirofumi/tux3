@@ -14,6 +14,42 @@
 #define trace trace_on
 #endif
 
+static int check_present(struct inode *inode)
+{
+	tuxnode_t *tuxnode = tux_inode(inode);
+	switch (inode->i_mode & S_IFMT) {
+	default:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		break;
+	case S_IFBLK:
+	case S_IFCHR:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		/* FIXME: assert(tuxnode->present & RDEV_BIT) */
+		break;
+	case S_IFREG:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		break;
+	case S_IFDIR:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		break;
+	case S_IFLNK:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		break;
+	case 0:
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		break;
+	}
+	return 0;
+}
+
 #ifdef __KERNEL__
 static void tux_setup_inode(struct inode *inode, dev_t rdev);
 #else
@@ -80,6 +116,7 @@ static int open_inode(struct inode *inode)
 	dump_attrs(inode);
 	if (tux_inode(inode)->xcache)
 		xcache_dump(inode);
+	check_present(inode);
 	tux_setup_inode(inode, inode->i_rdev);
 	err = 0;
 eek:
