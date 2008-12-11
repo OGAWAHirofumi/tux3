@@ -143,11 +143,10 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	 * file data belonging to those inodes provided somebody sets the block
 	 * allocation goal based on the directory the file will be in.
 	 */
-	struct inode *inode = new_inode(dir->i_sb);
+	struct inode *inode = tux_new_inode(dir, iattr);
 	if (!inode)
 		return NULL; // err ???
-	iattr->mtime = iattr->ctime = iattr->atime = gettime();
-	int err = make_inode(inode, dir->i_sb->nextalloc, iattr);
+	int err = make_inode(inode, dir->i_sb->nextalloc);
 	if (err)
 		goto error; // err ???
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)

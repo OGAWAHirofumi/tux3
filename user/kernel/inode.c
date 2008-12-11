@@ -14,6 +14,41 @@
 #define trace trace_on
 #endif
 
+#ifdef __KERNEL__
+static void tux_setup_inode(struct inode *inode);
+#else
+static void tux_setup_inode(struct inode *inode)
+{
+}
+#endif
+
+static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr)
+{
+	struct inode *inode = new_inode(dir->i_sb);
+	if (!inode)
+		return NULL;
+
+	inode->i_mode = iattr->mode;
+	inode->i_uid = iattr->uid;
+	if (dir->i_mode & S_ISGID) {
+		inode->i_gid = dir->i_gid;
+		if (S_ISDIR(inode->i_mode))
+			inode->i_mode |= S_ISGID;
+	} else
+		inode->i_gid = iattr->gid;
+	inode->i_mtime = inode->i_ctime = inode->i_atime = gettime();
+	if (S_ISDIR(inode->i_mode))
+		inode->i_nlink++;
+#ifdef __KERNEL__
+	/* FIXME: will overflow on 32bit arch */
+	inode->i_ino = TUX_INVALID_INO;
+#endif
+	tux_inode(inode)->inum = TUX_INVALID_INO;
+	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
+	tux_setup_inode(inode);
+	return inode;
+}
+
 static int open_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -43,6 +78,7 @@ static int open_inode(struct inode *inode)
 	dump_attrs(inode);
 	if (tux_inode(inode)->xcache)
 		xcache_dump(inode);
+	tux_setup_inode(inode);
 	err = 0;
 eek:
 	release_cursor(cursor);
@@ -86,7 +122,7 @@ int store_attrs(struct inode *inode, struct cursor *cursor)
  * we should only round down the split point, not the returned goal.)
  */
 
-int make_inode(struct inode *inode, inum_t goal, struct tux_iattr *iattr)
+static int make_inode(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	int err = -ENOENT, depth = sb->itable.root.depth;
@@ -101,6 +137,7 @@ int make_inode(struct inode *inode, inum_t goal, struct tux_iattr *iattr)
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 //	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
 
+	/* FIXME: inum allocation should check min and max */
 	trace("create inode 0x%Lx", (L)goal);
 	assert(!tux_inode(inode)->btree.root.depth);
 	assert(goal < next_key(cursor, depth));
@@ -122,14 +159,14 @@ int make_inode(struct inode *inode, inum_t goal, struct tux_iattr *iattr)
 		}
 	}
 
-	inode->i_mode = iattr->mode;
-	inode->i_uid = iattr->uid;
-	inode->i_gid = iattr->gid;
-	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
-	inode->i_nlink = 1;
+#ifdef __KERNEL__
+	/* FIXME: will overflow on 32bit arch */
+	inode->i_ino = goal;
+#endif
 	tux_inode(inode)->inum = goal;
-	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
-	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
+	/* FIXME: is this right strategy? */
+	if (tux_inode(inode)->present & DATA_BTREE_BIT)
+		tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
 	if ((err = store_attrs(inode, cursor)))
 		goto errout;
 	release_cursor(cursor);
@@ -145,6 +182,7 @@ errout:
 
 int save_inode(struct inode *inode)
 {
+	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	struct sb *sb = tux_sb(inode->i_sb);
 	int err, depth = sb->itable.root.depth;
@@ -289,12 +327,10 @@ static const struct inode_operations tux_file_iops = {
 //	.fiemap		= ext4_fiemap,
 };
 
-static void tux3_setup_inode(struct inode *inode)
+static void tux_setup_inode(struct inode *inode)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
 
-	/* FIXME: will overflow on 32bit arch */
-	inode->i_ino = tux_inode(inode)->inum;
 	inode->i_blocks = ((inode->i_size + sbi->blockmask)
 			   & ~(loff_t)sbi->blockmask) >> 9;
 //	inode->i_generation = 0;
@@ -334,28 +370,20 @@ static void tux3_setup_inode(struct inode *inode)
 
 struct inode *tux_create_inode(struct inode *dir, int mode)
 {
-	struct inode *inode = new_inode(dir->i_sb);
+	struct tux_iattr iattr = {
+		.uid	= current->fsuid,
+		.gid	= current->fsgid,
+		.mode	= mode,
+	};
+	struct inode *inode = tux_new_inode(dir, &iattr);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
-
-	struct tux_iattr iattr;
-	iattr.mode = mode;
-	iattr.uid = current->fsuid;
-	if (dir->i_mode & S_ISGID) {
-		iattr.gid = dir->i_gid;
-		if (S_ISDIR(iattr.mode))
-			iattr.mode |= S_ISGID;
-	} else
-		iattr.gid = current->fsgid;
-	iattr.ctime = iattr.mtime = iattr.atime = gettime();
-
-	int err = make_inode(inode, tux_sb(dir->i_sb)->nextalloc, &iattr);
+	int err = make_inode(inode, tux_sb(dir->i_sb)->nextalloc);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);
 		return ERR_PTR(err);
 	}
-	tux3_setup_inode(inode);
 	insert_inode_hash(inode);
 	return inode;
 }
@@ -371,16 +399,13 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 		return ERR_PTR(-ENOMEM);
 	if (!(inode->i_state & I_NEW))
 		return inode;
-
 	tux_inode(inode)->inum = inum;
+
 	err = open_inode(inode);
 	if (err) {
 		iget_failed(inode);
 		return ERR_PTR(err);
 	}
-
-	tux3_setup_inode(inode);
-
 	unlock_new_inode(inode);
 	return inode;
 }

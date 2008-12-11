@@ -58,9 +58,13 @@ int sync_super(struct sb *sb)
 
 int make_tux3(struct sb *sb, int fd)
 {
+	struct inode *dir = &(struct inode){
+		.i_sb	= sb,
+		.i_mode	= S_IFDIR | 0755,
+	};
 	int err = 0;
 	trace("create bitmap");
-	if (!(sb->bitmap = new_inode(sb)))
+	if (!(sb->bitmap = tux_new_inode(dir, &(struct tux_iattr){ })))
 		goto eek;
 
 	trace("reserve superblock");
@@ -78,25 +82,25 @@ int make_tux3(struct sb *sb, int fd)
 	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
 	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
 	trace("create bitmap inode");
-	if (make_inode(sb->bitmap, TUX_BITMAP_INO, &(struct tux_iattr){ }))
+	if (make_inode(sb->bitmap, TUX_BITMAP_INO))
 		goto eek;
 	trace("create version table");
-	if (!(sb->vtable = new_inode(sb)))
+	if (!(sb->vtable = tux_new_inode(dir, &(struct tux_iattr){ })))
 		goto eek;
-	if (make_inode(sb->vtable, TUX_VTABLE_INO, &(struct tux_iattr){ }))
+	if (make_inode(sb->vtable, TUX_VTABLE_INO))
 		goto eek;
 	trace("create root directory");
-	if (!(sb->rootdir = new_inode(sb)))
+	if (!(sb->rootdir = tux_new_inode(dir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 })))
 		goto eek;
-	if (make_inode(sb->rootdir, TUX_ROOTDIR_INO, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }))
+	if (make_inode(sb->rootdir, TUX_ROOTDIR_INO))
 		goto eek;
 	trace("create atom dictionary");
-	if (!(sb->atable = new_inode(sb)))
+	if (!(sb->atable = tux_new_inode(dir, &(struct tux_iattr){ })))
 		goto eek;
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
-	if (make_inode(sb->atable, TUX_ATABLE_INO, &(struct tux_iattr){ }))
+	if (make_inode(sb->atable, TUX_ATABLE_INO))
 		goto eek;
 	if ((err = sync_super(sb)))
 		goto eek;

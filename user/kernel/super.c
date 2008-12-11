@@ -92,7 +92,6 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	if (!tuxi)
 		return NULL;
 	tuxi->btree = (struct btree){};
-	tuxi->inum = 0;
 	tuxi->present = 0;
 	tuxi->xcache = NULL;
 	/* uninitialized stuff by alloc_inode() */
