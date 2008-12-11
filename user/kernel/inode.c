@@ -295,7 +295,6 @@ static void tux3_setup_inode(struct inode *inode)
 
 	/* FIXME: will overflow on 32bit arch */
 	inode->i_ino = tux_inode(inode)->inum;
-	inode->i_version = 1;
 	inode->i_blocks = ((inode->i_size + sbi->blockmask)
 			   & ~(loff_t)sbi->blockmask) >> 9;
 //	inode->i_generation = 0;

@@ -87,6 +87,7 @@ static void __exit tux3_destroy_inodecache(void)
 
 static struct inode *tux3_alloc_inode(struct super_block *sb)
 {
+	static struct timespec epoch;
 	tuxnode_t *tuxi = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
 	if (!tuxi)
 		return NULL;
@@ -94,6 +95,14 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	tuxi->inum = 0;
 	tuxi->present = 0;
 	tuxi->xcache = NULL;
+	/* uninitialized stuff by alloc_inode() */
+	tuxi->vfs_inode.i_version = 1;
+	tuxi->vfs_inode.i_uid = 0;
+	tuxi->vfs_inode.i_gid = 0;
+	tuxi->vfs_inode.i_atime = epoch;
+	tuxi->vfs_inode.i_mtime = epoch;
+	tuxi->vfs_inode.i_ctime = epoch;
+	tuxi->vfs_inode.i_mode = 0;
 	return &tuxi->vfs_inode;
 }
 

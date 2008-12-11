@@ -26,7 +26,7 @@ struct inode *new_inode(struct sb *sb)
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto eek;
-	*inode = (struct inode){ .i_sb = sb, .map = map, };
+	*inode = (struct inode){ .i_sb = sb, .map = map, .i_version = 1, .i_nlink = 1, };
 	return inode->map->inode = inode;
 eek:
 	if (map)

@@ -186,7 +186,5 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		}
 		tuxnode->present |= 1 << kind;
 	}
-	if (!(tuxnode->present & MTIME_BIT))
-		inode->i_mtime = inode->i_ctime;
 	return attrs;
 }
