@@ -121,10 +121,26 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	int err = tux_del_dirent(dir, dentry);
-
 	if (!err) {
 		inode->i_ctime = dir->i_ctime;
 		inode_dec_link_count(inode);
+	}
+	return err;
+}
+
+static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
+{
+	struct inode *inode = dentry->d_inode;
+	int err = -ENOTEMPTY;
+	if (tux_dir_is_empty(inode)) {
+		err = tux_del_dirent(dir, dentry);
+		if (!err) {
+			inode->i_ctime = dir->i_ctime;
+			inode->i_size = 0;
+			clear_nlink(inode);
+			mark_inode_dirty(inode);
+			inode_dec_link_count(dir);
+		}
 	}
 	return err;
 }
@@ -174,25 +190,6 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	old_inode->i_ctime = gettime();
 	tux_delete_entry(old_buffer, old_de);
 	return 0;
-}
-
-static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
-{
-	struct inode *inode = dentry->d_inode;
-	int err = -ENOTEMPTY;
-
-	if (tux_dir_is_empty(inode)) {
-
-		err = tux_del_dirent(dir, dentry);
-
-		if (!err) {
-			inode->i_ctime = dir->i_ctime;
-			inode->i_size = 0;
-			inode_dec_link_count(inode);
-			inode_dec_link_count(dir);
-		}
-	}
-	return err;
 }
 
 const struct file_operations tux_dir_fops = {
