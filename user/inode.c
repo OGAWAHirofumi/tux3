@@ -119,7 +119,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
 	if (IS_ERR(entry))
 		return NULL; // ERR_PTR me!!!
-	inum_t inum = from_be_u32(entry->inum);
+	inum_t inum = from_be_u64(entry->inum);
 	brelse(buffer);
 	struct inode *inode = iget(dir->i_sb, inum);
 	return open_inode(inode) ? NULL : inode;

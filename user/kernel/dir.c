@@ -40,8 +40,9 @@
 
 #include "tux3.h"
 
-#define TUX_DIR_PAD 3
-#define TUX_REC_LEN(name_len) (((name_len) + 8 + TUX_DIR_PAD) & ~TUX_DIR_PAD)
+#define TUX_DIR_PAD (sizeof(inum_t) - 1)
+#define TUX_DIR_HEAD (offsetof(tux_dirent, name))
+#define TUX_REC_LEN(name_len) (((name_len) + TUX_DIR_HEAD + TUX_DIR_PAD) & ~TUX_DIR_PAD)
 #define TUX_MAX_REC_LEN ((1<<16)-1)
 
 static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
@@ -148,7 +149,7 @@ create:
 	}
 	entry->name_len = len;
 	memcpy(entry->name, name, len);
-	entry->inum = to_be_u32(inum);
+	entry->inum = to_be_u64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	dir->i_mtime = dir->i_ctime = gettime();
 	mark_inode_dirty(dir);
@@ -246,7 +247,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 				int lame = filldir(
 					state, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
-					from_be_u32(entry->inum), type);
+					from_be_u64(entry->inum), type);
 				if (lame) {
 					brelse(buffer);
 					return 0;
@@ -278,7 +279,7 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 		tux_rec_len_from_disk(entry->rec_len) - (void *)prev);
 	memset(entry->name, 0, entry->name_len);
 	entry->name_len = entry->type = 0;
-	entry->inum = to_be_u32(0);
+	entry->inum = 0;
 	brelse_dirty(buffer);
 	dir->i_ctime = dir->i_mtime = gettime();
 	mark_inode_dirty(dir);
@@ -289,8 +290,7 @@ int tux_dir_is_empty(struct inode *dir)
 {
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
 	unsigned blocks = dir->i_size >> blockbits, blocksize = 1 << blockbits;
-	/* FIXME: will overflow on 32bit arch */
-	be_u32 self = to_be_u32(tux_inode(dir)->inum);
+	be_u64 self = to_be_u64(tux_inode(dir)->inum);
 	struct buffer_head *buffer;
 
 	for (unsigned block = 0; block < blocks; block++) {

@@ -351,7 +351,7 @@ static inline map_t *mapping(struct inode *inode)
 
 /* directory entry */
 typedef struct {
-	be_u32 inum;
+	be_u64 inum;
 	be_u16 rec_len;
 	u8 name_len, type;
 	char name[];

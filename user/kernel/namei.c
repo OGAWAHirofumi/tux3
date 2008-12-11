@@ -13,7 +13,7 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, stru
 		inode = NULL;
 		goto out;
 	}
-	inode = tux3_iget(dir->i_sb, from_be_u32(entry->inum));
+	inode = tux3_iget(dir->i_sb, from_be_u64(entry->inum));
 	brelse(buffer);
 	if (IS_ERR(inode))
 		return ERR_CAST(inode);

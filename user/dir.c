@@ -74,11 +74,11 @@ void tux_dump_entries(struct buffer_head *buffer)
 			break;
 		}
 		if (!is_deleted(entry))
-			printf("%.*s (%x:%i) ",
-				entry->name_len,
-				entry->name,
-				entry->inum,
-				entry->type);
+			printf("%.*s (%Lx:%i) ",
+			       entry->name_len,
+			       entry->name,
+			       (L)from_be_u64(entry->inum),
+			       entry->type);
 		entry = next_entry(entry);
 	}
 	brelse(buffer);

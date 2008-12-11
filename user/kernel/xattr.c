@@ -42,7 +42,7 @@ typedef u32 atom_t;
 
 static inline atom_t entry_atom(tux_dirent *entry)
 {
-	return from_be_u32(entry->inum);
+	return from_be_u64(entry->inum);
 }
 
 struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
