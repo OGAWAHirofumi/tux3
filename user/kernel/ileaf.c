@@ -10,7 +10,13 @@
 
 #include "tux3.h"
 
-struct ileaf { be_u16 magic, count; u32 pad; be_u64 ibase; char table[]; };
+struct ileaf {
+	be_u16 magic;		/* Magic number */
+	be_u16 count;		/* Counts of used offset info entries */
+	u32 pad;
+	be_u64 ibase;		/* Base inode number */
+	char table[];		/* ileaf data: inode attrs ... offset info */
+};
 
 /*
  * inode leaf format
