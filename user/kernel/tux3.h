@@ -528,9 +528,7 @@ static inline struct timespec gettime(void)
 }
 
 struct tux_iattr {
-	u64 isize;
-	struct timespec mtime, ctime, atime;
-	unsigned mode, uid, gid, links;
+	unsigned mode, uid, gid;
 };
 
 void hexdump(void *data, unsigned size);
