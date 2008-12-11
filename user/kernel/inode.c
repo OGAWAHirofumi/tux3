@@ -50,7 +50,7 @@ int store_attrs(struct inode *inode, struct cursor *cursor)
  * we should only round down the split point, not the returned goal.)
  */
 
-int make_inode(struct inode *inode, struct tux_iattr *iattr)
+int make_inode(struct inode *inode, inum_t goal, struct tux_iattr *iattr)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	int err = -ENOENT, depth = sb->itable.root.depth;
@@ -58,22 +58,21 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
+	if ((err = probe(&sb->itable, goal, cursor))) {
 		free_cursor(cursor);
 		return err;
 	}
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 //	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
 
-	trace("create inode 0x%Lx", (L)tux_inode(inode)->inum);
+	trace("create inode 0x%Lx", (L)goal);
 	assert(!tux_inode(inode)->btree.root.depth);
-	inum_t inum = tux_inode(inode)->inum;
-	assert(inum < next_key(cursor, depth));
+	assert(goal < next_key(cursor, depth));
 	while (1) {
 //		printf("find empty inode in [%Lx] base %Lx\n", (L)bufindex(leafbuf), (L)ibase(leaf));
-		inum = find_empty_inode(&sb->itable, bufdata(leafbuf), inum);
-		printf("result inum is %Lx, limit is %Lx\n", (L)inum, (L)next_key(cursor, depth));
-		if (inum < next_key(cursor, depth))
+		goal = find_empty_inode(&sb->itable, bufdata(leafbuf), goal);
+		printf("result inum is %Lx, limit is %Lx\n", (L)goal, (L)next_key(cursor, depth));
+		if (goal < next_key(cursor, depth))
 			break;
 		int more = advance(&sb->itable, cursor);
 		if (more < 0) {
@@ -92,7 +91,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 	inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = iattr->ctime;
 	inode->i_nlink = 1;
-	tux_inode(inode)->inum = inum;
+	tux_inode(inode)->inum = goal;
 	tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
 	tux_inode(inode)->present = CTIME_SIZE_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
 	if ((err = store_attrs(inode, cursor)))
@@ -104,7 +103,7 @@ int make_inode(struct inode *inode, struct tux_iattr *iattr)
 errout:
 	/* release_cursor() was already called at error point */
 	free_cursor(cursor);
-	warn("make_inode 0x%Lx failed (%d)", (L)tux_inode(inode)->inum, err);
+	warn("make_inode 0x%Lx failed (%d)", (L)goal, err);
 	return err;
 }
 
@@ -339,7 +338,6 @@ struct inode *tux_create_inode(struct inode *dir, int mode)
 	struct inode *inode = new_inode(dir->i_sb);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
-	tux_inode(inode)->inum = tux_sb(dir->i_sb)->nextalloc;
 
 	struct tux_iattr iattr;
 	iattr.mode = mode;
@@ -352,7 +350,7 @@ struct inode *tux_create_inode(struct inode *dir, int mode)
 		iattr.gid = current->fsgid;
 	iattr.ctime = iattr.mtime = iattr.atime = gettime();
 
-	int err = make_inode(inode, &iattr);
+	int err = make_inode(inode, tux_sb(dir->i_sb)->nextalloc, &iattr);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);

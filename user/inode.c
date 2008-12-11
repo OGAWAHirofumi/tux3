@@ -147,8 +147,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	if (!inode)
 		return NULL; // err ???
 	iattr->mtime = iattr->ctime = iattr->atime = gettime();
-	tux_inode(inode)->inum = dir->i_sb->nextalloc;
-	int err = make_inode(inode, iattr);
+	int err = make_inode(inode, dir->i_sb->nextalloc, iattr);
 	if (err)
 		goto error; // err ???
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)

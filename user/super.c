@@ -78,20 +78,17 @@ int make_tux3(struct sb *sb, int fd)
 	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
 	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
 	trace("create bitmap inode");
-	tux_inode(sb->bitmap)->inum = TUX_BITMAP_INO;
-	if (make_inode(sb->bitmap, &(struct tux_iattr){ }))
+	if (make_inode(sb->bitmap, TUX_BITMAP_INO, &(struct tux_iattr){ }))
 		goto eek;
 	trace("create version table");
 	if (!(sb->vtable = new_inode(sb)))
 		goto eek;
-	tux_inode(sb->vtable)->inum = TUX_VTABLE_INO;
-	if (make_inode(sb->vtable, &(struct tux_iattr){ }))
+	if (make_inode(sb->vtable, TUX_VTABLE_INO, &(struct tux_iattr){ }))
 		goto eek;
 	trace("create root directory");
 	if (!(sb->rootdir = new_inode(sb)))
 		goto eek;
-	tux_inode(sb->rootdir)->inum = TUX_ROOTDIR_INO;
-	if (make_inode(sb->rootdir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }))
+	if (make_inode(sb->rootdir, TUX_ROOTDIR_INO, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }))
 		goto eek;
 	trace("create atom dictionary");
 	if (!(sb->atable = new_inode(sb)))
@@ -99,8 +96,7 @@ int make_tux3(struct sb *sb, int fd)
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
-	tux_inode(sb->atable)->inum = TUX_ATABLE_INO;
-	if (make_inode(sb->atable, &(struct tux_iattr){ }))
+	if (make_inode(sb->atable, TUX_ATABLE_INO, &(struct tux_iattr){ }))
 		goto eek;
 	if ((err = sync_super(sb)))
 		goto eek;
