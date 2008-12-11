@@ -140,6 +140,7 @@ void release_cursor(struct cursor *cursor)
 		level_pop_brelse(cursor);
 }
 
+/* unused */
 void show_cursor(struct cursor *cursor, int depth)
 {
 	printf(">>> cursor %p/%i:", cursor, depth);
@@ -240,7 +241,7 @@ eek:
  * all the way to the end of the index block, there we find the key that
  * separates the subtree we are in (a leaf) from the next subtree to the right.
  */
-be_u64 *next_keyp(struct cursor *cursor, int depth)
+static be_u64 *next_keyp(struct cursor *cursor, int depth)
 {
 	for (int level = depth; level--;)
 		if (!level_finished(cursor, level))
@@ -325,7 +326,7 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count = to_be_u32(bcount(node) + bcount(node2));
 }
 
-int delete_from_leaf(struct btree *btree, vleaf *leaf, struct delete_info *info)
+static int delete_from_leaf(struct btree *btree, vleaf *leaf, struct delete_info *info)
 {
 	return (btree->ops->leaf_chop)(btree, info->key, leaf);
 }
@@ -473,7 +474,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count = to_be_u32(bcount(node) + 1);
 }
 
-int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor)
+static int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor)
 {
 	trace("insert node 0x%Lx key 0x%Lx into node 0x%Lx", (L)childblock, (L)childkey, (L)btree->root.block);
 	int depth = btree->root.depth;
@@ -597,6 +598,7 @@ eek:
 	return (struct btree){ };
 }
 
+/* userland only */
 void free_btree(struct btree *btree)
 {
 	// write me

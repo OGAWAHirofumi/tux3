@@ -68,7 +68,7 @@ static inline struct dleaf *to_dleaf(vleaf *leaf)
 	return leaf;
 }
 
-int dleaf_init(struct btree *btree, vleaf *leaf)
+static int dleaf_init(struct btree *btree, vleaf *leaf)
 {
 	if (!leaf)
 		return -1;
@@ -79,7 +79,7 @@ int dleaf_init(struct btree *btree, vleaf *leaf)
 	return 0;
 }
 
-int dleaf_sniff(struct btree *btree, vleaf *leaf)
+static int dleaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return from_be_u16(to_dleaf(leaf)->magic) == 0x1eaf;
 }
@@ -89,12 +89,13 @@ unsigned dleaf_free(struct btree *btree, vleaf *leaf)
 	return from_be_u16(to_dleaf(leaf)->used) - from_be_u16(to_dleaf(leaf)->free);
 }
 
+/* unused */
 unsigned dleaf_need(struct btree *btree, struct dleaf *leaf)
 {
 	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
-int dleaf_free2(struct btree *btree, void *vleaf)
+static int dleaf_free2(struct btree *btree, void *vleaf)
 {
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
@@ -159,7 +160,7 @@ void dleaf_dump(struct btree *btree, vleaf *vleaf)
  * But it does truncate so it is getting checked in just for now.
  */
 
-int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
+static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 {
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *group = gdict;
@@ -208,6 +209,7 @@ int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 	return 1;
 }
 
+/* userland only */
 int dleaf_check(struct btree *btree, struct dleaf *leaf)
 {
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
@@ -238,7 +240,7 @@ eek:
 	return -1;
 }
 
-tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
+static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(dleaf_sniff(btree, from));
 	struct dleaf *leaf = from, *dest = into;
@@ -299,6 +301,7 @@ tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into
 	return get_index(destgroups - 1, destentries - 1);
 }
 
+/* userland only */
 void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
@@ -524,6 +527,7 @@ void dwalk_chop_after(struct dwalk *walk)
 	set_dleaf_groups(leaf, newgroups);
 }
 
+/* userland only */
 void dwalk_chop(struct dwalk *walk) // do we ever need this?
 {
 	if (!dleaf_groups(walk->leaf)) {

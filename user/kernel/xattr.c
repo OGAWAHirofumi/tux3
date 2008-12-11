@@ -45,7 +45,7 @@ static inline atom_t entry_atom(tux_dirent *entry)
 	return from_be_u64(entry->inum);
 }
 
-struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
+static struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
 {
 	unsigned shift = tux_sb(atable->i_sb)->blockbits - 3;
 	*offset = atom & ~(-1 << shift);
@@ -81,6 +81,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 	return len;
 }
 
+/* userland only */
 void dump_atoms(struct inode *atable)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
@@ -113,6 +114,7 @@ eek:
 	return;
 }
 
+/* userland only */
 void show_freeatoms(struct sb *sb)
 {
 	struct inode *atable = sb->atable;
@@ -134,7 +136,7 @@ eek:
 	warn("eek");
 }
 
-atom_t get_freeatom(struct inode *atable)
+static atom_t get_freeatom(struct inode *atable)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
 	atom_t atom = sb->freeatom;
@@ -155,7 +157,7 @@ eek:
 	return -1;
 }
 
-int use_atom(struct inode *atable, atom_t atom, int use)
+static int use_atom(struct inode *atable, atom_t atom, int use)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
 	unsigned shift = sb->blockbits - 1;
@@ -198,7 +200,7 @@ int use_atom(struct inode *atable, atom_t atom, int use)
 	return 0;
 }
 
-atom_t find_atom(struct inode *atable, char *name, unsigned len)
+static atom_t find_atom(struct inode *atable, char *name, unsigned len)
 {
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer);
@@ -209,7 +211,7 @@ atom_t find_atom(struct inode *atable, char *name, unsigned len)
 	return atom;
 }
 
-atom_t make_atom(struct inode *atable, char *name, unsigned len)
+static atom_t make_atom(struct inode *atable, char *name, unsigned len)
 {
 	atom_t atom = find_atom(atable, name, len);
 	if (atom != -1)
@@ -259,7 +261,7 @@ bail:
 	return -1;
 }
 
-struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom, int *err)
+static struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom, int *err)
 {
 	if (!xcache)
 		return NULL;
@@ -310,7 +312,7 @@ static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
  *
  *  * Should expand by binary factor
  */
-int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, unsigned flags)
+static int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, unsigned flags)
 {
 	int err = 0, use = 0;
 	struct xcache *xcache = tux_inode(inode)->xcache;
@@ -366,6 +368,7 @@ int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigne
 	return xcache_update(inode, atom, data, size, flags);
 }
 
+/* unused */
 int del_xattr(struct inode *inode, char *name, unsigned len)
 {
 	int err = 0;
@@ -384,6 +387,7 @@ int del_xattr(struct inode *inode, char *name, unsigned len)
 	return err;
 }
 
+/* userland only */
 int xattr_list(struct inode *inode, char *text, size_t size)
 {
 	if (!tux_inode(inode)->xcache)

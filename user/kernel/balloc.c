@@ -15,7 +15,7 @@
 #define trace trace_off
 #endif
 
-void set_bits(u8 *bitmap, unsigned start, unsigned count)
+static void set_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -31,7 +31,7 @@ void set_bits(u8 *bitmap, unsigned start, unsigned count)
 		bitmap[roff] |= rmask;
 }
 
-void clear_bits(u8 *bitmap, unsigned start, unsigned count)
+static void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -47,7 +47,7 @@ void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 		bitmap[roff] &= ~rmask;
 }
 
-int all_set(u8 *bitmap, unsigned start, unsigned count)
+static int all_set(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -72,6 +72,7 @@ static int bytebits(unsigned char c)
 	return count;
 }
 
+/* userland only */
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
 	assert(!(start & 7));
@@ -105,6 +106,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 	return total;
 }
 
+/* userland only */
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
@@ -164,7 +166,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
+static block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
 {
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	assert(blocks > 0);
@@ -220,7 +222,7 @@ final_partial_byte:
 	return -1;
 }
 
-block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
+static block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
 {
 	return balloc_extent_from_range(inode, start, count, 1);
 }
@@ -253,7 +255,7 @@ found:
 	return block;
 }
 
-void bfree_extent(struct sb *sb, block_t start, unsigned count)
+static void bfree_extent(struct sb *sb, block_t start, unsigned count)
 {
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;

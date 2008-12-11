@@ -36,6 +36,7 @@ unsigned encode_asize(unsigned bits)
 	return need;
 }
 
+/* unused */
 int attr_check(void *attrs, unsigned size)
 {
 	void *limit = attrs + size;

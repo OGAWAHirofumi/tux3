@@ -47,31 +47,31 @@ static inline tuxkey_t ibase(struct ileaf *leaf)
 	return from_be_u64(leaf->ibase);
 }
 
-int ileaf_init(struct btree *btree, vleaf *leaf)
+static int ileaf_init(struct btree *btree, vleaf *leaf)
 {
 	printf("initialize inode leaf %p\n", leaf);
 	*(struct ileaf *)leaf = (struct ileaf){ to_be_u16(0x90de) };
 	return 0;
 }
 
-int ileaf_sniff(struct btree *btree, vleaf *leaf)
+static int ileaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return ((struct ileaf *)leaf)->magic == to_be_u16(0x90de);
 }
 
-unsigned ileaf_need(struct btree *btree, vleaf *vleaf)
+static unsigned ileaf_need(struct btree *btree, vleaf *vleaf)
 {
 	be_u16 *dict = vleaf + btree->sb->blocksize;
 	unsigned count = icount(to_ileaf(vleaf));
 	return atdict(dict, count) + count * sizeof(*dict);
 }
 
-unsigned ileaf_free(struct btree *btree, vleaf *leaf)
+static unsigned ileaf_free(struct btree *btree, vleaf *leaf)
 {
 	return btree->sb->blocksize - ileaf_need(btree, leaf) - sizeof(struct ileaf);
 }
 
-void ileaf_dump(struct btree *btree, vleaf *vleaf)
+static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 {
 	struct sb *sb = btree->sb;
 	struct ileaf *leaf = vleaf;
@@ -122,7 +122,7 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 	return attrs;
 }
 
-int isinorder(struct btree *btree, struct ileaf *leaf)
+static int isinorder(struct btree *btree, struct ileaf *leaf)
 {
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	for (int i = 0, offset = 0, limit; --i >= -icount(leaf); offset = limit)
@@ -131,6 +131,7 @@ int isinorder(struct btree *btree, struct ileaf *leaf)
 	return 1;
 }
 
+/* userland only */
 int ileaf_check(struct btree *btree, struct ileaf *leaf)
 {
 	char *why;
@@ -146,7 +147,8 @@ eek:
 	return -1;
 }
 
-void ileaf_trim(struct btree *btree, struct ileaf *leaf) {
+static void ileaf_trim(struct btree *btree, struct ileaf *leaf)
+{
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	while (icount(leaf) > 1 && *(dict - icount(leaf)) == *(dict - icount(leaf) + 1))
 		leaf->count = to_be_u16(from_be_u16(leaf->count) - 1);
@@ -156,7 +158,7 @@ void ileaf_trim(struct btree *btree, struct ileaf *leaf) {
 
 #define SPLIT_AT_INUM
 
-tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vleaf *into)
+static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vleaf *into)
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
@@ -200,6 +202,7 @@ tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vleaf *int
 	return ibase(dest);
 }
 
+/* userland only */
 void ileaf_merge(struct btree *btree, struct ileaf *leaf, struct ileaf *from)
 {
 	if (!icount(from))
@@ -215,7 +218,7 @@ void ileaf_merge(struct btree *btree, struct ileaf *leaf, struct ileaf *from)
 		add_idict(dict - i, from_be_u16(*(dict - at)));
 }
 
-void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsigned newsize)
+static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsigned newsize)
 {
 	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;

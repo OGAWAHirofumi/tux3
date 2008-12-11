@@ -129,7 +129,7 @@ eek:
 	return err;
 }
 
-int store_attrs(struct inode *inode, struct cursor *cursor)
+static int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
 	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, cursor);
@@ -219,7 +219,7 @@ errout:
 	return err;
 }
 
-int save_inode(struct inode *inode)
+static int save_inode(struct inode *inode)
 {
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
