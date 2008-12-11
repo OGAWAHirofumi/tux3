@@ -14,6 +14,42 @@
 #define trace trace_on
 #endif
 
+static int open_inode(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	int err, depth = sb->itable.root.depth;
+	struct cursor *cursor = alloc_cursor(depth + 1);
+	if (!cursor)
+		return -ENOMEM;
+
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
+		free_cursor(cursor);
+		return err;
+	}
+	unsigned size;
+	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
+	if (!attrs) {
+		err = -ENOENT;
+		goto eek;
+	}
+	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
+	//ileaf_dump(&sb->itable, bufdata(cursor[depth].buffer));
+	//hexdump(attrs, size);
+	unsigned xsize = decode_xsize(inode, attrs, size);
+	err = -ENOMEM;
+	if (!(tux_inode(inode)->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
+		goto eek;
+	decode_attrs(inode, attrs, size); // error???
+	dump_attrs(inode);
+	if (tux_inode(inode)->xcache)
+		xcache_dump(inode);
+	err = 0;
+eek:
+	release_cursor(cursor);
+	free_cursor(cursor);
+	return err;
+}
+
 int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
@@ -104,42 +140,6 @@ errout:
 	/* release_cursor() was already called at error point */
 	free_cursor(cursor);
 	warn("make_inode 0x%Lx failed (%d)", (L)goal, err);
-	return err;
-}
-
-static int open_inode(struct inode *inode)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	int err, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 1);
-	if (!cursor)
-		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
-		free_cursor(cursor);
-		return err;
-	}
-	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
-	if (!attrs) {
-		err = -ENOENT;
-		goto eek;
-	}
-	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(&sb->itable, bufdata(cursor[depth].buffer));
-	//hexdump(attrs, size);
-	unsigned xsize = decode_xsize(inode, attrs, size);
-	err = -ENOMEM;
-	if (!(tux_inode(inode)->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
-		goto eek;
-	decode_attrs(inode, attrs, size); // error???
-	dump_attrs(inode);
-	if (tux_inode(inode)->xcache)
-		xcache_dump(inode);
-	err = 0;
-eek:
-	release_cursor(cursor);
-	free_cursor(cursor);
 	return err;
 }
 
