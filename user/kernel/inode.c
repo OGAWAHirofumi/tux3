@@ -342,6 +342,24 @@ int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat
 	return 0;
 }
 
+int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode *inode = dentry->d_inode;
+	tuxnode_t *tuxnode = tux_inode(inode);
+	int error;
+
+	error = inode_change_ok(inode, iattr);
+	if (error)
+		return error;
+	if (timespec_equal(iattr->ia_valid & ATTR_MTIME ? &iattr->ia_mtime : &inode->i_mtime,
+			   iattr->ia_valid & ATTR_CTIME ? &iattr->ia_ctime : &inode->i_ctime))
+		tuxnode->present &= ~MTIME_BIT;
+	else
+		tuxnode->present |= MTIME_BIT;
+
+	return inode_setattr(inode, iattr);
+}
+
 static const struct file_operations tux_file_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= do_sync_read,
@@ -478,21 +496,4 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	return inode;
 }
 
-int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
-{
-	struct inode *inode = dentry->d_inode;
-	tuxnode_t *tuxnode = tux_inode(inode);
-	int error;
-
-	error = inode_change_ok(inode, iattr);
-	if (error)
-		return error;
-	if (timespec_equal(iattr->ia_valid & ATTR_MTIME ? &iattr->ia_mtime : &inode->i_mtime,
-			   iattr->ia_valid & ATTR_CTIME ? &iattr->ia_ctime : &inode->i_ctime))
-		tuxnode->present &= ~MTIME_BIT;
-	else
-		tuxnode->present |= MTIME_BIT;
-
-	return inode_setattr(inode, iattr);
-}
 #endif /* !__KERNEL__ */
