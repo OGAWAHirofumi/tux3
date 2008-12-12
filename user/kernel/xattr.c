@@ -200,10 +200,13 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 	return 0;
 }
 
+tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size);
+loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size);
+
 static atom_t find_atom(struct inode *atable, char *name, unsigned len)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = _tux_find_entry(atable, name, len, &buffer, atable->i_sb->dictsize);
+	tux_dirent *entry = _tux_find_entry(atable, name, len, &buffer, tux_sb(atable->i_sb)->dictsize);
 	if (IS_ERR(entry))
 		return -1; /* FIXME: return correct errno */
 	atom_t atom = entry_atom(entry);
@@ -217,7 +220,7 @@ static atom_t make_atom(struct inode *atable, char *name, unsigned len)
 	if (atom != -1)
 		return atom;
 	atom = get_freeatom(atable);
-	loff_t where = _tux_create_entry(atable, name, len, atom, 0, &atable->i_sb->dictsize);
+	loff_t where = _tux_create_entry(atable, name, len, atom, 0, &tux_sb(atable->i_sb)->dictsize);
 	if (where < 0)
 		return -1; // and what about the err???
 
