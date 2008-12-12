@@ -105,6 +105,15 @@ int make_tux3(struct sb *sb, int fd)
 	if ((err = sync_super(sb)))
 		goto eek;
 
+	/* Clear first and last block to get rid of other magic */
+	for (int i = 0; i <= 1; i++) {
+		loff_t loc = (loff_t[2]){ 0, (sb->volblocks - 1) << sb->blockbits }[i];
+		unsigned len = (loff_t[2]){ SB_LOC, sb->blocksize }[i];
+		char data[4096] = { };
+		if ((err = diskwrite(sb->devmap->dev->fd, data, len, loc)))
+			goto eek;
+	}
+
 	show_buffers(mapping(sb->bitmap));
 	show_buffers(mapping(sb->rootdir));
 	show_buffers(sb->devmap);
