@@ -362,7 +362,7 @@ static const struct file_operations tux_file_fops = {
 static const struct inode_operations tux_file_iops = {
 	.truncate	= tux3_truncate,
 //	.permission	= ext4_permission,
-//	.setattr	= ext4_setattr,
+	.setattr	= tux3_setattr,
 	.getattr	= tux3_getattr
 #ifdef CONFIG_EXT4DEV_FS_XATTR
 //	.setxattr	= generic_setxattr,
@@ -476,5 +476,23 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	}
 	unlock_new_inode(inode);
 	return inode;
+}
+
+int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	struct inode *inode = dentry->d_inode;
+	tuxnode_t *tuxnode = tux_inode(inode);
+	int error;
+
+	error = inode_change_ok(inode, iattr);
+	if (error)
+		return error;
+	if (timespec_equal(iattr->ia_valid & ATTR_MTIME ? &iattr->ia_mtime : &inode->i_mtime,
+			   iattr->ia_valid & ATTR_CTIME ? &iattr->ia_ctime : &inode->i_ctime))
+		tuxnode->present &= ~MTIME_BIT;
+	else
+		tuxnode->present |= MTIME_BIT;
+
+	return inode_setattr(inode, iattr);
 }
 #endif /* !__KERNEL__ */
