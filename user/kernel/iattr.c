@@ -150,7 +150,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = decode48(attrs, &v64);
-			attrs = decode64(attrs, &inode->i_size);
+			attrs = decode64(attrs, (u64 *)&inode->i_size); // decode to temp?
 			inode->i_ctime = spectime(v64 << TIME_ATTR_SHIFT);
 			break;
 		case MTIME_ATTR:

@@ -154,7 +154,9 @@ struct disksuper
 	/* The rest should be moved to a "metablock" that is updated frequently */
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
 	be_u64 nextalloc;	/* Get rid of this when we have a real allocation policy */
-	be_u32 freeatom, atomgen;
+	be_u32 freeatom;	/* Beginning of persistent free atom list in atable */
+	be_u32 atomgen;		/* Next atom number if there are no free atoms */
+	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
 };
 
 struct root {
@@ -214,6 +216,7 @@ struct sb {
 	unsigned atomref_base, unatom_base; /* layout of atom table */
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
+	loff_t dictsize;	/* Atom dictionary size */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
@@ -280,7 +283,7 @@ typedef struct inode {
 	struct xcache *xcache;
 	struct sb *i_sb;
 	map_t *map;
-	u64 i_size;
+	loff_t i_size;
 	unsigned i_version;
 	struct timespec i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_nlink;

@@ -105,13 +105,13 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
-loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
+loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size)
 {
 	tux_dirent *entry;
 	struct buffer_head *buffer;
 	unsigned reclen = TUX_REC_LEN(len), rec_len, name_len, offset;
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
-	unsigned blocks = dir->i_size >> blockbits, block;
+	unsigned blocks = *size >> blockbits, block;
 	for (block = 0; block < blocks; block++) {
 		buffer = blockread(mapping(dir), block);
 		if (!buffer)
@@ -139,7 +139,7 @@ loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inu
 	name_len = 0;
 	rec_len = blocksize;
 	*entry = (tux_dirent){ .rec_len = tux_rec_len_to_disk(blocksize) };
-	dir->i_size += blocksize;
+	*size += blocksize;
 create:
 	if (!is_deleted(entry)) {
 		tux_dirent *newent = (tux_dirent *)((char *)entry + name_len);
@@ -158,11 +158,11 @@ create:
 	return (block << blockbits) + offset; /* only needed for xattr create */
 }
 
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
+tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size)
 {
 	unsigned reclen = TUX_REC_LEN(len);
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
-	unsigned blocks = dir->i_size >> tux_sb(dir->i_sb)->blockbits, block;
+	unsigned blocks = size >> tux_sb(dir->i_sb)->blockbits, block;
 	int err = -ENOENT;
 	for (block = 0; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
@@ -190,6 +190,16 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct 
 error:
 	*result = NULL;		/* for debug */
 	return ERR_PTR(err);
+}
+
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
+{
+	return _tux_create_entry(dir, name, len, inum, mode, &dir->i_size);
+}
+
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
+{
+	return _tux_find_entry(dir, name, len, result, dir->i_size);
 }
 
 static unsigned char filetype[TUX_TYPES] = {

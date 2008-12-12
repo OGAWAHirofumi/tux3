@@ -47,7 +47,7 @@ static int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
 	sb->nextalloc = from_be_u64(super->nextalloc);
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
-
+	sb->dictsize = from_be_u64(super->dictsize);
 	return 0;
 }
 
@@ -55,10 +55,11 @@ static void pack_sb(struct sb *sb, struct disksuper *super)
 {
 	super->blockbits = to_be_u16(sb->blockbits);
 	super->volblocks = to_be_u64(sb->volblocks);
-	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
-	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
-	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
 	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
+	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
+	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
+	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
+	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
 	super->iroot = to_be_u64(pack_root(&sb->itable.root));
 }
 

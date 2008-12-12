@@ -203,7 +203,7 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 static atom_t find_atom(struct inode *atable, char *name, unsigned len)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer);
+	tux_dirent *entry = _tux_find_entry(atable, name, len, &buffer, atable->i_sb->dictsize);
 	if (IS_ERR(entry))
 		return -1; /* FIXME: return correct errno */
 	atom_t atom = entry_atom(entry);
@@ -217,7 +217,7 @@ static atom_t make_atom(struct inode *atable, char *name, unsigned len)
 	if (atom != -1)
 		return atom;
 	atom = get_freeatom(atable);
-	loff_t where = tux_create_entry(atable, name, len, atom, 0);
+	loff_t where = _tux_create_entry(atable, name, len, atom, 0, &atable->i_sb->dictsize);
 	if (where < 0)
 		return -1; // and what about the err???
 
