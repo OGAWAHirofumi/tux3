@@ -629,6 +629,7 @@ extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
 
 /* dtree.c */
+#define MAX_GROUP_ENTRIES 255
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;

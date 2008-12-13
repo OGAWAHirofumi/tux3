@@ -9,14 +9,14 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, stru
 	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
 	if (IS_ERR(entry)) {
 		if (PTR_ERR(entry) != -ENOENT)
-			return ERR_CAST(entry);
+			return ERR_PTR(PTR_ERR(entry));
 		inode = NULL;
 		goto out;
 	}
 	inode = tux3_iget(dir->i_sb, from_be_u64(entry->inum));
 	brelse(buffer);
 	if (IS_ERR(inode))
-		return ERR_CAST(inode);
+		return ERR_PTR(PTR_ERR(inode));
 out:
 	return d_splice_alias(inode, dentry);
 }
