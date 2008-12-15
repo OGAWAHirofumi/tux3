@@ -120,8 +120,8 @@ loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t in
 		tux_dirent *limit = bufdata(buffer) + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
-				warn("zero-length directory entry");
 				brelse(buffer);
+				tux_error(dir->i_sb, "zero-length directory entry");
 				return -EIO;
 			}
 			name_len = TUX_REC_LEN(entry->name_len);
@@ -175,7 +175,7 @@ tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				err = -EIO;
 				goto error;
 			}
@@ -249,7 +249,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
-				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return -EIO;
 			}
 			if (!is_deleted(entry)) {
@@ -277,8 +277,8 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
-			warn("zero-length directory entry");
 			brelse(buffer);
+			tux_error(dir->i_sb, "zero-length directory entry");
 			return -EIO;
 		}
 		prev = this;
@@ -312,8 +312,9 @@ int tux_dir_is_empty(struct inode *dir)
 		tux_dirent *limit = bufdata(buffer) + blocksize - TUX_REC_LEN(1);
 		for (; entry <= limit; entry = next_entry(entry)) {
 			if (!entry->rec_len) {
-				warn("zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
-				goto not_empty;
+				brelse(buffer);
+				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				return -EIO;
 			}
 			if (is_deleted(entry))
 				continue;

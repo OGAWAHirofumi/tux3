@@ -20,4 +20,13 @@
 #define trace_off(...) do {} while (0)
 #define trace_on(fmt, args...) warn(fmt , ##args)
 
+/*
+ * FIXME: this may want to change behavior by mount option.
+ * NOTE: don't assume this calls die().
+ */
+#define tux_error(sb, fmt, args...) do {	\
+	warn(fmt , ##args);			\
+	die(100);				\
+} while (0)
+
 #endif
