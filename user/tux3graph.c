@@ -365,7 +365,7 @@ static inline struct diskextent *dleaf_extents(struct dleaf *dleaf,
 	struct entry *entries;
 	int i;
 
-	for (i = 0; i < gr - 1; i++) {
+	for (i = 0; i < gr; i++) {
 		group = dleaf_group_ptr(groups, i);
 		entries = dleaf_entries(dleaf, groups, i);
 		extents += entry_limit(dleaf_entry(entries, group_count(group) - 1));
