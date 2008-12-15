@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
 	};
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
-	if ((errno = -make_tux3(sb, fd)))
+	if ((errno = -make_tux3(sb)))
 		goto eek;
 	trace("create file");
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });

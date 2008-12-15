@@ -56,13 +56,32 @@ int sync_super(struct sb *sb)
 	return 0;
 }
 
-int make_tux3(struct sb *sb, int fd)
+static int clear_other_magic(struct sb *sb)
+{
+	int err;
+	/* Clear first and last block to get rid of other magic */
+	for (int i = 0; i <= 1; i++) {
+		loff_t loc = (loff_t[2]){ 0, (sb->volblocks - 1) << sb->blockbits }[i];
+		unsigned len = (loff_t[2]){ SB_LOC, sb->blocksize }[i];
+		char data[len];
+		memset(data, 0, len);
+		if ((err = diskwrite(sb->devmap->dev->fd, data, len, loc)))
+			break;
+	}
+	return err;
+}
+
+int make_tux3(struct sb *sb)
 {
 	struct inode *dir = &(struct inode){
 		.i_sb	= sb,
 		.i_mode	= S_IFDIR | 0755,
 	};
-	int err = 0;
+
+	int err = clear_other_magic(sb);
+	if (err)
+		return err;
+
 	trace("create bitmap");
 	if (!(sb->bitmap = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
@@ -104,16 +123,6 @@ int make_tux3(struct sb *sb, int fd)
 		goto eek;
 	if ((err = sync_super(sb)))
 		goto eek;
-
-	/* Clear first and last block to get rid of other magic */
-	for (int i = 0; i <= 1; i++) {
-		loff_t loc = (loff_t[2]){ 0, (sb->volblocks - 1) << sb->blockbits }[i];
-		unsigned len = (loff_t[2]){ SB_LOC, sb->blocksize }[i];
-		char data[len];
-		memset(data, 0, len);
-		if ((err = diskwrite(sb->devmap->dev->fd, data, len, loc)))
-			goto eek;
-	}
 
 	show_buffers(mapping(sb->bitmap));
 	show_buffers(mapping(sb->rootdir));

@@ -86,7 +86,7 @@ int main(int argc, const char *argv[])
 			goto usage;
 		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
 		printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
-		if ((errno = -make_tux3(sb, fd)))
+		if ((errno = -make_tux3(sb)))
 			goto eek;
 		show_tree_range(&sb->itable, 0, -1);
 		return 0;
