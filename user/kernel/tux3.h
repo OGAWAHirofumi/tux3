@@ -332,6 +332,7 @@ typedef struct {
 
 /* version:10, count:6, block:48 */
 struct diskextent { be_u64 block_count_version; };
+#define MAX_GROUP_ENTRIES 255
 /* count:8, keyhi:24 */
 struct group { be_u32 count_and_keyhi; };
 /* limit:8, keylo:24 */
@@ -629,7 +630,6 @@ extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
 
 /* dtree.c */
-#define MAX_GROUP_ENTRIES 255
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;

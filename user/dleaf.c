@@ -21,9 +21,8 @@
 
 #include "tux3.h"
 #ifndef main
+#undef MAX_GROUP_ENTRIES
 #define MAX_GROUP_ENTRIES 7
-#else
-#define MAX_GROUP_ENTRIES 255
 #endif
 #include "kernel/dleaf.c"
 
