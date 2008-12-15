@@ -105,6 +105,17 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
+int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode)
+{
+	struct inode *dir = buffer_inode(buffer);
+	entry->inum = to_be_u64(inum);
+	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
+	brelse_dirty(buffer);
+	dir->i_mtime = dir->i_ctime = gettime();
+	mark_inode_dirty(dir);
+	return 0;
+}
+
 loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size)
 {
 	tux_dirent *entry;
@@ -149,12 +160,10 @@ create:
 	}
 	entry->name_len = len;
 	memcpy(entry->name, name, len);
-	entry->inum = to_be_u64(inum);
-	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
-	dir->i_mtime = dir->i_ctime = gettime();
-	mark_inode_dirty(dir);
 	offset = (void *)entry - bufdata(buffer);
-	brelse_dirty(buffer);
+	int err = tux_update_entry(buffer, entry, inum, mode);
+	if (err)
+		return err;
 	return (block << blockbits) + offset; /* only needed for xattr create */
 }
 

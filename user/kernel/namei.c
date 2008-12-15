@@ -21,7 +21,7 @@ out:
 	return d_splice_alias(inode, dentry);
 }
 
-static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
+static int __tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
 	loff_t where;
 
@@ -29,8 +29,20 @@ static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode
 				 tux_inode(inode)->inum, inode->i_mode);
 	if (where < 0)
 		return where;
-	d_instantiate(dentry, inode);
 	return 0;
+}
+
+static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
+{
+	int err = __tux_add_dirent(dir, dentry, inode);
+	if (!err)
+		d_instantiate(dentry, inode);
+	return err;
+}
+
+static int tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *inode)
+{
+	return tux_update_entry(buffer, entry, tux_inode(inode)->inum, inode->i_mode);
 }
 
 static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
@@ -153,45 +165,71 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
 	struct buffer_head *old_buffer, *new_buffer;
-	tux_dirent *old_de, *new_de = NULL;
+	tux_dirent *old_entry, *new_entry;
+	int err, new_subdir = 0;
 
-	old_de = tux_find_entry(old_dir, old_dentry->d_name.name,
-		old_dentry->d_name.len, &old_buffer);
-	if (IS_ERR(old_de))
-		return PTR_ERR(old_de);
+	old_entry = tux_find_entry(old_dir, old_dentry->d_name.name,
+				   old_dentry->d_name.len, &old_buffer);
+	if (IS_ERR(old_entry))
+		return PTR_ERR(old_entry);
+
+	/* FIXME: is this needed? */
+	BUG_ON(from_be_u64(old_entry->inum) != tux_inode(old_inode)->inum);
 
 	if (new_inode) {
-		int err = tux_dir_is_empty(new_inode);
+		int old_is_dir = S_ISDIR(old_inode->i_mode);
+		if (old_is_dir) {
+			err = tux_dir_is_empty(new_inode);
+			if (err)
+				goto error;
+		}
+
+		new_entry = tux_find_entry(new_dir, new_dentry->d_name.name,
+					   new_dentry->d_name.len, &new_buffer);
+		if (IS_ERR(new_entry)) {
+			BUG_ON(PTR_ERR(new_entry) == -ENOENT);
+			err = PTR_ERR(new_entry);
+			goto error;
+		}
+		err = tux_update_dirent(new_buffer, new_entry, old_inode);
 		if (err)
-			return err;
-
-		new_de = tux_find_entry(new_dir, new_dentry->d_name.name,
-			new_dentry->d_name.len, &new_buffer);
-		if (IS_ERR(new_de))
-			return PTR_ERR(old_de);
-
-		if ((err = tux_delete_entry(new_buffer, new_de)))
-			return err;
-
-		new_inode->i_ctime = new_dentry->d_parent->d_inode->i_ctime;
+			goto error;
+		new_inode->i_ctime = new_dir->i_ctime;
+		if (old_is_dir)
+			drop_nlink(new_inode);
 		inode_dec_link_count(new_inode);
-		err = tux_create_entry(new_dentry->d_parent->d_inode,
-				       new_dentry->d_name.name,
-				       new_dentry->d_name.len,
-				       tux_inode(old_inode)->inum,
-				       old_inode->i_mode);
-
-		if (err)
-			return err;
-
 	} else {
-		int err = tux_add_dirent(new_dentry->d_parent->d_inode, new_dentry, old_inode);
+		new_subdir = S_ISDIR(old_inode->i_mode) && new_dir != old_dir;
+		if (new_subdir) {
+			if (new_dir->i_nlink >= TUX_LINK_MAX) {
+				err = -EMLINK;
+				goto error;
+			}
+		}
+		err = __tux_add_dirent(new_dir, new_dentry, old_inode);
 		if (err)
-			return err;
+			goto error;
+		if (new_subdir)
+			inode_inc_link_count(new_dir);
 	}
-	old_inode->i_ctime = gettime();
-	tux_delete_entry(old_buffer, old_de);
-	return 0;
+	old_inode->i_ctime = new_dir->i_ctime;
+	mark_inode_dirty(old_inode);
+
+	err = tux_delete_entry(old_buffer, old_entry);
+	if (err) {
+		printk(KERN_ERR "TUX3: %s: couldn't delete old entry (%Lu)\n",
+		       __func__, (L)tux_inode(old_inode)->inum);
+		/* FIXME: now, we have hardlink even if it's dir. */
+		inode_inc_link_count(old_inode);
+	}
+	if (!err && new_subdir)
+		inode_dec_link_count(old_dir);
+
+	return err;
+
+error:
+	brelse(old_buffer);
+	return err;
 }
 
 const struct file_operations tux_dir_fops = {
