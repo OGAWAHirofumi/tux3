@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 	dleaf_dump(btree, leaf);
-	for (int i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+	for (int i = 0; i < ARRAY_SIZE(keys); i++) {
 		unsigned key = keys[i];
 		unsigned count;
 		void *found = dleaf_lookup(btree, leaf, key, &count);

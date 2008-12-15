@@ -14,8 +14,6 @@
 #include "inode.c"
 #include <popt.h>
 
-#define ARRAY_SIZE(x)		(sizeof(x) / sizeof((x)[0]))
-
 static int fls(uint32_t v)
 {
 	uint32_t mask;
