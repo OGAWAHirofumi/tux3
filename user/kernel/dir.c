@@ -330,8 +330,8 @@ int tux_dir_is_empty(struct inode *dir)
 		}
 		brelse(buffer);
 	}
-	return 1;
+	return 0;
 not_empty:
 	brelse(buffer);
-	return 0;
+	return -ENOTEMPTY;
 }

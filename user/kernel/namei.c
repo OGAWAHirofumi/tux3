@@ -131,8 +131,10 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	int err = -ENOTEMPTY;
-	if (tux_dir_is_empty(inode)) {
+	int err;
+
+	err = tux_dir_is_empty(inode);
+	if (!err) {
 		err = tux_del_dirent(dir, dentry);
 		if (!err) {
 			inode->i_ctime = dir->i_ctime;
@@ -159,8 +161,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return PTR_ERR(old_de);
 
 	if (new_inode) {
-		int err = -ENOTEMPTY;
-		if (!tux_dir_is_empty(new_inode))
+		int err = tux_dir_is_empty(new_inode);
+		if (err)
 			return err;
 
 		new_de = tux_find_entry(new_dir, new_dentry->d_name.name,
