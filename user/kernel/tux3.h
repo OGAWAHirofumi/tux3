@@ -408,7 +408,7 @@ static inline struct diskextent make_extent(block_t block, unsigned count)
 	return (struct diskextent){ to_be_u64(((u64)(count - 1) << 48) | block) };
 }
 
-static inline unsigned extent_block(struct diskextent extent)
+static inline block_t extent_block(struct diskextent extent)
 {
 	return from_be_u64(*(be_u64 *)&extent) & ~(-1LL << 48);
 }
