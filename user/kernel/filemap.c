@@ -122,6 +122,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned limit, struct s
 				goto eek;
 			}
 			depth = btree->root.depth;
+			leaf = bufdata(cursor_leafbuf(cursor));
 			dwalk_probe(leaf, sbi->blocksize, walk, 0);
 			dwalk_seek(walk, start);
 			rewind = *walk;
