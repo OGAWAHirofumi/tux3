@@ -22,7 +22,7 @@ static void dwalk_seek(struct dwalk *walk, tuxkey_t key)
 
 struct seg { block_t block; int count; };
 
-int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg seg[], unsigned max_segs, int write)
+static int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg seg[], unsigned max_segs, int write)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -271,7 +271,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	if (seg.count < 0)
 		set_buffer_uptodate(bh_result);
 	else {
-		unsigned blocks = min(max_blocks, (unsigned)seg.count);
+		size_t blocks = min_t(size_t, max_blocks, seg.count);
 		map_bh(bh_result, inode->i_sb, seg.block);
 		bh_result->b_size = blocks << sbi->blockbits;
 		inode->i_blocks += blocks << (sbi->blockbits - 9);
