@@ -99,6 +99,11 @@ int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg seg[
 
 	if (update_dtree) {
 		/* Update dtree by new extents */
+		while (next_extent) {
+			trace("save tail");
+			seg[segs++] = (struct seg){ extent_block(*next_extent), extent_count(*next_extent) };
+			next_extent = dwalk_next(walk);
+		}
 		*walk = rewind;
 		for (int try = 0; try < 2; try++) {
 			/* Everything fits in the leaf? */
