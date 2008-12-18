@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	struct cursor *cursor = alloc_cursor(btree.root.depth + 2); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(&btree, 1); /* +1 for new depth */
 	int until_new_depth = sb->entries_per_node * btree.entries_per_leaf + 1;
 	for (int key = 0; key < until_new_depth; key++) {
 		if (probe(&btree, key, cursor))

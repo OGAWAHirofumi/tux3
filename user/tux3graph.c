@@ -211,7 +211,7 @@ static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t dr
 		"label = \"%s\"\n",
 		gi->subgraph, gi->bname);
 
-	cursor = alloc_cursor(btree->root.depth + 1);
+	cursor = alloc_cursor(btree, 0);
 	if (!cursor)
 		error("out of memory");
 

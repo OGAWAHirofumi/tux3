@@ -149,19 +149,21 @@ void show_cursor(struct cursor *cursor, int depth)
 	printf("\n");
 }
 
-static inline int alloc_cursor_size(int depth)
+static inline int alloc_cursor_size(int maxlevel)
 {
-	return sizeof(struct cursor) + sizeof(struct path_level) * depth;
+	return sizeof(struct cursor) + sizeof(struct path_level) * maxlevel;
 }
 
-struct cursor *alloc_cursor(int depth)
+struct cursor *alloc_cursor(struct btree *btree, int extra)
 {
-	struct cursor *cursor = malloc(alloc_cursor_size(depth));
+	int maxlevel = btree->root.depth + 1 + extra;
+	struct cursor *cursor = malloc(alloc_cursor_size(maxlevel));
 	if (cursor) {
+		cursor->btree = btree;
 		cursor->len = 0;
 #ifdef CURSOR_DEBUG
-		cursor->maxlen = depth;
-		for (int i = 0; i < depth; i++) {
+		cursor->maxlen = maxlevel;
+		for (int i = 0; i < maxlevel; i++) {
 			cursor->path[i].buffer = FREE_BUFFER; /* for debug */
 			cursor->path[i].next = FREE_NEXT; /* for debug */
 		}
@@ -259,7 +261,7 @@ tuxkey_t next_key(struct cursor *cursor, int depth)
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
-	struct cursor *cursor = alloc_cursor(btree->root.depth + 1);
+	struct cursor *cursor = alloc_cursor(btree, 0);
 	if (!cursor)
 		error("out of memory");
 	if (probe(btree, start, cursor))
@@ -340,7 +342,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	struct sb *sb = btree->sb;
 	int ret;
 
-	cursor = alloc_cursor(depth + 1);
+	cursor = alloc_cursor(btree, 0);
 	prev = malloc(sizeof(*prev) * depth);
 	memset(prev, 0, sizeof(*prev) * depth);
 

@@ -187,6 +187,7 @@ static inline struct root unpack_root(u64 v)
 /* Path cursor for btree traversal */
 
 struct cursor {
+	struct btree *btree;
 #define CURSOR_DEBUG
 #ifdef CURSOR_DEBUG
 #define FREE_BUFFER	((void *)0xdbc06505)
@@ -609,7 +610,7 @@ block_t balloc_extent(struct sb *sb, unsigned blocks);
 /* btree.c */
 struct buffer_head *cursor_leafbuf(struct cursor *cursor);
 void release_cursor(struct cursor *cursor);
-struct cursor *alloc_cursor(int);
+struct cursor *alloc_cursor(struct btree *btree, int);
 void free_cursor(struct cursor *cursor);
 int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor);
 int advance(struct btree *btree, struct cursor *cursor);

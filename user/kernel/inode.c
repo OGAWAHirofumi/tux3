@@ -94,8 +94,8 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 static int open_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	int err, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 1);
+	int err;
+	struct cursor *cursor = alloc_cursor(&sb->itable, 0);
 	if (!cursor)
 		return -ENOMEM;
 
@@ -169,7 +169,7 @@ static int make_inode(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	int err = -ENOENT, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for now depth */
+	struct cursor *cursor = alloc_cursor(&sb->itable, 1); /* +1 for now depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -224,8 +224,8 @@ static int save_inode(struct inode *inode)
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	struct sb *sb = tux_sb(inode->i_sb);
-	int err, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for new depth */
+	int err;
+	struct cursor *cursor = alloc_cursor(&sb->itable, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -248,11 +248,11 @@ error:
 
 static int purge_inum(struct btree *btree, inum_t inum)
 {
-	int err = -ENOENT, depth = btree->root.depth;
-	struct cursor *cursor = alloc_cursor(depth + 1);
+	struct cursor *cursor = alloc_cursor(btree, 0);
 	if (!cursor)
 		return -ENOMEM;
 
+	int err = -ENOENT;
 	if (!(err = probe(btree, inum, cursor))) {
 		/* FIXME: truncate the bnode and leaf if empty. */
 		struct buffer_head *ileafbuf = cursor_leafbuf(cursor);

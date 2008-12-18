@@ -25,15 +25,16 @@ struct seg { block_t block; int count; };
 int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg seg[], unsigned max_segs, int write)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
-	int depth = tux_inode(inode)->btree.root.depth, i, err;
+	struct btree *btree = &tux_inode(inode)->btree;
+	int depth = btree->root.depth, i, err;
 	if (!depth)
 		return 0;
 
-	struct cursor *cursor = alloc_cursor(depth + 2); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(btree, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 
-	if ((err = probe(&tux_inode(inode)->btree, start, cursor))) {
+	if ((err = probe(btree, start, cursor))) {
 		free_cursor(cursor);
 		return err;
 	}
@@ -43,7 +44,7 @@ int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg seg[
 		limit = next_key(cursor, depth);
 	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	struct dwalk *walk = &(struct dwalk){ };
-	dleaf_dump(&tux_inode(inode)->btree, leaf);
+	dleaf_dump(btree, leaf);
 	/* Probe below io start to include overlapping extents */
 	dwalk_probe(leaf, sbi->blocksize, walk, 0); // start at beginning of leaf just for now
 	dwalk_seek(walk, start);
@@ -110,17 +111,17 @@ int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg seg[
 			for (i = 0, index = start - offset; i < segs; i++, index += seg[i].count)
 				dwalk_mock(walk, index, make_extent(seg[i].block, seg[i].count));
 			trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
-			trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(&tux_inode(inode)->btree, leaf));
-			if (dleaf_free(&tux_inode(inode)->btree, leaf) >= walk->mock.free - walk->mock.used)
+			trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(btree, leaf));
+			if (dleaf_free(btree, leaf) >= walk->mock.free - walk->mock.used)
 				break;
 			if (try)
 				goto eek;
 			trace_on("--------- split leaf ---------");
-			if ((err = btree_leaf_split(&tux_inode(inode)->btree, cursor, start))) {
+			if ((err = btree_leaf_split(btree, cursor, start))) {
 				segs = err;
 				goto eek;
 			}
-			depth = tux_inode(inode)->btree.root.depth;
+			depth = btree->root.depth;
 			dwalk_probe(leaf, sbi->blocksize, walk, 0);
 			dwalk_seek(walk, start);
 			rewind = *walk;
@@ -254,7 +255,8 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 
 	struct sb *sbi = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
-	int depth = tux_inode(inode)->btree.root.depth;
+	struct btree *btree = &tux_inode(inode)->btree;
+	int depth = btree->root.depth;
 	if (!depth) {
 		warn("Uninitialied inode %lx", inode->i_ino);
 		return 0;
