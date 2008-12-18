@@ -74,6 +74,12 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
+	for (int i = 0; i < 30; i++) {
+		struct seg seg;
+		get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+	}
+	exit(0);
+
 #if 1
 	sb->nextalloc = 0x10;
 	balloc(sb);
