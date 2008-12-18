@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
 		struct seg seg;
 		get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
 	}
+	show_tree_range(&inode->btree, 0, -1);
 	exit(0);
 
 #if 1
