@@ -424,12 +424,6 @@ static inline unsigned extent_version(struct diskextent extent)
 	return from_be_u64(*(be_u64 *)&extent) >> 54;
 }
 
-/* helper to get the index for extent in group/entry  */
-static inline tuxkey_t get_index(struct group *group, struct entry *entry)
-{
-	return ((tuxkey_t)group_keyhi(group) << 24) | entry_keylo(entry);
-}
-
 /* dleaf wrappers */
 
 static inline unsigned dleaf_groups(struct dleaf *leaf)

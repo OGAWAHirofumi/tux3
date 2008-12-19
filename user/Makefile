@@ -7,7 +7,7 @@ CFLAGS  += -m32
 endif
 
 CFLAGS += -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
-CFLAGS += -Werror -Wall -Wextra
+CFLAGS += -Wall -Wextra # -Werror
 CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 
 CHECKER = sparse

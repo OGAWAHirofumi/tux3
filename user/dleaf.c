@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
 	dleaf_dump(btree, leaf);
-	dleaf_check(btree, leaf);
+	assert(!dleaf_check(btree, leaf));
 
 	if (1) {
 		/* test for dwalk_next and dwalk_back */
@@ -132,8 +132,7 @@ int main(int argc, char *argv[])
 			assert(memcmp(&w2[i], &w2[i], sizeof(w1[0])) == 0);
 		dleaf_destroy(btree, leaf1);
 	}
-	exit(0);
-	if (1) {
+	if (0) { // fails
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
 		dwalk_back(walk);
 		dwalk_back(walk);
@@ -141,7 +140,7 @@ int main(int argc, char *argv[])
 			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent_block(*extent));
 		exit(0);
 	}
-	if (1) {
+	if (0) { // fails
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1c01c);
 		dwalk_chop(walk);
 		dleaf_dump(btree, leaf);
@@ -159,6 +158,7 @@ int main(int argc, char *argv[])
 			printf("0x%x not found\n", key);
 	}
 
+	assert(!dleaf_check(btree, leaf));
 	struct dleaf *dest = dleaf_create(btree);
 	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
 	printf("split key 0x%Lx\n", (L)key);

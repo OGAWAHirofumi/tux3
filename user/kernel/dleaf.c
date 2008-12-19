@@ -106,6 +106,11 @@ static int dleaf_free2(struct btree *btree, void *vleaf)
 	return (void *)entry - (void *)extents;
 }
 
+static inline tuxkey_t get_index(struct group *group, struct entry *entry)
+{
+	return ((tuxkey_t)group_keyhi(group) << 24) | entry_keylo(entry);
+}
+
 void dleaf_dump(struct btree *btree, vleaf *vleaf)
 {
 	unsigned blocksize = btree->sb->blocksize;
@@ -209,7 +214,6 @@ static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 	return 1;
 }
 
-/* userland only */
 int dleaf_check(struct btree *btree, struct dleaf *leaf)
 {
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
