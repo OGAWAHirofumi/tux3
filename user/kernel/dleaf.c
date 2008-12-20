@@ -376,8 +376,8 @@ struct btree_ops dtree_ops = {
  *         min address +--------------------------+
  *                     |     dleaf header         |
  *                   | | extent <0> (gr 0, ent 0) | __ walk->exbase
- * growing downwards | | extent <0> (gr 1, ent 0) | __ walk->extent, walk->estop
- *                   | | extent <1> (gr 1, ent 1) |
+ * growing downwards | | extent <0> (gr 1, ent 0) | __ walk->extent
+ *                   | | extent <1> (gr 1, ent 1) | __ walk->exstop
  *                   V | extent <2> (gr 1, ent 2) |
  *                     |                          |
  *                     |        .......           |
@@ -385,7 +385,7 @@ struct btree_ops dtree_ops = {
  *                     | entry <2> (gr 1)         |
  *                     | entry <1> (gr 1)         | __ walk->entry
  *                   ^ | entry <0> (gr 1)         |
- *                   | | entry <0> (gr 0)         | __ walk->group, walk->gstop
+ *                   | | entry <0> (gr 0)         | __ walk->group,walk->gstop
  * growing upwards   | | group <1>                |
  *                   | | group <0>                |
  *         max address +--------------------------+ __ walk->gdict
@@ -397,70 +397,91 @@ struct btree_ops dtree_ops = {
  *      ->gstop is the last group in this dleaf
  *      ->entry is the current entry (entry <0> (gr 1))
  *      ->estop is the last entry in current group
- *      ->exbase is the first extent in current entry
- *      ->extent is the next extent (extent <1> (gr1, ent 1)).
- *        NOTE: ->extent is using as cursor, so it already points to next one.
- *              So, dwalk_next() returns current extent.
- *      ->exstop is the address that dwalk_next() has to update to next entry.
+ *      ->exbase is the first extent in current group
+ *      ->extent is the current extent (extent <1> (gr1, ent 1)).
+ *      ->exstop is the first extent in next entry.
+ *        (i.e. the address that dwalk_next() has to update to next entry.)
  */
 
+/* FIXME: current code is assuming the entry has only one extent. */
+
+/*
+ * Probe the extent position with key. If not found, position is next
+ * extent of key.  If probed all extents return 0, otherwise return 1
+ * (i.e. next extent is available).
+ */
+tuxkey_t dwalk_index(struct dwalk *walk);
+struct diskextent *dwalk_next(struct dwalk *walk);
+void dwalk_back(struct dwalk *walk);
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key)
 {
 	trace("probe for 0x%Lx", (L)key);
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
-	struct group *gdict = (void *)leaf + blocksize;
-	struct entry *edict = (struct entry *)(gdict - dleaf_groups(leaf));
-	struct group *gstop = gdict - dleaf_groups(leaf), *group = gdict;
-	struct entry *estop = edict, *entry;
-	struct diskextent *exbase = leaf->table;
 
-	if (dleaf_groups(leaf))
-		while (--group >= gstop) {
-			trace_off("group %i check %x = %x", gdict - group - 1, keyhi, group_keyhi(group));
-			estop -= group_count(group);
-			if (group_keyhi(group) > keyhi)
-				break;
-			trace_off("next group keylow = %x", entry_keylo(estop - 1));
-			if (group_keyhi(group) == keyhi) {
-				if (group == gstop)
-					break;
-				if (group_keyhi(group - 1) != keyhi)
-					break;
-				if (entry_keylo(estop - 1) > keylo)
-					break;
-			}
-			exbase += entry_limit(estop);
-		}
-
-	struct diskextent *extent = exbase, *exstop = exbase;
-	//trace("group %i entry %i of %i", gdict - 1 - group, estop + group_count(group) - 1 - entry, group_count(group));
-	if (!dleaf_groups(leaf) || group < gstop)
-		entry = estop;
-	else {
-		assert(group_keyhi(group) >= keyhi);
-		entry = estop + group_count(group);
-		//trace("entry %x, estop %x", entry_keylo(entry), entry_keylo(estop));
-		if (group_keyhi(group) == keyhi) {
-			while (entry > estop) {
-				--entry;
-				trace_off("entry check %x, %x", keylo, entry_keylo(entry - 1));
-				exstop = exbase + entry_limit(entry);
-				if (entry_keylo(entry) >= keylo)
-					break;
-				extent = exstop;
-			}
-		}
+	walk->leaf = leaf;
+	walk->gdict = (void *)leaf + blocksize;
+	walk->gstop = walk->gdict - dleaf_groups(leaf);
+	walk->group = walk->gdict;
+	walk->estop = (struct entry *)walk->gstop;
+	walk->exbase = leaf->table;
+	if (!dleaf_groups(leaf)) {
+		walk->entry = (struct entry *)walk->gstop;
+		walk->extent = leaf->table;
+		walk->exstop = leaf->table;
+		return 0;
 	}
 
-	trace_off("group %i entry %i of %i", gdict - 1 - group, estop + group_count(group) - 1 - entry, group_count(group));
-	trace("extent = %tx, exstop = %tx", extent - leaf->table, exstop - leaf->table);
-	*walk = (struct dwalk){
-		.leaf = leaf, .gdict = gdict,
-		.group = group, .gstop = gstop,
-		.entry = entry, .estop = estop,
-		.extent = extent, .exstop = exstop,
-		.exbase = exbase };
+	while (walk->group > walk->gstop) {
+		walk->group--;
+		walk->entry = walk->estop - 1;
+		walk->estop -= group_count(walk->group);
+		if (group_keyhi(walk->group) > keyhi)
+			goto no_group;
+		if (group_keyhi(walk->group) == keyhi) {
+			if (entry_keylo(walk->entry) > keylo)
+				goto no_group;
+			if (walk->group == walk->gstop)
+				goto probe_entry;
+			if (group_keyhi(walk->group - 1) > keyhi)
+				goto probe_entry;
+			if (entry_keylo(walk->estop - 1) > keylo)
+				goto probe_entry;
+		}
+		walk->exbase += entry_limit(walk->estop);
+	}
+	/* There is no group after this key */
+	walk->entry = walk->estop;
+	walk->exstop = walk->exbase;
+	walk->extent = walk->exbase;
+	walk->exbase = walk->exbase - entry_limit(walk->estop);
 	return 0;
+
+no_group:
+	/* There is no interesting group, set first extent in this group */
+	walk->extent = walk->exbase;
+	walk->exstop = walk->exbase + entry_limit(walk->entry);
+	return 1;
+
+probe_entry:
+	/* There is interesting group, next is probe interesting entry */
+	walk->extent = walk->exbase;
+	walk->exstop = walk->exbase + entry_limit(walk->entry);
+	while (walk->entry > walk->estop) {
+		if (entry_keylo(walk->entry - 1) > keylo)
+			break;
+		walk->entry--;
+		walk->extent = walk->exstop;
+		walk->exstop = walk->exbase + entry_limit(walk->entry);
+	}
+
+	/* Now, entry has the nearest keylo (<= key), probe extent */
+	struct diskextent *ex;
+	while ((ex = dwalk_next(walk))) {
+		if (dwalk_index(walk) + extent_count(*ex) > key)
+			break;
+	}
+	dwalk_back(walk);
+	return ex != NULL;
 }
 
 tuxkey_t dwalk_index(struct dwalk *walk)
