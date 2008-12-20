@@ -108,8 +108,7 @@ static int get_segs(struct inode *inode, block_t start, block_t limit, struct se
 		}
 
 		*walk = rewind;
-		if (dleaf_groups(leaf))
-			dwalk_chop_after(walk);
+		dwalk_chop(walk);
 		for (i = 0, index = seg_start; i < segs; i++) {
 			trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
 			dwalk_pack(walk, index, make_extent(seg[i].block, seg[i].count));

@@ -602,7 +602,8 @@ probe_entry:
 	return !dwalk_end(walk);
 }
 
-void dwalk_chop_after(struct dwalk *walk)
+/* userland only */
+static void dwalk_chop_after(struct dwalk *walk)
 {
 	struct dleaf *leaf = walk->leaf;
 	struct group *gdict = walk->gdict;
@@ -619,7 +620,7 @@ void dwalk_chop_after(struct dwalk *walk)
 }
 
 /* userland only */
-void dwalk_chop(struct dwalk *walk) // do we ever need this?
+void dwalk_chop_old(struct dwalk *walk) // do we ever need this?
 {
 	if (!dleaf_groups(walk->leaf)) {
 		trace("<<<<<<<<<<<<< dleaf empty");
@@ -657,6 +658,47 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 	return 0;
 }
 
+/* This removes extents >= this extent. (cursor position is dwalk_end()). */
+void dwalk_chop(struct dwalk *walk)
+{
+	if (dwalk_end(walk))
+		return;
+
+	struct dleaf *leaf = walk->leaf;
+	if (dwalk_first(walk)) {
+		unsigned blocksize = (void *)walk->gdict - (void *)leaf;
+		set_dleaf_groups(leaf, 0);
+		leaf->free = to_be_u16(sizeof(struct dleaf));
+		leaf->used = to_be_u16(blocksize);
+		/* Initialize dwalk state */
+		dwalk_probe(leaf, blocksize, walk, 0);
+		return;
+	}
+
+	/* This extent is first extent on this group, remove this group too */
+	if (walk->exbase == walk->extent)
+		dwalk_back(walk);
+
+	struct entry *ebase = walk->estop + group_count(walk->group);
+	void *entry = walk->entry;
+	set_dleaf_groups(leaf, walk->gdict - walk->group);
+	set_group_count(walk->group, ebase - walk->entry);
+	entry += (void *)walk->gstop - (void *)walk->group;
+	memmove(entry, walk->entry, (void *)walk->gstop - (void *)walk->entry);
+	walk->estop = walk->entry = entry;
+	walk->gstop = walk->group;
+	walk->exstop = walk->exbase + entry_limit(walk->entry);
+	walk->extent = walk->exstop;
+	leaf->free = to_be_u16((void *)walk->exstop - (void *)leaf);
+	leaf->used = to_be_u16((void *)walk->estop - (void *)leaf);
+	dwalk_check(walk);
+}
+
+/*
+ * Add extent to dleaf. This can use only if dwalk_end() is true.
+ * Note, dwalk state is invalid after this.  (I.e. it can be used only
+ * for dwalk_pack())
+ */
 int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 {
 	trace("group %ti/%i", walk->gstop + dleaf_groups(walk->leaf) - 1 - walk->group, dleaf_groups(walk->leaf));
