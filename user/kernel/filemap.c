@@ -11,13 +11,13 @@
 
 static void dwalk_seek(struct dwalk *walk, tuxkey_t key)
 {
-	/* dwalk_probe should just return a flag */
-	for (struct diskextent *extent; (extent = dwalk_next(walk));)
-		if (dwalk_index(walk) + extent_count(*extent) > key) {
-			if (dwalk_index(walk) <= key)
-				dwalk_back(walk);
-			break;
-		}
+	if (!dwalk_end(walk)) {
+		/* dwalk_probe should just return a flag */
+		do {
+			if (dwalk_index(walk) + dwalk_count(walk) > key)
+				break;
+		} while (dwalk_next(walk));
+	}
 }
 
 struct seg { block_t block; int count; };
@@ -66,10 +66,11 @@ static int get_segs(struct inode *inode, block_t start, unsigned limit, struct s
 			next_extent = NULL;
 			continue;
 		}
-
 		block_t next_index = limit;
-		if ((next_extent = dwalk_next(walk))) {
+		if (!dwalk_end(walk)) {
+			next_extent = walk->extent;
 			next_index = dwalk_index(walk);
+			dwalk_next(walk);
 			trace("next_index = %Lx", (L)next_index);
 			if (next_index < start) {
 				offset = start - next_index;
@@ -103,7 +104,11 @@ static int get_segs(struct inode *inode, block_t start, unsigned limit, struct s
 		while (next_extent) {
 			trace("save tail");
 			seg[segs++] = (struct seg){ extent_block(*next_extent), extent_count(*next_extent) };
-			next_extent = dwalk_next(walk);
+			if (!dwalk_end(walk))
+				next_extent = walk->extent;
+			else
+				next_extent = NULL;
+			dwalk_next(walk);
 		}
 		*walk = rewind;
 		for (int try = 0; try < 2; try++) {

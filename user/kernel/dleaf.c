@@ -417,11 +417,6 @@ static int dwalk_end(struct dwalk *walk)
 	return walk->extent == walk->exstop;
 }
 
-struct diskextent *dwalk_extent(struct dwalk *walk)
-{
-	return walk->extent;
-}
-
 block_t dwalk_block(struct dwalk *walk)
 {
 	return extent_block(*walk->extent);
@@ -547,24 +542,13 @@ probe_entry:
 		walk->extent = walk->exstop;
 		walk->exstop = walk->exbase + entry_limit(walk->entry);
 	}
-
-#if 0
 	/* Now, entry has the nearest keylo (<= key), probe extent */
-	struct diskextent *ex;
-	while ((ex = dwalk_next(walk))) {
-		if (dwalk_index(walk) + extent_count(*ex) > key)
-			break;
-	}
-	dwalk_back(walk);
-	return ex != NULL;
-#else
-	do {
-		if (dwalk_index(walk) + dwalk_count(walk) > key)
-			break;
-	} while (dwalk_next(walk));
-	dwalk_check(walk);
+	/* FIXME: this is assuming the entry has only one extent */
+	if (key < dwalk_index(walk) + dwalk_count(walk))
+		return 1;
+	/* This entry didn't have the target extent, set next entry */
+	dwalk_next(walk);
 	return !dwalk_end(walk);
-#endif
 }
 
 tuxkey_t dwalk_index(struct dwalk *walk)

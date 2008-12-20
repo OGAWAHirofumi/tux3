@@ -76,12 +76,11 @@ void *dleaf_lookup(struct btree *btree, struct dleaf *leaf, tuxkey_t index, unsi
 
 static void dwalk_probe_check(struct dwalk *walk, block_t index, struct diskextent *ex)
 {
-	struct diskextent *extest;
-	extest = dwalk_extent(walk);
 	trace("index %#lx (%#lx)", dwalk_index(walk), index);
 	assert(dwalk_index(walk) == index);
-	trace("block %#Lx, count %#x (%#Lx, %#x)", (L)extent_block(*extest), extent_count(*extest), (L)extent_block(*ex), extent_count(*ex));
-	assert(memcmp(extest, ex, sizeof(*extest)) == 0);
+	trace("block %#Lx, count %#x (%#Lx, %#x)", (L)dwalk_block(walk), dwalk_count(walk), (L)extent_block(*ex), extent_count(*ex));
+	assert(dwalk_block(walk) == extent_block(*ex));
+	assert(dwalk_count(walk) == extent_count(*ex));
 }
 
 int main(int argc, char *argv[])
