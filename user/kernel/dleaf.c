@@ -405,14 +405,62 @@ struct btree_ops dtree_ops = {
 
 /* FIXME: current code is assuming the entry has only one extent. */
 
+/* The first extent in dleaf */
+static int dwalk_first(struct dwalk *walk)
+{
+	return walk->leaf->table == walk->extent;
+}
+
+/* The end of extent in dleaf */
+static int dwalk_end(struct dwalk *walk)
+{
+	return walk->extent == walk->exstop;
+}
+
+struct diskextent *dwalk_extent(struct dwalk *walk)
+{
+	return walk->extent;
+}
+
+block_t dwalk_block(struct dwalk *walk)
+{
+	return extent_block(*walk->extent);
+}
+
+unsigned dwalk_count(struct dwalk *walk)
+{
+	return extent_count(*walk->extent);
+}
+
+static void dwalk_check(struct dwalk *walk)
+{
+	if (!dleaf_groups(walk->leaf)) {
+		assert(walk->group == walk->gstop);
+		assert(walk->entry == walk->estop);
+		assert(walk->exbase == walk->extent);
+		assert(walk->extent == walk->exstop);
+		assert(walk->leaf->table == walk->exstop);
+	} else if (dwalk_end(walk)) {
+		assert(walk->group == walk->gstop);
+		assert(walk->entry == walk->estop);
+		assert(walk->exbase < walk->extent);
+		assert(walk->extent == walk->exstop);
+	} else {
+		assert(walk->group >= walk->gstop);
+		assert(walk->entry >= walk->estop);
+		assert(walk->exbase <= walk->extent);
+		assert(walk->extent < walk->exstop);
+	}
+}
+
 /*
  * Probe the extent position with key. If not found, position is next
  * extent of key.  If probed all extents return 0, otherwise return 1
  * (i.e. next extent is available).
  */
 tuxkey_t dwalk_index(struct dwalk *walk);
-struct diskextent *dwalk_next(struct dwalk *walk);
-void dwalk_back(struct dwalk *walk);
+int dwalk_next(struct dwalk *walk);
+int dwalk_back(struct dwalk *walk);
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key)
 {
 	trace("probe for 0x%Lx", (L)key);
@@ -425,9 +473,11 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 	walk->estop = (struct entry *)walk->gstop;
 	walk->exbase = leaf->table;
 	if (!dleaf_groups(leaf)) {
+		/* dwalk_first() and dwalk_end() will return true */
 		walk->entry = (struct entry *)walk->gstop;
 		walk->extent = leaf->table;
 		walk->exstop = leaf->table;
+		dwalk_check(walk);
 		return 0;
 	}
 
@@ -454,12 +504,14 @@ int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxk
 	walk->exstop = walk->exbase;
 	walk->extent = walk->exbase;
 	walk->exbase = walk->exbase - entry_limit(walk->estop);
+	dwalk_check(walk);
 	return 0;
 
 no_group:
 	/* There is no interesting group, set first extent in this group */
 	walk->extent = walk->exbase;
 	walk->exstop = walk->exbase + entry_limit(walk->entry);
+	dwalk_check(walk);
 	return 1;
 
 probe_entry:
@@ -474,6 +526,7 @@ probe_entry:
 		walk->exstop = walk->exbase + entry_limit(walk->entry);
 	}
 
+#if 0
 	/* Now, entry has the nearest keylo (<= key), probe extent */
 	struct diskextent *ex;
 	while ((ex = dwalk_next(walk))) {
@@ -482,6 +535,14 @@ probe_entry:
 	}
 	dwalk_back(walk);
 	return ex != NULL;
+#else
+	do {
+		if (dwalk_index(walk) + dwalk_count(walk) > key)
+			break;
+	} while (dwalk_next(walk));
+	dwalk_check(walk);
+	return !dwalk_end(walk);
+#endif
 }
 
 tuxkey_t dwalk_index(struct dwalk *walk)
@@ -489,65 +550,53 @@ tuxkey_t dwalk_index(struct dwalk *walk)
 	return get_index(walk->group, walk->entry);
 }
 
-/*
- * Return the current extent, then set cursor to next.
- *
- * NOTE: ->group and ->entry is still not updated, so dwalk_index() will
- * return the index for the returned extent.
- */
-struct diskextent *dwalk_next(struct dwalk *walk)
+/* Set the cursor to next extent */
+int dwalk_next(struct dwalk *walk)
 {
-	if (!dleaf_groups(walk->leaf))
-		return NULL;
-	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
-	if (walk->extent >= walk->exstop) {
-		trace("at entry %ti/%i", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
-		if (walk->entry <= walk->estop) {
-			trace("next group, end = %i", walk->group <= walk->gstop);
-			if (walk->group <= walk->gstop)
-				return NULL;
+	/* last extent of this dleaf, or empty dleaf */
+	if (dwalk_end(walk))
+		return 0;
+	walk->extent++;
+	if (walk->extent == walk->exstop) {
+		if (walk->entry == walk->estop) {
+			if (walk->group == walk->gstop)
+				return 0;
+			walk->group--;
 			walk->exbase += entry_limit(walk->estop);
-			trace("exbase => %Lx", (L)extent_block(*walk->exbase));
-			trace("extent => %Lx", (L)extent_block(*walk->extent));
-			walk->estop -= group_count(--walk->group);
+			walk->estop -= group_count(walk->group);
 		}
 		walk->entry--;
 		walk->exstop = walk->exbase + entry_limit(walk->entry);
 	}
-	trace("next extent 0x%Lx => %Lx/%x", (L)dwalk_index(walk), (L)extent_block(*walk->extent), extent_count(*walk->extent));
-	trace("walk extent = %tx, exstop = %tx", walk->extent - walk->leaf->table, walk->exstop - walk->leaf->table);
-	trace("at entry %ti/%i", walk->estop + group_count(walk->group) - 1 - walk->entry, group_count(walk->group));
-	return walk->extent++; // also return key
+	dwalk_check(walk);
+	return 1;
 }
 
 /* Back to the previous extent. (i.e. rewind the previous dwalk_next()) */
-void dwalk_back(struct dwalk *walk)
+int dwalk_back(struct dwalk *walk)
 {
-	assert(dleaf_groups(walk->leaf));
-	assert(walk->extent <= walk->exstop);
-
-	/* caller is using at beginning of extent (disallow for now) */
-	assert(walk->extent > walk->exbase);
-
-	trace("back one extent");
-	if (walk->extent-- == walk->exstop) {
-		trace("back one entry");
-		if (++walk->entry == walk->estop + group_count(walk->group)) {
-			trace("back one group");
-			if (++walk->group == walk->gdict) {
-				trace("at start");
-				--walk->group;
-				walk->exstop = walk->extent = walk->exbase = walk->leaf->table;
-				return;
-			}
-			walk->exbase -= entry_limit(walk->entry);
-			walk->estop = walk->entry;
-			trace("exbase => %Lx", (L)extent_block(*walk->exbase));
-			trace("entry offset = %ti", walk->estop + group_count(walk->group) - 1 - walk->entry);
+	/* first extent of this dleaf, or empty dleaf */
+	if (dwalk_first(walk))
+		return 0;
+	struct diskextent *entry_exbase;
+	if (walk->entry + 1 == walk->estop + group_count(walk->group))
+		entry_exbase = walk->exbase;
+	else
+		entry_exbase = walk->exbase + entry_limit(walk->entry + 1);
+	walk->extent--;
+	if (walk->extent < entry_exbase) {
+		if (walk->extent < walk->exbase) {
+			if (walk->group == walk->gdict)
+				return 1;
+			walk->group++;
+			walk->estop = walk->entry + 1;
+			walk->exbase -= entry_limit(walk->entry + 1);
 		}
+		walk->entry++;
 		walk->exstop = walk->exbase + entry_limit(walk->entry);
-		trace("exstop => %Lx", (L)extent_block(*walk->exstop));
 	}
+	dwalk_check(walk);
+	return 1;
 }
 
 void dwalk_chop_after(struct dwalk *walk)

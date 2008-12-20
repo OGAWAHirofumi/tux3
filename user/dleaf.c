@@ -77,7 +77,7 @@ void *dleaf_lookup(struct btree *btree, struct dleaf *leaf, tuxkey_t index, unsi
 static void dwalk_probe_check(struct dwalk *walk, block_t index, struct diskextent *ex)
 {
 	struct diskextent *extest;
-	extest = dwalk_next(walk);
+	extest = dwalk_extent(walk);
 	trace("index %#lx (%#lx)", dwalk_index(walk), index);
 	assert(dwalk_index(walk) == index);
 	trace("block %#Lx, count %#x (%#Lx, %#x)", (L)extent_block(*extest), extent_count(*extest), (L)extent_block(*ex), extent_count(*ex));
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 		dwalk_probe_check(walk1, data[5].index, &data[5].ex);
 		ret = dwalk_probe(leaf1, sb->blocksize, walk1, 0x3003000000ULL);
 		assert(!ret);
-		assert(dwalk_next(walk1) == NULL);
+		assert(dwalk_end(walk1));
 		/* test for dwalk_next and dwalk_back */
 #define NR	7
 		struct dwalk w1[NR + 1], w2[NR + 1];
@@ -169,14 +169,6 @@ int main(int argc, char *argv[])
 		for (i = 0; i < NR; i++)
 			assert(memcmp(&w2[i], &w2[i], sizeof(w1[0])) == 0);
 		dleaf_destroy(btree, leaf1);
-	}
-	if (0) { // fails
-		dwalk_probe(leaf, sb->blocksize, walk, 0x1000044);
-		dwalk_back(walk);
-		dwalk_back(walk);
-		for (struct diskextent *extent; (extent = dwalk_next(walk));)
-			printf("0x%Lx => 0x%Lx\n", (L)dwalk_index(walk), (L)extent_block(*extent));
-		exit(0);
 	}
 	if (0) { // fails
 		dwalk_probe(leaf, sb->blocksize, walk, 0x1c01c);
