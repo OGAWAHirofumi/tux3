@@ -432,6 +432,28 @@ unsigned dwalk_count(struct dwalk *walk)
 	return extent_count(*walk->extent);
 }
 
+/* unused */
+void dwalk_dump(struct dwalk *walk)
+{
+	if (walk->leaf->table == walk->exstop) {
+		trace_on("empty leaf");
+		return;
+	}
+	if (dwalk_end(walk)) {
+		trace_on("end of extent");
+		return;
+	}
+	struct diskextent *entry_exbase;
+	if (walk->entry + 1 == walk->estop + group_count(walk->group))
+		entry_exbase = walk->exbase;
+	else
+		entry_exbase = walk->exbase + entry_limit(walk->entry + 1);
+	trace_on("leaf %p", walk->leaf);
+	trace_on("group %tu/%tu", (walk->gdict - walk->group) - 1, walk->gdict - walk->gstop);
+	trace_on("entry %tu/%u", group_count(walk->group) - (walk->entry - walk->estop) - 1, group_count(walk->group));
+	trace_on("extent %tu/%tu", walk->extent - entry_exbase, walk->exstop - entry_exbase);
+}
+
 static void dwalk_check(struct dwalk *walk)
 {
 	if (!dleaf_groups(walk->leaf)) {
