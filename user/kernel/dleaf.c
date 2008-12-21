@@ -683,7 +683,7 @@ void dwalk_chop(struct dwalk *walk)
 	void *entry = walk->entry;
 	set_dleaf_groups(leaf, walk->gdict - walk->group);
 	set_group_count(walk->group, ebase - walk->entry);
-	entry += (void *)walk->gstop - (void *)walk->group;
+	entry += (void *)walk->group - (void *)walk->gstop;
 	memmove(entry, walk->entry, (void *)walk->gstop - (void *)walk->entry);
 	walk->estop = walk->entry = entry;
 	walk->gstop = walk->group;
