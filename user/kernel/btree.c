@@ -38,6 +38,10 @@ static void free_block(struct sb *sb, block_t block)
 {
 }
 
+// desperately need ERR_PTR return here to distinguish between
+// ENOMEM, which should be impossible but when it happens we
+// need to do something reasonable, or ENOSPC which we must
+// just report and keep going without a fuss.
 static struct buffer_head *new_block(struct btree *btree)
 {
 	block_t block = (btree->ops->balloc)(btree->sb);
@@ -52,7 +56,7 @@ static struct buffer_head *new_block(struct btree *btree)
 	return buffer;
 }
 
-static struct buffer_head *new_leaf(struct btree *btree)
+struct buffer_head *new_leaf(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
 	if (buffer)
@@ -101,8 +105,7 @@ static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
 	cursor->path[0].next = next;
 }
 
-static void level_push(struct cursor *cursor, struct buffer_head *buffer,
-		       struct index_entry *next)
+void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next)
 {
 #ifdef CURSOR_DEBUG
 	assert(cursor->len < cursor->maxlen);
@@ -132,6 +135,11 @@ static struct buffer_head *level_pop(struct cursor *cursor)
 static void level_pop_brelse(struct cursor *cursor)
 {
 	brelse(level_pop(cursor));
+}
+
+void level_pop_brelse_dirty(struct cursor *cursor)
+{
+	brelse_dirty(level_pop(cursor));
 }
 
 void release_cursor(struct cursor *cursor)
@@ -275,6 +283,11 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
 	} while (--count && advance(btree, cursor));
 	free_cursor(cursor);
+}
+
+void show_tree(struct btree *btree)
+{
+	show_tree_range(btree, 0, -1);
 }
 
 /* Deletion */
@@ -476,7 +489,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count = to_be_u32(bcount(node) + 1);
 }
 
-static int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor)
+int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor)
 {
 	trace("insert node 0x%Lx key 0x%Lx into node 0x%Lx", (L)childblock, (L)childkey, (L)btree->root.block);
 	int depth = btree->root.depth;
@@ -551,8 +564,7 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 	block_t childblock = bufindex(newbuf);
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
-		mark_buffer_dirty(leafbuf);
-		level_pop_brelse(cursor);
+		level_pop_brelse_dirty(cursor);
 		level_push(cursor, newbuf, NULL);
 	} else
 		brelse_dirty(newbuf);

@@ -68,7 +68,7 @@ static inline struct dleaf *to_dleaf(vleaf *leaf)
 	return leaf;
 }
 
-static int dleaf_init(struct btree *btree, vleaf *leaf)
+int dleaf_init(struct btree *btree, vleaf *leaf)
 {
 	if (!leaf)
 		return -1;
@@ -89,7 +89,6 @@ unsigned dleaf_free(struct btree *btree, vleaf *leaf)
 	return from_be_u16(to_dleaf(leaf)->used) - from_be_u16(to_dleaf(leaf)->free);
 }
 
-/* unused */
 unsigned dleaf_need(struct btree *btree, struct dleaf *leaf)
 {
 	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
@@ -244,7 +243,22 @@ eek:
 	return -1;
 }
 
-static tuxkey_t dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize)
+	struct dleaf *leaf;
+	struct group *group, *gstop, *gdict;
+	struct entry *entry, *estop;
+	struct diskextent *exbase, *extent, *exstop;
+
+void show_dwalk(struct dwalk *walk, unsigned blocksize)
+{
+	struct dleaf *leaf = walk->leaf;
+	struct group *gdict = (void *)leaf + blocksize;
+	struct entry *edict = (void *)(gdict - dleaf_groups(leaf));
+	unsigned ecount = edict - (struct entry *)((void *)leaf + from_be_u16(leaf->used));
+	printf("group %i of %i, ", gdict - walk->group, dleaf_groups(leaf));
+	printf("entry %i of %i\n", edict - walk->entry, ecount);
+}
+
+tuxkey_t dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize)
 {
 	struct dleaf *leaf = from, *dest = into;
 	struct group *groups = from + blocksize, *grbase = groups - dleaf_groups(leaf);
@@ -252,7 +266,8 @@ static tuxkey_t dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, un
 	printf("split %p into %p\n", leaf, dest);
 	unsigned recount = 0, grsplit = 0, exsplit = 0;
 	unsigned encount = entries - enbase, split = entries - entry;
-	assert(split < encount);
+
+	assert(split <= encount);
 	for (struct group *group = groups - 1; group >= grbase; group--, grsplit++) {
 		if (recount + group_count(group) > split)
 			break;
@@ -478,6 +493,7 @@ static void dwalk_check(struct dwalk *walk)
 /* Set the cursor to next extent */
 int dwalk_next(struct dwalk *walk)
 {
+	trace(" ");
 	/* last extent of this dleaf, or empty dleaf */
 	if (dwalk_end(walk))
 		return 0;
@@ -500,6 +516,7 @@ int dwalk_next(struct dwalk *walk)
 /* Back to the previous extent. (i.e. rewind the previous dwalk_next()) */
 int dwalk_back(struct dwalk *walk)
 {
+	trace(" ");
 	/* first extent of this dleaf, or empty dleaf */
 	if (dwalk_first(walk))
 		return 0;
@@ -603,7 +620,7 @@ probe_entry:
 }
 
 /* userland only */
-static void dwalk_chop_after(struct dwalk *walk)
+void dwalk_chop_after(struct dwalk *walk)
 {
 	struct dleaf *leaf = walk->leaf;
 	struct group *gdict = walk->gdict;

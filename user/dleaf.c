@@ -76,9 +76,9 @@ void *dleaf_lookup(struct btree *btree, struct dleaf *leaf, tuxkey_t index, unsi
 
 static void dwalk_probe_check(struct dwalk *walk, block_t index, struct diskextent *ex)
 {
-	trace("index %#lx (%#lx)", dwalk_index(walk), index);
+	trace("index %Lx (%Lx)", (L)dwalk_index(walk), (L)index);
 	assert(dwalk_index(walk) == index);
-	trace("block %#Lx, count %#x (%#Lx, %#x)", (L)dwalk_block(walk), dwalk_count(walk), (L)extent_block(*ex), extent_count(*ex));
+	trace("block %Lx, count %x (%Lx, %x)", (L)dwalk_block(walk), dwalk_count(walk), (L)extent_block(*ex), extent_count(*ex));
 	assert(dwalk_block(walk) == extent_block(*ex));
 	assert(dwalk_count(walk) == extent_count(*ex));
 }
@@ -89,6 +89,7 @@ int main(int argc, char *argv[])
 	struct sb *sb = &(struct sb){ .blocksize = 1 << 10 };
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = dleaf_create(btree);
+
 	dleaf_chop(btree, 0x14014LL, leaf);
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi/*, next = 0*/;

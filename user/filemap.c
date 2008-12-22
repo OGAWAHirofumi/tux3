@@ -1,5 +1,5 @@
 #ifndef trace
-#define trace trace_off
+#define trace trace_on
 #endif
 
 #define main notmain0
@@ -74,12 +74,36 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
-	for (int i = 0; i < 30; i++) {
-		struct seg seg;
-		get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
-	}
-	show_tree_range(&inode->btree, 0, -1);
+#if 1
+	int segs;
+	struct seg segvec[100];
+	segs = get_segs(inode, 2, 3, segvec, 1, 1); show_segs(segvec, segs);
+	segs = get_segs(inode, 4, 5, segvec, 1, 1); show_segs(segvec, segs);
 	exit(0);
+#endif
+
+#if 1
+	for (int i = 30; i-- > 28;) {
+		struct seg segvec[100];
+		get_segs(inode, 2*i, 2*i + 1, segvec, 1, 1);
+	}
+	exit(0);
+#endif
+
+#if 1
+	for (int i = 0; i < 1; i++) {
+		struct cursor *cursor = alloc_cursor(&inode->btree, 1);
+		struct seg segvec[100];
+		struct dwalk seek[2] = { };
+		unsigned overlap[2];
+		int segs = find_segs(cursor, 2*i, 2*i + 1, segvec, 2, seek, overlap);
+		show_segs(segvec, segs);
+		segs = fill_segs(cursor, 2*i, 2*i + 1, segvec, segs, seek, overlap);
+		show_segs(segvec, segs);
+	}
+
+	exit(0);
+#endif
 
 #if 1
 	sb->nextalloc = 0x10;

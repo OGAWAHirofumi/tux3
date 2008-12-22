@@ -9,120 +9,225 @@
 #define trace trace_on
 #endif
 
+static void dwalk_seek(struct dwalk *walk, tuxkey_t key)
+{
+	/* dwalk_probe should just return a flag */
+	if (!dwalk_end(walk)) {
+		/* dwalk_probe should just return a flag */
+		do {
+			if (dwalk_index(walk) + dwalk_count(walk) > key)
+				break;
+		} while (dwalk_next(walk));
+	}
+}
+
 struct seg { block_t block; int count; };
 
-static int get_segs(struct inode *inode, block_t start, block_t limit, struct seg seg[], unsigned max_segs, int write)
+void show_segs(struct seg seglist[], unsigned segs)
 {
-	struct sb *sbi = tux_sb(inode->i_sb);
-	struct btree *btree = &tux_inode(inode)->btree;
-	int depth = btree->root.depth, i, err;
-	if (!depth)
-		return 0;
+	printf("%i segs: ", segs);
+	for (int i = 0; i < segs; i++)
+		printf("%Lx/%i ", seglist[i].block, seglist[i].count);
+	printf("\n");
+}
 
-	struct cursor *cursor = alloc_cursor(btree, 1); /* +1 for new depth */
-	if (!cursor)
-		return -ENOMEM;
+static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
+	struct seg seg[], unsigned max_segs, struct dwalk seek[2], unsigned overlap[2])
+{
+	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
+	struct btree *btree = cursor->btree;
+	struct sb *sb = btree->sb;
+	int err;
+	if (!btree->root.depth)
+		return 0;
 
 	if ((err = probe(btree, start, cursor))) {
 		free_cursor(cursor);
 		return err;
 	}
-	assert(max_segs > 0);
-	//assert(start >= this_key(cursor, depth))
+	//assert(start >= this_key(cursor, btree->root.depth))
 	/* do not overlap next leaf */
-	if (limit > next_key(cursor, depth))
-		limit = next_key(cursor, depth);
+	if (limit > next_key(cursor, btree->root.depth))
+		limit = next_key(cursor, btree->root.depth);
 	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	dleaf_dump(btree, leaf);
-
 	struct dwalk *walk = &(struct dwalk){ };
-	dwalk_probe(leaf, sbi->blocksize, walk, start);
 
-	struct dwalk rewind = *walk;
-	block_t index = start, seg_start;
-	unsigned segs = 0, update_dtree = 0;
-	if (!dwalk_end(walk) && dwalk_index(walk) < start)
-		seg_start = dwalk_index(walk);
-	else
-		seg_start = index;
+	/* Probe below io start to include overlapping extents */
+	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
+	dwalk_seek(walk, start);
+	seek[0] = *walk;
+	struct diskextent *next_extent = NULL;
+	block_t index = start, next_index = 0;
+	unsigned segs = 0, below = 0, above = 0, next_count = 0;
 	while (index < limit && segs < max_segs) {
-		block_t ex_index;
-		if (!dwalk_end(walk))
-			ex_index = dwalk_index(walk);
-		else
-			ex_index = limit;
+		trace("index %Lx, limit %Lx", (L)index, (L)limit);
+		if (next_extent) {
+			trace("emit %Lx/%x", (L)extent_block(*next_extent), next_count);
+			assert(next_index >= start);
+			seg[segs++] = (struct seg){ extent_block(*next_extent), next_count };
+			index += next_count;
+			next_extent = NULL;
+			continue;
+		}
 
-		if (index < ex_index) {
-			ex_index = min(ex_index, limit);
-			block_t gap = ex_index - index;
-			trace("index = %Lx, seg_start = %Lx, ex_index = %Lx, gap = %Lx", (L)index, (L)seg_start, (L)ex_index, (L)gap);
-			index = ex_index;
-			if (!write)
-				seg[segs++] = (struct seg){ 0, gap };
-			else {
-				block_t block = balloc_extent(sbi, gap); // goal ???
-				if (block == -1) {
-					segs = -ENOSPC;
-					goto nospace;
-				}
-				seg[segs++] = (struct seg){ block, gap };
-				update_dtree = 1;
-			}
-		} else {
-			block_t block = dwalk_block(walk);
-			unsigned count = dwalk_count(walk);
-			trace("emit %Lx/%x", (L)block, count );
-			seg[segs++] = (struct seg){ block, count };
-			index = ex_index + count;
+		if (dwalk_end(walk))
+			next_index = limit;
+		else {
+			next_extent = walk->extent;
+			next_index = dwalk_index(walk);
+			next_count = dwalk_count(walk);
 			dwalk_next(walk);
+			trace("next_index = %Lx", (L)next_index);
+			if (next_index < start) {
+				below = start - next_index;
+				next_index = start;
+			} else if (next_index >= limit) {
+				above = start - next_index;
+				next_extent = NULL;
+				dwalk_back(walk);
+			} else if (next_index + next_count > limit) {
+				above = next_index + next_count - limit;
+				next_count = limit - next_index;
+			}
+		}
+
+		if (index < next_index) {
+			int gap = next_index - index;
+			trace("index = %Lx, below = %Li, next = %Lx, gap = %i", (L)index, (L)below, (L)next_index, gap);
+			if (index + gap > limit)
+				gap = limit - index;
+			trace("emit gap %x", gap);
+			seg[segs++] = (struct seg){ .count = -gap };
+			index += gap;
 		}
 	}
-
-	if (update_dtree) {
-		/* Update dtree by new extents */
-		while (!dwalk_end(walk)) {
-			trace("save tail");
-			seg[segs++] = (struct seg){ dwalk_block(walk), dwalk_count(walk) };
-			dwalk_next(walk);
+	seek[1] = *walk;
+	if (segs) {
+		seg[0].block += below;
+		seg[0].count -= below;
+		seg[segs - 1].count -= above;
+		if (overlap) {
+			overlap[0] = below;
+			overlap[1] = above;
 		}
-		*walk = rewind;
-		for (int try = 0; try < 2; try++) {
-			/* Everything fits in the leaf? */
-			for (i = 0, index = seg_start; i < segs; i++, index += seg[i].count)
-				dwalk_mock(walk, index, make_extent(seg[i].block, seg[i].count));
-			trace("need %i data and %i index bytes", walk->mock.free, -walk->mock.used);
-			trace("need %i bytes, %u bytes free", walk->mock.free - walk->mock.used, dleaf_free(btree, leaf));
-			if (dleaf_free(btree, leaf) >= walk->mock.free - walk->mock.used)
-				break;
-			if (try)
-				goto eek;
-			trace_on("--------- split leaf ---------");
-			if ((err = btree_leaf_split(btree, cursor, start))) {
-				segs = err;
-				goto eek;
+	}
+	return segs;
+}
+
+/*
+ * This interface has no way of telling how long the seg vector is in case segs
+ * has to be increased.  If ENOSPC, has no way of telling how may segs were
+ * successfully allocated and recorded in the btree.  Sucks, still.
+ */
+
+static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
+	struct seg seg[], unsigned segs, struct dwalk seek[2], unsigned overlap[2])
+{
+	struct btree *btree = cursor->btree;
+	struct sb *sb = btree->sb;
+	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
+	struct dleaf *tail = malloc(sb->blocksize); // error???
+	tuxkey_t tailkey = dwalk_index(&seek[1]);
+	int err;
+
+	dleaf_init(btree, tail);
+	err = dleaf_split_at(leaf, tail, seek[1].entry, sb->blocksize);
+
+	for (int i = 0; i < segs; i++) {
+		int count = seg[i].count;
+		if (count < 0) {
+			count = -count;
+			block_t block = balloc_extent(sb, count); // goal ???
+			trace("fill in %Lx/%i ", block, count);
+			if (block == -1) {
+				/*
+				 * Out of space on file data allocation.  It happens.  Tread
+				 * carefully.  We have not stored anything in the btree yet,
+				 * so we free what we allocated so far.  We need to leave the
+				 * user with a nice ENOSPC return and all metadata consistent
+				 * on disk.  We better have reserved everything we need for
+				 * metadata, just giving up is not an option.
+				 */
+				/*
+				 * Alternatively, we can go ahead and try to record just what
+				 * we successfully allocated, then if the update fails on no
+				 * space for btree splits, free just the blocks for extents
+				 * we failed to store.
+				 */
+				return -ENOSPC;
 			}
-			depth = btree->root.depth;
+			seg[i] = (struct seg){ block, count };
+		}
+	}
+	/* Go back to region start and pack in new segs */
+	dleaf_dump(btree, leaf);
+	dwalk_chop_after(seek);
+	dleaf_dump(btree, leaf);
+	for (int i = 0, index = start; i < segs; i++) {
+		if (dleaf_free(btree, leaf) < 16) {
+			struct buffer_head *newbuf = new_leaf(btree);
+			if (!newbuf) {
+				release_cursor(cursor);
+				return -ENOMEM;
+			}
+			level_pop_brelse_dirty(cursor);
+			level_push(cursor, newbuf, NULL);
+			/*
+			 * ENOSPC on btree index split could leave the cache state
+			 * badly messed up.  Going to have to do this in two steps:
+			 * first, look at the cursor to see how many splits we need,
+			 * then make sure we have that, or give up before starting.
+			 */
+			insert_node(btree, dwalk_index(seek), bufindex(newbuf), cursor);
 			leaf = bufdata(cursor_leafbuf(cursor));
-			dwalk_probe(leaf, sbi->blocksize, walk, start);
-			rewind = *walk;
+			dwalk_probe(leaf, sb->blocksize, seek, 0);
 		}
-
-		*walk = rewind;
-		dwalk_chop(walk);
-		for (i = 0, index = seg_start; i < segs; i++) {
-			trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
-			dwalk_pack(walk, index, make_extent(seg[i].block, seg[i].count));
-			index += seg[i].count;
-		}
-		mark_buffer_dirty(cursor_leafbuf(cursor));
+		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
+		dleaf_dump(btree, leaf);
+		dwalk_pack(seek, index, make_extent(seg[i].block, seg[i].count));
+		dleaf_dump(btree, leaf);
+		index += seg[i].count;
 	}
-	seg[0].block += start - seg_start;
-	seg[0].count -= start - seg_start;
-eek:
-	// free blocks and try to clean up ???
+	if (dleaf_need(btree, tail) < dleaf_free(btree, leaf)) {
+		trace("Merge tail");
+		dleaf_dump(btree, leaf);
+		dleaf_merge(btree, leaf, tail);
+		dleaf_dump(btree, leaf);
+	} else {
+		/* Tail does not fit, add it as a new btree leaf */
+		struct buffer_head *newbuf = new_leaf(btree);
+		if (!newbuf) {
+			release_cursor(cursor);
+			return -ENOMEM;
+		}
+		memcpy(bufdata(newbuf), tail, sb->blocksize);
+		level_pop_brelse_dirty(cursor);
+		level_push(cursor, newbuf, NULL);
+		insert_node(btree, tailkey, bufindex(newbuf), cursor);
+	}
+	free(tail);
+	mark_buffer_dirty(cursor_leafbuf(cursor));
+printf("\n");
+show_tree(btree);
+//eek:
 	release_cursor(cursor);
-nospace:
-	/* release_cursor() was already called at error point */
+	return segs;
+}
+
+static int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg segvec[], unsigned max_segs, int create)
+{
+	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* +1 for new depth */
+	if (!cursor)
+		return -ENOMEM;
+
+	unsigned overlap[2];
+	struct dwalk seek[2] = { };
+	int segs = find_segs(cursor, start, limit, segvec, max_segs, seek, overlap);
+	if (segs > 0 && create)
+		segs = fill_segs(cursor, start, limit, segvec, segs, seek, overlap);
+	if (segs >= 0)
+		release_cursor(cursor);
 	free_cursor(cursor);
 	return segs;
 }
@@ -184,8 +289,9 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	guess_extent(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 
-	struct seg seg[10];
-	int segs = get_segs(inode, start, limit, seg, ARRAY_SIZE(seg), write);
+	struct seg segvec[10];
+
+	int segs = get_segs(inode, start, limit, segvec, 1, write);
 	if (segs < 0)
 		return segs;
 
@@ -201,12 +307,12 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 
 	int err = 0;
 	for (int i = 0, index = start; !err && index < limit; i++) {
-		int count = seg[i].count, hole = count < 0;
+		int count = segvec[i].count, hole = count < 0;
 		if (hole)
 			count = -count;
-		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)seg[i].block);
+		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)segvec[i].block);
 		for (int j = 0; !err && j < count; j++) {
-			block_t block = seg[i].block + j;
+			block_t block = segvec[i].block + j;
 			buffer = blockget(mapping(inode), index + j);
 			trace_on("block 0x%Lx => %Lx", (L)bufindex(buffer), (L)block);
 			if (write) {
@@ -227,12 +333,12 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 }
 #else /* __KERNEL__ */
 int tux3_get_block(struct inode *inode, sector_t iblock,
-		   struct buffer_head *bh_result, int write)
+		   struct buffer_head *bh_result, int create)
 {
-	trace("==> inum %Lu, iblock %Lu, b_size %zu, write %d",
-	      (L)tux_inode(inode)->inum, (L)iblock, bh_result->b_size, write);
+	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
+	      (L)tux_inode(inode)->inum, (L)iblock, bh_result->b_size, create);
 
-	struct sb *sbi = tux_sb(inode->i_sb);
+	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
 	struct btree *btree = &tux_inode(inode)->btree;
 	int depth = btree->root.depth;
@@ -242,7 +348,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 
 	struct seg seg;
-	int segs = get_segs(inode, iblock, iblock + max_blocks, &seg, 1, write);
+	int segs = get_segs(inode, iblock, iblock + max_blocks, &seg, 1, create);
 	if (segs < 0) {
 		warn("get_segs failed: %d", -segs);
 		return -EIO;
@@ -252,8 +358,8 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	else {
 		size_t blocks = min_t(size_t, max_blocks, seg.count);
 		map_bh(bh_result, inode->i_sb, seg.block);
-		bh_result->b_size = blocks << sbi->blockbits;
-		inode->i_blocks += blocks << (sbi->blockbits - 9);
+		bh_result->b_size = blocks << sb->blockbits;
+		inode->i_blocks += blocks << (sb->blockbits - 9);
 	}
 	trace("<== inum %Lu, mapped %d, block %Lu, size %zu",
 	      (L)tux_inode(inode)->inum, buffer_mapped(bh_result),

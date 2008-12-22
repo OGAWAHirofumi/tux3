@@ -606,14 +606,22 @@ struct buffer_head *cursor_leafbuf(struct cursor *cursor);
 void release_cursor(struct cursor *cursor);
 struct cursor *alloc_cursor(struct btree *btree, int);
 void free_cursor(struct cursor *cursor);
+void level_pop_brelse_dirty(struct cursor *cursor);
+void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
+
+struct btree new_btree(struct sb *sb, struct btree_ops *ops);
+struct buffer_head *new_leaf(struct btree *btree);
 int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor);
 int advance(struct btree *btree, struct cursor *cursor);
 tuxkey_t next_key(struct cursor *cursor, int depth);
-void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline);
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key);
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor);
-struct btree new_btree(struct sb *sb, struct btree_ops *ops);
+int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor);
+void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from);
+void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
+void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
+void show_tree(struct btree *btree);
 
 /* dir.c */
 int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode);
@@ -626,9 +634,14 @@ extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
 
 /* dtree.c */
+int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
+tuxkey_t dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
+void dwalk_chop_after(struct dwalk *walk);
+unsigned dleaf_need(struct btree *btree, struct dleaf *leaf);
 extern struct btree_ops dtree_ops;
+
 int dwalk_end(struct dwalk *walk);
 block_t dwalk_block(struct dwalk *walk);
 unsigned dwalk_count(struct dwalk *walk);
