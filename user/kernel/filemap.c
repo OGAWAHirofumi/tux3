@@ -103,7 +103,6 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 		}
 	}
 	trace("\n");
-	dwalk_dump(walk);
 	trace("below = %i, above = %i", below, above);
 	seek[1] = *walk;
 	if (segs) {
