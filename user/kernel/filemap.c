@@ -78,7 +78,7 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 			next_index = dwalk_index(walk);
 			next_count = dwalk_count(walk);
 			dwalk_next(walk);
-			trace("next_index = %Lx", (L)next_index);
+			trace("next_index = %Lx, next_count = %x", (L)next_index, next_count);
 			if (next_index < start) {
 				below = start - next_index;
 				next_index = start;
@@ -94,7 +94,7 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 
 		if (index < next_index) {
 			int gap = next_index - index;
-			trace("index = %Lx, below = %Li, next = %Lx, gap = %i", (L)index, (L)below, (L)next_index, gap);
+			trace("index = %Lx, next = %Lx, gap = %i", (L)index, (L)next_index, gap);
 			if (index + gap > limit)
 				gap = limit - index;
 			trace("emit gap %x", gap);
@@ -102,11 +102,14 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 			index += gap;
 		}
 	}
+	trace("\n");
+	dwalk_dump(walk);
+	trace("below = %i, above = %i", below, above);
 	seek[1] = *walk;
 	if (segs) {
 		seg[0].block += below;
 		seg[0].count -= below;
-		seg[segs - 1].count -= above;
+//		seg[segs - 1].count -= above;
 		if (overlap) {
 			overlap[0] = below;
 			overlap[1] = above;
@@ -132,7 +135,10 @@ static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
 	int err;
 
 	dleaf_init(btree, tail);
+	trace("leaf..."); dleaf_dump(btree, leaf);
 	err = dleaf_split_at(leaf, tail, seek[1].entry, sb->blocksize);
+	trace("leaf..."); dleaf_dump(btree, leaf);
+	trace("tail..."); dleaf_dump(btree, tail);
 
 	for (int i = 0; i < segs; i++) {
 		int count = seg[i].count;
@@ -162,7 +168,7 @@ static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
 	}
 	/* Go back to region start and pack in new segs */
 	dleaf_dump(btree, leaf);
-	dwalk_chop_after(seek);
+	dwalk_chop(seek);
 	dleaf_dump(btree, leaf);
 	for (int i = 0, index = start; i < segs; i++) {
 		if (dleaf_free(btree, leaf) < 16) {

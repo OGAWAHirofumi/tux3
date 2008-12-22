@@ -637,7 +637,7 @@ extern const struct inode_operations tux_dir_iops;
 int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
-tuxkey_t dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
+int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
 void dwalk_chop_after(struct dwalk *walk);
 unsigned dleaf_need(struct btree *btree, struct dleaf *leaf);
 extern struct btree_ops dtree_ops;
