@@ -83,7 +83,6 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 				below = start - next_index;
 				next_index = start;
 			} else if (next_index >= limit) {
-				above = start - next_index;
 				next_extent = NULL;
 				dwalk_back(walk);
 			} else if (next_index + next_count > limit) {
@@ -108,7 +107,7 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 	if (segs) {
 		seg[0].block += below;
 		seg[0].count -= below;
-//		seg[segs - 1].count -= above;
+		seg[segs - 1].count -= above;
 		if (overlap) {
 			overlap[0] = below;
 			overlap[1] = above;
