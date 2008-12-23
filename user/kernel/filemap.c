@@ -96,12 +96,13 @@ static int find_segs(struct cursor *cursor, block_t start, block_t limit,
  */
 
 static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
-	struct seg seg[], unsigned segs, struct dwalk seek[2], unsigned overlap[2])
+	struct seg seg[], int segs, struct dwalk seek[2], unsigned overlap[2])
 {
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
 	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	struct dleaf *tail = malloc(sb->blocksize); // error???
+	unsigned below = overlap[0], above = overlap[1];
 	tuxkey_t tailkey;
 	int err;
 
@@ -144,7 +145,7 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	dleaf_dump(btree, leaf);
 	dwalk_chop(seek);
 	dleaf_dump(btree, leaf);
-	for (int i = 0, index = start; i < segs; i++) {
+	for (int i = -!!below, index = start; i < segs + !!above; i++) {
 		if (dleaf_free(btree, leaf) < 16) {
 			struct buffer_head *newbuf = new_leaf(btree);
 			if (!newbuf) {
@@ -162,6 +163,16 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 			insert_node(btree, index, bufindex(newbuf), cursor);
 			leaf = bufdata(cursor_leafbuf(cursor));
 			dwalk_probe(leaf, sb->blocksize, seek, index);
+		}
+		if (i < 0) {
+			trace("emit below");
+			dwalk_add(seek, index - below, make_extent(seg[0].block - below, below));
+			continue;
+		}
+		if (i == segs) {
+			trace("emit above");
+			dwalk_add(seek, index, make_extent(seg[segs - 1].block + seg[segs - 1].count, above));
+			continue;
 		}
 		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
 		dleaf_dump(btree, leaf);

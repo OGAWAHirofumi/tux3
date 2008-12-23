@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
 	}
-	if (1) {
+	if (0) {
 		struct seg seg;
 		for (int i = 10, j = 0; i--; j++) {
 			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
@@ -158,9 +158,8 @@ int main(int argc, char *argv[])
 		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
-exit(0);
 	}
-	if (1) {
+	if (0) {
 		struct seg seg;
 		for (int i = 30, j = 0; i-- > 28; j++) {
 			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
@@ -185,7 +184,13 @@ exit(0);
 		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
 	}
+#if 1
+	int n;
+	n = get_segs(inode, 2, 7, segs, 10, 1); show_segs(segs, n);
+	n = get_segs(inode, 4, 5, segs, 10, 1); show_segs(segs, n);
 	exit(0);
+#endif
+
 #if 1
 	sb->nextalloc = 0x10;
 	balloc(sb, 1);
