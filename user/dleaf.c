@@ -215,7 +215,7 @@ int main(int argc, char *argv[])
 			nr++;
 			dwalk_next(walk1);
 		}
-		dleaf_chop2(btree, 0x3001000008ULL, leaf1);
+		dleaf_chop(btree, 0x3001000008ULL, leaf1);
 		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
 		nr = 0;
 		while (!dwalk_end(walk1)) {

@@ -146,73 +146,6 @@ void dleaf_dump(struct btree *btree, vleaf *vleaf)
 	}
 }
 
-/*
- * Reasons this dleaf truncator sucks:
- *
- * * Does not check for integrity at all so a corrupted leaf can cause overflow
- *   and system corruption.
- *
- * * Assumes all block pointers after the truncation point will be deleted,
- *   which does not hold when versions arrive.
- *
- * * Modifies a group count in the middle of the traversal knowing that it has
- *   already loaded the changed field and will not load it again, fragile.
- *
- * * Does not provide a generic mechanism that can be adapted to other
- *   truncation tasks.
- *
- * But it does truncate so it is getting checked in just for now.
- */
-
-static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
-{
-	struct dleaf *leaf = vleaf;
-	struct group *gdict = (void *)leaf + btree->sb->blocksize, *group = gdict;
-	struct entry *entry = (void *)(--group - dleaf_groups(leaf));
-	struct group *gstop = group - dleaf_groups(leaf);
-	struct entry *estop = entry - group_count(group), *eend = NULL;
-	unsigned extents = 0, start = 0, trunc = 0;
-	unsigned newgroups = dleaf_groups(leaf);
-
-	if (!newgroups)
-		return 0;
-
-	while (1) {
-		unsigned count = entry_limit(entry) - start;
-		tuxkey_t key = get_index(group, entry);
-		/* FIXME: even if key < chop, we may truncate partially */
-		if (key >= chop) {
-			if (!trunc) {
-				int removed = entry - estop, remaining = group_count(group) - removed;
-				newgroups = gdict - group - !remaining;
-				inc_group_count(group, - removed);
-				eend = entry + 1;
-				trunc = 1;
-			}
-			for (int i = 0; i < count; i++)
-				(btree->ops->bfree)(btree->sb, extent_block(leaf->table[extents + i]), 1);
-		}
-		start = entry_limit(entry);
-		extents += count;
-		if (--entry != estop)
-			continue;
-		if (--group == gstop)
-			break;
-		estop = entry - group_count(group);
-		start = 0;
-	}
-	if (!trunc)
-		return 0;
-
-	unsigned tamp = (dleaf_groups(leaf) - newgroups) * sizeof(struct group);
-	unsigned tail = (void *)(gdict - newgroups) - ((void *)entry + tamp);
-	memmove((void *)entry + tamp, entry, tail);
-	set_dleaf_groups(leaf, newgroups);
-	leaf->free = to_be_u16(from_be_u16(leaf->free) - extents * sizeof(struct diskextent));
-	leaf->used = to_be_u16(tamp + ((void *)eend - (void *)leaf));
-	return 1;
-}
-
 int dleaf_check(struct btree *btree, struct dleaf *leaf)
 {
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);
@@ -363,17 +296,6 @@ void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from)
 		for (int i = 1; i <= group_count((gdict2 - 1)); i++)
 			inc_entry_limit(ebase - i, entry_limit(ebase));
 }
-
-struct btree_ops dtree_ops = {
-	.leaf_sniff = dleaf_sniff,
-	.leaf_init = dleaf_init,
-	.leaf_dump = dleaf_dump,
-	.leaf_split = dleaf_split,
-//	.leaf_resize = dleaf_resize,
-	.leaf_chop = dleaf_chop,
-	.balloc = balloc,
-	.bfree = bfree,
-};
 
 /*
  * dleaf format and dwalk structure
@@ -610,39 +532,6 @@ probe_entry:
 	return !dwalk_end(walk);
 }
 
-/* userland only */
-void dwalk_chop_after(struct dwalk *walk)
-{
-	struct dleaf *leaf = walk->leaf;
-	struct group *gdict = walk->gdict;
-	struct entry *ebase = walk->estop + group_count(walk->group);
-	struct entry *entry = walk->entry;
-	unsigned newgroups = walk->gdict - walk->group;
-	set_group_count(walk->group, ebase - entry);
-	trace_on("%i groups, %i entries in last", dleaf_groups(leaf), group_count(walk->group));
-	void *free = (void *)entry + (dleaf_groups(leaf) - newgroups) * sizeof(*gdict);
-	memmove(free, entry, (void *)(gdict - newgroups) - free);
-	walk->estop = walk->entry = free;
-	walk->gstop = walk->group;
-	set_dleaf_groups(leaf, newgroups);
-}
-
-/* userland only */
-void dwalk_chop_old(struct dwalk *walk) // do we ever need this?
-{
-	if (!dleaf_groups(walk->leaf)) {
-		trace("<<<<<<<<<<<<< dleaf empty");
-		return;
-	}
-	if (walk->group + 1 == walk->gdict && walk->entry + 1 == walk->estop + group_count(walk->group)) {
-		trace(">>>>>>>>>>>>> empty dleaf");
-		set_dleaf_groups(walk->leaf, 0);
-		return;
-	}
-	dwalk_back(walk);
-	dwalk_chop_after(walk);
-}
-
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 {
 	if (!dleaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
@@ -775,7 +664,7 @@ static void dwalk_update(struct dwalk *walk, struct diskextent extent)
  *
  * But it does truncate so it is getting checked in just for now.
  */
-int dleaf_chop2(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
+static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 {
 	struct sb *sb = btree->sb;
 	struct dleaf *leaf = to_dleaf(vleaf);
@@ -804,3 +693,14 @@ int dleaf_chop2(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 
 	return 1;
 }
+
+struct btree_ops dtree_ops = {
+	.leaf_sniff = dleaf_sniff,
+	.leaf_init = dleaf_init,
+	.leaf_dump = dleaf_dump,
+	.leaf_split = dleaf_split,
+//	.leaf_resize = dleaf_resize,
+	.leaf_chop = dleaf_chop,
+	.balloc = balloc,
+	.bfree = bfree,
+};
