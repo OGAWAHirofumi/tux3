@@ -112,12 +112,16 @@ int main(int argc, const char *argv[])
 		goto usage;
 
 	if (!strcmp(command, "write")) {
-		printf("---- create file ----\n");
-		struct inode *inode = tuxcreate(sb->rootdir, filename, strlen(filename),
-			&(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
+		printf("---- open file ----\n");
+		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (!inode) {
-			errno = EEXIST;
-			goto eek;
+			printf("---- create file ----\n");
+			inode = tuxcreate(sb->rootdir, filename, strlen(filename),
+					  &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
+			if (!inode) {
+				errno = EEXIST;
+				goto eek;
+			}
 		}
 		tux_dump_entries(blockget(sb->rootdir->map, 0));
 		printf("---- write file ----\n");
