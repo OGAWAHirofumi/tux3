@@ -9,18 +9,6 @@
 #define trace trace_on
 #endif
 
-static void dwalk_seek(struct dwalk *walk, tuxkey_t key)
-{
-	/* dwalk_probe should just return a flag */
-	if (!dwalk_end(walk)) {
-		/* dwalk_probe should just return a flag */
-		do {
-			if (dwalk_index(walk) + dwalk_count(walk) > key)
-				break;
-		} while (dwalk_next(walk));
-	}
-}
-
 struct seg { block_t block; int count; };
 
 /* userland only */
@@ -32,9 +20,10 @@ void show_segs(struct seg seglist[], unsigned segs)
 	printf("\n");
 }
 
-static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
+static int find_segs(struct cursor *cursor, block_t start, block_t limit,
 	struct seg seg[], unsigned max_segs, struct dwalk seek[2], unsigned overlap[2])
 {
+	assert(max_segs > 0);
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
@@ -52,66 +41,48 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
 		limit = next_key(cursor, btree->root.depth);
 	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	dleaf_dump(btree, leaf);
+
 	struct dwalk *walk = &(struct dwalk){ };
-
-	/* Probe below io start to include overlapping extents */
-	dwalk_probe(leaf, sb->blocksize, walk, 0); // start at beginning of leaf just for now
-	dwalk_seek(walk, start);
+	block_t index = start, seg_start;
+	unsigned segs = 0;
+	dwalk_probe(leaf, sb->blocksize, walk, start);
 	seek[0] = *walk;
-	struct diskextent *next_extent = NULL;
-	block_t index = start, next_index = 0;
-	unsigned segs = 0, below = 0, above = 0, next_count = 0;
+	if (!dwalk_end(walk) && dwalk_index(walk) < start)
+		seg_start = dwalk_index(walk);
+	else
+		seg_start = index;
 	while (index < limit && segs < max_segs) {
-		trace("index %Lx, limit %Lx", (L)index, (L)limit);
-		if (next_extent) {
-			trace("emit %Lx/%x", (L)extent_block(*next_extent), next_count);
-			assert(next_index >= start);
-			seg[segs++] = (struct seg){ extent_block(*next_extent), next_count };
-			index += next_count;
-			next_extent = NULL;
-			continue;
-		}
+		block_t ex_index;
+		if (!dwalk_end(walk))
+			ex_index = dwalk_index(walk);
+		else
+			ex_index = limit;
 
-		if (dwalk_end(walk))
-			next_index = limit;
-		else {
-			next_extent = walk->extent;
-			next_index = dwalk_index(walk);
-			next_count = dwalk_count(walk);
-			dwalk_next(walk);
-			trace("next_index = %Lx, next_count = %x", (L)next_index, next_count);
-			if (next_index < start) {
-				below = start - next_index;
-				next_index = start;
-			} else if (next_index >= limit) {
-				next_extent = NULL;
-				dwalk_back(walk);
-			} else if (next_index + next_count > limit) {
-				above = next_index + next_count - limit;
-				next_count = limit - next_index;
-			}
-		}
-
-		if (index < next_index) {
-			int gap = next_index - index;
-			trace("index = %Lx, next = %Lx, gap = %i", (L)index, (L)next_index, gap);
-			if (index + gap > limit)
-				gap = limit - index;
-			trace("emit gap %x", gap);
+		if (index < ex_index) {
+			/* There is hole */
+			ex_index = min(ex_index, limit);
+			block_t gap = ex_index - index;
+			index = ex_index;
 			seg[segs++] = (struct seg){ .count = -gap };
-			index += gap;
-		}
+		} else {
+			block_t block = dwalk_block(walk);
+			unsigned count = dwalk_count(walk);
+			trace("emit %Lx/%x", (L)block, count );
+			seg[segs++] = (struct seg){ block, count };
+			index = ex_index + count;
+			dwalk_next(walk);
+ 		}
 	}
 	trace("\n");
-	trace("below = %i, above = %i", below, above);
 	seek[1] = *walk;
 	if (segs) {
+		block_t below = start - seg_start;
 		seg[0].block += below;
 		seg[0].count -= below;
-		seg[segs - 1].count -= above;
+//		seg[segs - 1].count -= above;
 		if (overlap) {
 			overlap[0] = below;
-			overlap[1] = above;
+//			overlap[1] = above;
 		}
 	}
 	return segs;
@@ -123,7 +94,7 @@ static int find_segs(struct cursor *cursor, block_t start, unsigned limit,
  * successfully allocated and recorded in the btree.  Sucks, still.
  */
 
-static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
+static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	struct seg seg[], unsigned segs, struct dwalk seek[2], unsigned overlap[2])
 {
 	struct btree *btree = cursor->btree;
@@ -224,7 +195,7 @@ show_tree(btree);
 	return segs;
 }
 
-static int get_segs(struct inode *inode, block_t start, unsigned limit, struct seg segvec[], unsigned max_segs, int create)
+static int get_segs(struct inode *inode, block_t start, block_t limit, struct seg segvec[], unsigned max_segs, int create)
 {
 	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* +1 for new depth */
 	if (!cursor)
