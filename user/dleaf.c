@@ -193,12 +193,44 @@ int main(int argc, char *argv[])
 			assert(memcmp(&w2[i], &w2[i], sizeof(w1[0])) == 0);
 		dleaf_destroy(btree, leaf1);
 	}
-	if (0) { // fails
-		dwalk_probe(leaf, sb->blocksize, walk, 0x1c01c);
-		dwalk_chop(walk);
-		dleaf_dump(btree, leaf);
-		exit(0);
+	if (1) {
+		/* dleaf_chop test */
+		struct dleaf *leaf1 = dleaf_create(btree);
+		struct dwalk *walk1 = &(struct dwalk){ };
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_add(walk1, 0x3001000001ULL, make_extent(0x1, 1));
+		dwalk_add(walk1, 0x3001000002ULL, make_extent(0x2, 1));
+		dwalk_add(walk1, 0x3001000003ULL, make_extent(0x3, 1));
+		dwalk_add(walk1, 0x3001000004ULL, make_extent(0x4, 1));
+		dwalk_add(walk1, 0x3001000005ULL, make_extent(0x5, 10));
+		dwalk_add(walk1, 0x3002000000ULL, make_extent(0xa, 1));
+		dwalk_add(walk1, 0x3002000001ULL, make_extent(0xb, 1));
+		tuxkey_t k1[NR + 1];
+		struct diskextent e1[NR + 1];
+		int nr = 0;
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		while (!dwalk_end(walk1)) {
+			k1[nr] = dwalk_index(walk1);
+			e1[nr] = *walk1->extent;
+			nr++;
+			dwalk_next(walk1);
+		}
+		dleaf_chop(btree, 0x3001000008ULL, leaf1);
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		nr = 0;
+		while (!dwalk_end(walk1)) {
+			assert(dwalk_index(walk1) == k1[nr]);
+			assert(dwalk_block(walk1) == extent_block(e1[nr]));
+			if (nr == 4)
+				assert(dwalk_count(walk1) == 3);
+			else
+				assert(dwalk_count(walk1) == extent_count(e1[nr]));
+			nr++;
+			dwalk_next(walk1);
+		}
+		assert(nr == 5);
+		dleaf_destroy(btree, leaf1);
 	}
-	exit(0);
+	return 0;
 }
 #endif
