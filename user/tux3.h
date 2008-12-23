@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <byteswap.h>
 #include <sys/time.h>
 #include <time.h>

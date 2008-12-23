@@ -46,6 +46,12 @@ struct map_ops filemap_ops = {
 };
 
 #ifndef filemap_included
+static void check_created_seg(struct seg *seg)
+{
+	assert(seg->block > 0);
+	assert(seg->count > 0);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -74,39 +80,100 @@ int main(int argc, char *argv[])
 	inode->map->inode = inode;
 	inode = inode;
 
-#if 1
-	{
-		int segs;
-		struct seg segvec[100];
-		segs = get_segs(inode, 2, 3, segvec, 1, 1); show_segs(segvec, segs);
-		segs = get_segs(inode, 4, 5, segvec, 1, 1); show_segs(segvec, segs);
-		exit(0);
+	block_t nextalloc = sb->nextalloc;
+	if (1) {
+		for (int i = 0; i < 1; i++) {
+			struct cursor *cursor = alloc_cursor(&inode->btree, 1);
+			struct seg segvec[100];
+			struct dwalk seek[2] = { };
+			unsigned overlap[2];
+			int segs = find_segs(cursor, 2*i, 2*i + 1, segvec, 2, seek, overlap);
+			show_segs(segvec, segs);
+			segs = fill_segs(cursor, 2*i, 2*i + 1, segvec, segs, seek, overlap);
+			show_segs(segvec, segs);
+		}
+		struct delete_info delinfo = { .key = 0, };
+		int r = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!r);
+		sb->nextalloc = nextalloc;
 	}
-#endif
 
-#if 1
-	for (int i = 30; i-- > 28;) {
-		struct seg segvec[100];
-		get_segs(inode, 2*i, 2*i + 1, segvec, 1, 1);
+	struct seg segs[64];
+	if (1) {
+		struct seg seg;
+		for (int i = 0, j = 0; i < 30; i++, j++) {
+			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+			assert(r == 1);
+			check_created_seg(&seg);
+			segs[j].block = seg.block;
+			segs[j].count = seg.count;
+		}
+		for (int i = 0, j = 0; i < 30; i++, j++) {
+			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
+			assert(r == 1);
+			check_created_seg(&seg);
+			assert(segs[j].block == seg.block);
+			assert(segs[j].count == seg.count);
+		}
+		show_tree_range(&inode->btree, 0, -1);
+		struct delete_info delinfo = { .key = 0, };
+		int r = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!r);
+		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		sb->nextalloc = nextalloc;
+	}
+	if (1) {
+		struct seg seg;
+		for (int i = 2, j = 0; i--; j++) {
+			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+			assert(r == 1);
+			check_created_seg(&seg);
+			segs[j].block = seg.block;
+			segs[j].count = seg.count;
+		}
+		for (int i = 2, j = 0; i--; j++) {
+			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
+			assert(r == 1);
+			check_created_seg(&seg);
+			assert(segs[j].block == seg.block);
+			assert(segs[j].count == seg.count);
+		}
+		show_tree_range(&inode->btree, 0, -1);
+		/* 0/2: 0 => 3/1; 2 => 2/1; */
+		struct delete_info delinfo = { .key = 0, };
+		int r = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!r);
+		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		sb->nextalloc = nextalloc;
+	}
+	if (1) {
+		struct seg seg;
+		for (int i = 30, j = 0; i-- > 28; j++) {
+			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+			assert(r == 1);
+			check_created_seg(&seg);
+			segs[j].block = seg.block;
+			segs[j].count = seg.count;
+		}
+		for (int i = 30, j = 0; i-- > 28; j++) {
+			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
+			assert(r == 1);
+			check_created_seg(&seg);
+			assert(segs[j].block == seg.block);
+			assert(segs[j].count == seg.count);
+		}
+		/* 0/2: 38 => 3/1; 3a => 2/1; */
+		show_tree_range(&inode->btree, 0, -1);
+		struct delete_info delinfo = { .key = 0, };
+		int r = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!r);
+		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		sb->nextalloc = nextalloc;
 	}
 	exit(0);
-#endif
-
-#if 1
-	for (int i = 0; i < 1; i++) {
-		struct cursor *cursor = alloc_cursor(&inode->btree, 1);
-		struct seg segvec[100];
-		struct dwalk seek[2] = { };
-		unsigned overlap[2];
-		int segs = find_segs(cursor, 2*i, 2*i + 1, segvec, 2, seek, overlap);
-		show_segs(segvec, segs);
-		segs = fill_segs(cursor, 2*i, 2*i + 1, segvec, segs, seek, overlap);
-		show_segs(segvec, segs);
-	}
-
-	exit(0);
-#endif
-
 #if 1
 	sb->nextalloc = 0x10;
 	balloc(sb, 1);
