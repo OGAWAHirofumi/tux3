@@ -77,12 +77,13 @@ static int find_segs(struct cursor *cursor, block_t start, block_t limit,
 	seek[1] = *walk;
 	if (segs) {
 		block_t below = start - seg_start;
+		block_t above = index - limit;
 		seg[0].block += below;
 		seg[0].count -= below;
-//		seg[segs - 1].count -= above;
+		seg[segs - 1].count -= above;
 		if (overlap) {
 			overlap[0] = below;
-//			overlap[1] = above;
+			overlap[1] = above;
 		}
 	}
 	return segs;

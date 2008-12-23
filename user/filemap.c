@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 	inode = inode;
 
 	block_t nextalloc = sb->nextalloc;
-	if (1) {
+	if (0) {
 		for (int i = 0; i < 1; i++) {
 			struct cursor *cursor = alloc_cursor(&inode->btree, 1);
 			struct seg segvec[100];
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
 	}
 
 	struct seg segs[64];
-	if (1) {
+	if (0) {
 		struct seg seg;
 		for (int i = 0, j = 0; i < 30; i++, j++) {
 			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
@@ -136,14 +136,14 @@ int main(int argc, char *argv[])
 	}
 	if (1) {
 		struct seg seg;
-		for (int i = 2, j = 0; i--; j++) {
+		for (int i = 10, j = 0; i--; j++) {
 			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
 			assert(r == 1);
 			check_created_seg(&seg);
 			segs[j].block = seg.block;
 			segs[j].count = seg.count;
 		}
-		for (int i = 2, j = 0; i--; j++) {
+		for (int i = 10, j = 0; i--; j++) {
 			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
 			assert(r == 1);
 			check_created_seg(&seg);
@@ -158,6 +158,7 @@ int main(int argc, char *argv[])
 		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
+exit(0);
 	}
 	if (1) {
 		struct seg seg;
