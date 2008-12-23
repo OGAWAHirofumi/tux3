@@ -130,14 +130,17 @@ static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
 	struct sb *sb = btree->sb;
 	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	struct dleaf *tail = malloc(sb->blocksize); // error???
-	tuxkey_t tailkey = dwalk_index(&seek[1]);
+	tuxkey_t tailkey;
 	int err;
 
 	dleaf_init(btree, tail);
-	trace("leaf..."); dleaf_dump(btree, leaf);
-	err = dleaf_split_at(leaf, tail, seek[1].entry, sb->blocksize);
-	trace("leaf..."); dleaf_dump(btree, leaf);
-	trace("tail..."); dleaf_dump(btree, tail);
+	if (!dwalk_end(&seek[1])) {
+		tailkey = dwalk_index(&seek[1]);
+		trace("leaf..."); dleaf_dump(btree, leaf);
+		err = dleaf_split_at(leaf, tail, seek[1].entry, sb->blocksize);
+		trace("leaf..."); dleaf_dump(btree, leaf);
+		trace("tail..."); dleaf_dump(btree, tail);
+	}
 
 	for (int i = 0; i < segs; i++) {
 		int count = seg[i].count;
@@ -200,6 +203,7 @@ static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
 		dleaf_merge(btree, leaf, tail);
 		dleaf_dump(btree, leaf);
 	} else {
+		assert(dleaf_groups(tail) >= 1);
 		/* Tail does not fit, add it as a new btree leaf */
 		struct buffer_head *newbuf = new_leaf(btree);
 		if (!newbuf) {
