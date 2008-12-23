@@ -116,10 +116,21 @@ int main(int argc, char *argv[])
 			assert(segs[j].count == seg.count);
 		}
 		show_tree_range(&inode->btree, 0, -1);
-		struct delete_info delinfo = { .key = 0, };
-		int r = tree_chop(&inode->btree, &delinfo, 0);
-		assert(!r);
-		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		/* tree_chop and dleaf_chop test */
+		int index = 31*2;
+		while (index--) {
+			struct delete_info delinfo = { .key = index, };
+			int r = tree_chop(&inode->btree, &delinfo, 0);
+			assert(!r);
+			for (int i = 0, j = 0; i < 30; i++, j++) {
+				if (index <= i*2)
+					break;
+				get_segs(inode, i*2, i*2 + 1, &seg, 1, 0);
+				assert(segs[j].block == seg.block);
+				assert(segs[j].count == seg.count);
+			}
+		}
+		int r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
 	}
