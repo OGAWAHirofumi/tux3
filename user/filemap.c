@@ -81,6 +81,9 @@ int main(int argc, char *argv[])
 	inode = inode;
 
 	block_t nextalloc = sb->nextalloc;
+	struct seg segvec[64];
+	int segs;
+
 	if (0) {
 		for (int i = 0; i < 1; i++) {
 			struct cursor *cursor = alloc_cursor(&inode->btree, 1);
@@ -93,103 +96,102 @@ int main(int argc, char *argv[])
 			show_segs(segvec, segs);
 		}
 		struct delete_info delinfo = { .key = 0, };
-		int r = tree_chop(&inode->btree, &delinfo, 0);
-		assert(!r);
+		int segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
 		sb->nextalloc = nextalloc;
 	}
 
-	struct seg segs[64];
-	if (0) {
+	if (1) { /* create seg entirely inside existing */
+		segs = get_segs(inode, 2, 7, segvec, 10, 1); show_segs(segvec, segs);
+		segs = get_segs(inode, 4, 5, segvec, 10, 1); show_segs(segvec, segs);
+		exit(0);
+	}
+
+	if (1) {
 		struct seg seg;
 		for (int i = 0, j = 0; i < 30; i++, j++) {
-			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
-			assert(r == 1);
+			segs = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+			assert(segs == 1);
 			check_created_seg(&seg);
-			segs[j].block = seg.block;
-			segs[j].count = seg.count;
+			segvec[j].block = seg.block;
+			segvec[j].count = seg.count;
 		}
 		for (int i = 0, j = 0; i < 30; i++, j++) {
-			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
-			assert(r == 1);
+			segs = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
+			assert(segs == 1);
 			check_created_seg(&seg);
-			assert(segs[j].block == seg.block);
-			assert(segs[j].count == seg.count);
+			assert(segvec[j].block == seg.block);
+			assert(segvec[j].count == seg.count);
 		}
 		show_tree_range(&inode->btree, 0, -1);
 		/* tree_chop and dleaf_chop test */
 		int index = 31*2;
 		while (index--) {
 			struct delete_info delinfo = { .key = index, };
-			int r = tree_chop(&inode->btree, &delinfo, 0);
-			assert(!r);
+			segs = tree_chop(&inode->btree, &delinfo, 0);
+			assert(!segs);
 			for (int i = 0, j = 0; i < 30; i++, j++) {
 				if (index <= i*2)
 					break;
 				get_segs(inode, i*2, i*2 + 1, &seg, 1, 0);
-				assert(segs[j].block == seg.block);
-				assert(segs[j].count == seg.count);
+				assert(segvec[j].block == seg.block);
+				assert(segvec[j].count == seg.count);
 			}
 		}
-		int r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		segs = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		assert(segs == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
 	}
-	if (0) {
+	if (1) {
 		struct seg seg;
 		for (int i = 10, j = 0; i--; j++) {
-			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
-			assert(r == 1);
+			segs = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+			assert(segs == 1);
 			check_created_seg(&seg);
-			segs[j].block = seg.block;
-			segs[j].count = seg.count;
+			segvec[j].block = seg.block;
+			segvec[j].count = seg.count;
 		}
 		for (int i = 10, j = 0; i--; j++) {
-			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
-			assert(r == 1);
+			segs = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
+			assert(segs == 1);
 			check_created_seg(&seg);
-			assert(segs[j].block == seg.block);
-			assert(segs[j].count == seg.count);
+			assert(segvec[j].block == seg.block);
+			assert(segvec[j].count == seg.count);
 		}
 		show_tree_range(&inode->btree, 0, -1);
 		/* 0/2: 0 => 3/1; 2 => 2/1; */
 		struct delete_info delinfo = { .key = 0, };
-		int r = tree_chop(&inode->btree, &delinfo, 0);
-		assert(!r);
-		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
+		segs = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		assert(segs == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
 	}
-	if (0) {
+	if (1) {
 		struct seg seg;
 		for (int i = 30, j = 0; i-- > 28; j++) {
-			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
-			assert(r == 1);
+			segs = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 1);
+			assert(segs == 1);
 			check_created_seg(&seg);
-			segs[j].block = seg.block;
-			segs[j].count = seg.count;
+			segvec[j].block = seg.block;
+			segvec[j].count = seg.count;
 		}
 		for (int i = 30, j = 0; i-- > 28; j++) {
-			int r = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
-			assert(r == 1);
+			segs = get_segs(inode, 2*i, 2*i + 1, &seg, 1, 0);
+			assert(segs == 1);
 			check_created_seg(&seg);
-			assert(segs[j].block == seg.block);
-			assert(segs[j].count == seg.count);
+			assert(segvec[j].block == seg.block);
+			assert(segvec[j].count == seg.count);
 		}
 		/* 0/2: 38 => 3/1; 3a => 2/1; */
 		show_tree_range(&inode->btree, 0, -1);
 		struct delete_info delinfo = { .key = 0, };
-		int r = tree_chop(&inode->btree, &delinfo, 0);
-		assert(!r);
-		r = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(r == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
+		segs = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
+		assert(segs == 1 && seg.block == 0 && seg.count == -INT_MAX);
 		sb->nextalloc = nextalloc;
 	}
-#if 1
-	int n;
-	n = get_segs(inode, 2, 7, segs, 10, 1); show_segs(segs, n);
-	n = get_segs(inode, 4, 5, segs, 10, 1); show_segs(segs, n);
-	exit(0);
-#endif
 
 #if 1
 	sb->nextalloc = 0x10;
