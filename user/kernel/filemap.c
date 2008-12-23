@@ -158,9 +158,9 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 			 * first, look at the cursor to see how many splits we need,
 			 * then make sure we have that, or give up before starting.
 			 */
-			insert_node(btree, dwalk_index(seek), bufindex(newbuf), cursor);
+			insert_node(btree, index, bufindex(newbuf), cursor);
 			leaf = bufdata(cursor_leafbuf(cursor));
-			dwalk_probe(leaf, sb->blocksize, seek, 0);
+			dwalk_probe(leaf, sb->blocksize, seek, index);
 		}
 		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
 		dleaf_dump(btree, leaf);
