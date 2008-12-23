@@ -111,8 +111,31 @@ int main(int argc, char *argv[])
 		try(walk, 0x3001006, make_extent(0x6, 1));
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
-	dleaf_dump(btree, leaf);
 	assert(!dleaf_check(btree, leaf));
+	dleaf_dump(btree, leaf);
+	for (int i = 0; i < ARRAY_SIZE(keys); i++) {
+		unsigned key = keys[i];
+		unsigned count;
+		void *found = dleaf_lookup(btree, leaf, key, &count);
+		if (count) {
+			printf("lookup 0x%x, found [%i] ", key, count );
+			hexdump(found, count);
+		} else
+			printf("0x%x not found\n", key);
+	}
+
+	assert(!dleaf_check(btree, leaf));
+	struct dleaf *dest = dleaf_create(btree);
+	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
+	printf("split key 0x%Lx\n", (L)key);
+	dleaf_dump(btree, leaf);
+	dleaf_dump(btree, dest);
+	dleaf_merge(btree, leaf, dest);
+	dleaf_dump(btree, leaf);
+	dleaf_chop(btree, 0x14014LL, leaf);
+	dleaf_dump(btree, leaf);
+	dleaf_destroy(btree, leaf);
+	dleaf_destroy(btree, dest);
 
 	if (1) {
 		struct {
@@ -176,30 +199,6 @@ int main(int argc, char *argv[])
 		dleaf_dump(btree, leaf);
 		exit(0);
 	}
-	dleaf_dump(btree, leaf);
-	for (int i = 0; i < ARRAY_SIZE(keys); i++) {
-		unsigned key = keys[i];
-		unsigned count;
-		void *found = dleaf_lookup(btree, leaf, key, &count);
-		if (count) {
-			printf("lookup 0x%x, found [%i] ", key, count );
-			hexdump(found, count);
-		} else
-			printf("0x%x not found\n", key);
-	}
-
-	assert(!dleaf_check(btree, leaf));
-	struct dleaf *dest = dleaf_create(btree);
-	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
-	printf("split key 0x%Lx\n", (L)key);
-	dleaf_dump(btree, leaf);
-	dleaf_dump(btree, dest);
-	dleaf_merge(btree, leaf, dest);
-	dleaf_dump(btree, leaf);
-	dleaf_chop(btree, 0x14014LL, leaf);
-	dleaf_dump(btree, leaf);
-	dleaf_destroy(btree, leaf);
-	dleaf_destroy(btree, dest);
 	exit(0);
 }
 #endif
