@@ -190,7 +190,7 @@ static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 				trunc = 1;
 			}
 			for (int i = 0; i < count; i++)
-				(btree->ops->bfree)(btree->sb, extent_block(leaf->table[extents + i]));
+				(btree->ops->bfree)(btree->sb, extent_block(leaf->table[extents + i]), 1);
 		}
 		start = entry_limit(entry);
 		extents += count;
@@ -790,7 +790,7 @@ int dleaf_chop2(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 		unsigned count = chop - dwalk_index(&walk);
 
 		/* FIXME: err check? */
-		bfree_extent(sb, block + count, dwalk_count(&walk) - count);
+		(btree->ops->bfree)(sb, block + count, dwalk_count(&walk) - count);
 		dwalk_update(&walk, make_extent(block, count));
 		if (!dwalk_next(&walk))
 			return 1;
@@ -798,7 +798,7 @@ int dleaf_chop2(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 	struct dwalk rewind = walk;
 	do {
 		/* FIXME: err check? */
-		bfree_extent(sb, dwalk_block(&walk), dwalk_count(&walk));
+		(btree->ops->bfree)(sb, dwalk_block(&walk), dwalk_count(&walk));
 	} while (dwalk_next(&walk));
 	dwalk_chop(&rewind);
 

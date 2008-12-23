@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 
 #if 1
 	sb->nextalloc = 0x10;
-	balloc(sb);
+	balloc(sb, 1);
 	sb->nextalloc = 0xf;
 	brelse_dirty(blockread(mapping(inode), 0x0));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));

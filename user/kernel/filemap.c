@@ -146,7 +146,7 @@ static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
 		int count = seg[i].count;
 		if (count < 0) {
 			count = -count;
-			block_t block = balloc_extent(sb, count); // goal ???
+			block_t block = balloc(sb, count); // goal ???
 			trace("fill in %Lx/%i ", (L)block, count);
 			if (block == -1) {
 				/*

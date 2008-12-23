@@ -124,10 +124,10 @@ struct btree_ops ops = {
 	.balloc = balloc,
 };
 
-block_t balloc(struct sb *sb)
+block_t balloc(struct sb *sb, unsigned blocks)
 {
 	printf("-> %Lx\n", (L)sb->nextalloc);
-	return sb->nextalloc++;
+	return sb->nextalloc += blocks;
 }
 
 int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)

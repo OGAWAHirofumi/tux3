@@ -44,7 +44,7 @@ static void free_block(struct sb *sb, block_t block)
 // just report and keep going without a fuss.
 static struct buffer_head *new_block(struct btree *btree)
 {
-	block_t block = (btree->ops->balloc)(btree->sb);
+	block_t block = (btree->ops->balloc)(btree->sb, 1);
 	if (block == -1)
 		return NULL;
 	struct buffer_head *buffer = sb_getblk(vfs_sb(btree->sb), block);

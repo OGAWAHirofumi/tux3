@@ -454,8 +454,8 @@ struct btree_ops {
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(struct btree *btree, tuxkey_t key, vleaf *leaf);
 	void (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
-	block_t (*balloc)(struct sb *sb);
-	void (*bfree)(struct sb *sb, block_t block);
+	block_t (*balloc)(struct sb *sb, unsigned blocks);
+	void (*bfree)(struct sb *sb, block_t block, unsigned blocks);
 };
 
 /*
@@ -501,9 +501,8 @@ struct tux_iattr {
 };
 
 void hexdump(void *data, unsigned size);
-block_t balloc(struct sb *sb);
-void bfree_extent(struct sb *sb, block_t start, unsigned count);
-void bfree(struct sb *sb, block_t block);
+block_t balloc(struct sb *sb, unsigned blocks);
+void bfree(struct sb *sb, block_t start, unsigned blocks);
 
 enum atkind {
 	MIN_ATTR = 6,
@@ -598,9 +597,6 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
 	return buffer->b_page->mapping->host;
 }
-
-/* balloc.c */
-block_t balloc_extent(struct sb *sb, unsigned blocks);
 
 /* btree.c */
 struct buffer_head *cursor_leafbuf(struct cursor *cursor);

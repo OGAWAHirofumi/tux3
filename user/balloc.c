@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 		set_buffer_uptodate(buffer);
 	}
 	for (int i = 0; i < 12; i++) {
-		block_t block = balloc_from_range(bitmap, 121, 10);
+		block_t block = balloc_from_range(bitmap, 121, 10, 1);
 		printf("%Li\n", (L)block);
 	}
 	hexdump(bufdata(blockget(map, 0)), dumpsize);
@@ -86,18 +86,18 @@ int main(int argc, char *argv[])
 
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 1; i++)
-		balloc(sb);
+		balloc(sb, 1);
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 10; i++)
-		balloc(sb);
+		balloc(sb, 1);
 	hexdump(bufdata(blockget(map, 0)), dumpsize);
 	hexdump(bufdata(blockget(map, 1)), dumpsize);
 	hexdump(bufdata(blockget(map, 2)), dumpsize);
 
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, from_be_u64(sb->super.volblocks)), (L)sb->freeblocks);
-	bfree(sb, 0x7e);
-	bfree(sb, 0x80);
+	bfree(sb, 0x7e, 1);
+	bfree(sb, 0x80, 1);
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	exit(0);
 }

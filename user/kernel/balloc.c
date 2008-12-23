@@ -166,7 +166,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-static block_t balloc_extent_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
+static block_t balloc_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
 {
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	assert(blocks > 0);
@@ -222,32 +222,14 @@ final_partial_byte:
 	return -1;
 }
 
-static block_t balloc_from_range(struct inode *inode, block_t start, block_t count)
+block_t balloc(struct sb *sb, unsigned blocks)
 {
-	return balloc_extent_from_range(inode, start, count, 1);
-}
-
-block_t balloc(struct sb *sb)
-{
-	trace_off("balloc block at goal %Lx", (L)sb->nextalloc);
-	block_t goal = sb->nextalloc, total = sb->volblocks, block;
-	if ((block = balloc_from_range(sb->bitmap, goal, total - goal)) >= 0)
-		goto found;
-	if ((block = balloc_from_range(sb->bitmap, 0, goal)) >= 0)
-		goto found;
-	return -1;
-found:
-	trace("balloc -> [%Lx]", (L)block);
-	return block;
-}
-
-block_t balloc_extent(struct sb *sb, unsigned blocks)
-{
+	assert(blocks > 0);
 	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
-	if ((block = balloc_extent_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
+	if ((block = balloc_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
 		goto found;
-	if ((block = balloc_extent_from_range(sb->bitmap, 0, goal, blocks)) >= 0)
+	if ((block = balloc_from_range(sb->bitmap, 0, goal, blocks)) >= 0)
 		goto found;
 	return -1;
 found:
@@ -255,8 +237,9 @@ found:
 	return block;
 }
 
-void bfree_extent(struct sb *sb, block_t start, unsigned count)
+void bfree(struct sb *sb, block_t start, unsigned blocks)
 {
+	assert(blocks > 0);
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
@@ -265,11 +248,11 @@ void bfree_extent(struct sb *sb, block_t start, unsigned count)
 	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
 		goto eek;
-	if (!all_set(bufdata(buffer), start &= mapmask, count))
+	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
 		goto eeek;
-	clear_bits(bufdata(buffer), start, count);
+	clear_bits(bufdata(buffer), start, blocks);
 	brelse_dirty(buffer);
-	sb->freeblocks += count;
+	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
 	return;
 eeek:
@@ -277,9 +260,4 @@ eeek:
 	brelse(buffer);
 eek:
 	warn("extent 0x%Lx %s!\n", (L)start, why);
-}
-
-void bfree(struct sb *sb, block_t block)
-{
-	bfree_extent(sb, block, 1);
 }
