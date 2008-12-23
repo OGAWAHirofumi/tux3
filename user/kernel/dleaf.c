@@ -146,6 +146,7 @@ void dleaf_dump(struct btree *btree, vleaf *vleaf)
 	}
 }
 
+/* userland only */
 int dleaf_check(struct btree *btree, struct dleaf *leaf)
 {
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gstop = gdict - dleaf_groups(leaf);

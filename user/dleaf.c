@@ -124,15 +124,16 @@ int main(int argc, char *argv[])
 			printf("0x%x not found\n", key);
 	}
 
-	assert(!dleaf_check(btree, leaf));
 	struct dleaf *dest = dleaf_create(btree);
 	tuxkey_t key = dleaf_split(btree, 0, leaf, dest);
 	printf("split key 0x%Lx\n", (L)key);
 	dleaf_dump(btree, leaf);
 	dleaf_dump(btree, dest);
 	dleaf_merge(btree, leaf, dest);
+	assert(!dleaf_check(btree, leaf));
 	dleaf_dump(btree, leaf);
 	dleaf_chop(btree, 0x14014LL, leaf);
+	assert(!dleaf_check(btree, leaf));
 	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
@@ -155,6 +156,7 @@ int main(int argc, char *argv[])
 		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
 		for (int i = 0; i < ARRAY_SIZE(data); i++)
 			dwalk_add(walk1, data[i].index, data[i].ex);
+		assert(!dleaf_check(btree, leaf1));
 		/* dwalk_probe test */
 		int i, ret;
 		for (i = 0; i < ARRAY_SIZE(data); i++) {
@@ -205,6 +207,7 @@ int main(int argc, char *argv[])
 		dwalk_add(walk1, 0x3001000005ULL, make_extent(0x5, 10));
 		dwalk_add(walk1, 0x3002000000ULL, make_extent(0xa, 1));
 		dwalk_add(walk1, 0x3002000001ULL, make_extent(0xb, 1));
+		assert(!dleaf_check(btree, leaf1));
 		tuxkey_t k1[NR + 1];
 		struct diskextent e1[NR + 1];
 		int nr = 0;
@@ -216,6 +219,7 @@ int main(int argc, char *argv[])
 			dwalk_next(walk1);
 		}
 		dleaf_chop(btree, 0x3001000008ULL, leaf1);
+		assert(!dleaf_check(btree, leaf1));
 		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
 		nr = 0;
 		while (!dwalk_end(walk1)) {
