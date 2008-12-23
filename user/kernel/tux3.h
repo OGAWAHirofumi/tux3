@@ -650,7 +650,7 @@ int dwalk_back(struct dwalk *walk);
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 void dwalk_chop(struct dwalk *walk);
-int dwalk_pack(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
+int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 
 /* filemap.c */
 int tux3_get_block(struct inode *inode, sector_t iblock,

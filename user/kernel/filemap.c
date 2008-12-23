@@ -193,7 +193,7 @@ static int fill_segs(struct cursor *cursor, block_t start, unsigned limit,
 		}
 		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
 		dleaf_dump(btree, leaf);
-		dwalk_pack(seek, index, make_extent(seg[i].block, seg[i].count));
+		dwalk_add(seek, index, make_extent(seg[i].block, seg[i].count));
 		dleaf_dump(btree, leaf);
 		index += seg[i].count;
 	}

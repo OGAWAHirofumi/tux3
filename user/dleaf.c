@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
 			walk->mock.group = *walk->group;
 			walk->mock.entry = *walk->entry;
 		}
-		int (*try)(struct dwalk *walk, tuxkey_t key, struct diskextent extent) = i ? dwalk_pack: dwalk_mock;
+		int (*try)(struct dwalk *walk, tuxkey_t key, struct diskextent extent) = i ? dwalk_add: dwalk_mock;
 		try(walk, 0x3001001, make_extent(0x1, 1));
 		try(walk, 0x3001002, make_extent(0x2, 1));
 		try(walk, 0x3001003, make_extent(0x3, 1));
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 		struct dwalk *walk1 = &(struct dwalk){ };
 		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
 		for (int i = 0; i < ARRAY_SIZE(data); i++)
-			dwalk_pack(walk1, data[i].index, data[i].ex);
+			dwalk_add(walk1, data[i].index, data[i].ex);
 		/* dwalk_probe test */
 		int i, ret;
 		for (i = 0; i < ARRAY_SIZE(data); i++) {
