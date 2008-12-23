@@ -290,7 +290,7 @@ static void tux3_truncate(struct inode *inode)
 
 	if (!tux_can_truncate(inode))
 		return;
-	/* FIXME: must fix dleaf_chop bug, and expand size */
+	/* FIXME: must fix expand size */
 	WARN_ON(inode->i_size);
 	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
 	err = tree_chop(&tux_inode(inode)->btree, &del_info, 0);

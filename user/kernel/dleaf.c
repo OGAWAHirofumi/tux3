@@ -89,8 +89,9 @@ unsigned dleaf_free(struct btree *btree, vleaf *leaf)
 	return from_be_u16(to_dleaf(leaf)->used) - from_be_u16(to_dleaf(leaf)->free);
 }
 
-unsigned dleaf_need(struct btree *btree, struct dleaf *leaf)
+unsigned dleaf_need(struct btree *btree, vleaf *vleaf)
 {
+	struct dleaf *leaf = to_dleaf(vleaf);
 	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
@@ -259,8 +260,9 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vlea
 	return get_index(gdict2 - 1, (struct entry *)(gdict2 - groups2) - 1);
 }
 
-void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from)
+void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 {
+	struct dleaf *leaf = to_dleaf(vinto), *from = to_dleaf(vfrom);
 	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gbase = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gbase;
 	printf("merge %p into %p\n", from, leaf);
@@ -699,9 +701,12 @@ struct btree_ops dtree_ops = {
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
 	.leaf_dump = dleaf_dump,
+	.leaf_need = dleaf_need,
+	.leaf_free = dleaf_free,
 	.leaf_split = dleaf_split,
 //	.leaf_resize = dleaf_resize,
 	.leaf_chop = dleaf_chop,
+	.leaf_merge = dleaf_merge,
 	.balloc = balloc,
 	.bfree = bfree,
 };

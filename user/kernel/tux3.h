@@ -633,9 +633,9 @@ int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
-void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from);
+void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
 void dwalk_chop_after(struct dwalk *walk);
-unsigned dleaf_need(struct btree *btree, struct dleaf *leaf);
+unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;
 
 int dwalk_end(struct dwalk *walk);
