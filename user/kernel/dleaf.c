@@ -405,7 +405,8 @@ struct btree_ops dtree_ops = {
  *      ->exbase is the first extent in current group
  *      ->extent is the current extent (extent <1> (gr1, ent 1)).
  *      ->exstop is the first extent in next entry.
- *        (i.e. the address that dwalk_next() has to update to next entry.)
+ *        (I.e. the address that dwalk_next() has to update to next entry.
+ *        If there is no next, it will stop with ->extent == ->exstop.)
  */
 
 /* FIXME: current code is assuming the entry has only one extent. */
@@ -534,7 +535,7 @@ int dwalk_back(struct dwalk *walk)
 /*
  * Probe the extent position with key. If not found, position is next
  * extent of key.  If probed all extents return 0, otherwise return 1
- * (i.e. next extent is available).
+ * (I.e. current extent is valid. IOW, !dwalk_end()).
  */
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key)
 {
