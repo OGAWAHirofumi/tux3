@@ -255,7 +255,7 @@ found:
 	return block;
 }
 
-static void bfree_extent(struct sb *sb, block_t start, unsigned count)
+void bfree_extent(struct sb *sb, block_t start, unsigned count)
 {
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;

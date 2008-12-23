@@ -751,3 +751,56 @@ int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 
 	return 0; // extent out of order??? leaf full???
 }
+
+/* Update this extent. The caller have to check new extent isn't overlapping. */
+static void dwalk_update(struct dwalk *walk, struct diskextent extent)
+{
+	*walk->extent = extent;
+}
+
+/*
+ * Reasons this dleaf truncator sucks:
+ *
+ * * Does not check for integrity at all so a corrupted leaf can cause overflow
+ *   and system corruption.
+ *
+ * * Assumes all block pointers after the truncation point will be deleted,
+ *   which does not hold when versions arrive.
+ *
+ * * Modifies a group count in the middle of the traversal knowing that it has
+ *   already loaded the changed field and will not load it again, fragile.
+ *
+ * * Does not provide a generic mechanism that can be adapted to other
+ *   truncation tasks.
+ *
+ * But it does truncate so it is getting checked in just for now.
+ */
+int dleaf_chop2(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
+{
+	struct sb *sb = btree->sb;
+	struct dleaf *leaf = to_dleaf(vleaf);
+	struct dwalk walk;
+
+	if (!dwalk_probe(leaf, sb->blocksize, &walk, chop))
+		return 0;
+
+	/* Chop this extent partially */
+	if (dwalk_index(&walk) < chop) {
+		block_t block = dwalk_block(&walk);
+		unsigned count = chop - dwalk_index(&walk);
+
+		/* FIXME: err check? */
+		bfree_extent(sb, block + count, dwalk_count(&walk) - count);
+		dwalk_update(&walk, make_extent(block, count));
+		if (!dwalk_next(&walk))
+			return 1;
+	}
+	struct dwalk rewind = walk;
+	do {
+		/* FIXME: err check? */
+		bfree_extent(sb, dwalk_block(&walk), dwalk_count(&walk));
+	} while (dwalk_next(&walk));
+	dwalk_chop(&rewind);
+
+	return 1;
+}

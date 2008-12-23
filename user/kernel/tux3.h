@@ -502,6 +502,7 @@ struct tux_iattr {
 
 void hexdump(void *data, unsigned size);
 block_t balloc(struct sb *sb);
+void bfree_extent(struct sb *sb, block_t start, unsigned count);
 void bfree(struct sb *sb, block_t block);
 
 enum atkind {
