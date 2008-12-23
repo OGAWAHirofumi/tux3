@@ -243,21 +243,6 @@ eek:
 	return -1;
 }
 
-	struct dleaf *leaf;
-	struct group *group, *gstop, *gdict;
-	struct entry *entry, *estop;
-	struct diskextent *exbase, *extent, *exstop;
-
-void show_dwalk(struct dwalk *walk, unsigned blocksize)
-{
-	struct dleaf *leaf = walk->leaf;
-	struct group *gdict = (void *)leaf + blocksize;
-	struct entry *edict = (void *)(gdict - dleaf_groups(leaf));
-	unsigned ecount = edict - (struct entry *)((void *)leaf + from_be_u16(leaf->used));
-	printf("group %i of %i, ", gdict - walk->group, dleaf_groups(leaf));
-	printf("entry %i of %i\n", edict - walk->entry, ecount);
-}
-
 int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize)
 {
 	struct dleaf *leaf = from, *leaf2 = into;

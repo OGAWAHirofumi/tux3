@@ -618,8 +618,6 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key);
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor);
 int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor);
-void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from);
-void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 void show_tree(struct btree *btree);
 
@@ -638,6 +636,7 @@ int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
+void dleaf_merge(struct btree *btree, struct dleaf *leaf, struct dleaf *from);
 void dwalk_chop_after(struct dwalk *walk);
 unsigned dleaf_need(struct btree *btree, struct dleaf *leaf);
 extern struct btree_ops dtree_ops;

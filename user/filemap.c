@@ -75,11 +75,13 @@ int main(int argc, char *argv[])
 	inode = inode;
 
 #if 1
-	int segs;
-	struct seg segvec[100];
-	segs = get_segs(inode, 4, 5, segvec, 1, 1); show_segs(segvec, segs);
-	segs = get_segs(inode, 2, 3, segvec, 1, 1); show_segs(segvec, segs);
-	exit(0);
+	{
+		int segs;
+		struct seg segvec[100];
+		segs = get_segs(inode, 2, 3, segvec, 1, 1); show_segs(segvec, segs);
+		segs = get_segs(inode, 4, 5, segvec, 1, 1); show_segs(segvec, segs);
+		exit(0);
+	}
 #endif
 
 #if 1
