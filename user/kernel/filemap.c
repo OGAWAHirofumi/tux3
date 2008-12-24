@@ -206,7 +206,7 @@ show_tree(btree);
 	return segs;
 }
 
-static int get_segs(struct inode *inode, block_t start, block_t limit, struct seg segvec[], unsigned max_segs, int create)
+static int get_segs(struct inode *inode, block_t start, block_t count, struct seg segvec[], unsigned max_segs, int create)
 {
 	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* +1 for new depth */
 	if (!cursor)
@@ -214,9 +214,9 @@ static int get_segs(struct inode *inode, block_t start, block_t limit, struct se
 
 	unsigned overlap[2];
 	struct dwalk seek[2] = { };
-	int segs = find_segs(cursor, start, limit, segvec, max_segs, seek, overlap);
+	int segs = find_segs(cursor, start, start + count, segvec, max_segs, seek, overlap);
 	if (segs > 0 && create)
-		segs = fill_segs(cursor, start, limit, segvec, segs, seek, overlap);
+		segs = fill_segs(cursor, start, start + count, segvec, segs, seek, overlap);
 	if (segs >= 0)
 		release_cursor(cursor);
 	free_cursor(cursor);
@@ -282,7 +282,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 
 	struct seg segvec[10];
 
-	int segs = get_segs(inode, start, limit, segvec, 1, write);
+	int segs = get_segs(inode, start, limit - start, segvec, 1, write);
 	if (segs < 0)
 		return segs;
 
@@ -339,7 +339,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 
 	struct seg seg;
-	int segs = get_segs(inode, iblock, iblock + max_blocks, &seg, 1, create);
+	int segs = get_segs(inode, iblock, max_blocks, &seg, 1, create);
 	if (segs < 0) {
 		warn("get_segs failed: %d", -segs);
 		return -EIO;
