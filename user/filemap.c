@@ -87,16 +87,15 @@ int main(int argc, char *argv[])
 	if (0) {
 		for (int i = 0; i < 1; i++) {
 			struct cursor *cursor = alloc_cursor(&inode->btree, 1);
-			struct seg segvec[100];
 			struct dwalk seek[2] = { };
 			unsigned overlap[2];
-			int segs = find_segs(cursor, 2*i, 2*i + 1, segvec, 2, seek, overlap);
+			segs = find_segs(cursor, 2*i, 2*i + 1, segvec, 2, seek, overlap);
 			show_segs(segvec, segs);
 			segs = fill_segs(cursor, 2*i, 2*i + 1, segvec, segs, seek, overlap);
 			show_segs(segvec, segs);
 		}
 		struct delete_info delinfo = { .key = 0, };
-		int segs = tree_chop(&inode->btree, &delinfo, 0);
+		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
 		sb->nextalloc = nextalloc;
 	}
