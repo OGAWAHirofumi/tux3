@@ -196,7 +196,6 @@ int main(int argc, char *argv[])
 		dleaf_destroy(btree, leaf1);
 	}
 	if (1) {
-		/* dleaf_chop test */
 		struct dleaf *leaf1 = dleaf_create(btree);
 		struct dwalk *walk1 = &(struct dwalk){ };
 		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
@@ -218,6 +217,19 @@ int main(int argc, char *argv[])
 			nr++;
 			dwalk_next(walk1);
 		}
+		/* dwalk_chop test (dwalk_chop() will use dwalk_back()) */
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0x3002000000ULL);
+		dwalk_chop(walk1);
+		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		nr = 0;
+		while (!dwalk_end(walk1)) {
+			assert(k1[nr] == dwalk_index(walk1));
+			assert(extent_block(e1[nr]) == dwalk_block(walk1));
+			assert(extent_count(e1[nr]) == dwalk_count(walk1));
+			nr++;
+			dwalk_next(walk1);
+		}
+		/* dleaf_chop test */
 		dleaf_chop(btree, 0x3001000008ULL, leaf1);
 		assert(!dleaf_check(btree, leaf1));
 		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
