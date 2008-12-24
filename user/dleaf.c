@@ -157,6 +157,19 @@ int main(int argc, char *argv[])
 		for (int i = 0; i < ARRAY_SIZE(data); i++)
 			dwalk_add(walk1, data[i].index, data[i].ex);
 		assert(!dleaf_check(btree, leaf1));
+		/* dwalk_copy test */
+		struct dleaf *leaf2 = dleaf_create(btree);
+		for (int i = 0; i < ARRAY_SIZE(data); i++) {
+			dwalk_probe(leaf1, sb->blocksize, walk1, data[i].index);
+			dwalk_copy(walk1, leaf2);
+			assert(!dleaf_check(btree, leaf2));
+			dwalk_probe(leaf2, sb->blocksize, walk1, data[i].index);
+			for (int j = i; j < ARRAY_SIZE(data); j++) {
+				dwalk_probe_check(walk1, data[j].index, &data[j].ex);
+				dwalk_next(walk1);
+			}
+		}
+		dleaf_destroy(btree, leaf2);
 		/* dwalk_probe test */
 		int i, ret;
 		for (i = 0; i < ARRAY_SIZE(data); i++) {

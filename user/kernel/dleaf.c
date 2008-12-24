@@ -558,6 +558,53 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 	return 0;
 }
 
+/* This copy extents >= this extent to another dleaf. */
+void dwalk_copy(struct dwalk *walk, struct dleaf *dest)
+{
+	struct dleaf *leaf = walk->leaf;
+	unsigned blocksize = (void *)walk->gdict - (void *)leaf;
+
+	if (dwalk_end(walk))
+		return;
+	if (dwalk_first(walk)) {
+		memcpy(dest, leaf, blocksize);
+		return;
+	}
+
+	struct group *gdict2 = (void *)dest + blocksize;
+	unsigned groups2 = walk->group + 1 - walk->gstop;
+	struct entry *ebase = (void *)leaf + from_be_u16(leaf->used);
+	unsigned entries = (walk->entry + 1) - ebase;
+	struct entry *edict2 = (struct entry *)(gdict2 - groups2);
+	struct diskextent *exend = (void *)leaf + from_be_u16(leaf->free);
+	struct diskextent *entry_exbase;
+	unsigned limit_adjust, extents;
+
+	if (walk->entry + 1 == walk->estop + group_count(walk->group)) {
+		entry_exbase = walk->exbase;
+		limit_adjust = 0;
+	} else {
+		entry_exbase = walk->exbase + entry_limit(walk->entry + 1);
+		limit_adjust = entry_limit(walk->entry + 1);
+	}
+	extents = exend - entry_exbase;
+
+	veccopy(gdict2 - groups2, walk->gstop, groups2);
+	veccopy(edict2 - entries, ebase, entries);
+	veccopy(dest->table, entry_exbase, extents);
+
+	unsigned group_count = (walk->entry + 1) - walk->estop;
+	set_dleaf_groups(dest, groups2);
+	dest->free = to_be_u16((void *)(dest->table + extents) - (void *)dest);
+	dest->used = to_be_u16((void *)(edict2 - entries) - (void *)dest);
+	set_group_count(gdict2 - 1, group_count);
+	struct entry *entry2 = edict2 - 1, *estop2 = edict2 - group_count;
+	while (entry2 >= estop2) {
+		inc_entry_limit(entry2, -limit_adjust);
+		entry2--;
+	}
+}
+
 /* This removes extents >= this extent. (cursor position is dwalk_end()). */
 void dwalk_chop(struct dwalk *walk)
 {

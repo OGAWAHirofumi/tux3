@@ -634,7 +634,6 @@ unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
 void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
-void dwalk_chop_after(struct dwalk *walk);
 unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;
 
@@ -646,6 +645,7 @@ int dwalk_next(struct dwalk *walk);
 int dwalk_back(struct dwalk *walk);
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
+void dwalk_copy(struct dwalk *walk, struct dleaf *dest);
 void dwalk_chop(struct dwalk *walk);
 int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 
