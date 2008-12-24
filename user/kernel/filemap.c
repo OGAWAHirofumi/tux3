@@ -9,7 +9,10 @@
 #define trace trace_on
 #endif
 
-struct seg { block_t block; int count; };
+#define SEG_HOLE	(1 << 0)
+#define SEG_NEW	(1 << 1)
+
+struct seg { block_t block; unsigned count; unsigned state; };
 
 /* userland only */
 void show_segs(struct seg seglist[], unsigned segs)
@@ -63,12 +66,12 @@ static int find_segs(struct cursor *cursor, block_t start, block_t limit,
 			ex_index = min(ex_index, limit);
 			block_t gap = ex_index - index;
 			index = ex_index;
-			seg[segs++] = (struct seg){ .count = -gap };
+			seg[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
 		} else {
 			block_t block = dwalk_block(walk);
 			unsigned count = dwalk_count(walk);
 			trace("emit %Lx/%x", (L)block, count );
-			seg[segs++] = (struct seg){ block, count };
+			seg[segs++] = (struct seg){ .block = block, .count = count };
 			index = ex_index + count;
 			dwalk_next(walk);
  		}
@@ -115,9 +118,8 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	}
 
 	for (int i = 0; i < segs; i++) {
-		int count = seg[i].count;
-		if (count < 0) {
-			count = -count;
+		if (seg[i].state == SEG_HOLE) {
+			unsigned count = seg[i].count;
 			block_t block = balloc(sb, count); // goal ???
 			trace("fill in %Lx/%i ", (L)block, count);
 			if (block == -1) {
@@ -137,7 +139,7 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 				 */
 				return -ENOSPC;
 			}
-			seg[i] = (struct seg){ block, count };
+			seg[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
 		}
 	}
 	/* Go back to region start and pack in new segs */
@@ -298,9 +300,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 
 	int err = 0;
 	for (int i = 0, index = start; !err && index < limit; i++) {
-		int count = segvec[i].count, hole = count < 0;
-		if (hole)
-			count = -count;
+		int count = segvec[i].count, hole = segvec[i].state == SEG_HOLE;
 		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)segvec[i].block);
 		for (int j = 0; !err && j < count; j++) {
 			block_t block = segvec[i].block + j;
@@ -344,13 +344,16 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 		warn("get_segs failed: %d", -segs);
 		return -EIO;
 	}
-	if (seg.count < 0)
-		set_buffer_uptodate(bh_result);
-	else {
-		size_t blocks = min_t(size_t, max_blocks, seg.count);
+	assert(segs == 1);
+	size_t blocks = min_t(size_t, max_blocks, seg.count);
+	if (seg.state == SEG_NEW) {
+		assert(seg.block);
+		set_buffer_new(bh_result);
+		inode->i_blocks += blocks << (sb->blockbits - 9);
+	}
+	if (seg.state != SEG_HOLE) {
 		map_bh(bh_result, inode->i_sb, seg.block);
 		bh_result->b_size = blocks << sb->blockbits;
-		inode->i_blocks += blocks << (sb->blockbits - 9);
 	}
 	trace("<== inum %Lu, mapped %d, block %Lu, size %zu",
 	      (L)tux_inode(inode)->inum, buffer_mapped(bh_result),

@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
 			}
 		}
 		segs = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(segs == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
 		sb->nextalloc = nextalloc;
 	}
 	if (1) {
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
 		segs = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(segs == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
 		sb->nextalloc = nextalloc;
 	}
 	if (1) {
@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
 		segs = get_segs(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(segs == 1 && seg.block == 0 && seg.count == -INT_MAX);
+		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
 		sb->nextalloc = nextalloc;
 	}
 
