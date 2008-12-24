@@ -591,9 +591,8 @@ void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btr
 	btree->sb = sb;
 	btree->ops = ops;
 	btree->root = root;
-	btree->entries_per_leaf = 0;
-	if (ops)
-		ops->btree_init(btree);
+	init_rwsem(&btree->lock);
+	ops->btree_init(btree);
 }
 
 int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
@@ -612,8 +611,7 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
-	struct root root = { .block = bufindex(rootbuf), .depth = 1 };
-	init_btree(btree, sb, root, ops);
+	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 	return 0;
 eek:
 	if (rootbuf)
