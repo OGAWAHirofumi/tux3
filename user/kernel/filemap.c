@@ -214,6 +214,10 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 	if (!cursor)
 		return -ENOMEM;
 
+	if (create)
+		down_write(&cursor->btree->lock);
+	else
+		down_read(&cursor->btree->lock);
 	unsigned overlap[2];
 	struct dwalk seek[2] = { };
 	int segs = find_segs(cursor, start, start + count, segvec, max_segs, seek, overlap);
@@ -221,6 +225,10 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 		segs = fill_segs(cursor, start, start + count, segvec, segs, seek, overlap);
 	if (segs >= 0)
 		release_cursor(cursor);
+	if (create)
+		up_write(&cursor->btree->lock);
+	else
+		up_read(&cursor->btree->lock);
 	free_cursor(cursor);
 	return segs;
 }
@@ -334,7 +342,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	struct btree *btree = &tux_inode(inode)->btree;
 	int depth = btree->root.depth;
 	if (!depth) {
-		warn("Uninitialied inode %lx", inode->i_ino);
+		warn("Uninitialized inode %lx", inode->i_ino);
 		return 0;
 	}
 

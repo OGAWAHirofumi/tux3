@@ -53,6 +53,14 @@ typedef uint64_t u64;
 
 typedef int fd_t;
 
+struct rw_semaphore { };
+
+static inline void down_read(struct rw_semaphore *sem) { };
+static inline void down_write(struct rw_semaphore *sem) { };
+static inline void up_read(struct rw_semaphore *sem) { };
+static inline void up_write(struct rw_semaphore *sem) { };
+static inline void init_rwsem(struct rw_semaphore *sem) { };
+
 /* Bitmaps */
 
 // !!! change to bit zero at high end of byte, consistent with big endian !!! //

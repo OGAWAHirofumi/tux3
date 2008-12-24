@@ -601,6 +601,7 @@ struct btree new_btree(struct sb *sb, struct btree_ops *ops)
 	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
+	init_rwsem(&btree.lock);
 	return btree;
 eek:
 	if (rootbuf)

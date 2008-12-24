@@ -170,6 +170,7 @@ struct btree {
 	struct btree_ops *ops;	/* Generic btree low level operations */
 	struct root root;	/* Cached description of btree root */
 	u16 entries_per_leaf;	/* Used in btree leaf splitting */
+	struct rw_semaphore lock;
 };
 
 /* Define layout of btree root on disk, endian conversion is elsewhere. */
