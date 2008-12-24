@@ -18,13 +18,13 @@
 #include "xattr.c"
 #undef main
 
+#define main notmain4
+#include "btree.c"
+#undef main
+
 #define iattr_notmain_from_inode
 #define main iattr_notmain_from_inode
 #include "ileaf.c"
-#undef main
-
-#define main notmain4
-#include "btree.c"
 #undef main
 
 #include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */

@@ -166,11 +166,11 @@ struct root {
 };
 
 struct btree {
+	struct rw_semaphore lock;
 	struct sb *sb;		/* Convenience to reduce parameter list size */
 	struct btree_ops *ops;	/* Generic btree low level operations */
 	struct root root;	/* Cached description of btree root */
 	u16 entries_per_leaf;	/* Used in btree leaf splitting */
-	struct rw_semaphore lock;
 };
 
 /* Define layout of btree root on disk, endian conversion is elsewhere. */
@@ -445,6 +445,7 @@ static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 typedef void vleaf;
 
 struct btree_ops {
+	void (*btree_init)(struct btree *btree);
 	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
 	int (*leaf_init)(struct btree *btree, vleaf *leaf);
 	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into);
@@ -607,6 +608,7 @@ void free_cursor(struct cursor *cursor);
 void level_pop_brelse_dirty(struct cursor *cursor);
 void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
 
+void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
 int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops);
 struct buffer_head *new_leaf(struct btree *btree);
 int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor);

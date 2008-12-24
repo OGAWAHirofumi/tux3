@@ -27,6 +27,7 @@ struct inode *new_inode(struct sb *sb)
 	if (!inode)
 		goto eek;
 	*inode = (struct inode){ .i_sb = sb, .map = map, .i_version = 1, .i_nlink = 1, };
+	init_btree(&tux_inode(inode)->btree, NULL, (struct root){}, NULL);
 	return inode->map->inode = inode;
 eek:
 	if (map)

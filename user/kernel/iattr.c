@@ -126,16 +126,17 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	trace_off("decode %u attr bytes", size);
-	u64 v64;
-	u32 v32;
+	struct sb *sb = tux_sb(inode->i_sb);
 	tuxnode_t *tuxnode = tux_inode(inode);
 	struct xattr *xattr = tuxnode->xcache ? tuxnode->xcache->xattrs : NULL;
 	void *limit = attrs + size;
+	u64 v64;
+	u32 v32;
 	while (attrs < limit - 1) {
 		unsigned head;
 		attrs = decode16(attrs, &head);
 		unsigned version = head & 0xfff, kind = head >> 12;
-		if (version != tux_sb(inode->i_sb)->version) {
+		if (version != sb->version) {
 			attrs += atsize[kind];
 			continue;
 		}
@@ -159,12 +160,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			tuxnode->btree = (struct btree){
-				.sb = tux_sb(inode->i_sb),
-				.entries_per_leaf = 64, // !!! should depend on blocksize
-				.ops = &dtree_ops,
-				.root = unpack_root(v64),
-			};
+			init_btree(&tuxnode->btree, sb, unpack_root(v64), &dtree_ops);
 			break;
 		case LINK_COUNT_ATTR:
 			attrs = decode32(attrs, &inode->i_nlink);

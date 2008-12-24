@@ -586,22 +586,34 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cu
 	return NULL;
 }
 
+void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops)
+{
+	btree->sb = sb;
+	btree->ops = ops;
+	btree->root = root;
+	btree->entries_per_leaf = 0;
+	if (ops)
+		ops->btree_init(btree);
+}
+
 int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 {
+	/* Initialize btree with dummy root */
+	init_btree(btree, sb, (struct root){}, ops);
+
 	struct buffer_head *rootbuf = new_node(btree);
 	struct buffer_head *leafbuf = new_leaf(btree);
 	if (!rootbuf || !leafbuf)
 		goto eek;
-	struct bnode *root = bufdata(rootbuf);
-	root->entries[0].block = to_be_u64(bufindex(leafbuf));
-	root->count = to_be_u32(1);
-	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
+	struct bnode *rootnode = bufdata(rootbuf);
+	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
+	rootnode->count = to_be_u32(1);
 	printf("root at %Lx\n", (L)bufindex(rootbuf));
 	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
-	btree->ops = ops;
-	btree->sb = sb;
+	struct root root = { .block = bufindex(rootbuf), .depth = 1 };
+	init_btree(btree, sb, root, ops);
 	return 0;
 eek:
 	if (rootbuf)

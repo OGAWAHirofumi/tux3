@@ -78,8 +78,8 @@ int main(int argc, const char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
-		.itable = (struct btree){ .sb = sb, .ops = &itable_ops,
-			.entries_per_leaf = 1 << (dev->bits - 6) } };
+	};
+	init_btree(&sb->itable, sb, (struct root){}, &itable_ops);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (poptPeekArg(popt))

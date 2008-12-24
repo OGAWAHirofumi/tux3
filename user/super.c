@@ -95,10 +95,9 @@ int make_tux3(struct sb *sb)
 	}
 
 	trace("create inode table");
-	assert(!new_btree(&sb->itable, sb, &itable_ops));
-	if (!sb->itable.ops)
+	err = new_btree(&sb->itable, sb, &itable_ops);
+	if (err)
 		goto eek;
-	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
 	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
 	trace("create bitmap inode");
 	if (make_inode(sb->bitmap, TUX_BITMAP_INO))

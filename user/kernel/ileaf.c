@@ -47,6 +47,11 @@ static inline tuxkey_t ibase(struct ileaf *leaf)
 	return from_be_u64(leaf->ibase);
 }
 
+static void ileaf_btree_init(struct btree *btree)
+{
+	btree->entries_per_leaf = 1 << (btree->sb->blockbits - 6);
+}
+
 static int ileaf_init(struct btree *btree, vleaf *leaf)
 {
 	printf("initialize inode leaf %p\n", leaf);
@@ -286,6 +291,7 @@ int ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 }
 
 struct btree_ops itable_ops = {
+	.btree_init = ileaf_btree_init,
 	.leaf_dump = ileaf_dump,
 	.leaf_sniff = ileaf_sniff,
 	.leaf_init = ileaf_init,

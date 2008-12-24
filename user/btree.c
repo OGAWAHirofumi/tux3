@@ -33,6 +33,12 @@ static inline struct uleaf *to_uleaf(vleaf *leaf)
 	return leaf;
 }
 
+static void uleaf_btree_init(struct btree *btree)
+{
+	struct sb *sb = btree->sb;
+	btree->entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct entry);
+}
+
 int uleaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return to_uleaf(leaf)->magic == 0xc0de;
@@ -112,6 +118,7 @@ void uleaf_merge(struct btree *btree, vleaf *into, vleaf *from)
 }
 
 struct btree_ops ops = {
+	.btree_init = uleaf_btree_init,
 	.leaf_sniff = uleaf_sniff,
 	.leaf_init = uleaf_init,
 	.leaf_split = uleaf_split,
@@ -152,7 +159,6 @@ int main(int argc, char *argv[])
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = { };
 	assert(!new_btree(&btree, sb, &ops));
-	btree.entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct entry);
 
 	if (0) {
 		struct buffer_head *buffer = new_leaf(&btree);

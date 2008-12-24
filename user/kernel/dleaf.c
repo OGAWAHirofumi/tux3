@@ -68,6 +68,11 @@ static inline struct dleaf *to_dleaf(vleaf *leaf)
 	return leaf;
 }
 
+static void dleaf_btree_init(struct btree *btree)
+{
+	btree->entries_per_leaf = 64; /* FIXME: should depend on blocksize */
+}
+
 int dleaf_init(struct btree *btree, vleaf *leaf)
 {
 	if (!leaf)
@@ -745,6 +750,7 @@ static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 }
 
 struct btree_ops dtree_ops = {
+	.btree_init = dleaf_btree_init,
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,
 	.leaf_dump = dleaf_dump,

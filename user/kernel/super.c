@@ -17,6 +17,7 @@
 
 static int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
 {
+	u64 iroot = from_be_u64(super->iroot);
 	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic))) {
 		if (!silent)
 			printf("invalid superblock [%Lx]\n",
@@ -24,18 +25,10 @@ static int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
 		return -EINVAL;
 	}
 
-	int blockbits = from_be_u16(super->blockbits);
-
-	sb->itable = (struct btree){
-		.sb	= sb,
-		.ops	= &itable_ops,
-		.root	= unpack_root(from_be_u64(super->iroot)),
-		.entries_per_leaf = 1 << (blockbits - 6),
-	};
 //	sb->rootbuf;
-	sb->blockbits = blockbits;
-	sb->blocksize = 1 << blockbits;
-	sb->blockmask = (1 << blockbits) - 1;
+	sb->blockbits = from_be_u16(super->blockbits);
+	sb->blocksize = 1 << sb->blockbits;
+	sb->blockmask = (1 << sb->blockbits) - 1;
 	/* FIXME: those should be initialized based on blocksize. */
 	sb->entries_per_node = 20;
 	sb->max_inodes_per_block = 64;
@@ -48,6 +41,9 @@ static int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
 	sb->dictsize = from_be_u64(super->dictsize);
+
+	init_btree(&sb->itable, sb, unpack_root(iroot), &itable_ops);
+
 	return 0;
 }
 
@@ -93,7 +89,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	tuxnode_t *tuxi = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
 	if (!tuxi)
 		return NULL;
-	tuxi->btree = (struct btree){};
+	init_btree(&tuxi->btree, NULL, (struct root){}, NULL);
 	tuxi->present = 0;
 	tuxi->xcache = NULL;
 

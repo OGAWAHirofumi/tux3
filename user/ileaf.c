@@ -65,8 +65,11 @@ int main(int argc, char *argv[])
 {
 	printf("--- test inode table leaf methods ---\n");
 	struct sb *sb = &(struct sb){ .blocksize = 4096 };
-	struct btree *btree = &(struct btree){ .sb = sb, .ops = &itable_ops };
-	btree->entries_per_leaf = 64; // !!! should depend on blocksize
+	struct btree *btree = &(struct btree){
+		.sb = sb,
+		.ops = &itable_ops,
+		.entries_per_leaf = 64, // !!! should depend on blocksize
+	};
 	struct ileaf *leaf = ileaf_create(btree);
 	struct ileaf *dest = ileaf_create(btree);
 	leaf->ibase = to_be_u64(0x10);
