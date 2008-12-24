@@ -104,13 +104,12 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	struct dleaf *tail = malloc(sb->blocksize); // error???
 	unsigned below = overlap[0], above = overlap[1];
 	tuxkey_t tailkey;
-	int err;
 
 	dleaf_init(btree, tail);
 	if (!dwalk_end(&seek[1])) {
 		tailkey = dwalk_index(&seek[1]);
 		trace("leaf..."); dleaf_dump(btree, leaf);
-		err = dleaf_split_at(leaf, tail, seek[1].entry, sb->blocksize);
+		dwalk_copy(&seek[1], tail);
 		trace("leaf..."); dleaf_dump(btree, leaf);
 		trace("tail..."); dleaf_dump(btree, tail);
 	}
