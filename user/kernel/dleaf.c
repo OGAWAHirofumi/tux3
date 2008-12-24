@@ -623,9 +623,8 @@ void dwalk_chop(struct dwalk *walk)
 		return;
 	}
 
-	/* This extent is first extent on this group, remove this group too */
-	if (walk->exbase == walk->extent)
-		dwalk_back(walk);
+	/* If extent is first extent on this group, remove this group too */
+	dwalk_back(walk);
 
 	struct entry *ebase = walk->estop + group_count(walk->group);
 	void *entry = walk->entry;
