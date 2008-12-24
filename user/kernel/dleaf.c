@@ -655,6 +655,7 @@ int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 
 	/* FIXME: assume entry has only one extent */
 	assert(!groups || dwalk_index(walk) != index);
+	assert(extent_block(extent) > 0 && extent_count(extent) > 0);
 
 	trace("group %ti/%i", walk->gstop + groups - 1 - walk->group, groups);
 	if (!groups || dwalk_index(walk) != index) {
