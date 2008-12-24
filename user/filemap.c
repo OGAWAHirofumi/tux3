@@ -103,7 +103,29 @@ int main(int argc, char *argv[])
 	if (1) { /* create seg entirely inside existing */
 		segs = get_segs(inode, 2, 7, segvec, 10, 1); show_segs(segvec, segs);
 		segs = get_segs(inode, 4, 5, segvec, 10, 1); show_segs(segvec, segs);
-		exit(0);
+		struct delete_info delinfo = { .key = 0, };
+		segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
+		sb->nextalloc = nextalloc;
+	}
+
+	if (1) { /* seek[0] and seek[1] are same position */
+		segs = get_segs(inode, 0x2, 0x3, segvec, 10, 1);
+		segs = get_segs(inode, 0x6, 0x7, segvec, 10, 1);
+		segs = get_segs(inode, 0x4, 0x5, segvec, 10, 1);
+		struct delete_info delinfo = { .key = 0, };
+		segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
+		sb->nextalloc = nextalloc;
+	}
+	if (1) { /* another seek[0] and seek[1] are same position */
+		segs = get_segs(inode, 0x1100000, 0x1100040, segvec, 10, 1);
+		segs = get_segs(inode, 0x800000, 0x800040, segvec, 10, 1);
+		segs = get_segs(inode, 0x800040, 0x800080, segvec, 10, 1);
+		struct delete_info delinfo = { .key = 0, };
+		segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
+		sb->nextalloc = nextalloc;
 	}
 
 	if (1) {
