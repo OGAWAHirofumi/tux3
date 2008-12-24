@@ -150,7 +150,8 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);
-	struct btree btree = new_btree(sb, &ops);
+	struct btree btree = { };
+	assert(!new_btree(&btree, sb, &ops));
 	btree.entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct entry);
 
 	if (0) {

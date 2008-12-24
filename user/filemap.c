@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
 	sb->bitmap->map->inode = sb->bitmap;
 	init_buffers(dev, 1 << 20);
 	struct inode *inode = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) };
-	inode->btree = new_btree(sb, &dtree_ops); // error???
+	assert(!new_btree(&inode->btree, sb, &dtree_ops));
 	inode->map->inode = inode;
 	inode = inode;
 

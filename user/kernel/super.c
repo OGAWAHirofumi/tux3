@@ -69,6 +69,7 @@ static struct kmem_cache *tux_inode_cachep;
 static void tux3_inode_init_once(struct kmem_cache *cachep, void *mem)
 {
 	inode_init_once(&((tuxnode_t *)mem)->vfs_inode);
+	init_rwsem(&((tuxnode_t *)mem)->btree.lock);
 }
 
 static int __init tux3_init_inodecache(void)
@@ -95,6 +96,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	tuxi->btree = (struct btree){};
 	tuxi->present = 0;
 	tuxi->xcache = NULL;
+
 	/* uninitialized stuff by alloc_inode() */
 	tuxi->vfs_inode.i_version = 1;
 	tuxi->vfs_inode.i_uid = 0;

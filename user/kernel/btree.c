@@ -586,29 +586,29 @@ void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cu
 	return NULL;
 }
 
-struct btree new_btree(struct sb *sb, struct btree_ops *ops)
+int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 {
-	struct btree btree = { .sb = sb, .ops = ops };
-	struct buffer_head *rootbuf = new_node(&btree);
-	struct buffer_head *leafbuf = new_leaf(&btree);
+	struct buffer_head *rootbuf = new_node(btree);
+	struct buffer_head *leafbuf = new_leaf(btree);
 	if (!rootbuf || !leafbuf)
 		goto eek;
 	struct bnode *root = bufdata(rootbuf);
 	root->entries[0].block = to_be_u64(bufindex(leafbuf));
 	root->count = to_be_u32(1);
-	btree.root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
+	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 	printf("root at %Lx\n", (L)bufindex(rootbuf));
 	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
 	brelse_dirty(rootbuf);
 	brelse_dirty(leafbuf);
-	init_rwsem(&btree.lock);
-	return btree;
+	btree->ops = ops;
+	btree->sb = sb;
+	return 0;
 eek:
 	if (rootbuf)
 		brelse(rootbuf);
 	if (leafbuf)
 		brelse(leafbuf);
-	return (struct btree){ };
+	return -ENOMEM;
 }
 
 /* userland only */

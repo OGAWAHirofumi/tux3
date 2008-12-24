@@ -607,7 +607,7 @@ void free_cursor(struct cursor *cursor);
 void level_pop_brelse_dirty(struct cursor *cursor);
 void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
 
-struct btree new_btree(struct sb *sb, struct btree_ops *ops);
+int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops);
 struct buffer_head *new_leaf(struct btree *btree);
 int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor);
 int advance(struct btree *btree, struct cursor *cursor);

@@ -203,9 +203,9 @@ static int make_inode(struct inode *inode, inum_t goal)
 	}
 
 	tux_set_inum(inode, goal);
-	/* FIXME: is this right strategy? */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
-		tux_inode(inode)->btree = new_btree(sb, &dtree_ops); // error???
+		if ((err = new_btree(&tux_inode(inode)->btree, sb, &dtree_ops)))
+			goto errout;
 	if ((err = store_attrs(inode, cursor)))
 		goto errout;
 	release_cursor(cursor);

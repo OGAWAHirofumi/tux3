@@ -95,7 +95,7 @@ int make_tux3(struct sb *sb)
 	}
 
 	trace("create inode table");
-	sb->itable = new_btree(sb, &itable_ops);
+	assert(!new_btree(&sb->itable, sb, &itable_ops));
 	if (!sb->itable.ops)
 		goto eek;
 	sb->itable.entries_per_leaf = 64; // !!! should depend on blocksize
