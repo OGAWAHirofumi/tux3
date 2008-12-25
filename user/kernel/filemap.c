@@ -292,7 +292,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 
 	struct seg segvec[10];
 
-	int segs = get_segs(inode, start, limit - start, segvec, 1, write);
+	int segs = get_segs(inode, start, limit - start, segvec, ARRAY_SIZE(segvec), write);
 	if (segs < 0)
 		return segs;
 
@@ -307,7 +307,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	}
 
 	int err = 0;
-	for (int i = 0, index = start; !err && index < limit; i++) {
+	for (int i = 0, index = start; !err && i < segs; i++) {
 		int count = segvec[i].count, hole = segvec[i].state == SEG_HOLE;
 		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)segvec[i].block);
 		for (int j = 0; !err && j < count; j++) {
@@ -317,12 +317,10 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 			if (write) {
 				err = diskwrite(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			} else {
-				if (hole) {
-					trace("zero fill buffer");
+				if (hole)
 					memset(bufdata(buffer), 0, sb->blocksize);
-					continue;
-				}
-				err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
+				else
+					err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			}
 			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
 		}
