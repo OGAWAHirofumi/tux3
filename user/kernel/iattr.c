@@ -65,9 +65,6 @@ void dump_attrs(struct inode *inode)
 		case MODE_OWNER_ATTR:
 			printf("mode 0%.6o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
-		case DATA_BTREE_ATTR:
-			printf("root %Lx:%u ", (L)tuxnode->btree.root.block, tuxnode->btree.root.depth);
-			break;
 		case CTIME_SIZE_ATTR:
 			printf("ctime %Lx size %Lx ", (L)tuxtime(inode->i_ctime), (L)inode->i_size);
 			break;
@@ -76,6 +73,9 @@ void dump_attrs(struct inode *inode)
 			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", inode->i_nlink);
+			break;
+		case DATA_BTREE_ATTR:
+			printf("root %Lx:%u ", (L)tuxnode->btree.root.block, tuxnode->btree.root.depth);
 			break;
 		case XATTR_ATTR:
 			printf("xattr(s) ");
@@ -112,11 +112,11 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case MTIME_ATTR:
 			attrs = encode48(attrs, tuxtime(inode->i_mtime) >> TIME_ATTR_SHIFT);
 			break;
-		case DATA_BTREE_ATTR:
-			attrs = encode64(attrs, pack_root(&tuxnode->btree.root));
-			break;
 		case LINK_COUNT_ATTR:
 			attrs = encode32(attrs, inode->i_nlink);
+			break;
+		case DATA_BTREE_ATTR:
+			attrs = encode64(attrs, pack_root(&tuxnode->btree.root));
 			break;
 		}
 	}
@@ -158,12 +158,12 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode48(attrs, &v64);
 			inode->i_mtime = spectime(v64 << TIME_ATTR_SHIFT);
 			break;
+		case LINK_COUNT_ATTR:
+			attrs = decode32(attrs, &inode->i_nlink);
+			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
 			init_btree(&tuxnode->btree, sb, unpack_root(v64), &dtree_ops);
-			break;
-		case LINK_COUNT_ATTR:
-			attrs = decode32(attrs, &inode->i_nlink);
 			break;
 		case XATTR_ATTR:;
 			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
