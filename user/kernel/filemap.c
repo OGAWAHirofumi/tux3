@@ -104,17 +104,15 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
 	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
-	struct dleaf *tail = malloc(sb->blocksize); // error???
+	struct dleaf *tail = NULL;
 	unsigned below = overlap[0], above = overlap[1];
 	tuxkey_t tailkey;
 
 	dleaf_init(btree, tail);
 	if (!dwalk_end(&seek[1])) {
+		tail = malloc(sb->blocksize); // error???
 		tailkey = dwalk_index(&seek[1]);
-		trace("leaf..."); dleaf_dump(btree, leaf);
 		dwalk_copy(&seek[1], tail);
-		trace("leaf..."); dleaf_dump(btree, leaf);
-		trace("tail..."); dleaf_dump(btree, tail);
 	}
 
 	for (int i = 0; i < segs; i++) {
@@ -143,9 +141,7 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 		}
 	}
 	/* Go back to region start and pack in new segs */
-	dleaf_dump(btree, leaf);
 	dwalk_chop(seek);
-	dleaf_dump(btree, leaf);
 	for (int i = -!!below, index = start; i < segs + !!above; i++) {
 		if (dleaf_free(btree, leaf) < 16) {
 			struct buffer_head *newbuf = new_leaf(btree);
@@ -181,28 +177,26 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 		dleaf_dump(btree, leaf);
 		index += seg[i].count;
 	}
-	if (dleaf_need(btree, tail) < dleaf_free(btree, leaf)) {
-		trace("Merge tail");
-		dleaf_dump(btree, leaf);
-		dleaf_merge(btree, leaf, tail);
-		dleaf_dump(btree, leaf);
-	} else {
-		assert(dleaf_groups(tail) >= 1);
-		/* Tail does not fit, add it as a new btree leaf */
-		struct buffer_head *newbuf = new_leaf(btree);
-		if (!newbuf) {
-			release_cursor(cursor);
-			return -ENOMEM;
+	if (tail) {
+		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf)) {
+			dleaf_merge(btree, leaf, tail);
+			dleaf_dump(btree, leaf);
+		} else {
+			assert(dleaf_groups(tail) >= 1);
+			/* Tail does not fit, add it as a new btree leaf */
+			struct buffer_head *newbuf = new_leaf(btree);
+			if (!newbuf) {
+				release_cursor(cursor);
+				return -ENOMEM;
+			}
+			memcpy(bufdata(newbuf), tail, sb->blocksize);
+			level_pop_brelse_dirty(cursor);
+			level_push(cursor, newbuf, NULL);
+			insert_node(btree, tailkey, bufindex(newbuf), cursor);
 		}
-		memcpy(bufdata(newbuf), tail, sb->blocksize);
-		level_pop_brelse_dirty(cursor);
-		level_push(cursor, newbuf, NULL);
-		insert_node(btree, tailkey, bufindex(newbuf), cursor);
+		free(tail);
 	}
-	free(tail);
 	mark_buffer_dirty(cursor_leafbuf(cursor));
-printf("\n");
-show_tree(btree);
 //eek:
 	release_cursor(cursor);
 	return segs;
