@@ -465,7 +465,7 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 		}
 		attrs += atsize[kind];
 	}
-	return total + sizeof(struct xcache);
+	return total ? total + sizeof(struct xcache) : 0;
 }
 
 unsigned encode_xsize(struct inode *inode)

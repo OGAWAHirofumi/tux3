@@ -114,7 +114,7 @@ static int open_inode(struct inode *inode)
 	//hexdump(attrs, size);
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;
-	if (!(tux_inode(inode)->xcache = new_xcache(xsize))) // !!! only do this when we hit an xattr !!!
+	if (xsize && !(tux_inode(inode)->xcache = new_xcache(xsize)))
 		goto eek;
 	decode_attrs(inode, attrs, size); // error???
 	dump_attrs(inode);

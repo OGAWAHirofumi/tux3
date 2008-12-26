@@ -99,7 +99,9 @@ static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 #ifndef main
 			hexdump(leaf->table + offset, size);
 #else
-			struct inode inode = { .i_sb = btree->sb, .xcache = new_xcache(9999) };
+			struct inode inode = { .i_sb = btree->sb };
+			unsigned xsize = decode_xsize(&inode, leaf->table + offset, size);
+			inode.xcache = xsize ? new_xcache(xsize) : NULL;
 			decode_attrs(&inode, leaf->table + offset, size);
 			dump_attrs(&inode);
 			xcache_dump(&inode);
