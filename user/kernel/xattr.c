@@ -291,7 +291,7 @@ struct xcache *new_xcache(unsigned maxsize)
 	struct xcache *xcache = malloc(maxsize);
 	if (!xcache)
 		return NULL;
-	*xcache = (struct xcache){ .size = offsetof(struct xcache, xattrs), .maxsize = maxsize };
+	*xcache = (struct xcache){ .size = sizeof(struct xcache), .maxsize = maxsize };
 	return xcache;
 }
 
@@ -330,14 +330,14 @@ static int xcache_update(struct inode *inode, unsigned atom, void *data, unsigne
 	/* Insert new */
 	unsigned more = sizeof(*xattr) + len;
 	if (!xcache || xcache->size + more > xcache->maxsize) {
-		unsigned oldsize = xcache ? xcache->size : offsetof(struct xcache, xattrs);
+		unsigned oldsize = xcache ? xcache->size : sizeof(struct xcache);
 		unsigned maxsize = xcache ? xcache->maxsize : (1 << 7);
 		unsigned newsize = oldsize + (more < maxsize ? maxsize : more);
 		struct xcache *newcache = new_xcache(newsize);
 		if (!newcache)
 			return -ENOMEM;
 		if (xcache) {
-			memcpy(newcache->xattrs, xcache->xattrs, oldsize - offsetof(struct xcache, xattrs));
+			memcpy(newcache->xattrs, xcache->xattrs, oldsize - sizeof(struct xcache));
 			newcache->size = oldsize;
 			free(xcache);
 		}
