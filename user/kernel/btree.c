@@ -520,8 +520,8 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 }
 
 /*
- * Insert new leaf to next position of cursor.
- * keep == 1: keep current cursor posision.
+ * Insert new leaf to next cursor position.
+ * keep == 1: keep current cursor position.
  * keep == 0, set cursor position to new leaf.
  */
 static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_head *leafbuf, int keep)
@@ -601,7 +601,7 @@ eek:
 	return -ENOMEM;
 }
 
-/* Insert new leaf to next posision of cursor, then set cursor to new leaf */
+/* Insert new leaf to next cursor position, then set cursor to new leaf */
 int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf)
 {
 	return insert_leaf(cursor, key, leafbuf, 0);
