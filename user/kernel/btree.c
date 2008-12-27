@@ -359,7 +359,7 @@ static void remove_index(struct cursor *cursor, int level)
 
 static void merge_nodes(struct bnode *node, struct bnode *node2)
 {
-	memcpy(&node->entries[bcount(node)], &node2->entries[0], bcount(node2) * sizeof(struct index_entry));
+	veccopy(&node->entries[bcount(node)], node2->entries, bcount(node2));
 	node->count = to_be_u32(bcount(node) + bcount(node2));
 }
 
@@ -595,7 +595,7 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 		return -ENOMEM;
 	}
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
-	u64 newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
+	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
 	block_t childblock = bufindex(newbuf);
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {

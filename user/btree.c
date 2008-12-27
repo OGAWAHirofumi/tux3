@@ -82,7 +82,7 @@ tuxkey_t uleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into
 	veccopy(to_uleaf(into)->entries, leaf->entries + at, tail);
 	to_uleaf(into)->count = tail;
 	leaf->count = at;
-	return at < leaf->count ? to_uleaf(into)->entries[0].key : key;
+	return tail ? to_uleaf(into)->entries[0].key : key;
 }
 
 unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)
@@ -105,11 +105,14 @@ void *uleaf_resize(struct btree *btree, tuxkey_t key, vleaf *data, unsigned one)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;
+	unsigned at = uleaf_seek(btree, key, leaf);
+	if (at < leaf->count && leaf->entries[at].key == key)
+		goto out;
 	if (uleaf_free(btree, leaf) < one)
 		return NULL;
-	unsigned at = uleaf_seek(btree, key, leaf);
 	printf("expand leaf at 0x%x by %i\n", at, one);
 	vecmove(leaf->entries + at + one, leaf->entries + at, leaf->count++ - at);
+out:
 	return leaf->entries + at;
 }
 
@@ -194,7 +197,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* tree_expand() test, and reverse order */
-	struct cursor *cursor = alloc_cursor(&btree, 1); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(&btree, 8); /* +8 for new depth */
 	int until_new_depth = sb->entries_per_node * btree.entries_per_leaf + 1;
 	for (int key = 0; key < until_new_depth; key++)
 		tree_expand_test(cursor, key);
