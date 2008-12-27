@@ -191,6 +191,37 @@ int main(int argc, char *argv[])
 	show_buffers(sb->devmap);
 	tree_chop(&btree, &(struct delete_info){ .key = 0x10 }, -1);
 	show_tree_range(&btree, 0, -1);
+
+	/* insert_node test */
+	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
+	cursor = alloc_cursor(&btree, 1); /* +1 for new depth */
+	assert(!probe(&btree, 0, cursor));
+	for (int i = 0; i < sb->entries_per_node - 1; i++) {
+		struct buffer_head *buffer = new_leaf(&btree);
+		assert(buffer);
+		level_pop_brelse(cursor);
+		level_push(cursor, buffer, NULL);
+		insert_node(&btree, 100 + i, bufindex(buffer), cursor);
+	}
+	release_cursor(cursor);
+	/* insert key=1 after key=0 */
+	assert(!probe(&btree, 0, cursor));
+	struct buffer_head *buffer = new_leaf(&btree);
+	level_pop_brelse(cursor);
+	level_push(cursor, buffer, NULL);
+	insert_node(&btree, 1, bufindex(buffer), cursor);
+	/* probe same key with cursor2 */
+	struct cursor *cursor2 = alloc_cursor(&btree, 0);
+	assert(!probe(&btree, 1, cursor2));
+	for (int i = 0; i < cursor->len; i++) {
+		assert(cursor->path[i].buffer == cursor2->path[i].buffer);
+		assert(cursor->path[i].next == cursor2->path[i].next);
+	}
+	release_cursor(cursor);
+	release_cursor(cursor2);
+	free_cursor(cursor);
+	free_cursor(cursor2);
+	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 	exit(0);
 }
 #endif

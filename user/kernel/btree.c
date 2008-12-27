@@ -142,6 +142,13 @@ void level_pop_brelse_dirty(struct cursor *cursor)
 	brelse_dirty(level_pop(cursor));
 }
 
+static inline int level_finished(struct cursor *cursor, int level)
+{
+	struct bnode *node = cursor_node(cursor, level);
+	return cursor->path[level].next == node->entries + bcount(node);
+}
+// also write level_beginning!!!
+
 void release_cursor(struct cursor *cursor)
 {
 	while (cursor->len)
@@ -155,6 +162,25 @@ void show_cursor(struct cursor *cursor, int depth)
 	for (int i = 0; i < depth; i++)
 		printf(" [%Lx/%i]", (L)bufindex(cursor->path[i].buffer), bufcount(cursor->path[i].buffer));
 	printf("\n");
+}
+
+static void cursor_check(struct cursor *cursor)
+{
+	if (cursor->len == 0)
+		return;
+	tuxkey_t key = 0;
+	block_t block = cursor->btree->root.block;
+	for (int i = 0; i < cursor->len; i++) {
+		assert(bufindex(cursor->path[i].buffer) == block);
+		if (!cursor->path[i].next)
+			break;
+		struct bnode *node = cursor_node(cursor, i);
+		assert(node->entries < cursor->path[i].next);
+		assert(cursor->path[i].next <= node->entries + bcount(node));
+		assert(from_be_u64((cursor->path[i].next - 1)->key) >= key);
+		block = from_be_u64((cursor->path[i].next - 1)->block);
+		key = from_be_u64((cursor->path[i].next - 1)->key);
+	}
 }
 
 static inline int alloc_cursor_size(int maxlevel)
@@ -209,18 +235,12 @@ int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor)
 	}
 	assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 	level_push(cursor, buffer, NULL);
+	cursor_check(cursor);
 	return 0;
 eek:
 	release_cursor(cursor);
 	return -EIO; /* stupid, it might have been NOMEM */
 }
-
-static inline int level_finished(struct cursor *cursor, int level)
-{
-	struct bnode *node = cursor_node(cursor, level);
-	return cursor->path[level].next == node->entries + bcount(node);
-}
-// also write level_beginning!!!
 
 int advance(struct btree *btree, struct cursor *cursor)
 {
@@ -240,6 +260,7 @@ int advance(struct btree *btree, struct cursor *cursor)
 		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 		level++;
 	} while (level < depth);
+	cursor_check(cursor);
 	return 1;
 eek:
 	release_cursor(cursor);
@@ -542,6 +563,7 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 	level_root_add(cursor, newbuf, NULL); // .next = ???
 	//set_sb_dirty(sb);
 	mark_buffer_dirty(newbuf);
+	cursor_check(cursor);
 	return 0;
 eek:
 	release_cursor(cursor);
