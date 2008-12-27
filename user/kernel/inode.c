@@ -393,6 +393,19 @@ static const struct inode_operations tux_special_iops = {
 #endif
 };
 
+const struct inode_operations tux_symlink_iops = {
+	.readlink	= generic_readlink,
+	.follow_link	= page_follow_link_light,
+	.put_link	= page_put_link,
+	.getattr	= tux3_getattr,
+#if 0
+//	.setxattr	= generic_setxattr,
+//	.getxattr	= generic_getxattr,
+//	.listxattr	= ext4_listxattr,
+//	.removexattr	= generic_removexattr,
+#endif
+};
+
 static void tux_setup_inode(struct inode *inode, dev_t rdev)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
