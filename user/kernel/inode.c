@@ -98,16 +98,14 @@ static int open_inode(struct inode *inode)
 	struct cursor *cursor = alloc_cursor(&sb->itable, 0);
 	if (!cursor)
 		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
-		free_cursor(cursor);
-		return err;
-	}
+	down_read(&cursor->btree->lock);
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor)))
+		goto out;
 	unsigned size;
 	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
 	if (!attrs) {
 		err = -ENOENT;
-		goto eek;
+		goto release;
 	}
 	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
 	//ileaf_dump(&sb->itable, bufdata(cursor[depth].buffer));
@@ -115,7 +113,7 @@ static int open_inode(struct inode *inode)
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;
 	if (xsize && !(tux_inode(inode)->xcache = new_xcache(xsize)))
-		goto eek;
+		goto release;
 	decode_attrs(inode, attrs, size); // error???
 	dump_attrs(inode);
 	if (tux_inode(inode)->xcache)
@@ -123,8 +121,10 @@ static int open_inode(struct inode *inode)
 	check_present(inode);
 	tux_setup_inode(inode, inode->i_rdev);
 	err = 0;
-eek:
+release:
 	release_cursor(cursor);
+out:
+	up_read(&cursor->btree->lock);
 	free_cursor(cursor);
 	return err;
 }
@@ -134,7 +134,7 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
 	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, cursor);
 	if (!base)
-		return -ENOMEM; // what was the actual error???
+		return -ENOMEM; // ERR_PTR me!!!
 	void *attr = encode_attrs(inode, base, size);
 	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
@@ -172,50 +172,44 @@ static int make_inode(struct inode *inode, inum_t goal)
 	struct cursor *cursor = alloc_cursor(&sb->itable, 1); /* +1 for now depth */
 	if (!cursor)
 		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, goal, cursor))) {
-		free_cursor(cursor);
-		return err;
-	}
+	down_write(&cursor->btree->lock);
+	if ((err = probe(&sb->itable, goal, cursor)))
+		goto out;
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
-//	struct ileaf *leaf = to_ileaf(bufdata(leafbuf));
 
 	/* FIXME: inum allocation should check min and max */
 	trace("create inode 0x%Lx", (L)goal);
 	assert(!tux_inode(inode)->btree.root.depth);
 	assert(goal < next_key(cursor, depth));
 	while (1) {
-//		printf("find empty inode in [%Lx] base %Lx\n", (L)bufindex(leafbuf), (L)ibase(leaf));
+		trace_off("find empty inode in [%Lx] base %Lx", (L)bufindex(leafbuf), (L)ibase(leaf));
 		goal = find_empty_inode(&sb->itable, bufdata(leafbuf), goal);
-		printf("result inum is %Lx, limit is %Lx\n", (L)goal, (L)next_key(cursor, depth));
+		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)next_key(cursor, depth));
 		if (goal < next_key(cursor, depth))
 			break;
 		int more = advance(&sb->itable, cursor);
 		if (more < 0) {
 			err = more;
-			goto errout;
+			goto out;
 		}
-		printf("no more inode space here, advance %i\n", more);
+		trace("no more inode space here, advance %i", more);
 		if (!more) {
 			err = -ENOSPC;
-			goto errout;
+			goto release;
 		}
 	}
 
 	tux_set_inum(inode, goal);
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
 		if ((err = new_btree(&tux_inode(inode)->btree, sb, &dtree_ops)))
-			goto errout;
+			goto release;
 	if ((err = store_attrs(inode, cursor)))
-		goto errout;
+		goto out;
+release:
 	release_cursor(cursor);
+out:
+	up_write(&cursor->btree->lock);
 	free_cursor(cursor);
-	return 0;
-
-errout:
-	/* release_cursor() was already called at error point */
-	free_cursor(cursor);
-	warn("make_inode 0x%Lx failed (%d)", (L)goal, err);
 	return err;
 }
 
@@ -228,20 +222,21 @@ static int save_inode(struct inode *inode)
 	struct cursor *cursor = alloc_cursor(&sb->itable, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
-
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor))) {
-		free_cursor(cursor);
-		return err;
-	}
+	down_write(&cursor->btree->lock);
+	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor)))
+		goto out;
+	/* paranoia check */
 	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size)))
-		return -EINVAL;
-	err = store_attrs(inode, cursor);
-	if (err)
-		goto error;
-	/* release_cursor() was already called at error point */
+	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size))) {
+		err = -EINVAL;
+		goto release;
+	}
+	if ((err = store_attrs(inode, cursor)))
+		goto out;
+release:
 	release_cursor(cursor);
-error:
+out:
+	up_write(&cursor->btree->lock);
 	free_cursor(cursor);
 	return err;
 }
