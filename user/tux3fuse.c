@@ -563,7 +563,7 @@ static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		return;
 	}
 
-	int err = set_xattr(inode, (char *)name, strlen(name), (void *)value, size, flags);
+	int err = set_xattr(inode, name, strlen(name), value, size, flags);
 	if (!err) {
 		tuxsync(inode);
 		sync_super(sb);
