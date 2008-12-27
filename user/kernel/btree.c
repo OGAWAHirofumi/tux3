@@ -522,7 +522,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 /*
  * Insert new leaf to next position of cursor.
  * keep == 1: keep current cursor posision.
- * keep == 0, set cursor posision to new leaf.
+ * keep == 0, set cursor position to new leaf.
  */
 static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_head *leafbuf, int keep)
 {
