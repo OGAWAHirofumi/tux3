@@ -520,7 +520,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 }
 
 /*
- * Insert new leaf to next posision of cursor.
+ * Insert new leaf to next position of cursor.
  * keep == 1: keep current cursor posision.
  * keep == 0, set cursor posision to new leaf.
  */
