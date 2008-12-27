@@ -516,13 +516,13 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 	trace("insert node 0x%Lx key 0x%Lx into node 0x%Lx", (L)childblock, (L)childkey, (L)btree->root.block);
 	int depth = btree->root.depth;
 	while (depth--) {
-		struct index_entry *next = cursor->path[depth].next;
-		struct buffer_head *parentbuf = cursor->path[depth].buffer;
+		struct path_level *at = cursor->path + depth;
+		struct buffer_head *parentbuf = at->buffer;
 		struct bnode *parent = bufdata(parentbuf);
 
 		/* insert and exit if not full */
 		if (bcount(parent) < btree->sb->entries_per_node) {
-			add_child(parent, next, childblock, childkey);
+			add_child(parent, at->next++, childblock, childkey);
 			mark_buffer_dirty(parentbuf);
 			return 0;
 		}
@@ -539,14 +539,16 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 		parent->count = to_be_u32(half);
 
 		/* if the cursor is in the new node, use that as the parent */
-		if (next > parent->entries + half) {
-			next = next - &parent->entries[half] + newnode->entries;
+		if (at->next > parent->entries + half) {
+			newbuf->count++;
+			at->buffer = newbuf;
+			at->next = at->next - &parent->entries[half] + newnode->entries;
 			mark_buffer_dirty(parentbuf);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else
 			mark_buffer_dirty(newbuf);
-		add_child(parent, next, childblock, childkey);
+		add_child(parent, at->next++, childblock, childkey);
 		mark_buffer_dirty(parentbuf);
 		childkey = newkey;
 		childblock = bufindex(newbuf);
@@ -557,13 +559,14 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 	if (!newbuf)
 		goto eek;
 	struct bnode *newroot = bufdata(newbuf);
+	int left_node = bufindex(cursor->path[0].buffer) != childblock;
 	newroot->count = to_be_u32(2);
 	newroot->entries[0].block = to_be_u64(btree->root.block);
 	newroot->entries[1].key = to_be_u64(childkey);
 	newroot->entries[1].block = to_be_u64(childblock);
 	btree->root.block = bufindex(newbuf);
 	btree->root.depth++;
-	level_root_add(cursor, newbuf, NULL); // .next = ???
+	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
 	//set_sb_dirty(sb);
 	mark_buffer_dirty(newbuf);
 	cursor_check(cursor);
