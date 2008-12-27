@@ -311,7 +311,7 @@ static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
  *
  *  * Should expand by binary factor
  */
-static int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, unsigned flags)
+static int xcache_update(struct inode *inode, unsigned atom, const void *data, unsigned len, unsigned flags)
 {
 	int use = 0;
 	struct xcache *xcache = tux_inode(inode)->xcache;
@@ -373,7 +373,7 @@ out:
 	return ret;
 }
 
-int set_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size, unsigned flags)
+int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags)
 {
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
 	mutex_lock(&atable->i_mutex);

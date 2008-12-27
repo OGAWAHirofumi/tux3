@@ -574,7 +574,7 @@ static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		tuxclose(inode);
 }
 
-static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
+static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t maxsize)
 {
 	fprintf(stderr, "tux3_getxattr(%Lx, '%s')\n", (L)ino, name);
 	struct inode *inode = open_fuse_ino(ino);
@@ -582,25 +582,20 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 		fuse_reply_err(req, ENOENT);
 		return;
 	}
-	int atsize = get_xattr(inode, name, strlen(name), NULL, 0);
-	if (atsize < 0) {
-		fuse_reply_err(req, -atsize);
-		goto out;
+	void *data = NULL;
+	if (maxsize) {
+		if (!(data = malloc(maxsize))) {
+			fuse_reply_err(req, ENOMEM);
+			goto out;
+		}
 	}
-	if (!size) {
-		fuse_reply_xattr(req, atsize);
-		goto out;
-	}
-	void *data = malloc(size);
-	if (!data) {
-		fuse_reply_err(req, ENOMEM);
-		goto out;
-	}
-	atsize = get_xattr(inode, name, strlen(name), data, size);
-	if (atsize < 0)
-		fuse_reply_err(req, -atsize);
+	int size = get_xattr(inode, name, strlen(name), data, maxsize);
+	if (size < 0)
+		fuse_reply_err(req, -size);
+	else if (!maxsize)
+		fuse_reply_xattr(req, size);
 	else
-		fuse_reply_buf(req, data, atsize);
+		fuse_reply_buf(req, data, size);
 	free(data);
 out:
 	if (ino != FUSE_ROOT_ID)

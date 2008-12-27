@@ -18,7 +18,7 @@ VG=valgrind --error-exitcode=200 --leak-check=full
 
 TESTDIR = .
 
-binaries = balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 tux3graph
+binaries = balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 tux3fuse tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
@@ -108,7 +108,7 @@ inodetest: inode
 tux3: vfs.o tux3.o
 	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
 
-tux3fuse: $(basedeps) $(inodedeps) vfs.o
+tux3fuse: $(basedeps) $(inodedeps) vfs.o tux3fuse.o
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
