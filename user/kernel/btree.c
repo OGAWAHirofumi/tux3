@@ -105,6 +105,19 @@ static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
 	cursor->path[0].next = next;
 }
 
+static void level_replace_brelse(struct cursor *cursor, int level, struct buffer_head *buffer, struct index_entry *next)
+{
+#ifdef CURSOR_DEBUG
+	assert(buffer);
+	assert(level < cursor->len);
+	assert(cursor->path[level].buffer != FREE_BUFFER);
+	assert(cursor->path[level].next != FREE_NEXT);
+#endif
+	brelse(cursor->path[level].buffer);
+	cursor->path[level].buffer = buffer;
+	cursor->path[level].next = next;
+}
+
 void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next)
 {
 #ifdef CURSOR_DEBUG
@@ -540,10 +553,11 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 
 		/* if the cursor is in the new node, use that as the parent */
 		if (at->next > parent->entries + half) {
-			newbuf->count++;
-			at->buffer = newbuf;
-			at->next = at->next - &parent->entries[half] + newnode->entries;
+			struct index_entry *newnext;
 			mark_buffer_dirty(parentbuf);
+			newnext = newnode->entries + (at->next - &parent->entries[half]);
+			get_bh(newbuf);
+			level_replace_brelse(cursor, depth, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else

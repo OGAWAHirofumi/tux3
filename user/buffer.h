@@ -83,6 +83,11 @@ static inline block_t bufindex(struct buffer_head *buffer)
 	return buffer->index;
 }
 
+static inline void get_bh(struct buffer_head *buffer)
+{
+	buffer->count++;
+}
+
 static inline int bufcount(struct buffer_head *buffer)
 {
 	return buffer->count;
