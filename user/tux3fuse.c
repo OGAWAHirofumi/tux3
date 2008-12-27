@@ -563,21 +563,12 @@ static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		return;
 	}
 
-	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
-
-	if (flags == XATTR_CREATE && xattr) {
-		fuse_reply_err(req, EEXIST);
-	} else if (flags == XATTR_REPLACE && !xattr) {
-		fuse_reply_err(req, ENODATA);
-	} else {
-		int err;
-		err = -set_xattr(inode, (char *)name, strlen(name), (void *)value, size, flags);
-		if (!err) {
-			tuxsync(inode);
-			sync_super(sb);
-		}
-		fuse_reply_err(req, err);
+	int err = set_xattr(inode, (char *)name, strlen(name), (void *)value, size, flags);
+	if (!err) {
+		tuxsync(inode);
+		sync_super(sb);
 	}
+	fuse_reply_err(req, -err);
 
 	if (ino != FUSE_ROOT_ID)
 		tuxclose(inode);
@@ -591,19 +582,27 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 		fuse_reply_err(req, ENOENT);
 		return;
 	}
-
-	struct xattr *xattr = get_xattr(inode, (char *)name, strlen(name));
-
-	if (!xattr) {
-		fuse_reply_err(req, ENODATA);
-	} else if (size == 0) {
-		fuse_reply_xattr(req, xattr->size);
-	} else if (size < xattr->size) {
-		fuse_reply_err(req, ERANGE);
-	} else {
-		fuse_reply_buf(req, xattr->body, xattr->size);
+	int atsize = get_xattr(inode, name, strlen(name), NULL, 0);
+	if (atsize < 0) {
+		fuse_reply_err(req, -atsize);
+		goto out;
 	}
-
+	if (!size) {
+		fuse_reply_xattr(req, atsize);
+		goto out;
+	}
+	void *data = malloc(size);
+	if (!data) {
+		fuse_reply_err(req, ENOMEM);
+		goto out;
+	}
+	atsize = get_xattr(inode, name, strlen(name), data, size);
+	if (atsize < 0)
+		fuse_reply_err(req, -atsize);
+	else
+		fuse_reply_buf(req, data, atsize);
+	free(data);
+out:
 	if (ino != FUSE_ROOT_ID)
 		tuxclose(inode);
 }

@@ -86,8 +86,8 @@ int main(int argc, char *argv[])
 	err = xcache_update(inode, 0x666, "hello", 5, 0);
 	err = xcache_update(inode, 0x777, "world!", 6, 0);
 	xcache_dump(inode);
-	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, 0x777, &err);
-	if (xattr)
+	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, 0x777);
+	if (!IS_ERR(xattr))
 		printf("atom %x => %.*s\n", xattr->atom, xattr->size, xattr->body);
 	err = xcache_update(inode, 0x111, "class", 5, 0);
 	err = xcache_update(inode, 0x666, NULL, 0, 0);
@@ -117,10 +117,12 @@ int main(int argc, char *argv[])
 	warn("---- xattr lookup ----");
 	for (int i = 0, len; i < 3; i++) {
 		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
-		if ((xattr = get_xattr(inode, name, len = strlen(name))))
-			printf("found xattr %.*s => %.*s\n", len, name, xattr->size, xattr->body);
+		char data[100];
+		int size = get_xattr(inode, name, len = strlen(name), data, sizeof(data));
+		if (size < 0)
+			printf("xattr %.*s not found (%s)\n", len, name, strerror(-size));
 		else
-			printf("xattr %.*s not found\n", len, name);
+			printf("found xattr %.*s => %.*s\n", len, name, size, data);
 	}
 	warn("---- list xattrs ----");
 	int len = xattr_list(inode, attrs, sizeof(attrs));

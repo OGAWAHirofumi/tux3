@@ -197,12 +197,24 @@ int main(int argc, const char *argv[])
 			goto usage;
 		if (!strcmp(command, "get")) {
 			printf("read xattr %.*s\n", (int)strlen(name), name);
-			struct xattr *xattr = get_xattr(inode, name, strlen(name));
-			if (!xattr) {
-				errno = EINVAL;
+			int size = get_xattr(inode, name, strlen(name), NULL, 0);
+			if (size < 0) {
+				errno = -size;
 				goto eek;
 			}
-			hexdump(xattr->body, xattr->size);
+			void *data = malloc(size);
+			if (!data) {
+				errno = ENOMEM;
+				goto eek;
+			}
+			size = get_xattr(inode, name, strlen(name), data, size);
+			if (size < 0) {
+				free(data);
+				errno = -size;
+				goto eek;
+			}
+			hexdump(data, size);
+			free(data);
 		}
 		if (!strcmp(command, "set")) {
 			char text[2 << 16];

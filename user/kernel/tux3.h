@@ -290,6 +290,7 @@ typedef struct inode {
 	unsigned i_version;
 	struct timespec i_mtime, i_ctime, i_atime;
 	unsigned i_mode, i_uid, i_gid, i_nlink;
+	struct mutex i_mutex;
 	dev_t i_rdev;
 } tuxnode_t;
 
@@ -685,8 +686,8 @@ extern const struct inode_operations tux_symlink_iops;
 /* xattr.c */
 int xcache_dump(struct inode *inode);
 struct xcache *new_xcache(unsigned maxsize);
-struct xattr *get_xattr(struct inode *inode, char *name, unsigned len);
-int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size, unsigned flags);
+int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size);
+int set_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size, unsigned flags);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);

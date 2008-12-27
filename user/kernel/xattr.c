@@ -200,10 +200,11 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 	return 0;
 }
 
+// bug waiting to happen...
 tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size);
 loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size);
 
-static atom_t find_atom(struct inode *atable, char *name, unsigned len)
+static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
 {
 	struct buffer_head *buffer;
 	tux_dirent *entry = _tux_find_entry(atable, name, len, &buffer, tux_sb(atable->i_sb)->dictsize);
@@ -214,7 +215,7 @@ static atom_t find_atom(struct inode *atable, char *name, unsigned len)
 	return atom;
 }
 
-static atom_t make_atom(struct inode *atable, char *name, unsigned len)
+static atom_t make_atom(struct inode *atable, const char *name, unsigned len)
 {
 	atom_t atom = find_atom(atable, name, len);
 	if (atom != -1)
@@ -264,25 +265,20 @@ bail:
 	return -1;
 }
 
-static struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom, int *err)
+static struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom)
 {
-	if (!xcache)
-		return NULL;
-	struct xattr *xattr = xcache->xattrs;
-	struct xattr *limit = xcache_limit(xcache);
-	while (xattr < limit) {
-		if (xattr->atom == atom)
-			return xattr;
-		if ((xattr = xcache_next(xattr)) > limit)
-			goto fail;
+	if (xcache) {
+		struct xattr *xattr = xcache->xattrs;
+		struct xattr *limit = xcache_limit(xcache);
+		while (xattr < limit) {
+			if (xattr->atom == atom)
+				return xattr;
+			if ((xattr = xcache_next(xattr)) > limit)
+				return ERR_PTR(-EINVAL);
+		}
+		assert(xattr == limit);
 	}
-	assert(xattr == limit);
-null:
-	return NULL;
-fail:
-	*err = EINVAL;
-	error("corrupt xattrs");
-	goto null;
+	return ERR_PTR(-ENOATTR);
 }
 
 struct xcache *new_xcache(unsigned maxsize)
@@ -317,15 +313,17 @@ static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
  */
 static int xcache_update(struct inode *inode, unsigned atom, void *data, unsigned len, unsigned flags)
 {
-	int err = 0, use = 0;
+	int use = 0;
 	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache_lookup(xcache, atom, &err);
-	if (xattr) {
+	struct xattr *xattr = xcache_lookup(xcache, atom);
+	if (IS_ERR(xattr)) {
+		if (PTR_ERR(xattr) != -ENOATTR || (flags & XATTR_REPLACE))
+			return PTR_ERR(xattr);
+	} else {
 		if (flags & XATTR_CREATE)
 			return -EEXIST;
 		use -= remove_old(xcache, xattr);
-	} else if (flags & XATTR_REPLACE)
-		return -ENOATTR;
+	}
 
 	/* Insert new */
 	unsigned more = sizeof(*xattr) + len;
@@ -354,48 +352,68 @@ static int xcache_update(struct inode *inode, unsigned atom, void *data, unsigne
 	return 0;
 }
 
-struct xattr *get_xattr(struct inode *inode, char *name, unsigned len)
+int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size)
 {
-	int err = 0;
-	atom_t atom = find_atom(tux_sb(inode->i_sb)->atable, name, len);
-	if (atom == -1)
-		return NULL;
-	return xcache_lookup(tux_inode(inode)->xcache, atom, &err); // and what about the err???
+	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	int ret;
+	mutex_lock(&atable->i_mutex);
+	atom_t atom = find_atom(atable, name, len);
+	if (atom == -1) {
+		ret = -ENOATTR;
+		goto out;
+	}
+	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom);
+	ret = xattr->size;
+	if (ret < size)
+		memcpy(data, xattr->body, ret);
+	else if (size)
+		ret = -ERANGE;
+out:
+	mutex_unlock(&atable->i_mutex);
+	return ret;
 }
 
-int set_xattr(struct inode *inode, char *name, unsigned len, void *data, unsigned size, unsigned flags)
+int set_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size, unsigned flags)
 {
-	atom_t atom = make_atom(tux_sb(inode->i_sb)->atable, name, len);
-	if (atom == -1)
-		return -EINVAL;
-	return xcache_update(inode, atom, data, size, flags);
-}
-
-/* unused */
-int del_xattr(struct inode *inode, char *name, unsigned len)
-{
-	int err = 0;
-	atom_t atom = find_atom(tux_sb(inode->i_sb)->atable, name, len);
-	if (atom == -1)
-		return -ENOATTR;
-	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache_lookup(xcache, atom, &err);
-	if (err)
-		return err;
-	if (!xattr)
-		return -ENOATTR;
-	int used = remove_old(xcache, xattr);
-	if (used)
-		use_atom(tux_sb(inode->i_sb)->atable, atom, -used);
+	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	mutex_lock(&atable->i_mutex);
+	atom_t atom = make_atom(atable, name, len);
+	int err = (atom == -1) ? -EINVAL :
+		xcache_update(inode, atom, data, size, flags);
+	mutex_unlock(&atable->i_mutex);
 	return err;
 }
 
-/* userland only */
+int del_xattr(struct inode *inode, const char *name, unsigned len)
+{
+	int err = 0;
+	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	mutex_lock(&atable->i_mutex);
+	atom_t atom = find_atom(atable, name, len);
+	if (atom == -1) {
+		err = -ENOATTR;
+		goto out;
+	}
+	struct xcache *xcache = tux_inode(inode)->xcache;
+	struct xattr *xattr = xcache_lookup(xcache, atom);
+	if (IS_ERR(xattr)) {
+		err = PTR_ERR(xattr);
+		goto out;
+	}
+	int used = remove_old(xcache, xattr);
+	if (used)
+		use_atom(atable, atom, -used);
+out:
+	mutex_unlock(&atable->i_mutex);
+	return err;
+}
+
 int xattr_list(struct inode *inode, char *text, size_t size)
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	mutex_lock(&atable->i_mutex);
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
 	char *base = text, *top = text + size;
@@ -415,8 +433,10 @@ int xattr_list(struct inode *inode, char *text, size_t size)
 	}
 	assert(xattr == limit);
 full:
+	mutex_unlock(&atable->i_mutex);
 	return text - base;
 fail:
+	mutex_unlock(&atable->i_mutex);
 	return -EINVAL;
 }
 
