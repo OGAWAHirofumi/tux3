@@ -129,12 +129,18 @@ struct btree_ops ops = {
 	.leaf_merge = uleaf_merge,
 	.leaf_chop = uleaf_chop,
 	.balloc = balloc,
+	.bfree = bfree,
 };
 
 block_t balloc(struct sb *sb, unsigned blocks)
 {
 	printf("-> %Lx\n", (L)sb->nextalloc);
 	return sb->nextalloc += blocks;
+}
+
+void bfree(struct sb *sb, block_t block, unsigned blocks)
+{
+	printf("free %Lx, count %x\n", (L)block, blocks);
 }
 
 int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)

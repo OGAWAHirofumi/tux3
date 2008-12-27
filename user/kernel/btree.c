@@ -34,10 +34,6 @@ static inline unsigned bcount(struct bnode *node)
 	return from_be_u32(node->count);
 }
 
-static void free_block(struct sb *sb, block_t block)
-{
-}
-
 // desperately need ERR_PTR return here to distinguish between
 // ENOMEM, which should be impossible but when it happens we
 // need to do something reasonable, or ENOSPC which we must
@@ -329,17 +325,6 @@ void show_tree(struct btree *btree)
 
 /* Deletion */
 
-static void brelse_free(struct sb *sb, struct buffer_head *buffer)
-{
-	brelse(buffer);
-	if (bufcount(buffer)) {
-		warn("free block %Lx still in use!", (long long)bufindex(buffer));
-		return;
-	}
-	free_block(sb, bufindex(buffer));
-	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
-}
-
 static void remove_index(struct cursor *cursor, int level)
 {
 	struct bnode *node = cursor_node(cursor, level);
@@ -378,9 +363,19 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count = to_be_u32(bcount(node) + bcount(node2));
 }
 
-static int delete_from_leaf(struct btree *btree, vleaf *leaf, struct delete_info *info)
+static void brelse_free(struct btree *btree, struct buffer_head *buffer)
 {
-	return (btree->ops->leaf_chop)(btree, info->key, leaf);
+	struct sb *sb = btree->sb;
+	block_t block = bufindex(buffer);
+	if (bufcount(buffer) != 1) {
+		warn("free block %Lx still in use!", (L)bufindex(buffer));
+		brelse(buffer);
+		assert(bufcount(buffer) == 0);
+		return;
+	}
+	brelse(buffer);
+	(btree->ops->bfree)(sb, block, 1);
+	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
 
 int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline)
@@ -401,7 +396,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 
 	/* leaf walk */
 	while (1) {
-		ret = delete_from_leaf(btree, bufdata(leafbuf), info);
+		ret = (ops->leaf_chop)(btree, info->key, bufdata(leafbuf));
 		if (ret) {
 			mark_buffer_dirty(leafbuf);
 			if (ret < 0)
@@ -418,7 +413,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 				(ops->leaf_merge)(btree, that, this);
 				remove_index(cursor, level);
 				mark_buffer_dirty(leafprev);
-				brelse_free(sb, leafbuf);
+				brelse_free(btree, leafbuf);
 				//dirty_buffer_count_check(sb);
 				goto keep_prev_leaf;
 			}
@@ -449,7 +444,7 @@ keep_prev_leaf:
 					merge_nodes(that, this);
 					remove_index(cursor, level - 1);
 					mark_buffer_dirty(prev[level]);
-					brelse_free(sb, level_pop(cursor));
+					brelse_free(btree, level_pop(cursor));
 					//dirty_buffer_count_check(sb);
 					goto keep_prev_node;
 				}
@@ -467,7 +462,7 @@ keep_prev_node:
 				while (depth > 1 && bcount(bufdata(prev[0])) == 1) {
 					trace("drop btree level");
 					btree->root.block = bufindex(prev[1]);
-					brelse_free(sb, prev[0]);
+					brelse_free(btree, prev[0]);
 					//dirty_buffer_count_check(sb);
 					depth = --btree->root.depth;
 					vecmove(prev, prev + 1, depth);
