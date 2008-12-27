@@ -252,14 +252,17 @@ int advance(struct btree *btree, struct cursor *cursor)
 			return 0;
 		level--;
 	} while (level_finished(cursor, level));
-	do {
+	while (1) {
 		buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next->block));
 		if (!buffer)
 			goto eek;
 		cursor->path[level].next++;
+		if (level + 1 == depth)
+			break;
 		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 		level++;
-	} while (level < depth);
+	}
+	level_push(cursor, buffer, NULL);
 	cursor_check(cursor);
 	return 1;
 eek:
