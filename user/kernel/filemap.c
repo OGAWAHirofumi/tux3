@@ -1,8 +1,3 @@
-#ifdef __KERNEL__
-#include <linux/fs.h>
-#include <linux/mpage.h>
-#include <linux/aio.h>
-#endif
 #include "tux3.h"
 
 #ifndef trace
@@ -226,6 +221,8 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 }
 
 #ifdef __KERNEL__
+#include <linux/mpage.h>
+
 int tux3_get_block(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create)
 {
