@@ -687,7 +687,7 @@ extern const struct inode_operations tux_symlink_iops;
 int xcache_dump(struct inode *inode);
 struct xcache *new_xcache(unsigned maxsize);
 int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size);
-int set_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size, unsigned flags);
+int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
