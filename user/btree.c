@@ -154,6 +154,24 @@ int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned
 	return 0;
 }
 
+static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
+{
+	struct btree *btree = cursor->btree;
+	if (probe(btree, key, cursor))
+		error("probe for %Lx failed", (L)key);
+	struct uentry *entry = tree_expand(btree, key, 1, cursor);
+	*entry = (struct uentry){ .key = key, .val = key + 0x100 };
+	mark_buffer_dirty(cursor_leafbuf(cursor));
+	block_t block = bufindex(cursor_leafbuf(cursor));
+	release_cursor(cursor);
+
+	/* probe added key: buffer should be same */
+	if (probe(btree, key, cursor))
+		error("probe for %Lx failed", (L)key);
+	assert(block == bufindex(cursor_leafbuf(cursor)));
+	release_cursor(cursor);
+}
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
@@ -175,31 +193,21 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
+	/* tree_expand() test, and reverse order */
 	struct cursor *cursor = alloc_cursor(&btree, 1); /* +1 for new depth */
 	int until_new_depth = sb->entries_per_node * btree.entries_per_leaf + 1;
-	for (int key = 0; key < until_new_depth; key++) {
-		if (probe(&btree, key, cursor))
-			error("probe for %i failed", key);
-		struct uentry *entry = tree_expand(&btree, key, 1, cursor);
-		*entry = (struct uentry){ .key = key, .val = key + 0x100 };
-		mark_buffer_dirty(cursor_leafbuf(cursor));
-		block_t block = bufindex(cursor_leafbuf(cursor));
-		release_cursor(cursor);
+	for (int key = 0; key < until_new_depth; key++)
+		tree_expand_test(cursor, key);
+	show_tree_range(&btree, 0, -1);
+	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 
-		/* probe added key: buffer should be same */
-		if (probe(&btree, key, cursor))
-			error("probe for %i failed", key);
-		assert(block == bufindex(cursor_leafbuf(cursor)));
-		release_cursor(cursor);
-	}
+	for (int key = until_new_depth * 100; key >= 0; key -= 100)
+		tree_expand_test(cursor, key);
+	show_tree_range(&btree, 0, -1);
 	free_cursor(cursor);
-	show_tree_range(&btree, 0, -1);
-	show_buffers(sb->devmap);
-	tree_chop(&btree, &(struct delete_info){ .key = 0x10 }, -1);
-	show_tree_range(&btree, 0, -1);
+	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 
 	/* insert_node test */
-	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 	cursor = alloc_cursor(&btree, 1); /* +1 for new depth */
 	assert(!probe(&btree, 0, cursor));
 	for (int i = 0; i < sb->entries_per_node - 1; i++) {
