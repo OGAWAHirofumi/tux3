@@ -519,10 +519,22 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count = to_be_u32(bcount(node) + 1);
 }
 
-int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cursor *cursor)
+/*
+ * Insert new leaf to next posision of cursor.
+ * keep == 1: keep current cursor posision.
+ * keep == 0, set cursor posision to new leaf.
+ */
+static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_head *leafbuf, int keep)
 {
-	trace("insert node 0x%Lx key 0x%Lx into node 0x%Lx", (L)childblock, (L)childkey, (L)btree->root.block);
+	struct btree *btree = cursor->btree;
 	int depth = btree->root.depth;
+	block_t childblock = bufindex(leafbuf);
+	if (keep)
+		brelse(leafbuf);
+	else {
+		level_pop_brelse(cursor);
+		level_push(cursor, leafbuf, NULL);
+	}
 	while (depth--) {
 		struct path_level *at = cursor->path + depth;
 		struct buffer_head *parentbuf = at->buffer;
@@ -530,7 +542,9 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 
 		/* insert and exit if not full */
 		if (bcount(parent) < btree->sb->entries_per_node) {
-			add_child(parent, at->next++, childblock, childkey);
+			add_child(parent, at->next, childblock, childkey);
+			if (!keep)
+				at->next++;
 			mark_buffer_dirty(parentbuf);
 			return 0;
 		}
@@ -557,7 +571,9 @@ int insert_node(struct btree *btree, u64 childkey, block_t childblock, struct cu
 			parent = newnode;
 		} else
 			mark_buffer_dirty(newbuf);
-		add_child(parent, at->next++, childblock, childkey);
+		add_child(parent, at->next, childblock, childkey);
+		if (!keep)
+			at->next++;
 		mark_buffer_dirty(parentbuf);
 		childkey = newkey;
 		childblock = bufindex(newbuf);
@@ -585,6 +601,12 @@ eek:
 	return -ENOMEM;
 }
 
+/* Insert new leaf to next posision of cursor, then set cursor to new leaf */
+int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf)
+{
+	return insert_leaf(cursor, key, leafbuf, 0);
+}
+
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 {
 	trace("split leaf");
@@ -596,14 +618,16 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 	}
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
-	block_t childblock = bufindex(newbuf);
+	int keep;
 	trace_off("use upper? %Li %Li", key, newkey);
 	if (key >= newkey) {
-		level_pop_brelse_dirty(cursor);
-		level_push(cursor, newbuf, NULL);
-	} else
-		brelse_dirty(newbuf);
-	return insert_node(btree, newkey, childblock, cursor);
+		mark_buffer_dirty(leafbuf);
+		keep = 0;
+	} else {
+		mark_buffer_dirty(newbuf);
+		keep = 1;
+	}
+	return insert_leaf(cursor, newkey, newbuf, keep);
 }
 
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor)

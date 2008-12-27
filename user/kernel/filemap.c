@@ -144,20 +144,19 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	dwalk_chop(seek);
 	for (int i = -!!below, index = start; i < segs + !!above; i++) {
 		if (dleaf_free(btree, leaf) < 16) {
+			mark_buffer_dirty(cursor_leafbuf(cursor));
 			struct buffer_head *newbuf = new_leaf(btree);
 			if (!newbuf) {
 				release_cursor(cursor);
 				return -ENOMEM;
 			}
-			level_pop_brelse_dirty(cursor);
-			level_push(cursor, newbuf, NULL);
 			/*
 			 * ENOSPC on btree index split could leave the cache state
 			 * badly messed up.  Going to have to do this in two steps:
 			 * first, look at the cursor to see how many splits we need,
 			 * then make sure we have that, or give up before starting.
 			 */
-			insert_node(btree, index, bufindex(newbuf), cursor);
+			btree_insert_leaf(cursor, index, newbuf);
 			leaf = bufdata(cursor_leafbuf(cursor));
 			dwalk_probe(leaf, sb->blocksize, seek, index);
 		}
@@ -182,6 +181,7 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 			dleaf_merge(btree, leaf, tail);
 			dleaf_dump(btree, leaf);
 		} else {
+			mark_buffer_dirty(cursor_leafbuf(cursor));
 			assert(dleaf_groups(tail) >= 1);
 			/* Tail does not fit, add it as a new btree leaf */
 			struct buffer_head *newbuf = new_leaf(btree);
@@ -190,9 +190,7 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 				return -ENOMEM;
 			}
 			memcpy(bufdata(newbuf), tail, sb->blocksize);
-			level_pop_brelse_dirty(cursor);
-			level_push(cursor, newbuf, NULL);
-			insert_node(btree, tailkey, bufindex(newbuf), cursor);
+			btree_insert_leaf(cursor, tailkey, newbuf);
 		}
 		free(tail);
 	}
