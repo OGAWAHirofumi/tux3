@@ -40,7 +40,8 @@ void bfree(struct sb *sb, block_t block, unsigned blocks)
 struct dleaf *dleaf_create(struct btree *btree)
 {
 	struct dleaf *leaf = malloc(btree->sb->blocksize);
-	dleaf_init(btree, leaf);
+	if (leaf)
+		dleaf_init(btree, leaf);
 	return leaf;
 }
 

@@ -75,8 +75,6 @@ static void dleaf_btree_init(struct btree *btree)
 
 int dleaf_init(struct btree *btree, vleaf *leaf)
 {
-	if (!leaf)
-		return -1;
 	*to_dleaf(leaf) = (struct dleaf){
 		.magic = to_be_u16(0x1eaf),
 		.free = to_be_u16(sizeof(struct dleaf)),

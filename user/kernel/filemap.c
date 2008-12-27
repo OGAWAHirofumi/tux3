@@ -108,9 +108,9 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 	unsigned below = overlap[0], above = overlap[1];
 	tuxkey_t tailkey;
 
-	dleaf_init(btree, tail);
 	if (!dwalk_end(&seek[1])) {
 		tail = malloc(sb->blocksize); // error???
+		dleaf_init(btree, tail);
 		tailkey = dwalk_index(&seek[1]);
 		dwalk_copy(&seek[1], tail);
 	}
