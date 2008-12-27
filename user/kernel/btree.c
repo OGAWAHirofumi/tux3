@@ -391,6 +391,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	prev = malloc(sizeof(*prev) * depth);
 	memset(prev, 0, sizeof(*prev) * depth);
 
+	down_write(&btree->lock);
 	probe(btree, info->resume, cursor);
 	leafbuf = level_pop(cursor);
 
@@ -505,6 +506,7 @@ out:
 	}
 	free(prev);
 	release_cursor(cursor);
+	up_write(&btree->lock);
 	free_cursor(cursor);
 	return ret;
 }
