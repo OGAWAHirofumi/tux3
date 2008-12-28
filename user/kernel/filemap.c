@@ -5,7 +5,7 @@
 #endif
 
 #define SEG_HOLE	(1 << 0)
-#define SEG_NEW	(1 << 1)
+#define SEG_NEW		(1 << 1)
 
 struct seg { block_t block; unsigned count; unsigned state; };
 
