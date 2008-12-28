@@ -226,14 +226,17 @@ block_t balloc(struct sb *sb, unsigned blocks)
 {
 	assert(blocks > 0);
 	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
+	mutex_lock(&sb->bitmap->i_mutex);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
 	if ((block = balloc_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
 		goto found;
 	if ((block = balloc_from_range(sb->bitmap, 0, goal, blocks)) >= 0)
 		goto found;
+	mutex_unlock(&sb->bitmap->i_mutex);
 	return -1;
 found:
 	printf("balloc extent -> [%Lx/%x]\n", (L)block, blocks);
+	mutex_unlock(&sb->bitmap->i_mutex);
 	return block;
 }
 
@@ -244,6 +247,7 @@ void bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
+	mutex_lock(&sb->bitmap->i_mutex);
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), mapblock);
 	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
@@ -254,10 +258,12 @@ void bfree(struct sb *sb, block_t start, unsigned blocks)
 	brelse_dirty(buffer);
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
+	mutex_unlock(&sb->bitmap->i_mutex);
 	return;
 eeek:
 	why = "blocks already free";
 	brelse(buffer);
 eek:
 	warn("extent 0x%Lx %s!\n", (L)start, why);
+	mutex_unlock(&sb->bitmap->i_mutex);
 }
