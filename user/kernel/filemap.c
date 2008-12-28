@@ -81,7 +81,6 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 			dwalk_next(walk);
  		}
 	}
-	seek[1] = *walk;
 	assert(segs);
 	unsigned below = start - seg_start, above = index - min(index, limit);
 	segvec[0].block += below;
@@ -94,11 +93,11 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	struct dleaf *tail = NULL;
 	tuxkey_t tailkey;
 
-	if (!dwalk_end(&seek[1])) {
+	if (!dwalk_end(walk)) {
 		tail = malloc(sb->blocksize); // error???
 		dleaf_init(btree, tail);
-		tailkey = dwalk_index(&seek[1]);
-		dwalk_copy(&seek[1], tail);
+		tailkey = dwalk_index(walk);
+		dwalk_copy(walk, tail);
 	}
 
 	for (int i = 0; i < segs; i++) {
