@@ -34,7 +34,6 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
-	struct dwalk seek[2] = { };
 	int err, segs = 0;
 
 	if (!btree->root.depth)
@@ -54,7 +53,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	struct dwalk *walk = &(struct dwalk){ };
 	block_t index = start, seg_start;
 	dwalk_probe(leaf, sb->blocksize, walk, start);
-	seek[0] = *walk;
+	struct dwalk headwalk = *walk;
 	if (!dwalk_end(walk) && dwalk_index(walk) < start)
 		seg_start = dwalk_index(walk);
 	else
@@ -127,7 +126,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 		}
 	}
 	/* Go back to region start and pack in new segs */
-	dwalk_chop(&seek[0]);
+	dwalk_chop(&headwalk);
 	index = start;
 	for (int i = -!!below; i < segs + !!above; i++) {
 		if (dleaf_free(btree, leaf) < 16) {
@@ -145,21 +144,21 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 			 */
 			btree_insert_leaf(cursor, index, newbuf);
 			leaf = bufdata(cursor_leafbuf(cursor));
-			dwalk_probe(leaf, sb->blocksize, &seek[0], index);
+			dwalk_probe(leaf, sb->blocksize, &headwalk, index);
 		}
 		if (i < 0) {
 			trace("emit below");
-			dwalk_add(&seek[0], index - below, make_extent(segvec[0].block - below, below));
+			dwalk_add(&headwalk, index - below, make_extent(segvec[0].block - below, below));
 			continue;
 		}
 		if (i == segs) {
 			trace("emit above");
-			dwalk_add(&seek[0], index, make_extent(segvec[segs - 1].block + segvec[segs - 1].count, above));
+			dwalk_add(&headwalk, index, make_extent(segvec[segs - 1].block + segvec[segs - 1].count, above));
 			continue;
 		}
 		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)segvec[i].block, segvec[i].count);
 		dleaf_dump(btree, leaf);
-		dwalk_add(&seek[0], index, make_extent(segvec[i].block, segvec[i].count));
+		dwalk_add(&headwalk, index, make_extent(segvec[i].block, segvec[i].count));
 		dleaf_dump(btree, leaf);
 		index += segvec[i].count;
 	}
