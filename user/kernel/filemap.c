@@ -10,17 +10,17 @@
 struct seg { block_t block; unsigned count; unsigned state; };
 
 /* userland only */
-void show_segs(struct seg seglist[], unsigned segs)
+void show_segs(struct seg segvec[], unsigned segs)
 {
 	printf("%i segs: ", segs);
 	for (int i = 0; i < segs; i++)
-		printf("%Lx/%i ", (L)seglist[i].block, seglist[i].count);
+		printf("%Lx/%i ", (L)segvec[i].block, segvec[i].count);
 	printf("\n");
 }
 
-static int get_segs(struct inode *inode, block_t start, unsigned count, struct seg seg[], unsigned max_segs, int create)
+static int get_segs(struct inode *inode, block_t start, unsigned count, struct seg segvec[], unsigned max_segs, int create)
 {
-	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 2); /* allow for depth increase */
+	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* allows for depth increase */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -71,12 +71,12 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 			ex_index = min(ex_index, limit);
 			unsigned gap = ex_index - index;
 			index = ex_index;
-			seg[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
+			segvec[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
 		} else {
 			block_t block = dwalk_block(walk);
 			unsigned count = dwalk_count(walk);
 			trace("emit %Lx/%x", (L)block, count );
-			seg[segs++] = (struct seg){ .block = block, .count = count };
+			segvec[segs++] = (struct seg){ .block = block, .count = count };
 			index = ex_index + count;
 			dwalk_next(walk);
  		}
@@ -84,9 +84,9 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	seek[1] = *walk;
 	assert(segs);
 	unsigned below = start - seg_start, above = index - min(index, limit);
-	seg[0].block += below;
-	seg[0].count -= below;
-	seg[segs - 1].count -= above;
+	segvec[0].block += below;
+	segvec[0].count -= below;
+	segvec[segs - 1].count -= above;
 
 	if (!create)
 		goto out_release;
@@ -102,8 +102,8 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	}
 
 	for (int i = 0; i < segs; i++) {
-		if (seg[i].state == SEG_HOLE) {
-			unsigned count = seg[i].count;
+		if (segvec[i].state == SEG_HOLE) {
+			unsigned count = segvec[i].count;
 			block_t block = balloc(sb, count); // goal ???
 			trace("fill in %Lx/%i ", (L)block, count);
 			if (block == -1) {
@@ -124,7 +124,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 				segs = -ENOSPC;
 				goto out_create;
 			}
-			seg[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
+			segvec[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
 		}
 	}
 	/* Go back to region start and pack in new segs */
@@ -150,19 +150,19 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 		}
 		if (i < 0) {
 			trace("emit below");
-			dwalk_add(seek, index - below, make_extent(seg[0].block - below, below));
+			dwalk_add(seek, index - below, make_extent(segvec[0].block - below, below));
 			continue;
 		}
 		if (i == segs) {
 			trace("emit above");
-			dwalk_add(seek, index, make_extent(seg[segs - 1].block + seg[segs - 1].count, above));
+			dwalk_add(seek, index, make_extent(segvec[segs - 1].block + segvec[segs - 1].count, above));
 			continue;
 		}
-		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)seg[i].block, seg[i].count);
+		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)segvec[i].block, segvec[i].count);
 		dleaf_dump(btree, leaf);
-		dwalk_add(seek, index, make_extent(seg[i].block, seg[i].count));
+		dwalk_add(seek, index, make_extent(segvec[i].block, segvec[i].count));
 		dleaf_dump(btree, leaf);
-		index += seg[i].count;
+		index += segvec[i].count;
 	}
 	if (tail) {
 		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf)) {
