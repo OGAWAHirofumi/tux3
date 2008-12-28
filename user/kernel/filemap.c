@@ -130,7 +130,8 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 	}
 	/* Go back to region start and pack in new segs */
 	dwalk_chop(seek);
-	for (int i = -!!below, index = start; i < segs + !!above; i++) {
+	index = start;
+	for (int i = -!!below; i < segs + !!above; i++) {
 		if (dleaf_free(btree, leaf) < 16) {
 			mark_buffer_dirty(cursor_leafbuf(cursor));
 			struct buffer_head *newbuf = new_leaf(btree);
