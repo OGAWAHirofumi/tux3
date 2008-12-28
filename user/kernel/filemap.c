@@ -128,7 +128,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 		}
 	}
 	/* Go back to region start and pack in new segs */
-	dwalk_chop(seek);
+	dwalk_chop(&seek[0]);
 	index = start;
 	for (int i = -!!below; i < segs + !!above; i++) {
 		if (dleaf_free(btree, leaf) < 16) {
@@ -146,21 +146,21 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 			 */
 			btree_insert_leaf(cursor, index, newbuf);
 			leaf = bufdata(cursor_leafbuf(cursor));
-			dwalk_probe(leaf, sb->blocksize, seek, index);
+			dwalk_probe(leaf, sb->blocksize, &seek[0], index);
 		}
 		if (i < 0) {
 			trace("emit below");
-			dwalk_add(seek, index - below, make_extent(segvec[0].block - below, below));
+			dwalk_add(&seek[0], index - below, make_extent(segvec[0].block - below, below));
 			continue;
 		}
 		if (i == segs) {
 			trace("emit above");
-			dwalk_add(seek, index, make_extent(segvec[segs - 1].block + segvec[segs - 1].count, above));
+			dwalk_add(&seek[0], index, make_extent(segvec[segs - 1].block + segvec[segs - 1].count, above));
 			continue;
 		}
 		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)segvec[i].block, segvec[i].count);
 		dleaf_dump(btree, leaf);
-		dwalk_add(seek, index, make_extent(segvec[i].block, segvec[i].count));
+		dwalk_add(&seek[0], index, make_extent(segvec[i].block, segvec[i].count));
 		dleaf_dump(btree, leaf);
 		index += segvec[i].count;
 	}
