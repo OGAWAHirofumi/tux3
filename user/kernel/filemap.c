@@ -20,7 +20,7 @@ void show_segs(struct seg seglist[], unsigned segs)
 
 static int get_segs(struct inode *inode, block_t start, block_t count, struct seg seg[], unsigned max_segs, int create)
 {
-	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 2); /* allow for depth increase */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -35,10 +35,10 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
 	struct dwalk seek[2] = { };
-	int err;
+	int err, segs = 0;
 
 	if (!btree->root.depth)
-		return 0;
+		goto out_unlock;
 
 	if ((err = probe(btree, start, cursor))) {
 		free_cursor(cursor);
@@ -53,7 +53,6 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 
 	struct dwalk *walk = &(struct dwalk){ };
 	block_t index = start, seg_start;
-	unsigned segs = 0;
 	dwalk_probe(leaf, sb->blocksize, walk, start);
 	seek[0] = *walk;
 	if (!dwalk_end(walk) && dwalk_index(walk) < start)
