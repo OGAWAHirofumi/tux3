@@ -637,6 +637,7 @@ extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
 
 /* dtree.c */
+int dleaf_check(struct btree *btree, struct dleaf *leaf);
 int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
