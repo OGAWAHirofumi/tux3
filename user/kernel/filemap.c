@@ -18,14 +18,25 @@ void show_segs(struct seg seglist[], unsigned segs)
 	printf("\n");
 }
 
-static int find_segs(struct cursor *cursor, block_t start, block_t limit,
-	struct seg seg[], unsigned max_segs, struct dwalk seek[2], unsigned overlap[2])
+static int get_segs(struct inode *inode, block_t start, block_t count, struct seg seg[], unsigned max_segs, int create)
 {
+	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* +1 for new depth */
+	if (!cursor)
+		return -ENOMEM;
+
+	if (create)
+		down_write(&cursor->btree->lock);
+	else
+		down_read(&cursor->btree->lock);
+
 	assert(max_segs > 0);
+	block_t limit = start + count;
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
+	struct dwalk seek[2] = { };
 	int err;
+
 	if (!btree->root.depth)
 		return 0;
 
@@ -71,36 +82,18 @@ static int find_segs(struct cursor *cursor, block_t start, block_t limit,
 			dwalk_next(walk);
  		}
 	}
-	trace("\n");
 	seek[1] = *walk;
-	if (segs) {
-		block_t below = start - seg_start;
-		block_t above = index - min(index, limit);
-		seg[0].block += below;
-		seg[0].count -= below;
-		seg[segs - 1].count -= above;
-		if (overlap) {
-			overlap[0] = below;
-			overlap[1] = above;
-		}
-	}
-	return segs;
-}
+	assert(segs);
+	block_t below = start - seg_start;
+	block_t above = index - min(index, limit);
+	seg[0].block += below;
+	seg[0].count -= below;
+	seg[segs - 1].count -= above;
 
-/*
- * This interface has no way of telling how long the seg vector is in case segs
- * has to be increased.  If ENOSPC, has no way of telling how may segs were
- * successfully allocated and recorded in the btree.  Sucks, still.
- */
+	if (!create)
+		goto out_release;
 
-static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
-	struct seg seg[], int segs, struct dwalk seek[2], unsigned overlap[2])
-{
-	struct btree *btree = cursor->btree;
-	struct sb *sb = btree->sb;
-	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
 	struct dleaf *tail = NULL;
-	unsigned below = overlap[0], above = overlap[1];
 	tuxkey_t tailkey;
 
 	if (!dwalk_end(&seek[1])) {
@@ -130,7 +123,8 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 				 * space for btree splits, free just the blocks for extents
 				 * we failed to store.
 				 */
-				return -ENOSPC;
+				segs = -ENOSPC;
+				goto out_create;
 			}
 			seg[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
 		}
@@ -142,8 +136,8 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 			mark_buffer_dirty(cursor_leafbuf(cursor));
 			struct buffer_head *newbuf = new_leaf(btree);
 			if (!newbuf) {
-				release_cursor(cursor);
-				return -ENOMEM;
+				segs = -ENOMEM;
+				goto out_create;
 			}
 			/*
 			 * ENOSPC on btree index split could leave the cache state
@@ -172,46 +166,33 @@ static int fill_segs(struct cursor *cursor, block_t start, block_t limit,
 		index += seg[i].count;
 	}
 	if (tail) {
-		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf)) {
+		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf))
 			dleaf_merge(btree, leaf, tail);
-			dleaf_dump(btree, leaf);
-		} else {
+		else {
 			mark_buffer_dirty(cursor_leafbuf(cursor));
 			assert(dleaf_groups(tail) >= 1);
 			/* Tail does not fit, add it as a new btree leaf */
 			struct buffer_head *newbuf = new_leaf(btree);
 			if (!newbuf) {
-				release_cursor(cursor);
-				return -ENOMEM;
+				segs = -ENOMEM;
+				goto out_create;
 			}
 			memcpy(bufdata(newbuf), tail, sb->blocksize);
-			btree_insert_leaf(cursor, tailkey, newbuf);
+			if ((err = btree_insert_leaf(cursor, tailkey, newbuf))) {
+				free(tail);
+				segs = err;
+				goto out_unlock;
+			}
+;
 		}
-		free(tail);
 	}
 	mark_buffer_dirty(cursor_leafbuf(cursor));
-//eek:
+out_create:
+	if (tail)
+		free(tail);
+out_release:
 	release_cursor(cursor);
-	return segs;
-}
-
-static int get_segs(struct inode *inode, block_t start, block_t count, struct seg segvec[], unsigned max_segs, int create)
-{
-	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* +1 for new depth */
-	if (!cursor)
-		return -ENOMEM;
-
-	if (create)
-		down_write(&cursor->btree->lock);
-	else
-		down_read(&cursor->btree->lock);
-	unsigned overlap[2];
-	struct dwalk seek[2] = { };
-	int segs = find_segs(cursor, start, start + count, segvec, max_segs, seek, overlap);
-	if (segs > 0 && create)
-		segs = fill_segs(cursor, start, start + count, segvec, segs, seek, overlap);
-	if (segs >= 0)
-		release_cursor(cursor);
+out_unlock:
 	if (create)
 		up_write(&cursor->btree->lock);
 	else
