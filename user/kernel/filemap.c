@@ -18,7 +18,7 @@ void show_segs(struct seg seglist[], unsigned segs)
 	printf("\n");
 }
 
-static int get_segs(struct inode *inode, block_t start, block_t count, struct seg seg[], unsigned max_segs, int create)
+static int get_segs(struct inode *inode, block_t start, unsigned count, struct seg seg[], unsigned max_segs, int create)
 {
 	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 2); /* allow for depth increase */
 	if (!cursor)
@@ -69,7 +69,7 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 		if (index < ex_index) {
 			/* There is hole */
 			ex_index = min(ex_index, limit);
-			block_t gap = ex_index - index;
+			unsigned gap = ex_index - index;
 			index = ex_index;
 			seg[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
 		} else {
@@ -83,8 +83,7 @@ static int get_segs(struct inode *inode, block_t start, block_t count, struct se
 	}
 	seek[1] = *walk;
 	assert(segs);
-	block_t below = start - seg_start;
-	block_t above = index - min(index, limit);
+	unsigned below = start - seg_start, above = index - min(index, limit);
 	seg[0].block += below;
 	seg[0].count -= below;
 	seg[segs - 1].count -= above;
