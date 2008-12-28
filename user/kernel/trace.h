@@ -1,13 +1,6 @@
 #ifndef TRACE_H
 #define TRACE_H
 
-#ifdef __KERNEL__
-#define printf		printk
-#define vprintf		vprintk
-
-#define die(code) BUG_ON(1)
-#endif
-
 #define logline(caller, fmt, args...)	do {	\
 	printf("%s: ", caller);			\
 	printf(fmt , ##args);			\
