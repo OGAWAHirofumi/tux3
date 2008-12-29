@@ -243,6 +243,32 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	return 0;
 }
 
+static struct buffer_head *find_buffer(struct address_space *mapping,
+				       pgoff_t index, int offset)
+{
+	struct buffer_head *bh = NULL;
+	struct page *page;
+
+	page = find_get_page(mapping, index);
+	if (page) {
+		spin_lock(&mapping->private_lock);
+		if (page_has_buffers(page)) {
+			bh = page_buffers(page);
+			if (bh){
+				while (offset--)
+					bh = bh->b_this_page;
+				if (buffer_uptodate(bh))
+					get_bh(bh);
+				else
+					bh = NULL;
+			}
+		}
+		spin_unlock(&mapping->private_lock);
+		page_cache_release(page);
+	}
+	return bh;
+}
+
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 {
 	struct inode *inode = mapping->host;
@@ -253,6 +279,11 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
 	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
+
+	/* FIXME: hack */
+	bh = find_buffer(mapping, index, offset);
+	if (bh)
+		return bh;
 
 	page = read_mapping_page(mapping, index, NULL);
 	if (IS_ERR(page))
