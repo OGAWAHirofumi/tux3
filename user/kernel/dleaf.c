@@ -289,41 +289,68 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vlea
 void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 {
 	struct dleaf *leaf = to_dleaf(vinto), *from = to_dleaf(vfrom);
-	struct group *gdict = (void *)leaf + btree->sb->blocksize, *gbase = gdict - dleaf_groups(leaf);
-	struct entry *edict = (void *)gbase;
-	printf("merge %p into %p\n", from, leaf);
-	//assert(dleaf_need(from) <= dleaf_free(leaf));
+	struct group *gdict = (void *)leaf + btree->sb->blocksize;
+	struct group *gstop = gdict - dleaf_groups(leaf);
+	struct entry *edict = (struct entry *)gstop;
+	unsigned free = from_be_u16(leaf->free);
+	struct group *gdict2 = (void *)from + btree->sb->blocksize;
+	struct group *group2 = gdict2 - 1;
+	struct group *gstop2 = gdict2 - dleaf_groups(from);
+	struct entry *edict2 = (struct entry *)gstop2;
+	int merge_group = 0;
+
+	assert(dleaf_groups(leaf) >= 1);
+	if (dleaf_groups(from) == 0)
+		return;
+
+	/* Try to merge group, and adjust */
+	if (group_keyhi(gstop) == group_keyhi(group2) &&
+	    group_count(gstop) < MAX_GROUP_ENTRIES) {
+		unsigned gcount = group_count(gstop);
+		unsigned gcount2 = group_count(group2);
+		unsigned room = MAX_GROUP_ENTRIES - gcount;
+		/* All entries can merge to this group? */
+		if (room < gcount2) {
+			/* Adjust group/entries which can't merge */
+			struct entry *entry2 = edict2 - room;
+			struct entry *estop2 = edict2 - gcount2;
+			unsigned limit_adjust2 = entry_limit(entry2);
+			set_group_count(group2, gcount2 - room);
+			while (--entry2 >= estop2)
+				inc_entry_limit(entry2, -limit_adjust2);
+			gcount2 = room;
+			merge_group = 0;
+		} else
+			merge_group = 1;
+
+		/* Adjust group/entries which merge */
+		struct entry *estop2 = edict2 - gcount2;
+		struct entry *entry2 = edict2;
+		unsigned limit_adjust = entry_limit(edict - gcount);
+		set_group_count(gstop, gcount + gcount2);
+		while (--entry2 >= estop2)
+			inc_entry_limit(entry2, limit_adjust);
+	}
 
 	/* append extents */
 	unsigned size = from_be_u16(from->free) - sizeof(struct dleaf);
-	memcpy((void *)leaf + from_be_u16(leaf->free), from->table, size);
-	leaf->free = to_be_u16(from_be_u16(leaf->free) + size);
-
-	/* merge last group (lowest) with first of from (highest)? */
-	struct group *gdict2 = (void *)from + btree->sb->blocksize;
-	int uncut = dleaf_groups(leaf) && dleaf_groups(from) && (group_keyhi(gdict2 - 1) == group_keyhi(gbase));
+	memcpy((void *)leaf + free, from->table, size);
+	leaf->free = to_be_u16(free + size);
 
 	/* make space and append groups except for possibly merged group */
-	unsigned addgroups = dleaf_groups(from) - uncut;
-	struct group *gbase2 = gdict2 - dleaf_groups(from);
+	assert(sizeof(struct group) == sizeof(struct entry));
+	unsigned addgroups = dleaf_groups(from) - merge_group;
 	struct entry *ebase2 = (void *)from + from_be_u16(from->used);
 	struct entry *ebase = (void *)leaf + from_be_u16(leaf->used);
 	vecmove(ebase - addgroups, ebase, edict - ebase);
-	veccopy(gbase -= addgroups, gbase2, addgroups);
+	veccopy(gstop - addgroups, gstop2, addgroups);
 	ebase -= addgroups;
-	if (uncut)
-		inc_group_count(gbase + addgroups, group_count(gdict2 - 1));
 	inc_dleaf_groups(leaf, addgroups);
 
 	/* append entries */
-	size = (void *)gbase2 - (void *)ebase2;
+	size = (void *)edict2 - (void *)ebase2;
 	memcpy((void *)ebase - size, ebase2, size);
 	leaf->used = to_be_u16((void *)ebase - size - (void *)leaf);
-
-	/* adjust entry limits for merged group */
-	if (uncut)
-		for (int i = 1; i <= group_count((gdict2 - 1)); i++)
-			inc_entry_limit(ebase - i, entry_limit(ebase));
 	assert(!dleaf_check(leaf, btree->sb->blocksize));
 }
 
@@ -621,12 +648,12 @@ void dwalk_copy(struct dwalk *walk, struct dleaf *dest)
 	veccopy(edict2 - entries, ebase, entries);
 	veccopy(dest->table, entry_exbase, extents);
 
-	unsigned group_count = (walk->entry + 1) - walk->estop;
+	unsigned gcount2 = (walk->entry + 1) - walk->estop;
 	set_dleaf_groups(dest, groups2);
 	dest->free = to_be_u16((void *)(dest->table + extents) - (void *)dest);
 	dest->used = to_be_u16((void *)(edict2 - entries) - (void *)dest);
-	set_group_count(gdict2 - 1, group_count);
-	struct entry *entry2 = edict2 - 1, *estop2 = edict2 - group_count;
+	set_group_count(gdict2 - 1, gcount2);
+	struct entry *entry2 = edict2 - 1, *estop2 = edict2 - gcount2;
 	while (entry2 >= estop2) {
 		inc_entry_limit(entry2, -limit_adjust);
 		entry2--;
