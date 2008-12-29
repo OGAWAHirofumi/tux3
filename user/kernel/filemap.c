@@ -163,10 +163,8 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 		index += segvec[i].count;
 	}
 	if (tail) {
-		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf)) {
+		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf))
 			dleaf_merge(btree, leaf, tail);
-			assert(!dleaf_check(btree, leaf));
-		}
 		else {
 			mark_buffer_dirty(cursor_leafbuf(cursor));
 			assert(dleaf_groups(tail) >= 1);
@@ -177,7 +175,6 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 				goto out_create;
 			}
 			memcpy(bufdata(newbuf), tail, sb->blocksize);
-			assert(!dleaf_check(btree, bufdata(newbuf)));
 			if ((err = btree_insert_leaf(cursor, tailkey, newbuf))) {
 				free(tail);
 				segs = err;

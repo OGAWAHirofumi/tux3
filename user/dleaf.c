@@ -88,6 +88,7 @@ int main(int argc, char *argv[])
 {
 	printf("--- leaf test ---\n");
 	struct sb *sb = &(struct sb){ .blocksize = 1 << 10 };
+	unsigned blocksize = sb->blocksize;
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = dleaf_create(btree);
 
@@ -98,7 +99,7 @@ int main(int argc, char *argv[])
 	struct dwalk *walk = &(struct dwalk){ };
 
 	for (int i = 1; i < 2; i++) {
-		dwalk_probe(leaf, sb->blocksize, walk, 0x3000055);
+		dwalk_probe(leaf, blocksize, walk, 0x3000055);
 		if ((walk->mock.groups = dleaf_groups(walk->leaf))) {
 			walk->mock.group = *walk->group;
 			walk->mock.entry = *walk->entry;
@@ -112,7 +113,6 @@ int main(int argc, char *argv[])
 		try(walk, 0x3001006, make_extent(0x6, 1));
 		if (!i) printf("mock free = %i, used = %i\n", walk->mock.free, walk->mock.used);
 	}
-	assert(!dleaf_check(btree, leaf));
 	dleaf_dump(btree, leaf);
 	for (int i = 0; i < ARRAY_SIZE(keys); i++) {
 		unsigned key = keys[i];
@@ -131,10 +131,8 @@ int main(int argc, char *argv[])
 	dleaf_dump(btree, leaf);
 	dleaf_dump(btree, dest);
 	dleaf_merge(btree, leaf, dest);
-	assert(!dleaf_check(btree, leaf));
 	dleaf_dump(btree, leaf);
 	dleaf_chop(btree, 0x14014LL, leaf);
-	assert(!dleaf_check(btree, leaf));
 	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
@@ -154,17 +152,15 @@ int main(int argc, char *argv[])
 		};
 		struct dleaf *leaf1 = dleaf_create(btree);
 		struct dwalk *walk1 = &(struct dwalk){ };
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		for (int i = 0; i < ARRAY_SIZE(data); i++)
 			dwalk_add(walk1, data[i].index, data[i].ex);
-		assert(!dleaf_check(btree, leaf1));
 		/* dwalk_copy test */
 		for (int i = 0; i < ARRAY_SIZE(data); i++) {
 			struct dleaf *leaf2 = dleaf_create(btree);
-			dwalk_probe(leaf1, sb->blocksize, walk1, data[i].index);
+			dwalk_probe(leaf1, blocksize, walk1, data[i].index);
 			dwalk_copy(walk1, leaf2);
-			assert(!dleaf_check(btree, leaf2));
-			dwalk_probe(leaf2, sb->blocksize, walk1, data[i].index);
+			dwalk_probe(leaf2, blocksize, walk1, data[i].index);
 			for (int j = i; j < ARRAY_SIZE(data); j++) {
 				dwalk_probe_check(walk1, data[j].index, &data[j].ex);
 				dwalk_next(walk1);
@@ -174,29 +170,29 @@ int main(int argc, char *argv[])
 		/* dwalk_probe test */
 		int i, ret;
 		for (i = 0; i < ARRAY_SIZE(data); i++) {
-			ret = dwalk_probe(leaf1, sb->blocksize, walk1, data[i].index);
+			ret = dwalk_probe(leaf1, blocksize, walk1, data[i].index);
 			assert(ret);
 			dwalk_probe_check(walk1, data[i].index, &data[i].ex);
 		}
-		ret = dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		ret = dwalk_probe(leaf1, blocksize, walk1, 0);
 		assert(ret);
 		dwalk_probe_check(walk1, data[0].index, &data[0].ex);
-		ret = dwalk_probe(leaf1, sb->blocksize, walk1, 0x3001000003ULL);
+		ret = dwalk_probe(leaf1, blocksize, walk1, 0x3001000003ULL);
 		assert(ret);
 		dwalk_probe_check(walk1, data[1].index, &data[1].ex);
-		ret = dwalk_probe(leaf1, sb->blocksize, walk1, 0x3001000011ULL);
+		ret = dwalk_probe(leaf1, blocksize, walk1, 0x3001000011ULL);
 		assert(ret);
 		dwalk_probe_check(walk1, data[2].index, &data[2].ex);
-		ret = dwalk_probe(leaf1, sb->blocksize, walk1, 0x3001000015ULL);
+		ret = dwalk_probe(leaf1, blocksize, walk1, 0x3001000015ULL);
 		assert(ret);
 		dwalk_probe_check(walk1, data[5].index, &data[5].ex);
-		ret = dwalk_probe(leaf1, sb->blocksize, walk1, 0x3003000000ULL);
+		ret = dwalk_probe(leaf1, blocksize, walk1, 0x3003000000ULL);
 		assert(!ret);
 		assert(dwalk_end(walk1));
 		/* test for dwalk_next and dwalk_back */
 #define NR	7
 		struct dwalk w1[NR + 1], w2[NR + 1];
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		for (i = 0; i < NR; i++) {
 			w1[i] = *walk1;
 			dwalk_next(walk1);
@@ -226,14 +222,13 @@ int main(int argc, char *argv[])
 		struct dleaf *leaf1 = dleaf_create(btree);
 		struct dwalk *walk1 = &(struct dwalk){ };
 		int i;
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		for (i = 0; i < ARRAY_SIZE(data); i++)
 			dwalk_add(walk1, data[i].index, data[i].ex);
-		assert(!dleaf_check(btree, leaf1));
 		tuxkey_t k1[ARRAY_SIZE(data) + 1];
 		struct diskextent e1[ARRAY_SIZE(data) + 1];
 		int nr = 0;
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		while (!dwalk_end(walk1)) {
 			k1[nr] = dwalk_index(walk1);
 			e1[nr] = *walk1->extent;
@@ -241,9 +236,9 @@ int main(int argc, char *argv[])
 			dwalk_next(walk1);
 		}
 		for (i = ARRAY_SIZE(data) - 1; i >= 0; i--) {
-			dwalk_probe(leaf1, sb->blocksize, walk1, data[i].index);
+			dwalk_probe(leaf1, blocksize, walk1, data[i].index);
 			dwalk_chop(walk1);
-			dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+			dwalk_probe(leaf1, blocksize, walk1, 0);
 			nr = 0;
 			while (!dwalk_end(walk1)) {
 				assert(k1[nr] == dwalk_index(walk1));
@@ -259,7 +254,7 @@ int main(int argc, char *argv[])
 	if (1) {
 		struct dleaf *leaf1 = dleaf_create(btree);
 		struct dwalk *walk1 = &(struct dwalk){ };
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		dwalk_add(walk1, 0x3001000001ULL, make_extent(0x1, 1));
 		dwalk_add(walk1, 0x3001000002ULL, make_extent(0x2, 1));
 		dwalk_add(walk1, 0x3001000003ULL, make_extent(0x3, 1));
@@ -267,11 +262,10 @@ int main(int argc, char *argv[])
 		dwalk_add(walk1, 0x3001000005ULL, make_extent(0x5, 10));
 		dwalk_add(walk1, 0x3002000000ULL, make_extent(0xa, 1));
 		dwalk_add(walk1, 0x3002000001ULL, make_extent(0xb, 1));
-		assert(!dleaf_check(btree, leaf1));
 		tuxkey_t k1[NR + 1];
 		struct diskextent e1[NR + 1];
 		int nr = 0;
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		while (!dwalk_end(walk1)) {
 			k1[nr] = dwalk_index(walk1);
 			e1[nr] = *walk1->extent;
@@ -279,9 +273,9 @@ int main(int argc, char *argv[])
 			dwalk_next(walk1);
 		}
 		/* dwalk_chop test (dwalk_chop() will use dwalk_back()) */
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0x3002000000ULL);
+		dwalk_probe(leaf1, blocksize, walk1, 0x3002000000ULL);
 		dwalk_chop(walk1);
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		nr = 0;
 		while (!dwalk_end(walk1)) {
 			assert(k1[nr] == dwalk_index(walk1));
@@ -292,8 +286,7 @@ int main(int argc, char *argv[])
 		}
 		/* dleaf_chop test */
 		dleaf_chop(btree, 0x3001000008ULL, leaf1);
-		assert(!dleaf_check(btree, leaf1));
-		dwalk_probe(leaf1, sb->blocksize, walk1, 0);
+		dwalk_probe(leaf1, blocksize, walk1, 0);
 		nr = 0;
 		while (!dwalk_end(walk1)) {
 			assert(dwalk_index(walk1) == k1[nr]);
