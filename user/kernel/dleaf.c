@@ -315,7 +315,6 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 			rest_gcount = gcount2 - room;
 			rest_limit_adjust = entry_limit(edict2 - room);
 			gcount2 = room;
-			can_merge_group = 0;
 		} else
 			can_merge_group = 1;
 
