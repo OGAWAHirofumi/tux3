@@ -566,6 +566,7 @@ void dwalk_copy(struct dwalk *walk, struct dleaf *dest)
 	struct dleaf *leaf = walk->leaf;
 	unsigned blocksize = (void *)walk->gdict - (void *)leaf;
 
+	assert(dleaf_groups(dest) == 0);
 	if (dwalk_end(walk))
 		return;
 	if (dwalk_first(walk)) {
