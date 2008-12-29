@@ -42,7 +42,7 @@
  *
  * For both, stop when extent is "big enough", whatever that means.
  */
-void guess_extent(struct buffer_head *buffer, block_t *start, block_t *limit, int write)
+void guess_region(struct buffer_head *buffer, block_t *start, block_t *limit, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
 	block_t ends[2] = { bufindex(buffer), bufindex(buffer) };
@@ -83,7 +83,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 		warn("egad, reading a dirty buffer");
 
 	block_t start, limit;
-	guess_extent(buffer, &start, &limit, write);
+	guess_region(buffer, &start, &limit, write);
 	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
 
 	struct seg segvec[10];
