@@ -138,6 +138,45 @@ int main(int argc, char *argv[])
 	dleaf_destroy(btree, dest);
 
 	if (1) {
+		for (int chop = 1; chop < MAX_GROUP_ENTRIES + 1; chop++) {
+			/* dleaf_merge() test */
+			struct dleaf *leaf1 = dleaf_create(btree);
+			struct dwalk *walk1 = &(struct dwalk){ };
+			dwalk_probe(leaf1, blocksize, walk1, 0);
+			for (int i = 0; i < MAX_GROUP_ENTRIES; i++)
+				dwalk_add(walk1, i, make_extent(10+i, 1));
+			struct dleaf *leaf2 = dleaf_create(btree);
+			dwalk_probe(leaf2, blocksize, walk1, 0);
+			for (int i = 0; i < MAX_GROUP_ENTRIES; i++)
+				dwalk_add(walk1, 100+i, make_extent(100+i, 1));
+			/* chop some extents */
+			dwalk_probe(leaf1, blocksize, walk1, 0);
+			for (int i = 0; i < chop; i++)
+				dwalk_next(walk1);
+			dwalk_chop(walk1);
+			/* merge leaf1 and leaf2 */
+			dleaf_dump(btree, leaf1);
+			dleaf_dump(btree, leaf2);
+			dleaf_merge(btree, leaf1, leaf2);
+			dleaf_dump(btree, leaf1);
+			dwalk_probe(leaf1, blocksize, walk1, 0);
+			for (int i = 0; i < chop; i++) {
+				assert(dwalk_index(walk1) == i);
+				assert(dwalk_block(walk1) == 10 + i);
+				assert(dwalk_count(walk1) == 1);
+				dwalk_next(walk1);
+			}
+			for (int i = 0; i < MAX_GROUP_ENTRIES; i++) {
+				assert(dwalk_index(walk1) == 100 + i);
+				assert(dwalk_block(walk1) == 100 + i);
+				assert(dwalk_count(walk1) == 1);
+				dwalk_next(walk1);
+			}
+			dleaf_destroy(btree, leaf1);
+			dleaf_destroy(btree, leaf2);
+		}
+	}
+	if (1) {
 		struct {
 			block_t index;
 			struct diskextent ex;
