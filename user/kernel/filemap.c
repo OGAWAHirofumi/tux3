@@ -51,7 +51,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	dleaf_dump(btree, leaf);
 
 	struct dwalk *walk = &(struct dwalk){ };
-	block_t index = start, seg_start;
+	block_t index = start, seg_start, block;
 	dwalk_probe(leaf, sb->blocksize, walk, start);
 	struct dwalk headwalk = *walk;
 	if (!dwalk_end(walk) && dwalk_index(walk) < start)
@@ -72,8 +72,8 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 			index = ex_index;
 			segvec[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
 		} else {
-			block_t block = dwalk_block(walk);
-			unsigned count = dwalk_count(walk);
+			block = dwalk_block(walk);
+			count = dwalk_count(walk);
 			trace("emit %Lx/%x", (L)block, count );
 			segvec[segs++] = (struct seg){ .block = block, .count = count };
 			index = ex_index + count;
@@ -101,8 +101,8 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 
 	for (int i = 0; i < segs; i++) {
 		if (segvec[i].state == SEG_HOLE) {
-			unsigned count = segvec[i].count;
-			block_t block = balloc(sb, count); // goal ???
+			count = segvec[i].count;
+			block = balloc(sb, count); // goal ???
 			trace("fill in %Lx/%i ", (L)block, count);
 			if (block == -1) {
 				/*
