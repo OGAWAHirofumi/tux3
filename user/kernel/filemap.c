@@ -40,8 +40,8 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 		goto out_unlock;
 
 	if ((err = probe(btree, start, cursor))) {
-		free_cursor(cursor);
-		return err;
+		segs = err;
+		goto out_unlock;
 	}
 	//assert(start >= this_key(cursor, btree->root.depth))
 	/* do not overlap next leaf */
@@ -183,7 +183,6 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 				segs = err;
 				goto out_unlock;
 			}
-;
 		}
 	}
 	mark_buffer_dirty(cursor_leafbuf(cursor));
