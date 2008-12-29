@@ -9,6 +9,7 @@ endif
 CFLAGS += -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
 CFLAGS += -Wall -Wextra -Werror
 CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
+CFLAGS += $(UCFLAGS)
 
 CHECKER = sparse
 CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
