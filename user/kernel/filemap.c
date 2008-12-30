@@ -10,15 +10,15 @@
 struct seg { block_t block; unsigned count; unsigned state; };
 
 /* userland only */
-void show_segs(struct seg segvec[], unsigned segs)
+void show_segs(struct seg map[], unsigned segs)
 {
 	printf("%i segs: ", segs);
 	for (int i = 0; i < segs; i++)
-		printf("%Lx/%i ", (L)segvec[i].block, segvec[i].count);
+		printf("%Lx/%i ", (L)map[i].block, map[i].count);
 	printf("\n");
 }
 
-static int get_segs(struct inode *inode, block_t start, unsigned count, struct seg segvec[], unsigned max_segs, int create)
+static int map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
 {
 	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* allows for depth increase */
 	if (!cursor)
@@ -70,21 +70,21 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 			ex_index = min(ex_index, limit);
 			unsigned gap = ex_index - index;
 			index = ex_index;
-			segvec[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
+			map[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
 		} else {
 			block = dwalk_block(walk);
 			count = dwalk_count(walk);
 			trace("emit %Lx/%x", (L)block, count );
-			segvec[segs++] = (struct seg){ .block = block, .count = count };
+			map[segs++] = (struct seg){ .block = block, .count = count };
 			index = ex_index + count;
 			dwalk_next(walk);
  		}
 	}
 	assert(segs);
 	unsigned below = start - seg_start, above = index - min(index, limit);
-	segvec[0].block += below;
-	segvec[0].count -= below;
-	segvec[segs - 1].count -= above;
+	map[0].block += below;
+	map[0].count -= below;
+	map[segs - 1].count -= above;
 
 	if (!create)
 		goto out_release;
@@ -100,8 +100,8 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 	}
 
 	for (int i = 0; i < segs; i++) {
-		if (segvec[i].state == SEG_HOLE) {
-			count = segvec[i].count;
+		if (map[i].state == SEG_HOLE) {
+			count = map[i].count;
 			block = balloc(sb, count); // goal ???
 			trace("fill in %Lx/%i ", (L)block, count);
 			if (block == -1) {
@@ -122,7 +122,7 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 				segs = -ENOSPC;
 				goto out_create;
 			}
-			segvec[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
+			map[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
 		}
 	}
 	/* Go back to region start and pack in new segs */
@@ -148,19 +148,19 @@ static int get_segs(struct inode *inode, block_t start, unsigned count, struct s
 		}
 		if (i < 0) {
 			trace("emit below");
-			dwalk_add(&headwalk, index - below, make_extent(segvec[0].block - below, below));
+			dwalk_add(&headwalk, index - below, make_extent(map[0].block - below, below));
 			continue;
 		}
 		if (i == segs) {
 			trace("emit above");
-			dwalk_add(&headwalk, index, make_extent(segvec[segs - 1].block + segvec[segs - 1].count, above));
+			dwalk_add(&headwalk, index, make_extent(map[segs - 1].block + map[segs - 1].count, above));
 			continue;
 		}
-		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)segvec[i].block, segvec[i].count);
+		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)map[i].block, map[i].count);
 		dleaf_dump(btree, leaf);
-		dwalk_add(&headwalk, index, make_extent(segvec[i].block, segvec[i].count));
+		dwalk_add(&headwalk, index, make_extent(map[i].block, map[i].count));
 		dleaf_dump(btree, leaf);
-		index += segvec[i].count;
+		index += map[i].count;
 	}
 	if (tail) {
 		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf))
@@ -216,9 +216,9 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 
 	struct seg seg;
-	int segs = get_segs(inode, iblock, max_blocks, &seg, 1, create);
+	int segs = map_region(inode, iblock, max_blocks, &seg, 1, create);
 	if (segs < 0) {
-		warn("get_segs failed: %d", -segs);
+		warn("map_region failed: %d", -segs);
 		return -EIO;
 	}
 	assert(segs == 1);
