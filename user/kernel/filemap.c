@@ -90,7 +90,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		goto out_release;
 
 	struct dleaf *tail = NULL;
-	tuxkey_t tailkey;
+	tuxkey_t tailkey = 0; // probably can just use limit instead
 
 	if (!dwalk_end(walk)) {
 		tail = malloc(sb->blocksize); // error???
