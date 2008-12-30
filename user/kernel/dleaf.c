@@ -297,7 +297,7 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 	struct group *group2 = gdict2 - 1;
 	struct group *gstop2 = gdict2 - dleaf_groups(from);
 	struct entry *edict2 = (struct entry *)gstop2;
-	unsigned merge_gcount = 0, rest_gcount = 0, rest_limit_adjust;
+	unsigned merge_gcount = 0, rest_gcount = 0;
 	int can_merge_group = 0;
 
 	assert(dleaf_groups(leaf) >= 1);
@@ -313,7 +313,6 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 		if (room < gcount2) {
 			/* Calc adjust for the rest of group/entries */
 			rest_gcount = gcount2 - room;
-			rest_limit_adjust = entry_limit(edict2 - room);
 			gcount2 = room;
 		} else
 			can_merge_group = 1;
@@ -353,9 +352,10 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 			/* adjust the group/entries which couldn't merge */
 			ebase = estop;
 			estop = ebase - rest_gcount;
+			limit_adjust = entry_limit(edict2 - merge_gcount);
 			set_group_count(gstop - 1, rest_gcount);
 			while (--ebase >= estop)
-				inc_entry_limit(ebase, -rest_limit_adjust);
+				inc_entry_limit(ebase, -limit_adjust);
 		}
 	}
 	assert(!dleaf_check(leaf, btree->sb->blocksize));
