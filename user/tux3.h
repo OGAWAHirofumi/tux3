@@ -124,7 +124,17 @@ static inline be_u64 to_be_u64(u64 val)
 
 #include "kernel/tux3.h"
 
-/* wrappers for buffer cache */
+static inline struct timespec gettime(void)
+{
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
+}
+
+struct tux_iattr {
+	unsigned mode, uid, gid;
+};
+
 static inline struct buffer_head *sb_getblk(struct sb *sb, block_t block)
 {
 	return blockget(sb->devmap, block);
