@@ -489,7 +489,7 @@ static inline struct timespec spectime(fixed32 time)
 
 static inline fixed32 tuxtime(struct timespec time)
 {
-	return ((u64)time.tv_sec << 32) + time.tv_nsec * (1ULL / 1000000000);
+	return ((u64)time.tv_sec << 32) + ((time.tv_nsec * ((1ULL << 63) / 1000000000)) >> 31);
 }
 
 static inline struct timespec gettime(void)
