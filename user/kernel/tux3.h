@@ -691,6 +691,10 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
 
+/* commit.c */
+int unpack_sb(struct sb *sb, struct disksuper *super, int silent);
+void pack_sb(struct sb *sb, struct disksuper *super);
+
 /* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockget(struct address_space *mapping, block_t iblock);

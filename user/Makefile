@@ -27,6 +27,7 @@ endif
 
 basedeps	= Makefile err.h buffer.h diskio.h list.h trace.h \
 	kernel/trace.h tux3.h kernel/tux3.h hexdump.c kernel/hexdump.c
+vfsdeps		= vfs.c buffer.c diskio.c
 ballocdeps	= balloc.c kernel/balloc.c
 btreedeps	= btree.c kernel/btree.c
 dirdeps		= dir.c kernel/dir.c
@@ -35,8 +36,8 @@ filemapdeps	= $(btreedeps) $(ballocdeps) $(dleafdeps) $(dirdeps) \
 	$(xattrdeps) $(ileafdeps) filemap.c kernel/filemap.c
 iattrdeps	= iattr.c kernel/iattr.c
 ileafdeps	= $(iattrdeps) ileaf.c kernel/ileaf.c
-inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c kernel/super.c
-vfsdeps		= vfs.c buffer.c diskio.c
+inodedeps	= $(filemapdeps) inode.c kernel/inode.c
+superdeps	= $(inodedeps) kernel/commit.c super.c kernel/super.c
 xattrdeps	= $(ballocdeps) $(dirdeps) $(ileafdeps) xattr.c kernel/xattr.c
 
 all: $(binaries)
@@ -50,8 +51,9 @@ filemap.o: $(basedeps) $(filemapdeps)
 iattr.o: $(basedeps) $(iattrdeps)
 ileaf.o: $(basedeps) $(ileafdeps)
 inode.o: $(basedeps) $(inodedeps)
-tux3.o:$(basedeps) $(inodedeps)
-tux3graph.o:$(basedeps) $(inodedeps)
+tux3.o:$(basedeps) $(superdeps)
+tux3fuse.o:$(basedeps) $(superdeps)
+tux3graph.o:$(basedeps) $(superdeps)
 vfs.o: $(basedeps) $(vfsdeps)
 xattr.o:$(basedeps) $(xattrdeps)
 
@@ -109,7 +111,7 @@ inodetest: inode
 tux3: vfs.o tux3.o
 	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
 
-tux3fuse: $(basedeps) $(inodedeps) vfs.o tux3fuse.o
+tux3fuse: vfs.o tux3fuse.o
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
