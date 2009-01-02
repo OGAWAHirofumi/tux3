@@ -2,29 +2,18 @@
  * Block allocation
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
- * Portions copyright (c) 2006-2008 Google Inc.
  * Licensed under the GPL version 3
  *
  * By contributing changes to this file you grant the original copyright holder
  * the right to distribute those changes under any license.
  */
 
-#include <stdio.h>
-#include <inttypes.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include "hexdump.c"
-
 #ifndef trace
 #define trace trace_off
 #endif
 
 #include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
+#include "hexdump.c"
 #include "kernel/balloc.c"
 
 #ifndef main
