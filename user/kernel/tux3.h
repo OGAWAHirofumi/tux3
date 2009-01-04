@@ -2,6 +2,7 @@
 #define TUX3_H
 
 #ifdef __KERNEL__
+#include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/time.h>

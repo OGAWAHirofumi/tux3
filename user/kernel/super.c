@@ -9,7 +9,11 @@
 
 static struct kmem_cache *tux_inode_cachep;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,27)
 static void tux3_inode_init_once(struct kmem_cache *cachep, void *mem)
+#else
+static void tux3_inode_init_once(void *mem)
+#endif
 {
 	inode_init_once(&((tuxnode_t *)mem)->vfs_inode);
 }
