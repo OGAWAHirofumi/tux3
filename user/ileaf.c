@@ -8,11 +8,6 @@
  * the right to distribute those changes under any license.
  */
 
-#include <stdio.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <string.h>
-#include <stdlib.h>
 #include "hexdump.c"
 
 #define iattr_included_from_ileaf
@@ -22,7 +17,6 @@
 #define trace trace_off
 #endif
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "kernel/ileaf.c"
 
 #ifndef main
