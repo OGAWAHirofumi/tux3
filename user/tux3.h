@@ -9,6 +9,8 @@
 #include <limits.h>
 #include <byteswap.h>
 #include <sys/time.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <time.h>
 #include <errno.h>
 #include "err.h"
