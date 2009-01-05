@@ -19,7 +19,7 @@ VG=valgrind --error-exitcode=200 --leak-check=full
 
 TESTDIR = .
 
-binaries = balloc dleaf ileaf iattr xattr btree dir filemap inode tux3 tux3fuse tux3graph
+binaries = balloc dleaf ileaf iattr xattr btree dir filemap inode commit tux3 tux3fuse tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
@@ -107,6 +107,11 @@ inode: vfs.o inode.o
 	$(CC) $(CFLAGS) vfs.o inode.o -o inode
 inodetest: inode
 	$(VG) ./inode foodev
+
+commit: vfs.o commit.o
+	$(CC) $(CFLAGS) vfs.o commit.o -o commit
+committest: commit
+	$(VG) ./commit
 
 tux3: vfs.o tux3.o
 	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3

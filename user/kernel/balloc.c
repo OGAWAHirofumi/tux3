@@ -47,7 +47,7 @@ static void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 		bitmap[roff] &= ~rmask;
 }
 
-static int all_set(u8 *bitmap, unsigned start, unsigned count)
+int all_set(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -64,6 +64,23 @@ static int all_set(u8 *bitmap, unsigned start, unsigned count)
 		(!rmask || (bitmap[roff] & rmask) == rmask);
 }
 
+int all_clear(u8 *bitmap, unsigned start, unsigned count) // untested
+{
+	unsigned limit = start + count;
+	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
+	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
+	unsigned loff = start >> 3, roff = limit >> 3;
+	if (loff == roff) {
+		unsigned mask = lmask & rmask;
+		return !(bitmap[loff] & mask);
+	}
+	for (unsigned i = loff + 1; i < roff; i++)
+		if (bitmap[i])
+			return 0;
+	return	(!bitmap[loff] & lmask) &&
+		(!rmask || !(bitmap[roff] & rmask));
+}
+
 static int bytebits(unsigned char c)
 {
 	unsigned count = 0;
@@ -72,7 +89,6 @@ static int bytebits(unsigned char c)
 	return count;
 }
 
-/* userland only */
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
 	assert(!(start & 7));
@@ -266,4 +282,20 @@ eeek:
 eek:
 	warn("extent 0x%Lx %s!\n", (L)start, why);
 	mutex_unlock(&sb->bitmap->i_mutex);
+}
+
+int update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
+{
+	unsigned shift = sb->blockbits + 3, mask = (1 << shift) - 1;
+	struct buffer_head *buffer = blockread(mapping(sb->bitmap), start >> shift);
+	if (!buffer)
+		return -ENOMEM;
+	if (!(set ? all_clear : all_set)(bufdata(buffer), start & mask, count)) {
+		brelse(buffer);
+		return -EINVAL;
+	}
+	(set ? set_bits : clear_bits)(bufdata(buffer), start & mask, count);
+	sb->freeblocks += set ? count : -count;
+	brelse_dirty(buffer);
+	return 0;
 }

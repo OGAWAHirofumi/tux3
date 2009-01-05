@@ -10,6 +10,7 @@
 #include <byteswap.h>
 #include <sys/time.h>
 #include <time.h>
+#include <errno.h>
 #include "err.h"
 #include "buffer.h"
 #include "trace.h"
