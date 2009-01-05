@@ -1,21 +1,20 @@
 #include "tux3.h"
+#include "diskio.h"
 
 #ifndef trace
 #define trace trace_on
 #endif
-
-#include "kernel/balloc.c"
-#include "kernel/dleaf.c"
 
 #define main notmain
 #include "dir.c"
 #undef main
 
 #include "kernel/xattr.c"
-#include "diskio.h"
+#include "kernel/dleaf.c"
+#include "kernel/ileaf.c"
+#include "kernel/balloc.c"
 #include "kernel/btree.c"
 #include "kernel/iattr.c"
-#include "kernel/ileaf.c"
 #include "kernel/filemap.c"
 
 /*
