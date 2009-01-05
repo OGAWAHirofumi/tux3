@@ -38,19 +38,10 @@
  * and moved here. AV
  */
 
-#include <stdio.h>
-#include <inttypes.h>
-#include <string.h>
-#include <stdlib.h>
-#include <errno.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
+#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "hexdump.c"
 
 #define mark_inode_dirty(x)
-typedef u16 le16;
 
 enum {DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
@@ -59,7 +50,6 @@ typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offse
 #define trace trace_off
 #endif
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "kernel/dir.c"
 
 void tux_dump_entries(struct buffer_head *buffer)
