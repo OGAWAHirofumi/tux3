@@ -77,7 +77,7 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count) // untested
 	for (unsigned i = loff + 1; i < roff; i++)
 		if (bitmap[i])
 			return 0;
-	return	(!bitmap[loff] & lmask) &&
+	return	!(bitmap[loff] & lmask) &&
 		(!rmask || !(bitmap[roff] & rmask));
 }
 
