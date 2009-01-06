@@ -20,6 +20,7 @@ void show_segs(struct seg map[], unsigned segs)
 
 static int map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
 {
+	struct sb *sb = tux_sb(inode->i_sb);
 	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* allows for depth increase */
 	if (!cursor)
 		return -ENOMEM;
@@ -33,7 +34,6 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 	block_t limit = start + count;
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 	struct btree *btree = cursor->btree;
-	struct sb *sb = btree->sb;
 	int err, segs = 0;
 
 	if (!btree->root.depth)

@@ -288,11 +288,13 @@ static void tux3_truncate(struct inode *inode)
 	/* FIXME: must fix expand size */
 	WARN_ON(inode->i_size);
 	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
+	begin_change(sb);
 	err = tree_chop(&tux_inode(inode)->btree, &del_info, 0);
 	inode->i_blocks = ((inode->i_size + sb->blockmask)
 			   & ~(loff_t)sb->blockmask) >> 9;
 	inode->i_mtime = inode->i_ctime = gettime();
 	mark_inode_dirty(inode);
+	end_change(sb);
 }
 
 void tux3_delete_inode(struct inode *inode)
@@ -300,9 +302,11 @@ void tux3_delete_inode(struct inode *inode)
 	struct sb *sb = tux_sb(inode->i_sb);
 	inum_t inum = tux_inode(inode)->inum;
 
+	begin_change(sb);
 	truncate_inode_pages(&inode->i_data, 0);
 	if (is_bad_inode(inode)) {
 		clear_inode(inode);
+		end_change(sb);
 		return;
 	}
 	inode->i_size = 0;
@@ -312,8 +316,8 @@ void tux3_delete_inode(struct inode *inode)
 
 	/* clear_inode() before freeing this ino. */
 	clear_inode(inode);
-
 	purge_inum(&sb->itable, inum);
+	end_change(sb);
 }
 
 void tux3_clear_inode(struct inode *inode)
