@@ -501,6 +501,7 @@ static inline fixed32 tuxtime(struct timespec time)
 void hexdump(void *data, unsigned size);
 block_t balloc(struct sb *sb, unsigned blocks);
 void bfree(struct sb *sb, block_t start, unsigned blocks);
+int update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
 
 enum atkind {
 	MIN_ATTR = 6,

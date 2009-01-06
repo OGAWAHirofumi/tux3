@@ -14,58 +14,7 @@
 
 #define include_inode_c
 #include "inode.c"
-
-struct logblock { be_u16 magic, bytes; be_u64 prevlog; unsigned char data[]; };
-
-enum { LOG_ALLOC, LOG_FREE, LOG_UPDATE };
-
-struct commit_entry { be_u64 previous; };
-
-void log_next(struct sb *sb)
-{
-	sb->logbuf = blockget(mapping(sb->logmap), sb->lognext++);
-	sb->logpos = sb->logbuf->data + sizeof(struct logblock);
-	sb->logtop = sb->logbuf->data + sb->blocksize;
-}
-
-void log_end(struct sb *sb)
-{
-	struct logblock *log = sb->logbuf->data;
-	assert(sb->logtop >= sb->logpos);
-	log->bytes = to_be_u16(sb->logpos - log->data);
-	memset(sb->logpos, 0, sb->logtop - sb->logpos);
-	brelse(sb->logbuf);
-	sb->logbuf = NULL;
-}
-
-void *log_need(struct sb *sb, unsigned bytes)
-{
-	if (sb->logpos + bytes > sb->logtop) {
-		if (sb->logbuf)
-			log_end(sb);
-		log_next(sb);
-		*(struct logblock *)sb->logbuf->data = (struct logblock){
-			.magic = to_be_u16(0xc0de) };
-	}
-	return sb->logpos;
-}
-
-void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc)
-{
-	unsigned char *data = log_need(sb, 8);
-	*data++ = alloc ? LOG_ALLOC : LOG_FREE;
-	*data++ = count;
-	sb->logpos = encode48(data, block);
-}
-
-void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
-{
-	unsigned char *data = log_need(sb, 19);
-	*data++ = LOG_UPDATE;
-	data = encode48(data, child);
-	data = encode48(data, parent);
-	sb->logpos = encode48(data, key);
-}
+//#include "kernel/commit.c"
 
 void replay(struct sb *sb)
 {
@@ -80,7 +29,7 @@ void replay(struct sb *sb)
 	unsigned logblocks = sb->lognext, code;
 	for (sb->lognext = 0; sb->lognext < logblocks;) {
 		log_next(sb);
-		struct logblock *log = sb->logbuf->data;
+		struct logblock *log = bufdata(sb->logbuf);
 		unsigned char *data = sb->logpos;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {

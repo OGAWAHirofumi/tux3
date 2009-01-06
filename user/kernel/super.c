@@ -206,12 +206,18 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error_rootdir;
 
 	err = -ENOMEM;
+	sbi->logmap = new_inode(sb);
+	if (!sbi->logmap)
+		goto error_logmap;
+
 	sb->s_root = d_alloc_root(sbi->rootdir);
 	if (!sb->s_root)
 		goto error_atable;
 
 	return 0;
 
+error_logmap:
+	iput(sbi->logmap);
 error_atable:
 	iput(sbi->atable);
 error_rootdir:
