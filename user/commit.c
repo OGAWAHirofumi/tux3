@@ -18,7 +18,7 @@
 
 struct logblock { be_u16 magic, bytes; be_u64 prevlog; unsigned char data[]; };
 
-enum { LOG_ALLOC, LOG_FREE };
+enum { LOG_ALLOC, LOG_FREE, LOG_UPDATE };
 
 struct commit_entry { be_u64 previous; };
 
@@ -59,6 +59,15 @@ void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc)
 	sb->logpos = encode48(data, block);
 }
 
+void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
+{
+	unsigned char *data = log_need(sb, 19);
+	*data++ = LOG_UPDATE;
+	data = encode48(data, child);
+	data = encode48(data, parent);
+	sb->logpos = encode48(data, key);
+}
+
 void replay(struct sb *sb)
 {
 	//char *why = "something broke";
@@ -69,7 +78,6 @@ void replay(struct sb *sb)
 	// walk through block:
 	//   if promise bread parent, apply
 	//   if alloc update bitmap
-	u64 v64;
 	unsigned logblocks = sb->lognext, code;
 	for (sb->lognext = 0; sb->lognext < logblocks;) {
 		log_next(sb);
@@ -78,16 +86,26 @@ void replay(struct sb *sb)
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
 			case LOG_ALLOC:
-			case LOG_FREE: {
+			case LOG_FREE:
+			{
+				u64 block;
 				unsigned count = *data++;
-				data = decode48(data, &v64);
-				trace("%s 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", v64, count);
-				update_bitmap(sb, v64, count, code == LOG_ALLOC);
+				data = decode48(data, &block);
+				trace("%s 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", block, count);
+				update_bitmap(sb, block, count, code == LOG_ALLOC);
+				break;
+			}
+			case LOG_UPDATE:
+			{
+				u64 child, parent, key;
+				data = decode48(data, &child);
+				data = decode48(data, &parent);
+				data = decode48(data, &key);
+				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", child, parent, key);
 				break;
 			}
 			default:
-				;
-				//goto eek;
+				break; //goto eek;
 			}
 		}
 	}
@@ -108,6 +126,8 @@ int main(int argc, char *argv[])
 
 	log_alloc(sb, 9, 6, 1);
 	log_alloc(sb, 0x99, 3, 0);
+	log_update(sb, 0xbabe, 0xd00d, 0x666);
+	//hexdump(sb->logbuf->data, 0x40);
 	log_end(sb);
 	replay(sb);
 	return 0;
