@@ -377,11 +377,11 @@ int set_xattr(struct inode *inode, const char *name, unsigned len, const void *d
 {
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
 	mutex_lock(&atable->i_mutex);
-	begin_change(tux_sb(inode->i_sb));
+	change_begin(tux_sb(inode->i_sb));
 	atom_t atom = make_atom(atable, name, len);
 	int err = (atom == -1) ? -EINVAL :
 		xcache_update(inode, atom, data, size, flags);
-	end_change(tux_sb(inode->i_sb));
+	change_end(tux_sb(inode->i_sb));
 	mutex_unlock(&atable->i_mutex);
 	return err;
 }
@@ -391,7 +391,7 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 	int err = 0;
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
 	mutex_lock(&atable->i_mutex);
-	begin_change(tux_sb(inode->i_sb));
+	change_begin(tux_sb(inode->i_sb));
 	atom_t atom = find_atom(atable, name, len);
 	if (atom == -1) {
 		err = -ENOATTR;
@@ -407,7 +407,7 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 	if (used)
 		use_atom(atable, atom, -used);
 out:
-	end_change(tux_sb(inode->i_sb));
+	change_end(tux_sb(inode->i_sb));
 	mutex_unlock(&atable->i_mutex);
 	return err;
 }

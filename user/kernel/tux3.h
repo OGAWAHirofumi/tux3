@@ -729,6 +729,6 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 }
 #endif /* !__KERNEL__ */
 
-static inline void begin_change(struct sb *sb) { };
-static inline void end_change(struct sb *sb) { };
+static inline void change_begin(struct sb *sb) { };
+static inline void change_end(struct sb *sb) { };
 #endif
