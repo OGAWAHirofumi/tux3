@@ -225,14 +225,14 @@ struct sb {
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 	loff_t dictsize;	/* Atom dictionary size */
-	unsigned lognext;
-	struct buffer_head *logbuf;
-	unsigned char *logpos, *logtop;
+	struct inode *logmap;	/* Prototype log block cache */
+	unsigned lognext;	/* Index of next log block in log map */
+	struct buffer_head *logbuf; /* Cached log block */
+	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
 	map_t *devmap; /* Userspace device block cache */
-	map_t *logmap; /* Prototype log block cache */
 #endif
 };
 

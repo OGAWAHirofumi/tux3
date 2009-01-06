@@ -12,9 +12,8 @@
 #define trace trace_on
 #endif
 
-#include "tux3.h"
-#include "kernel/hexdump.c"
-#include "kernel/balloc.c"
+#define include_inode_c
+#include "inode.c"
 
 struct logblock { be_u16 magic, bytes; be_u64 prevlog; unsigned char data[]; };
 
@@ -24,7 +23,7 @@ struct commit_entry { be_u64 previous; };
 
 void log_next(struct sb *sb)
 {
-	sb->logbuf = blockget(sb->logmap, sb->lognext++);
+	sb->logbuf = blockget(mapping(sb->logmap), sb->lognext++);
 	sb->logpos = sb->logbuf->data + sizeof(struct logblock);
 	sb->logtop = sb->logbuf->data + sb->blocksize;
 }
@@ -114,9 +113,10 @@ void replay(struct sb *sb)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	struct sb *sb = &(struct sb){ .logmap = new_map(dev, NULL), .blockbits = dev->bits, .blocksize = 1 << dev->bits };
+	struct sb *sb = &(struct sb){ .devmap = new_map(dev, NULL), .blockbits = dev->bits, .blocksize = 1 << dev->bits };
 	sb->bitmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, NULL) },
 	sb->bitmap->map->inode = sb->bitmap;
+	sb->logmap = new_inode(sb);
 	init_buffers(dev, 1 << 20);
 	for (int block = 0; block < 10; block++) {
 		struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);
