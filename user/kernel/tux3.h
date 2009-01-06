@@ -8,6 +8,7 @@
 #include <linux/time.h>
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
+#include <linux/mutex.h>
 
 typedef loff_t block_t;
 
@@ -229,6 +230,7 @@ struct sb {
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
+	struct mutex loglock; /* serialize log entries (spinlock me) */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else

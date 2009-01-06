@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 	log_alloc(sb, 0x99, 3, 0);
 	log_update(sb, 0xbabe, 0xd00d, 0x666);
 	//hexdump(sb->logbuf->data, 0x40);
-	log_end(sb);
+	log_finish(sb);
 	replay(sb);
 	return 0;
 }

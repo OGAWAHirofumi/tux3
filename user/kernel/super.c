@@ -149,14 +149,14 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sbi = kzalloc(sizeof(struct sb), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
+	sbi->vfs_sb = sb;
 	sb->s_fs_info = sbi;
-
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 	sb->s_magic = 0x54555833;
 	sb->s_op = &tux3_super_ops;
 	sb->s_time_gran = 1;
 
-	sbi->vfs_sb = sb;
+	mutex_init(&sbi->loglock);
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);
