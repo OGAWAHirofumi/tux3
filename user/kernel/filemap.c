@@ -209,9 +209,8 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
 	struct btree *btree = &tux_inode(inode)->btree;
-	int depth = btree->root.depth;
-	if (!depth) {
-		warn("Uninitialized inode %lx", inode->i_ino);
+	if (!btree->root.depth) {
+		assert(create && sb->logmap == inode);
 		return 0;
 	}
 

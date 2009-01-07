@@ -143,6 +143,7 @@ static const struct super_operations tux3_super_ops = {
 
 static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 {
+	static struct tux_iattr iattr;
 	struct sb *sbi;
 	int err, blocksize;
 
@@ -206,7 +207,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error_rootdir;
 
 	err = -ENOMEM;
-	sbi->logmap = new_inode(sb);
+	sbi->logmap = tux_new_inode(sbi->rootdir, &iattr, 0);
 	if (!sbi->logmap)
 		goto error_logmap;
 
