@@ -39,7 +39,7 @@ void replay(struct sb *sb)
 				u64 block;
 				unsigned count = *data++;
 				data = decode48(data, &block);
-				trace("%s 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", block, count);
+				trace("%s 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", (L)block, count);
 				update_bitmap(sb, block, count, code == LOG_ALLOC);
 				break;
 			}
@@ -49,7 +49,7 @@ void replay(struct sb *sb)
 				data = decode48(data, &child);
 				data = decode48(data, &parent);
 				data = decode48(data, &key);
-				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", child, parent, key);
+				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", (L)child, (L)parent, (L)key);
 				break;
 			}
 			default:
