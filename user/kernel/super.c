@@ -209,11 +209,11 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	err = -ENOMEM;
 	sbi->logmap = tux_new_inode(sbi->rootdir, &iattr, 0);
 	if (!sbi->logmap)
-		goto error_logmap;
+		goto error_atable;
 
 	sb->s_root = d_alloc_root(sbi->rootdir);
 	if (!sb->s_root)
-		goto error_atable;
+		goto error_logmap;
 
 	return 0;
 
