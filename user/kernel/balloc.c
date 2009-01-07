@@ -47,7 +47,7 @@ static void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 		bitmap[roff] &= ~rmask;
 }
 
-int all_set(u8 *bitmap, unsigned start, unsigned count)
+static int all_set(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -64,7 +64,7 @@ int all_set(u8 *bitmap, unsigned start, unsigned count)
 		(!rmask || (bitmap[roff] & rmask) == rmask);
 }
 
-int all_clear(u8 *bitmap, unsigned start, unsigned count) // untested
+static int all_clear(u8 *bitmap, unsigned start, unsigned count) // untested
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
