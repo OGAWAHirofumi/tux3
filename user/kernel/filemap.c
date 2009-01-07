@@ -328,8 +328,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	if (err)
 		return NULL;
 
-	if (!page_has_buffers(page))
-		create_empty_buffers(page, tux_sb(inode->i_sb)->blocksize, 0);
+	assert(page_has_buffers(page));
 
 	bh = page_buffers(page);
 	while (offset--)
