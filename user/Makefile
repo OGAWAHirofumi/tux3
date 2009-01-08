@@ -64,6 +64,11 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
 endif
 
+buffer: buffer.c
+	$(CC) $(CFLAGS) buffer.c diskio.c -o buffer
+buffertest: buffer
+	$(VG) ./buffer
+
 balloc: vfs.o balloc.o
 	$(CC) $(CFLAGS) vfs.o balloc.o -o balloc
 balloctest: balloc

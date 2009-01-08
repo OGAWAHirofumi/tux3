@@ -4,6 +4,7 @@
 #include "diskio.h"
 #include "buffer.h"
 #include "trace.h"
+#include "err.h"
 
 #define BUFFER_PARANOIA_DEBUG
 #define buftrace trace_off
@@ -241,9 +242,8 @@ static struct buffer_head *remove_buffer_free(void)
 #define SECTOR_BITS 9
 #define SECTOR_SIZE (1 << SECTOR_BITS)
 
-struct buffer_head *new_buffer(map_t *map, block_t block)
+struct buffer_head *new_buffer(map_t *map)
 {
-	buftrace("Allocate buffer, block = %Lx", block);
 	struct buffer_head *buffer = NULL;
 	int min_buffers = 100, err;
 
@@ -278,25 +278,22 @@ alloc_buffer:
 	buftrace("expand buffer pool");
 	if (buffer_count == max_buffers) {
 		warn("Maximum buffer count exceeded (%i)", buffer_count);
-		return NULL;
+		return ERR_PTR(-ERANGE);
 	}
 	buffer = (struct buffer_head *)malloc(sizeof(struct buffer_head));
 	if (!buffer)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	*buffer = (struct buffer_head){ .state = BUFFER_STATE_EMPTY };
-	if ((err = posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
+	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
-		return NULL;
+		return ERR_PTR(err);
 	}
-
 have_buffer:
 	assert(!buffer->count);
 	assert(buffer_empty(buffer));
 	buffer->map = map;
-	buffer->index = block;
 	buffer->count++;
-	add_buffer_lru(buffer);
 	return buffer;
 }
 
@@ -336,10 +333,13 @@ struct buffer_head *blockget(map_t *map, block_t block)
 			buffer->count++;
 			return buffer;
 		}
-	if ((buffer = new_buffer(map, block))) {
-		buffer->hashlink = *bucket;
-		*bucket = buffer;
-	}
+	buftrace("Allocate buffer, block = %Lx", block);
+	if (IS_ERR(buffer = new_buffer(map)))
+		return NULL; // ERR_PTR me!!!
+	buffer->index = block;
+	add_buffer_lru(buffer);
+	buffer->hashlink = *bucket;
+	*bucket = buffer;
 	return buffer;
 }
 
@@ -497,7 +497,8 @@ void free_map(map_t *map)
 	free(map);
 }
 
-int buffer_main(int argc, char *argv[])
+#ifndef include_buffer
+int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
 	map_t *map = new_map(dev, NULL);
@@ -511,3 +512,4 @@ int buffer_main(int argc, char *argv[])
 	printf("get %p\n", blockget(map, 1));
 	exit(0);
 }
+#endif
