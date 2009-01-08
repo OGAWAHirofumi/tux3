@@ -254,7 +254,6 @@ int main(int argc, const char *argv[])
 			goto eek;
 		}
 		inum_t inum = from_be_u64(entry->inum);
-		brelse(buffer);
 		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum, };
 		if ((errno = -open_inode(inode)))
 			goto eek;
@@ -263,6 +262,8 @@ int main(int argc, const char *argv[])
 		if ((errno = -tux_delete_entry(buffer, entry)))
 			goto eek;
 		tux_dump_entries(blockread(sb->rootdir->map, 0));
+		if ((errno = -sync_super(sb)))
+			goto eek;
 	}
 
 	if (!strcmp(command, "truncate")) {
