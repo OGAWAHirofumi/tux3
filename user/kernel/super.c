@@ -103,6 +103,7 @@ static void tux3_put_super(struct super_block *sb)
 
 	iput(sbi->atable);
 	iput(sbi->bitmap);
+	iput(sbi->logmap);
 
 	sb->s_fs_info = NULL;
 	kfree(sbi);
