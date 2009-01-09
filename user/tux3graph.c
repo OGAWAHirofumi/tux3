@@ -748,7 +748,8 @@ int main(int argc, const char *argv[])
 		.blocksize		= 1 << dev->bits,
 		.blockmask		= (1 << dev->bits) - 1,
 	};
-	sb->volmap = new_inode(sb);
+
+	sb->volmap = new_inode_ops(sb, NULL);
 
 	if ((errno = -load_sb(sb)))
 		goto eek;

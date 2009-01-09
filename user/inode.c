@@ -18,9 +18,9 @@
 #include "filemap.c"
 #undef main
 
-struct inode *new_inode(struct sb *sb)
+struct inode *new_inode_ops(struct sb *sb, struct map_ops *ops)
 {
-	map_t *map = new_map(sb->dev, &filemap_ops);
+	map_t *map = new_map(sb->dev, ops);
 	if (!map)
 		goto eek;
 	struct inode *inode = malloc(sizeof(*inode));
@@ -32,6 +32,11 @@ eek:
 	if (map)
 		free_map(map);
 	return NULL;
+}
+
+struct inode *new_inode(struct sb *sb)
+{
+	return new_inode_ops(sb, &filemap_ops);
 }
 
 void free_inode(struct inode *inode)

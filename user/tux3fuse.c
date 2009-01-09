@@ -380,7 +380,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 	};
-	sb->volmap = new_inode(sb);
+	sb->volmap = new_inode_ops(sb, NULL);
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
