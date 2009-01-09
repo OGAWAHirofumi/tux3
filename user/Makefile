@@ -19,7 +19,7 @@ VG=valgrind --error-exitcode=200 --leak-check=full
 
 TESTDIR = .
 
-binaries = balloc dleaf ileaf iattr xattr btree dir filemap inode commit tux3 tux3fuse tux3graph
+binaries = buffer balloc dleaf ileaf iattr xattr btree dir filemap inode commit tux3 tux3fuse tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
@@ -41,7 +41,7 @@ superdeps	= $(inodedeps) kernel/commit.c super.c kernel/super.c
 xattrdeps	= $(ballocdeps) $(dirdeps) $(ileafdeps) xattr.c kernel/xattr.c
 
 all: $(binaries)
-tests: balloctest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
+tests: buffertest balloctest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
 
 balloc.o: $(basedeps) $(ballocdeps)
 btree.o: $(basedeps) $(btreedeps)
