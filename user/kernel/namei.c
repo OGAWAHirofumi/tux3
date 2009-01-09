@@ -70,7 +70,8 @@ static int tux3_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t 
 				inode_inc_link_count(dir);
 			goto out;
 		}
-		inode_dec_link_count(inode);
+		clear_nlink(inode);
+		mark_inode_dirty(inode);
 		iput(inode);
 	}
 out:
