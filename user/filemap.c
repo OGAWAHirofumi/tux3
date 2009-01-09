@@ -144,23 +144,17 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	struct dev *dev = &(struct dev){ fd, .bits = 8 };
+	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
 	struct sb *sb = &(struct sb){
-		.dev = dev,
+		RAPID_INIT_SB(dev),
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.blockbits = dev->bits,
-		.blocksize = 1 << dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
-	sb->volmap = &(struct inode){ .i_sb = sb, };
-	sb->volmap->map = new_map(sb->volmap, NULL);
-	sb->bitmap = &(struct inode){ .i_sb = sb, };
-	sb->bitmap->map = new_map(sb->bitmap, &filemap_ops);
+	sb->volmap = rapid_new_inode(sb, NULL, 0);
+	sb->bitmap = rapid_new_inode(sb, &filemap_ops, 0);
 	init_buffers(dev, 1 << 20);
-	struct inode *inode = &(struct inode){ .i_sb = sb, };
-	inode->map = new_map(inode, &filemap_ops);
+	struct inode *inode = rapid_new_inode(sb, &filemap_ops, 0);
 	assert(!new_btree(&inode->btree, sb, &dtree_ops));
 
 	block_t nextalloc = sb->nextalloc;

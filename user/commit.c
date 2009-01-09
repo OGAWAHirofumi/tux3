@@ -62,17 +62,10 @@ void replay(struct sb *sb)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	struct sb *sb = &(struct sb){
-		.dev = dev,
-		.blocksize = 1 << dev->bits,
-		.blockbits = dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
-	};
-	sb->volmap = &(struct inode){ .i_sb = sb, };
-	sb->volmap->map = new_map(sb->volmap, NULL);
-	sb->bitmap = &(struct inode){ .i_sb = sb, };
-	sb->bitmap->map = new_map(sb->bitmap, NULL);
-	sb->logmap = new_inode(sb);
+	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), };
+	sb->volmap = rapid_new_inode(sb, NULL, 0);
+	sb->bitmap = rapid_new_inode(sb, NULL, 0);
+	sb->logmap = rapid_new_inode(sb, &filemap_ops, 0);
 	init_buffers(dev, 1 << 20);
 	for (int block = 0; block < 10; block++) {
 		struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);

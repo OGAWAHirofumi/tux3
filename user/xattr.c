@@ -42,11 +42,8 @@ int main(int argc, char *argv[])
 	ftruncate(dev->fd, 1 << 24);
 	init_buffers(dev, 1 << 20);
 	struct sb *sb = &(struct sb){
-		.dev = dev,
+		RAPID_INIT_SB(dev),
 		.version = 0,
-		.blockbits = dev->bits, 
-		.blocksize = 1 << dev->bits, 
-		.blockmask = (1 << dev->bits) - 1, 
 		.atomref_base = 1 << 10,
 		.unatom_base = 1 << 11,
 		.atomgen = 1,

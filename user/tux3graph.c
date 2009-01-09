@@ -748,7 +748,7 @@ int main(int argc, const char *argv[])
 		.blockmask		= (1 << dev->bits) - 1,
 	};
 
-	sb->volmap = new_inode_ops(sb, NULL);
+	sb->volmap = rapid_new_inode(sb, NULL, 0);
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
@@ -794,7 +794,6 @@ int main(int argc, const char *argv[])
 	free_inode(sb->bitmap);
 	free_inode(sb->rootdir);
 	free_inode(sb->atable);
-	free_inode(sb->volmap);
 
 out:
 #if 0 /* older version of popt doesn't return malloc memory */

@@ -178,14 +178,8 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
-	struct sb *sb = &(struct sb){
-		.dev = dev,
-		.blocksize = 1 << dev->bits,
-		.blockbits = dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
-	};
-	sb->volmap = &(struct inode){ .i_sb = sb, };
-	sb->volmap->map = new_map(sb->volmap, NULL);
+	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), };
+	sb->volmap = rapid_new_inode(sb, NULL, 0);
 	init_buffers(dev, 1 << 20);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);

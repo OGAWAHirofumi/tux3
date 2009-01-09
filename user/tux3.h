@@ -158,4 +158,21 @@ static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 {
 	return blockread(sb->volmap->map, block);
 }
+
+#define rapid_new_inode(sb, ops, mode)	({			\
+	struct inode *__inode = &(struct inode){		\
+		.i_sb = sb,					\
+		.i_mode = mode,					\
+	};							\
+	__inode->map = new_map(__inode, ops);			\
+	assert(__inode->map);					\
+	__inode;						\
+})
+
+#define RAPID_INIT_SB(dev)			\
+	.dev = dev,				\
+	.blockbits = (dev)->bits,		\
+	.blocksize = 1 << (dev)->bits,		\
+	.blockmask = ((1 << (dev)->bits) - 1)
+
 #endif

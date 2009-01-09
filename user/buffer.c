@@ -479,14 +479,8 @@ void free_map(map_t *map)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	struct sb *sb = &(struct sb){
-		.dev = dev,
-		.blocksize = 1 << dev->bits,
-		.blockbits = dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
-	};
-	struct inode *volmap = &(struct inode){ .i_sb = sb, };
-	volmap->map = new_map(volmap, NULL);
+	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), };
+	struct inode *volmap = rapid_new_inode(sb, NULL, 0);
 
 	init_buffers(dev, 1 << 20);
 	show_dirty_buffers(volmap->map);

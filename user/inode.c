@@ -18,13 +18,13 @@
 #include "filemap.c"
 #undef main
 
-struct inode *new_inode_ops(struct sb *sb, struct map_ops *ops)
+struct inode *new_inode(struct sb *sb)
 {
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto error;
 	*inode = (struct inode){ .i_sb = sb, .i_version = 1, .i_nlink = 1, };
-	inode->map = new_map(inode, ops);
+	inode->map = new_map(inode, &filemap_ops);
 	if (!inode->map)
 		goto error_map;
 	return inode;
@@ -33,11 +33,6 @@ error_map:
 	free(inode);
 error:
 	return NULL;
-}
-
-struct inode *new_inode(struct sb *sb)
-{
-	return new_inode_ops(sb, &filemap_ops);
 }
 
 void free_inode(struct inode *inode)
@@ -197,19 +192,15 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
-	struct dev *dev = &(struct dev){ fd, .bits = 12 };
+	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 20);
 	struct sb *sb = &(struct sb){
-		.dev = dev,
+		RAPID_INIT_SB(dev),
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.blockbits = dev->bits,
-		.blocksize = 1 << dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
-	sb->volmap = &(struct inode){ .i_sb = sb, };
-	sb->volmap->map = new_map(sb->volmap, NULL);
+	sb->volmap = rapid_new_inode(sb, NULL, 0);
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))
