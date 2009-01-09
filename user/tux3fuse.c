@@ -380,8 +380,9 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 	};
-	sb->volmap = rapid_new_inode(sb, NULL, 0);
-
+	sb->volmap = tux_new_volmap(sb);
+	if (!sb->volmap)
+		goto eek;
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))

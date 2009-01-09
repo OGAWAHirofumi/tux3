@@ -78,7 +78,9 @@ int main(int argc, const char *argv[])
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
 	};
-	sb->volmap = rapid_new_inode(sb, NULL, 0);
+	sb->volmap = tux_new_volmap(sb);
+	if (!sb->volmap)
+		goto eek;
 	init_btree(&sb->itable, sb, (struct root){}, &itable_ops);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {

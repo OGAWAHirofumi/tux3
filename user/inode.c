@@ -24,7 +24,7 @@ struct inode *new_inode(struct sb *sb)
 	if (!inode)
 		goto error;
 	*inode = (struct inode){ .i_sb = sb, .i_version = 1, .i_nlink = 1, };
-	inode->map = new_map(inode, &filemap_ops);
+	inode->map = new_map(inode, NULL);
 	if (!inode->map)
 		goto error_map;
 	return inode;
@@ -46,6 +46,13 @@ void free_inode(struct inode *inode)
 
 #include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "kernel/inode.c"
+
+static void tux_setup_inode(struct inode *inode, dev_t rdev)
+{
+	inode->i_rdev = rdev;
+	if (inode->i_mode != S_IFVOL)
+		inode->map->ops = &filemap_ops;
+}
 
 struct inode *iget(struct sb *sb, inum_t inum)
 {

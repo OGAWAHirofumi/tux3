@@ -64,14 +64,7 @@ static inline void tux_set_inum(struct inode *inode, inum_t inum)
 	tux_inode(inode)->inum = inum;
 }
 
-#ifdef __KERNEL__
 static void tux_setup_inode(struct inode *inode, dev_t rdev);
-#else
-static void tux_setup_inode(struct inode *inode, dev_t rdev)
-{
-	inode->i_rdev = rdev;
-}
-#endif
 
 struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 			    dev_t rdev)
