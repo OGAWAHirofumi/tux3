@@ -14,9 +14,6 @@
 #define trace trace_on
 #endif
 
-/* FIXME: hack */
-#define S_IFVOL		0160000
-
 static int check_present(struct inode *inode)
 {
 	tuxnode_t *tuxnode = tux_inode(inode);
@@ -45,12 +42,13 @@ static int check_present(struct inode *inode)
 		assert(tuxnode->present & DATA_BTREE_BIT);
 		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
 		break;
-	case S_IFVOL:
-		assert(tuxnode->present == 0);
-		break;
 	case 0:
-		assert(tuxnode->present & DATA_BTREE_BIT);
-		/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
+			assert(tuxnode->present == 0);
+		else {
+			assert(tuxnode->present & DATA_BTREE_BIT);
+			/* FIXME: assert(!(tuxnode->present & RDEV_BIT)) */
+		}
 		break;
 	}
 	return 0;
@@ -96,12 +94,8 @@ struct inode *tux_new_volmap(struct sb *sb)
 	if (!inode)
 		return NULL;
 
-	inode->i_mode = 0;
-	inode->i_uid = 0;
-	inode->i_gid = 0;
-	inode->i_mode = S_IFVOL;
 	inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
-	tux_set_inum(inode, TUX_INVALID_INO);
+	tux_set_inum(inode, TUX_VOLMAP_INO);
 	tux_setup_inode(inode, 0);
 	return inode;
 }
@@ -344,8 +338,9 @@ void tux3_clear_inode(struct inode *inode)
 int tux3_write_inode(struct inode *inode, int do_sync)
 {
 	BUG_ON(tux_inode(inode)->inum == TUX_BITMAP_INO ||
-	       tux_inode(inode)->inum == TUX_INVALID_INO ||
+	       tux_inode(inode)->inum == TUX_VOLMAP_INO ||
 	       tux_inode(inode)->inum == TUX_VTABLE_INO ||
+	       tux_inode(inode)->inum == TUX_INVALID_INO ||
 	       tux_inode(inode)->inum == TUX_ATABLE_INO);
 	return save_inode(inode);
 }
@@ -456,16 +451,15 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 		inode->i_op = &tux_symlink_iops;
 		inode->i_mapping->a_ops = &tux_aops;
 		break;
-	case S_IFVOL:
-		inode->i_mapping->a_ops = &tux_vol_aops;
-//		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
-		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
-		break;
 	case 0:
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
-		/* set fake i_size to escape the check of read/writepage */
-		inode->i_size = MAX_LFS_FILESIZE;
-		inode->i_mapping->a_ops = &tux_blk_aops;
+		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
+			inode->i_mapping->a_ops = &tux_vol_aops;
+		else {
+			/* set fake i_size to escape the check of block_* */
+			inode->i_size = MAX_LFS_FILESIZE;
+			inode->i_mapping->a_ops = &tux_blk_aops;
+		}
 //		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;

@@ -50,7 +50,7 @@ void free_inode(struct inode *inode)
 static void tux_setup_inode(struct inode *inode, dev_t rdev)
 {
 	inode->i_rdev = rdev;
-	if (inode->i_mode != S_IFVOL)
+	if (inode->inum != TUX_VOLMAP_INO)
 		inode->map->ops = &filemap_ops;
 }
 

@@ -145,8 +145,9 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
-#define TUX_INVALID_INO		1
+#define TUX_VOLMAP_INO		1	/* FIXME: reserve this */
 #define TUX_VTABLE_INO		2
+#define TUX_INVALID_INO		3	/* FIXME: reserve this */
 #define TUX_ATABLE_INO		10
 #define TUX_ROOTDIR_INO		13
 
