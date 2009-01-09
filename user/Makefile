@@ -64,7 +64,7 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
 endif
 
-buffer: buffer.c
+buffer: buffer.c buffer.h diskio.c diskio.h Makefile
 	$(CC) $(CFLAGS) buffer.c diskio.c -o buffer
 buffertest: buffer
 	$(VG) ./buffer

@@ -44,7 +44,7 @@ void show_buffer(struct buffer_head *buffer)
 	printf("%Lx/%i%s ", (L)buffer->index, buffer->count,
 		buffer_dirty(buffer) ? "*" :
 		buffer_uptodate(buffer) ? "" :
-		buffer->state == BUFFER_STATE_EMPTY ? "-" :
+		buffer->state == BUFFER_EMPTY ? "-" :
 		"???");
 }
 
@@ -109,33 +109,14 @@ void dump_buffer(struct buffer_head *buffer, unsigned offset, unsigned length)
 }
 #endif
 
-void add_buffer_journaled(struct buffer_head *buffer)
-{
-	if (buffer_dirty(buffer)) {
-		list_del(&buffer->dirtylink);
-		buffer->map->dirty_count--;
-	}
-	buffer->state = BUFFER_STATE_JOURNALED;
-	list_add_tail(&buffer->dirtylink, &journaled_buffers);
-	journaled_count ++;
-}
-
-static void remove_buffer_journaled(struct buffer_head *buffer)
-{
-	list_del(&buffer->dirtylink);
-	journaled_count --;
-}
-
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
 {
 	buftrace("set_buffer_dirty %Lx state = %u", buffer->index, buffer->state);
 	if (!buffer_dirty(buffer)) {
-		if (buffer_journaled(buffer))
-			remove_buffer_journaled(buffer);
 		assert(!buffer->dirtylink.next);
 		assert(!buffer->dirtylink.prev);
 		list_add_tail(&buffer->dirtylink, &buffer->map->dirty);
-		buffer->state = BUFFER_STATE_DIRTY;
+		buffer->state = BUFFER_DIRTY;
 		buffer->map->dirty_count++;
 	}
 	return buffer;
@@ -147,16 +128,14 @@ struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer)
 		list_del(&buffer->dirtylink);
 		buffer->map->dirty_count--;
 	}
-	if (buffer_journaled(buffer))
-		remove_buffer_journaled(buffer);
-	buffer->state = BUFFER_STATE_CLEAN;
+	buffer->state = BUFFER_CLEAN;
 	return buffer;
 }
 
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 {
 	set_buffer_uptodate(buffer); // to remove from dirty list
-	buffer->state = BUFFER_STATE_EMPTY;
+	buffer->state = BUFFER_EMPTY;
 	return buffer;
 }
 
@@ -225,7 +204,7 @@ removed:
 static void add_buffer_free(struct buffer_head *buffer)
 {
 	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
-	buffer->state = BUFFER_STATE_EMPTY;
+	buffer->state = BUFFER_EMPTY;
 	list_add_tail(&buffer->lrulink, &free_buffers);
 }
 
@@ -263,7 +242,7 @@ struct buffer_head *new_buffer(map_t *map)
 
 	list_for_each_safe(list, safe, &lru_buffers) {
 		struct buffer_head *buffer_evict = list_entry(list, struct buffer_head, lrulink);
-		if (buffer_evict->count == 0 && !buffer_dirty(buffer_evict) && !buffer_journaled(buffer_evict)) {
+		if (buffer_evict->count == 0 && !buffer_dirty(buffer_evict)) {
 			remove_buffer_lru(buffer_evict);
 			remove_buffer_hash(buffer_evict);
 			add_buffer_free(buffer_evict);
@@ -283,7 +262,7 @@ alloc_buffer:
 	buffer = (struct buffer_head *)malloc(sizeof(struct buffer_head));
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
-	*buffer = (struct buffer_head){ .state = BUFFER_STATE_EMPTY };
+	*buffer = (struct buffer_head){ .state = BUFFER_EMPTY };
 	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
@@ -436,7 +415,7 @@ int preallocate_buffers(unsigned bufsize) {
 
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for(i = 0; i < max_buffers; i++) {
-		buffers[i] = (struct buffer_head){ .data = (data_pool + i*bufsize), .state = BUFFER_STATE_EMPTY };
+		buffers[i] = (struct buffer_head){ .data = (data_pool + i*bufsize), .state = BUFFER_EMPTY };
 		add_buffer_free(&buffers[i]);
 	}
 

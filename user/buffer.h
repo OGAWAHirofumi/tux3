@@ -1,10 +1,12 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
-#define BUFFER_STATE_EMPTY 1
-#define BUFFER_STATE_CLEAN 2
-#define BUFFER_STATE_DIRTY 3
-#define BUFFER_STATE_JOURNALED 4
+enum {
+	BUFFER_EMPTY = 1,
+	BUFFER_CLEAN,
+	BUFFER_DIRTY,
+	BUFFER_STATES
+};
 #define BUFFER_BUCKETS 999
 
 #include "list.h"
@@ -95,22 +97,17 @@ static inline int bufcount(struct buffer_head *buffer)
 
 static inline int buffer_empty(struct buffer_head *buffer)
 {
-	return buffer->state == BUFFER_STATE_EMPTY;
+	return buffer->state == BUFFER_EMPTY;
 }
 
 static inline int buffer_uptodate(struct buffer_head *buffer)
 {
-	return buffer->state == BUFFER_STATE_CLEAN;
+	return buffer->state == BUFFER_CLEAN;
 }
 
 static inline int buffer_dirty(struct buffer_head *buffer)
 {
-	return buffer->state == BUFFER_STATE_DIRTY;
-}
-
-static inline int buffer_journaled(struct buffer_head *buffer)
-{
-	return buffer->state == BUFFER_STATE_JOURNALED;
+	return buffer->state == BUFFER_DIRTY;
 }
 
 map_t *new_map(struct dev *dev, struct map_ops *ops); // new_map should take inode *??? does it belong here???
