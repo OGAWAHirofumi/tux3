@@ -181,15 +181,15 @@ static void add_buffer_free(struct buffer_head *buffer)
 {
 	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
 	buffer->state = BUFFER_FREED;
-	list_add_tail(&buffer->lru, &free_buffers);
+	list_add_tail(&buffer->link, &free_buffers);
 }
 
 static struct buffer_head *remove_buffer_free(void)
 {
 	struct buffer_head *buffer = NULL;
 	if (!list_empty(&free_buffers)) {
-		buffer = list_entry(free_buffers.next, struct buffer_head, lru);
-		list_del(&buffer->lru);
+		buffer = list_entry(free_buffers.next, struct buffer_head, link);
+		list_del(&buffer->link);
 	}
 	return buffer;
 }
@@ -361,11 +361,12 @@ static void __destroy_buffers(void)
 {
 	struct list_head *heads[] = { &free_buffers, &lru_buffers, NULL, };
 	struct list_head **head = heads;
+return; /* need to loop over buffer state list heads, not lru */
 	while (*head) {
 		while (!list_empty(*head)) {
 			struct buffer_head *buffer =
-				list_entry((*head)->next, struct buffer_head, lru);
-			list_del(&buffer->lru);
+				list_entry((*head)->next, struct buffer_head, link);
+			list_del(&buffer->link);
 			free(buffer->data);
 			free(buffer);
 		}
