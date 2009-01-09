@@ -59,7 +59,9 @@ typedef int fd_t;
 
 struct rw_semaphore { };
 
+static inline void down_read_nested(struct rw_semaphore *sem, int sub) { };
 static inline void down_read(struct rw_semaphore *sem) { };
+static inline void down_write_nested(struct rw_semaphore *sem, int sub) { };
 static inline void down_write(struct rw_semaphore *sem) { };
 static inline void up_read(struct rw_semaphore *sem) { };
 static inline void up_write(struct rw_semaphore *sem) { };
@@ -67,6 +69,7 @@ static inline void init_rwsem(struct rw_semaphore *sem) { };
 
 struct mutex { };
 
+static inline void mutex_lock_nested(struct mutex *mutex, unsigned int sub) { };
 static inline void mutex_lock(struct mutex *mutex) { };
 static inline void mutex_unlock(struct mutex *mutex) { };
 

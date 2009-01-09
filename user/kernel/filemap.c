@@ -26,9 +26,9 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		return -ENOMEM;
 
 	if (create)
-		down_write(&cursor->btree->lock);
+		down_write_nested(&cursor->btree->lock, inode == sb->bitmap);
 	else
-		down_read(&cursor->btree->lock);
+		down_read_nested(&cursor->btree->lock, inode == sb->bitmap);
 
 	assert(max_segs > 0);
 	block_t limit = start + count;

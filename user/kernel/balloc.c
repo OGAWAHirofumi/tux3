@@ -15,6 +15,9 @@
 #define trace trace_off
 #endif
 
+/* For lockdep: random value bigger than max of inode_i_mutex_lock_class */
+#define I_MUTEX_BITMAP	7
+
 static void set_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
@@ -242,7 +245,7 @@ block_t balloc(struct sb *sb, unsigned blocks)
 {
 	assert(blocks > 0);
 	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
-	mutex_lock(&sb->bitmap->i_mutex);
+	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
 	if ((block = balloc_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
 		goto found;
@@ -263,7 +266,7 @@ void bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
-	mutex_lock(&sb->bitmap->i_mutex);
+	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), mapblock);
 	printf("free <- [%Lx]\n", (L)start);
 	if (!buffer)
