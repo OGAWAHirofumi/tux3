@@ -25,8 +25,11 @@ struct map_ops
 };
 
 struct map {
-	struct list_head dirty;
+#if 1 /* tux3 only */
 	struct inode *inode;
+#endif
+	struct list_head dirty;
+	struct dev *dev;
 	struct map_ops *ops;
 	struct buffer_head *hash[BUFFER_BUCKETS];
 	unsigned dirty_count;
@@ -74,6 +77,11 @@ static inline void *bufdata(struct buffer_head *buffer)
 	return buffer->data;
 }
 
+static inline unsigned bufsize(struct buffer_head *buffer)
+{
+	return 1 << buffer->map->dev->bits;
+}
+
 static inline block_t bufindex(struct buffer_head *buffer)
 {
 	return buffer->index;
@@ -104,6 +112,6 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return buffer->state == BUFFER_DIRTY;
 }
 
-map_t *new_map(struct inode *inode, struct map_ops *ops);
+map_t *new_map(struct dev *dev, struct map_ops *ops);
 void free_map(map_t *map);
 #endif

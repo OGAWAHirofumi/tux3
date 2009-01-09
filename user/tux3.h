@@ -136,11 +136,6 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 	return buffer->map->inode;
 }
 
-static inline unsigned bufsize(struct buffer_head *buffer)
-{
-	return buffer->map->inode->i_sb->blocksize;
-}
-
 static inline struct timespec gettime(void)
 {
 	struct timeval now;
@@ -167,8 +162,9 @@ static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 		.i_sb = sb,					\
 		.i_mode = mode,					\
 	};							\
-	__inode->map = new_map(__inode, ops);			\
+	__inode->map = new_map((sb)->dev, ops);			\
 	assert(__inode->map);					\
+	__inode->map->inode = __inode;				\
 	__inode;						\
 })
 

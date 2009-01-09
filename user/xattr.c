@@ -55,7 +55,8 @@ int main(int argc, char *argv[])
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
 		.i_ctime = spectime(0xdec0debeadULL),
 		.i_mtime = spectime(0xbadfaced00dULL) };
-	inode->map = new_map(inode, NULL);
+	inode->map = new_map(dev, NULL);
+	inode->map->inode = inode;
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {

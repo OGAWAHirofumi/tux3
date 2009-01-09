@@ -24,9 +24,10 @@ struct inode *new_inode(struct sb *sb)
 	if (!inode)
 		goto error;
 	*inode = (struct inode){ .i_sb = sb, .i_version = 1, .i_nlink = 1, };
-	inode->map = new_map(inode, NULL);
+	inode->map = new_map(sb->dev, NULL);
 	if (!inode->map)
 		goto error_map;
+	inode->map->inode = inode;
 	return inode;
 
 error_map:
