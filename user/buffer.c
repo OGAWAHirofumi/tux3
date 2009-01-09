@@ -7,7 +7,7 @@
 #include "err.h"
 
 #define BUFFER_PARANOIA_DEBUG
-#define buftrace trace_off
+#define buftrace trace_on
 
 /*
  * Emulate kernel buffers in userspace
@@ -163,18 +163,6 @@ unsigned buffer_hash(block_t block)
 	return (((block >> 32) ^ (block_t)block) * 978317583) % BUFFER_BUCKETS;
 }
 
-static void add_buffer_lru(struct buffer_head *buffer)
-{
-	buffer_count++;
-	list_add_tail(&buffer->lru, &lru_buffers);
-}
-
-static void remove_buffer_lru(struct buffer_head *buffer)
-{
-	buffer_count--;
-	list_del(&buffer->lru);
-}
-
 static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
 {
 	struct buffer_head **pbuffer = buffer->map->hash + buffer_hash(buffer->index);
@@ -192,7 +180,7 @@ removed:
 static void add_buffer_free(struct buffer_head *buffer)
 {
 	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
-	buffer->state = BUFFER_EMPTY;
+	buffer->state = BUFFER_FREED;
 	list_add_tail(&buffer->lru, &free_buffers);
 }
 
@@ -204,6 +192,16 @@ static struct buffer_head *remove_buffer_free(void)
 		list_del(&buffer->lru);
 	}
 	return buffer;
+}
+
+void evict_buffer(struct buffer_head *buffer)
+{
+	buftrace("Evict buffer [%Lx]", buffer->index);
+        if (!remove_buffer_hash(buffer))
+		warn("buffer not in hash");
+	list_del(&buffer->lru);
+	buffer_count--;
+	add_buffer_free(buffer);
 }
 
 #define SECTOR_BITS 9
@@ -229,11 +227,9 @@ struct buffer_head *new_buffer(map_t *map)
 	int count = 0;
 
 	list_for_each_safe(list, safe, &lru_buffers) {
-		struct buffer_head *buffer_evict = list_entry(list, struct buffer_head, lru);
-		if (buffer_evict->count == 0 && !buffer_dirty(buffer_evict)) {
-			remove_buffer_lru(buffer_evict);
-			remove_buffer_hash(buffer_evict);
-			add_buffer_free(buffer_evict);
+		struct buffer_head *victim = list_entry(list, struct buffer_head, lru);
+		if (victim->count == 0 && buffer_uptodate(victim)) {
+			evict_buffer(victim);
 			if (++count == max_evict)
 				break;
 		}
@@ -250,7 +246,7 @@ alloc_buffer:
 	buffer = (struct buffer_head *)malloc(sizeof(struct buffer_head));
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
-	*buffer = (struct buffer_head){ .state = BUFFER_EMPTY };
+	*buffer = (struct buffer_head){ };
 	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
@@ -258,7 +254,8 @@ alloc_buffer:
 	}
 have_buffer:
 	assert(!buffer->count);
-	assert(buffer_empty(buffer));
+	assert(buffer->state == BUFFER_FREED);
+	buffer->state = BUFFER_EMPTY;
 	buffer->map = map;
 	buffer->count++;
 	return buffer;
@@ -300,13 +297,14 @@ struct buffer_head *blockget(map_t *map, block_t block)
 			buffer->count++;
 			return buffer;
 		}
-	buftrace("Allocate buffer, block = %Lx", block);
+	buftrace("Get buffer [%Lx]", block);
 	if (IS_ERR(buffer = new_buffer(map)))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
-	add_buffer_lru(buffer);
 	buffer->hashlink = *bucket;
 	*bucket = buffer;
+	list_add_tail(&buffer->lru, &lru_buffers);
+	buffer_count++;
 	return buffer;
 }
 
@@ -324,15 +322,6 @@ struct buffer_head *blockread(map_t *map, block_t block)
 		set_buffer_uptodate(buffer);
 	}
 	return buffer;
-}
-
-void evict_buffer(struct buffer_head *buffer)
-{
-	remove_buffer_lru(buffer);
-        if (!remove_buffer_hash(buffer))
-		warn("buffer not found in hashlist");
-	buftrace("Evicted buffer for %Lx", buffer->index);
-	add_buffer_free(buffer);
 }
 
 /* !!! only used for testing */
