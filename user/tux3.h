@@ -141,11 +141,11 @@ struct tux_iattr {
 
 static inline struct buffer_head *sb_getblk(struct sb *sb, block_t block)
 {
-	return blockget(sb->devmap, block);
+	return blockget(sb->volmap->map, block);
 }
 
 static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 {
-	return blockread(sb->devmap, block);
+	return blockread(sb->volmap->map, block);
 }
 #endif

@@ -36,7 +36,7 @@ filemapdeps	= $(btreedeps) $(ballocdeps) $(dleafdeps) $(dirdeps) \
 	$(xattrdeps) $(ileafdeps) filemap.c kernel/filemap.c
 iattrdeps	= iattr.c kernel/iattr.c
 ileafdeps	= $(iattrdeps) ileaf.c kernel/ileaf.c
-inodedeps	= $(filemapdeps) inode.c kernel/inode.c
+inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c
 superdeps	= $(inodedeps) kernel/commit.c super.c kernel/super.c
 xattrdeps	= $(ballocdeps) $(dirdeps) $(ileafdeps) xattr.c kernel/xattr.c
 

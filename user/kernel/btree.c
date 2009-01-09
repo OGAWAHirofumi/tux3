@@ -236,7 +236,7 @@ int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor)
 		while (++next < top) /* binary search goes here */
 			if (from_be_u64(next->key) > key)
 				break;
-		//printf("probe level %i, %ti of %i\n", i, next - node->entries, bcount(node));
+		trace("probe level %i, %ti of %i", i, next - node->entries, bcount(node));
 		level_push(cursor, buffer, next);
 		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64((next - 1)->block))))
 			goto eek;

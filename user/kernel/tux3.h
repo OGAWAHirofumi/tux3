@@ -239,7 +239,7 @@ struct sb {
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
-	map_t *devmap; /* Userspace device block cache */
+	struct dev *dev;		/* userspace block device */
 #endif
 };
 

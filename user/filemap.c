@@ -62,7 +62,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)tux_inode(inode)->inum, (L)bufindex(buffer));
 	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	struct dev *dev = sb->devmap->dev;
+	struct dev *dev = sb->volmap->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	if (write && buffer_empty(buffer))
 		warn("egad, writing an invalid buffer");
@@ -148,7 +148,7 @@ int main(int argc, char *argv[])
 	struct sb *sb = &(struct sb){
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
+		.volmap = &(struct inode){ .map = new_map(dev, NULL) },
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,

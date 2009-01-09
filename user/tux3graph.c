@@ -743,11 +743,12 @@ int main(int argc, const char *argv[])
 
 	struct sb *sb = &(struct sb){ };
 	*sb = (struct sb){
-		.devmap			= new_map(dev, NULL),
+		.dev			= dev,
 		.blockbits		= dev->bits,
 		.blocksize		= 1 << dev->bits,
 		.blockmask		= (1 << dev->bits) - 1,
 	};
+	sb->volmap = new_inode(sb);
 
 	if ((errno = -load_sb(sb)))
 		goto eek;
@@ -793,7 +794,7 @@ int main(int argc, const char *argv[])
 	free_inode(sb->bitmap);
 	free_inode(sb->rootdir);
 	free_inode(sb->atable);
-	free_map(sb->devmap);
+	free_inode(sb->volmap);
 
 out:
 #if 0 /* older version of popt doesn't return malloc memory */

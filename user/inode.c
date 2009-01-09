@@ -20,7 +20,7 @@
 
 struct inode *new_inode(struct sb *sb)
 {
-	map_t *map = new_map(sb->devmap->dev, &filemap_ops);
+	map_t *map = new_map(sb->dev, &filemap_ops);
 	if (!map)
 		goto eek;
 	struct inode *inode = malloc(sizeof(*inode));
@@ -165,9 +165,10 @@ int tuxflush(struct inode *inode)
 
 int tuxsync(struct inode *inode)
 {
-	tuxflush(inode);
-	save_inode(inode);
-	return 0; // wrong!!!
+	int err;
+	if ((err = tuxflush(inode)))
+		return err;
+	return save_inode(inode);
 }
 
 void tuxclose(struct inode *inode)
@@ -193,14 +194,15 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ fd, .bits = 12 };
 	init_buffers(dev, 1 << 20);
 	struct sb *sb = &(struct sb){
+		.dev = dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
+	sb->volmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, NULL) };
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))
@@ -220,7 +222,7 @@ int main(int argc, char *argv[])
 	err = tuxwrite(file, "world!", 6);
 #if 0
 	tuxflush(sb->bitmap);
-	flush_buffers(sb->devmap);
+	flush_buffers(sb->volmap->map);
 #endif
 #if 1
 	trace(">>> close file <<<");
@@ -244,7 +246,7 @@ int main(int argc, char *argv[])
 	trace(">>> show state");
 	show_buffers(mapping(file->f_inode));
 	show_buffers(mapping(sb->rootdir));
-	show_buffers(sb->devmap);
+	show_buffers(sb->volmap->map);
 	bitmap_dump(sb->bitmap, 0, sb->volblocks);
 	show_tree_range(&sb->itable, 0, -1);
 	exit(0);

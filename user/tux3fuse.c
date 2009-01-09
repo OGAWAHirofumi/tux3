@@ -375,11 +375,12 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	init_buffers(dev, 1<<20);
 	sb = malloc(sizeof(*sb));
 	*sb = (struct sb){
-		.devmap = new_map(dev, NULL),
+		.dev = dev,
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 	};
+	sb->volmap = new_inode(sb);
 
 	if ((errno = -load_sb(sb)))
 		goto eek;

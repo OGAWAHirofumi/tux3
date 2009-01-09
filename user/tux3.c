@@ -70,15 +70,16 @@ int main(int argc, const char *argv[])
 
 	struct sb *sb = &(struct sb){ };
 	*sb = (struct sb){
+		.dev = dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.devmap = new_map(dev, NULL),
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
 	};
+	sb->volmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, NULL) };
 	init_btree(&sb->itable, sb, (struct root){}, &itable_ops);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
@@ -152,7 +153,8 @@ int main(int argc, const char *argv[])
 #endif
 			if ((errno = -tuxwrite(file, text, len)) > 0)
 				goto eek;
-		tuxsync(inode);
+		if ((errno = -tuxsync(inode)))
+			goto eek;
 		if ((errno = -sync_super(sb)))
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
@@ -292,7 +294,7 @@ int main(int argc, const char *argv[])
 
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
-	//show_buffers(sb->devmap);
+	//show_buffers(sb->volmap->map);
 	poptFreeContext(popt);
 	exit(0);
 	return 0;

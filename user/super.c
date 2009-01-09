@@ -19,7 +19,7 @@
 int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
-	int err = diskread(sb->devmap->dev->fd, super, sizeof(*super), SB_LOC);
+	int err = diskread(sb->volmap->map->dev->fd, super, sizeof(*super), SB_LOC);
 	if (err)
 		return err;
 	err = unpack_sb(sb, super, 0);
@@ -32,7 +32,7 @@ int save_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 	pack_sb(sb, super);
-	return diskwrite(sb->devmap->dev->fd, super, sizeof(*super), SB_LOC);
+	return diskwrite(sb->volmap->map->dev->fd, super, sizeof(*super), SB_LOC);
 }
 
 int sync_super(struct sb *sb)
@@ -47,8 +47,8 @@ int sync_super(struct sb *sb)
 	printf("sync atom table\n");
 	if ((err = tuxsync(sb->atable)))
 		return err;
-	printf("sync devmap\n");
-	if ((err = flush_buffers(sb->devmap)))
+	printf("sync volmap\n");
+	if ((err = flush_buffers(sb->volmap->map)))
 		return err;
 	printf("sync super\n");
 	if ((err = save_sb(sb)))
@@ -65,7 +65,7 @@ static int clear_other_magic(struct sb *sb)
 		unsigned len = (loff_t[2]){ SB_LOC, sb->blocksize }[i];
 		char data[len];
 		memset(data, 0, len);
-		if ((err = diskwrite(sb->devmap->dev->fd, data, len, loc)))
+		if ((err = diskwrite(sb->dev->fd, data, len, loc)))
 			break;
 	}
 	return err;
@@ -125,7 +125,7 @@ int make_tux3(struct sb *sb)
 
 	show_buffers(mapping(sb->bitmap));
 	show_buffers(mapping(sb->rootdir));
-	show_buffers(sb->devmap);
+	show_buffers(sb->volmap->map);
 	return 0;
 eek:
 	free_btree(&sb->itable);

@@ -481,12 +481,12 @@ int dev_blockwrite(struct buffer_head *buffer)
 	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
 
-struct map_ops devmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
+struct map_ops volmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
 
 map_t *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
 	map_t *map = malloc(sizeof(*map)); // error???
-	*map = (map_t){ .dev = dev, .ops = ops ? ops : &devmap_ops };
+	*map = (map_t){ .dev = dev, .ops = ops ? ops : &volmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
 	return map;
 }
