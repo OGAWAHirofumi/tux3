@@ -103,6 +103,7 @@ static void tux3_put_super(struct super_block *sb)
 
 	iput(sbi->atable);
 	iput(sbi->bitmap);
+	iput(sbi->volmap);
 	iput(sbi->logmap);
 
 	sb->s_fs_info = NULL;
@@ -208,6 +209,11 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error_atable;
 
 	err = -ENOMEM;
+	sbi->volmap = tux_new_inode(sbi->rootdir, &iattr, 0);
+	if (!sbi->volmap)
+		goto error_volmap;
+
+	err = -ENOMEM;
 	sbi->logmap = tux_new_inode(sbi->rootdir, &iattr, 0);
 	if (!sbi->logmap)
 		goto error_logmap;
@@ -221,6 +227,8 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 error_alloc_root:
 	iput(sbi->logmap);
 error_logmap:
+	iput(sbi->volmap);
+error_volmap:
 	iput(sbi->atable);
 error_atable:
 	iput(sbi->rootdir);
