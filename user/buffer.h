@@ -1,16 +1,22 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
+#include "list.h"
+
 enum {
 	BUFFER_FREED,
 	BUFFER_EMPTY,
 	BUFFER_CLEAN,
-	BUFFER_DIRTY,
+	BUFFER_DIRTY0,
+	BUFFER_DIRTY1,
+	BUFFER_DIRTY2,
+	BUFFER_DIRTY3,
 	BUFFER_STATES
 };
-#define BUFFER_BUCKETS 999
 
-#include "list.h"
+enum { BUFFER_DIRTY = BUFFER_DIRTY0 };
+
+#define BUFFER_BUCKETS 999
 
 typedef loff_t block_t; // disk io address range
 
