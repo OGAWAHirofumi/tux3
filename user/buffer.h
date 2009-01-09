@@ -41,9 +41,9 @@ struct buffer_head
 {
 	map_t *map;
 	struct buffer_head *hashlink;
-	struct list_head dirtylink;
-	struct list_head lrulink; /* used for LRU list and the free list */
-	unsigned count, state; // should be atomic_t
+	struct list_head link;
+	struct list_head lru; /* used for LRU list and the free list */
+	unsigned count, state;
 	block_t index;
 	void *data;
 };
