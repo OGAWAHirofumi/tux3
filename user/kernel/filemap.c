@@ -238,25 +238,27 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	return 0;
 }
 
-static struct buffer_head *find_buffer(struct address_space *mapping,
-				       pgoff_t index, int offset)
+static struct buffer_head *find_get_buffer(struct page *page, int offset)
+{
+	struct buffer_head *bh = page_buffers(page);
+	while (offset--)
+		bh = bh->b_this_page;
+	get_bh(bh);
+	return bh;
+}
+
+static struct buffer_head *get_buffer(struct address_space *mapping,
+				      pgoff_t index, int offset)
 {
 	struct buffer_head *bh = NULL;
 	struct page *page;
 
 	page = find_get_page(mapping, index);
-	if (page) {
+	if (page && PageUptodate(page)) {
 		spin_lock(&mapping->private_lock);
 		if (page_has_buffers(page)) {
-			bh = page_buffers(page);
-			if (bh){
-				while (offset--)
-					bh = bh->b_this_page;
-				if (buffer_uptodate(bh))
-					get_bh(bh);
-				else
-					bh = NULL;
-			}
+			bh = find_get_buffer(page, offset);
+			assert(buffer_uptodate(bh));
 		}
 		spin_unlock(&mapping->private_lock);
 		page_cache_release(page);
@@ -267,41 +269,48 @@ static struct buffer_head *find_buffer(struct address_space *mapping,
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 {
 	struct inode *inode = mapping->host;
+	gfp_t gfp_mask = mapping_gfp_mask(mapping) | __GFP_COLD; /* FIXME(?) */
 	pgoff_t index;
 	struct page *page;
 	struct buffer_head *bh;
-	int offset;
+	int err, offset;
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
 	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
 
-	/* FIXME: hack */
-	bh = find_buffer(mapping, index, offset);
+	bh = get_buffer(mapping, index, offset);
 	if (bh)
 		return bh;
 
-	page = read_mapping_page(mapping, index, NULL);
-	if (IS_ERR(page))
+	err = -ENOMEM;
+	/* FIXME: don't need to find again. Just try to allocate and insert */
+	page = find_or_create_page(mapping, index, gfp_mask);
+	if (!page)
 		goto error;
-	if (PageError(page))
-		goto error_page;
-
-	lock_page(page);
 
 	if (!page_has_buffers(page))
 		create_empty_buffers(page, tux_sb(inode->i_sb)->blocksize, 0);
+	bh = find_get_buffer(page, offset);
 
-	bh = page_buffers(page);
-	while (offset--)
-		bh = bh->b_this_page;
-	get_bh(bh);
-
-	unlock_page(page);
+	if (PageUptodate(page))
+		unlock_page(page);
+	else {
+		err = mapping->a_ops->readpage(NULL, page);
+		if (err)
+			goto error_readpage;
+		wait_on_page_locked(page);
+		if (!PageUptodate(page)) {
+			err = -EIO;
+			goto error_readpage;
+		}
+	}
 	page_cache_release(page);
+	assert(buffer_uptodate(bh));
 
 	return bh;
 
-error_page:
+error_readpage:
+	put_bh(bh);
 	page_cache_release(page);
 error:
 	return NULL;
