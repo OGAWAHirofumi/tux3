@@ -19,7 +19,7 @@
 int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
-	int err = diskread(sb->volmap->map->dev->fd, super, sizeof(*super), SB_LOC);
+	int err = diskread(sb->dev->fd, super, sizeof(*super), SB_LOC);
 	if (err)
 		return err;
 	err = unpack_sb(sb, super, 0);
@@ -32,7 +32,7 @@ int save_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 	pack_sb(sb, super);
-	return diskwrite(sb->volmap->map->dev->fd, super, sizeof(*super), SB_LOC);
+	return diskwrite(sb->dev->fd, super, sizeof(*super), SB_LOC);
 }
 
 int sync_super(struct sb *sb)

@@ -1,13 +1,13 @@
-#include <stdlib.h>
-#include <stddef.h>
-#include <errno.h>
+#include "tux3.h"
 #include "diskio.h"
-#include "buffer.h"
-#include "trace.h"
-#include "err.h"
 
 #define BUFFER_PARANOIA_DEBUG
 #define buftrace trace_off
+
+static inline struct dev *map_dev(map_t *map)
+{
+	return map->inode->i_sb->dev;
+}
 
 /*
  * Emulate kernel buffers in userspace
@@ -27,8 +27,6 @@
  * to be modified at all.  Another benefit is, it will be much easier to
  * add async IO.
  */
-
-typedef long long L; // widen for printf on 64 bit systems
 
 struct list_head free_buffers;
 struct list_head lru_buffers;
@@ -263,7 +261,7 @@ alloc_buffer:
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
 	*buffer = (struct buffer_head){ .state = BUFFER_EMPTY };
-	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
+	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map_dev(map)->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
 		return ERR_PTR(err);
@@ -447,7 +445,7 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 int dev_blockread(struct buffer_head *buffer)
 {
 	warn("read [%Lx]", (L)buffer->index);
-	struct dev *dev = buffer->map->dev;
+	struct dev *dev = map_dev(buffer->map);
 	assert(dev->bits >= 8 && dev->fd);
 	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
@@ -455,7 +453,7 @@ int dev_blockread(struct buffer_head *buffer)
 int dev_blockwrite(struct buffer_head *buffer)
 {
 	warn("write [%Lx]", (L)buffer->index);
-	struct dev *dev = buffer->map->dev;
+	struct dev *dev = map_dev(buffer->map);
 	assert(dev->bits >= 8 && dev->fd);
 	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 }
@@ -465,7 +463,7 @@ struct map_ops volmap_ops = { .blockread = dev_blockread, .blockwrite = dev_bloc
 map_t *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
 {
 	map_t *map = malloc(sizeof(*map)); // error???
-	*map = (map_t){ .dev = dev, .ops = ops ? ops : &volmap_ops };
+	*map = (map_t){ .ops = ops ? ops : &volmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
 	return map;
 }

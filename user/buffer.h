@@ -27,7 +27,6 @@ struct map_ops
 struct map {
 	struct list_head dirty;
 	struct inode *inode;
-	struct dev *dev;
 	struct map_ops *ops;
 	struct buffer_head *hash[BUFFER_BUCKETS];
 	unsigned dirty_count;
@@ -73,11 +72,6 @@ void init_buffers(struct dev *dev, unsigned poolsize);
 static inline void *bufdata(struct buffer_head *buffer)
 {
 	return buffer->data;
-}
-
-static inline unsigned bufsize(struct buffer_head *buffer)
-{
-	return 1 << buffer->map->dev->bits;
 }
 
 static inline block_t bufindex(struct buffer_head *buffer)

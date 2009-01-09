@@ -128,6 +128,16 @@ static inline be_u64 to_be_u64(u64 val)
 
 #include "kernel/tux3.h"
 
+static inline struct inode *buffer_inode(struct buffer_head *buffer)
+{
+	return buffer->map->inode;
+}
+
+static inline unsigned bufsize(struct buffer_head *buffer)
+{
+	return buffer->map->inode->i_sb->blocksize;
+}
+
 static inline struct timespec gettime(void)
 {
 	struct timeval now;

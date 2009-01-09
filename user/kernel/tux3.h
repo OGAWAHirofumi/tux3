@@ -730,11 +730,6 @@ static inline void brelse_dirty(struct buffer_head *buffer)
 	mark_buffer_dirty(buffer);
 	brelse(buffer);
 }
-#else /* !__KERNEL__ */
-static inline struct inode *buffer_inode(struct buffer_head *buffer)
-{
-	return buffer->map->inode;
-}
 #endif /* !__KERNEL__ */
 
 static inline void change_begin(struct sb *sb) { };
