@@ -49,9 +49,15 @@ int main(int argc, char *argv[])
 		free(bitmap);
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
-	map_t *map = new_map(dev, NULL);
-	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
-	struct inode *bitmap = &(struct inode){ .i_sb = sb, .map = map };
+	struct sb *sb = &(struct sb){
+		.super = { .volblocks = to_be_u64(150) },
+		.dev = dev,
+		.blocksize = 1 << dev->bits,
+		.blockbits = dev->bits,
+		.blockmask = (1 << dev->bits) - 1,
+	};
+	struct inode *bitmap = &(struct inode){ .i_sb = sb, };
+	bitmap->map = new_map(bitmap, NULL);
 	sb->freeblocks = from_be_u64(sb->super.volblocks);
 	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero
 	sb->bitmap = bitmap;
@@ -61,7 +67,7 @@ int main(int argc, char *argv[])
 	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
 
 	for (int block = 0; block < 10; block++) {
-		struct buffer_head *buffer = blockget(map, block);
+		struct buffer_head *buffer = blockget(bitmap->map, block);
 		memset(bufdata(buffer), 0, blocksize);
 		set_buffer_uptodate(buffer);
 	}
@@ -69,9 +75,9 @@ int main(int argc, char *argv[])
 		block_t block = balloc_from_range(bitmap, 121, 10, 1);
 		printf("%Li\n", (L)block);
 	}
-	hexdump(bufdata(blockget(map, 0)), dumpsize);
-	hexdump(bufdata(blockget(map, 1)), dumpsize);
-	hexdump(bufdata(blockget(map, 2)), dumpsize);
+	hexdump(bufdata(blockget(bitmap->map, 0)), dumpsize);
+	hexdump(bufdata(blockget(bitmap->map, 1)), dumpsize);
+	hexdump(bufdata(blockget(bitmap->map, 2)), dumpsize);
 
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 1; i++)
@@ -79,9 +85,9 @@ int main(int argc, char *argv[])
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 10; i++)
 		balloc(sb, 1);
-	hexdump(bufdata(blockget(map, 0)), dumpsize);
-	hexdump(bufdata(blockget(map, 1)), dumpsize);
-	hexdump(bufdata(blockget(map, 2)), dumpsize);
+	hexdump(bufdata(blockget(bitmap->map, 0)), dumpsize);
+	hexdump(bufdata(blockget(bitmap->map, 1)), dumpsize);
+	hexdump(bufdata(blockget(bitmap->map, 2)), dumpsize);
 
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, from_be_u64(sb->super.volblocks)), (L)sb->freeblocks);

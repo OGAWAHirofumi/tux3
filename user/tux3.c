@@ -68,8 +68,7 @@ int main(int argc, const char *argv[])
 	struct dev *dev = &(struct dev){ fd, .bits = blockbits };
 	init_buffers(dev, 1 << 20);
 
-	struct sb *sb = &(struct sb){ };
-	*sb = (struct sb){
+	struct sb *sb = &(struct sb){
 		.dev = dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
@@ -79,7 +78,8 @@ int main(int argc, const char *argv[])
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
 	};
-	sb->volmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, NULL) };
+	sb->volmap = &(struct inode){ .i_sb = sb, };
+	sb->volmap->map = new_map(sb->volmap, NULL);
 	init_btree(&sb->itable, sb, (struct root){}, &itable_ops);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {

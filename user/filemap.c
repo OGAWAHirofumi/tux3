@@ -146,21 +146,22 @@ int main(int argc, char *argv[])
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ fd, .bits = 8 };
 	struct sb *sb = &(struct sb){
+		.dev = dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.volmap = &(struct inode){ .map = new_map(dev, NULL) },
 		.blockbits = dev->bits,
 		.blocksize = 1 << dev->bits,
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
-	sb->bitmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) },
-	sb->bitmap->map->inode = sb->bitmap;
+	sb->volmap = &(struct inode){ .i_sb = sb, };
+	sb->volmap->map = new_map(sb->volmap, NULL);
+	sb->bitmap = &(struct inode){ .i_sb = sb, };
+	sb->bitmap->map = new_map(sb->bitmap, &filemap_ops);
 	init_buffers(dev, 1 << 20);
-	struct inode *inode = &(struct inode){ .i_sb = sb, .map = new_map(dev, &filemap_ops) };
+	struct inode *inode = &(struct inode){ .i_sb = sb, };
+	inode->map = new_map(inode, &filemap_ops);
 	assert(!new_btree(&inode->btree, sb, &dtree_ops));
-	inode->map->inode = inode;
-	inode = inode;
 
 	block_t nextalloc = sb->nextalloc;
 	struct seg map[64];

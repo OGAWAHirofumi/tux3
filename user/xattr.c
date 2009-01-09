@@ -40,10 +40,10 @@ int main(int argc, char *argv[])
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRWXU) };
 	ftruncate(dev->fd, 1 << 24);
-	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20);
 	struct sb *sb = &(struct sb){
-		.version = 0, .atable = map->inode,
+		.dev = dev,
+		.version = 0,
 		.blockbits = dev->bits, 
 		.blocksize = 1 << dev->bits, 
 		.blockmask = (1 << dev->bits) - 1, 
@@ -51,13 +51,14 @@ int main(int argc, char *argv[])
 		.unatom_base = 1 << 11,
 		.atomgen = 1,
 	};
-	struct inode *inode = &(struct inode){ .i_sb = sb,
-		.map = map, .i_mode = S_IFDIR | 0x666,
+	struct inode *inode = &(struct inode){
+		.i_sb = sb,
+		.i_mode = S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
 		.i_ctime = spectime(0xdec0debeadULL),
 		.i_mtime = spectime(0xbadfaced00dULL) };
-	map->inode = inode;
+	inode->map = new_map(inode, NULL);
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {
@@ -149,7 +150,7 @@ int main(int argc, char *argv[])
 
 	warn("---- dump atom table ----");
 	dump_atoms(inode);
-	show_buffers(map);
+	show_buffers(inode->map);
 	exit(0);
 }
 #endif

@@ -741,8 +741,7 @@ int main(int argc, const char *argv[])
 	};
 	init_buffers(dev, 1 << 20);
 
-	struct sb *sb = &(struct sb){ };
-	*sb = (struct sb){
+	struct sb *sb = &(struct sb){
 		.dev			= dev,
 		.blockbits		= dev->bits,
 		.blocksize		= 1 << dev->bits,

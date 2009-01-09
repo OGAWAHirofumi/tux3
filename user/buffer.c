@@ -460,11 +460,12 @@ int dev_blockwrite(struct buffer_head *buffer)
 
 struct map_ops volmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
 
-map_t *new_map(struct dev *dev, struct map_ops *ops) // new_map should take inode *???
+map_t *new_map(struct inode *inode, struct map_ops *ops)
 {
 	map_t *map = malloc(sizeof(*map)); // error???
 	*map = (map_t){ .ops = ops ? ops : &volmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
+	map->inode = inode;
 	return map;
 }
 
@@ -478,15 +479,23 @@ void free_map(map_t *map)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	map_t *map = new_map(dev, NULL);
+	struct sb *sb = &(struct sb){
+		.dev = dev,
+		.blocksize = 1 << dev->bits,
+		.blockbits = dev->bits,
+		.blockmask = (1 << dev->bits) - 1,
+	};
+	struct inode *volmap = &(struct inode){ .i_sb = sb, };
+	volmap->map = new_map(volmap, NULL);
+
 	init_buffers(dev, 1 << 20);
-	show_dirty_buffers(map);
-	mark_buffer_dirty(blockget(map, 1));
-	show_dirty_buffers(map);
-	printf("get %p\n", blockget(map, 0));
-	printf("get %p\n", blockget(map, 1));
-	printf("get %p\n", blockget(map, 2));
-	printf("get %p\n", blockget(map, 1));
+	show_dirty_buffers(volmap->map);
+	mark_buffer_dirty(blockget(volmap->map, 1));
+	show_dirty_buffers(volmap->map);
+	printf("get %p\n", blockget(volmap->map, 0));
+	printf("get %p\n", blockget(volmap->map, 1));
+	printf("get %p\n", blockget(volmap->map, 2));
+	printf("get %p\n", blockget(volmap->map, 1));
 	exit(0);
 }
 #endif

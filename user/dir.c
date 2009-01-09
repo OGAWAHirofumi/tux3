@@ -84,36 +84,42 @@ int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned i
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	map_t *map = new_map(dev, NULL);
+	struct sb *sb = &(struct sb){
+		.super = { .volblocks = to_be_u64(150) },
+		.dev = dev,
+		.blocksize = 1 << dev->bits,
+		.blockbits = dev->bits,
+		.blockmask = (1 << dev->bits) - 1,
+	};
+	struct inode *dir = &(struct inode){ .i_sb = sb, .i_mode = S_IFDIR, };
+	dir->map = new_map(dir, NULL);
 	init_buffers(dev, 1 << 20);
 	struct buffer_head *buffer;
-	struct sb *sb = &(struct sb){ .super = { .volblocks = to_be_u64(150) }, .blockbits = dev->bits };
-	map->inode = &(struct inode){ .i_sb = sb, .map = map, .i_mode = S_IFDIR };
-	printf("empty = %i\n", tux_dir_is_empty(map->inode));
-	tux_create_entry(map->inode, "hello", 5, 0x666, S_IFREG);
-	tux_create_entry(map->inode, "world", 5, 0x777, S_IFLNK);
-	tux_dirent *entry = tux_find_entry(map->inode, "hello", 5, &buffer);
+	printf("empty = %i\n", tux_dir_is_empty(dir));
+	tux_create_entry(dir, "hello", 5, 0x666, S_IFREG);
+	tux_create_entry(dir, "world", 5, 0x777, S_IFLNK);
+	tux_dirent *entry = tux_find_entry(dir, "hello", 5, &buffer);
 	assert(!IS_ERR(entry));
 	hexdump(entry, entry->name_len);
-	tux_dump_entries(blockget(map, 0));
+	tux_dump_entries(blockget(dir->map, 0));
 
 	if (!tux_delete_entry(buffer, entry)) {
-		show_buffers(map);
-		map->inode->i_ctime = map->inode->i_mtime = gettime();
-		mark_inode_dirty(map->inode);
+		show_buffers(dir->map);
+		dir->i_ctime = dir->i_mtime = gettime();
+		mark_inode_dirty(dir);
 	}
 
-	printf("empty = %i\n", tux_dir_is_empty(map->inode));
-	tux_dump_entries(blockget(map, 0));
-	struct file *file = &(struct file){ .f_inode = map->inode };
+	printf("empty = %i\n", tux_dir_is_empty(dir));
+	tux_dump_entries(blockget(dir->map, 0));
+	struct file *file = &(struct file){ .f_inode = dir };
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
-		tux_create_entry(map->inode, name, strlen(name), 0x800 + i, S_IFREG);
+		tux_create_entry(dir, name, strlen(name), 0x800 + i, S_IFREG);
 	}
-	tux_dump_entries(blockget(map, 0));
+	tux_dump_entries(blockget(dir->map, 0));
 	char dents[10000];
 	tux_readdir(file, dents, filldir);
-	show_buffers(map);
+	show_buffers(dir->map);
 	exit(0);
 }

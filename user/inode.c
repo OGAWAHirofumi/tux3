@@ -20,17 +20,18 @@
 
 struct inode *new_inode_ops(struct sb *sb, struct map_ops *ops)
 {
-	map_t *map = new_map(sb->dev, ops);
-	if (!map)
-		goto eek;
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
-		goto eek;
-	*inode = (struct inode){ .i_sb = sb, .map = map, .i_version = 1, .i_nlink = 1, };
-	return inode->map->inode = inode;
-eek:
-	if (map)
-		free_map(map);
+		goto error;
+	*inode = (struct inode){ .i_sb = sb, .i_version = 1, .i_nlink = 1, };
+	inode->map = new_map(inode, ops);
+	if (!inode->map)
+		goto error_map;
+	return inode;
+
+error_map:
+	free(inode);
+error:
 	return NULL;
 }
 
@@ -207,7 +208,8 @@ int main(int argc, char *argv[])
 		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = size >> dev->bits,
 	};
-	sb->volmap = &(struct inode){ .i_sb = sb, .map = new_map(dev, NULL) };
+	sb->volmap = &(struct inode){ .i_sb = sb, };
+	sb->volmap->map = new_map(sb->volmap, NULL);
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))

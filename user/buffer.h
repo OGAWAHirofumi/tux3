@@ -104,6 +104,6 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return buffer->state == BUFFER_DIRTY;
 }
 
-map_t *new_map(struct dev *dev, struct map_ops *ops); // new_map should take inode *??? does it belong here???
+map_t *new_map(struct inode *inode, struct map_ops *ops);
 void free_map(map_t *map);
 #endif
