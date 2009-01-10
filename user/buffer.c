@@ -107,7 +107,7 @@ struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer)
 
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 {
-	set_buffer_uptodate(buffer); // to remove from dirty list
+	list_move_tail(&buffer->link, buffers + BUFFER_EMPTY);
 	buffer->state = BUFFER_EMPTY;
 	return buffer;
 }
