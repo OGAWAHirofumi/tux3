@@ -143,7 +143,11 @@ unsigned buffer_hash(block_t block)
 static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
 {
 //	assert(!hlist_unhashed(&buffer->hashlink));  /* buffer not in hash */
+#ifdef BUFFER_PARANOIA_DEBUG
+	hlist_del_init(&buffer->hashlink);
+#else
 	hlist_del(&buffer->hashlink);
+#endif
 	return buffer;
 }
 
@@ -155,7 +159,11 @@ void evict_buffer(struct buffer_head *buffer)
 		warn("buffer not in hash");
 	list_move(&buffer->link, buffers + BUFFER_FREED);
 	buffer->state = BUFFER_FREED;
+#ifdef BUFFER_PARANOIA_DEBUG
+	list_del_init(&buffer->lru);
+#else
 	list_del(&buffer->lru);
+#endif
 	buffer_count--;
 }
 
@@ -310,23 +318,70 @@ int flush_buffers(map_t *map) // !!! should use lru list
 	return err;
 }
 
+static int debug_buffer;
+
 #ifdef BUFFER_PARANOIA_DEBUG
+static void free_buffer(struct buffer_head *buffer)
+{
+	if (list_empty(&buffer->lru))
+		assert(hlist_unhashed(&buffer->hashlink));
+	else
+		assert(!hlist_unhashed(&buffer->hashlink));
+	list_del(&buffer->lru);
+	list_del(&buffer->link);
+	free(buffer->data);
+	free(buffer);
+}
+
 static void __destroy_buffers(void)
 {
-	struct list_head *list = buffers + BUFFER_FREED;
-	while (!list_empty(list)) {
-		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, link);
-		list_del(buffer->link);
-		free(buffer->data);
-		free(buffer);
+	struct buffer_head *buffer, *safe;
+	struct list_head *head;
+	for (int i = 0; i < BUFFER_STATES; i++) {
+		if (BUFFER_DIRTY0 <= i && i <= BUFFER_DIRTY3)
+			continue;
+		head = buffers + i;
+		list_for_each_entry_safe(buffer, safe, head, link) {
+			if (debug_buffer) {
+				if (buffer->count || i != buffer->state)
+					continue;
+			}
+			free_buffer(buffer);
+		}
+		if (!list_empty(head)) {
+			warn("state %d: buffer leak, or list corruption?", i);
+			list_for_each_entry(buffer, head, link) {
+				printf("map [%p] ", buffer->map);
+				show_buffer(buffer);
+			}
+			printf("\n");
+		}
+		assert(list_empty(head));
 	}
-	list = &lru_buffers;
-	while (!list_empty(list)) {
-		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, lru);
-		list_del(buffer->lru);
-		free(buffer->data);
-		free(buffer);
+#if 1
+	int has_dirty = 0;
+	list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
+		if (buffer_dirty(buffer)) {
+			if (!debug_buffer)
+				free_buffer(buffer);
+			else
+				has_dirty = 1;
+		}
 	}
+	if (has_dirty) {
+		warn("dirty buffer leak, or list corruption?");
+		list_for_each_entry(buffer, &lru_buffers, lru) {
+			if (buffer_dirty(buffer)) {
+				printf("map [%p] ", buffer->map);
+				show_buffer(buffer);
+			}
+		}
+		printf("\n");
+		assert(list_empty(&lru_buffers));
+	}
+#else
+	assert(list_empty(&lru_buffers));
+#endif
 }
 
 static void destroy_buffers(void)
@@ -371,8 +426,9 @@ buffers_allocation_failure:
 	return err;
 }
 
-void init_buffers(struct dev *dev, unsigned poolsize)
+void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 {
+	debug_buffer = debug;
 	INIT_LIST_HEAD(&lru_buffers);
 	for (int i = 0; i < BUFFER_STATES; i++)
 		INIT_LIST_HEAD(buffers + i);
@@ -381,6 +437,8 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 	max_buffers = poolsize / bufsize;
 	max_evict = max_buffers / 10;
 	preallocate_buffers(bufsize);
+#else
+	destroy_buffers();
 #endif
 }
 
@@ -422,7 +480,7 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
 	map_t *map = new_map(dev, NULL);
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 0);
 	show_dirty_buffers(map);
 	mark_buffer_dirty(blockget(map, 1));
 	show_dirty_buffers(map);

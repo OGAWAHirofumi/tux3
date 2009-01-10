@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 8 };
 	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), .super = { .volblocks = to_be_u64(150) }, };
 	struct inode *dir = rapid_new_inode(sb, NULL, S_IFDIR);
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 0);
 	struct buffer_head *buffer;
 	printf("empty = %i\n", tux_dir_is_empty(dir));
 	tux_create_entry(dir, "hello", 5, 0x666, S_IFREG);

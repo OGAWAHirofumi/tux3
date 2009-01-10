@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero
 	sb->bitmap = bitmap;
 
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 0);
 	unsigned blocksize = 1 << dev->bits;
 	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
 

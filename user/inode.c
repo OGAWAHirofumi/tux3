@@ -201,7 +201,7 @@ int main(int argc, char *argv[])
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 0);
 	struct sb *sb = &(struct sb){
 		RAPID_INIT_SB(dev),
 		.max_inodes_per_block = 64,

@@ -66,7 +66,7 @@ int main(int argc, const char *argv[])
 	}
 
 	struct dev *dev = &(struct dev){ fd, .bits = blockbits };
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 1);
 
 	struct sb *sb = &(struct sb){
 		.dev = dev,

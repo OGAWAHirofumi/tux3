@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 	};
 	sb->volmap = rapid_new_inode(sb, NULL, 0);
 	sb->bitmap = rapid_new_inode(sb, &filemap_ops, 0);
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 0);
 	struct inode *inode = rapid_new_inode(sb, &filemap_ops, 0);
 	assert(!new_btree(&inode->btree, sb, &dtree_ops));
 

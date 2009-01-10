@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRWXU) };
 	ftruncate(dev->fd, 1 << 24);
-	init_buffers(dev, 1 << 20);
+	init_buffers(dev, 1 << 20, 0);
 	struct sb *sb = &(struct sb){
 		RAPID_INIT_SB(dev),
 		.version = 0,

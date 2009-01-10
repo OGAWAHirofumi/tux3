@@ -68,7 +68,7 @@ struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
 int flush_buffers(map_t *map);
 void evict_buffers(map_t *map);
-void init_buffers(struct dev *dev, unsigned poolsize);
+void init_buffers(struct dev *dev, unsigned poolsize, int debug);
 
 static inline void *bufdata(struct buffer_head *buffer)
 {

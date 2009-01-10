@@ -372,7 +372,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 		error("fdsize64 failed for '%s' (%s) %i", volname, strerror(errno), fd);
 	dev = malloc(sizeof(*dev));
 	*dev = (struct dev){ .fd = fd, .bits = 12 };
-	init_buffers(dev, 1<<20);
+	init_buffers(dev, 1<<20, 1);
 	sb = malloc(sizeof(*sb));
 	*sb = (struct sb){
 		.dev = dev,
