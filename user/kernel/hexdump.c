@@ -7,15 +7,15 @@ void hexdump(void *data, unsigned size)
 	while (size) {
 		unsigned char *p;
 		int w = 16, n = size < w? size: w, pad = w - n;
-		printf("%p:  ", data);
+		printk("%p:  ", data);
 		for (p = data; p < (unsigned char *)data + n;)
-			printf("%02hx ", *p++);
-		printf("%*.s  \"", pad*3, "");
+			printk("%02hx ", *p++);
+		printk("%*.s  \"", pad*3, "");
 		for (p = data; p < (unsigned char *)data + n;) {
 			int c = *p++;
-			printf("%c", c < ' ' || c > 127 ? '.' : c);
+			printk("%c", c < ' ' || c > 127 ? '.' : c);
 		}
-		printf("\"\n");
+		printk("\"\n");
 		data += w;
 		size -= n;
 	}
