@@ -153,7 +153,7 @@ static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
 
 void evict_buffer(struct buffer_head *buffer)
 {
-	buftrace("Evict buffer [%Lx]", (L)buffer->index);
+	buftrace("evict buffer [%Lx]", (L)buffer->index);
 	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
         if (!remove_buffer_hash(buffer))
 		warn("buffer not in hash");
@@ -263,7 +263,7 @@ struct buffer_head *blockget(map_t *map, block_t block)
 			buffer->count++;
 			return buffer;
 		}
-	buftrace("create buffer [%Lx]", (L)block);
+	buftrace("make buffer [%Lx]", (L)block);
 	if (IS_ERR(buffer = new_buffer(map)))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
@@ -280,9 +280,8 @@ struct buffer_head *blockread(map_t *map, block_t block)
 		buftrace("read buffer %Lx, state %i", (L)buffer->index, buffer->state);
 		int err = buffer->map->ops->blockio(buffer, 0);
 		if (err) {
-			warn("failed to read block %Lx (%s)", (L)block, strerror(-err));
 			brelse(buffer);
-			return NULL;
+			return NULL; // ERR_PTR me!!!
 		}
 	}
 	return buffer;
