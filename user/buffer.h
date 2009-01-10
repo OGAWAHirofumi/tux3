@@ -35,14 +35,14 @@ struct map {
 	struct list_head dirty;
 	struct dev *dev;
 	struct map_ops *ops;
-	struct buffer_head *hash[BUFFER_BUCKETS];
+	struct hlist_head hash[BUFFER_BUCKETS];
 };
 
 typedef struct map map_t;
 
 struct buffer_head {
 	map_t *map;
-	struct buffer_head *hashlink;
+	struct hlist_node hashlink;
 	struct list_head link;
 	struct list_head lru; /* used for LRU list and the free list */
 	unsigned count, state;

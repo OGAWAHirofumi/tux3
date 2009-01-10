@@ -46,19 +46,20 @@ void show_buffer(struct buffer_head *buffer)
 
 void show_buffers_(map_t *map, int all)
 {
+	struct buffer_head *buffer;
+	struct hlist_node *node;
 	unsigned i;
 
-	for (i = 0; i < BUFFER_BUCKETS; i++)
-	{
-		struct buffer_head *buffer = map->hash[i];
-
-		if (!buffer)
+	for (i = 0; i < BUFFER_BUCKETS; i++) {
+		struct hlist_head *bucket = &map->hash[i];
+		if (hlist_empty(bucket))
 			continue;
 
 		printf("[%i] ", i);
-		for (; buffer; buffer = buffer->hashlink)
+		hlist_for_each_entry(buffer, node, bucket, hashlink) {
 			if (all || buffer->count)
 				show_buffer(buffer);
+		}
 		printf("\n");
 	}
 }
@@ -141,15 +142,8 @@ unsigned buffer_hash(block_t block)
 
 static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
 {
-	struct buffer_head **pbuffer = buffer->map->hash + buffer_hash(buffer->index);
-
-	for (; *pbuffer; pbuffer = &((*pbuffer)->hashlink))
-		if (*pbuffer == buffer)
-			goto removed;
-	assert(0); /* buffer not in hash */
-removed:
-	*pbuffer = buffer->hashlink;
-	buffer->hashlink = NULL;
+//	assert(!hlist_unhashed(&buffer->hashlink));  /* buffer not in hash */
+	hlist_del(&buffer->hashlink);
 	return buffer;
 }
 
@@ -206,6 +200,7 @@ struct buffer_head *new_buffer(map_t *map)
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
 	*buffer = (struct buffer_head){ .link = LIST_HEAD_INIT(buffer->link) };
+	INIT_HLIST_NODE(&buffer->hashlink);
 	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
@@ -235,8 +230,10 @@ int count_buffers(void)
 
 struct buffer_head *peekblk(map_t *map, block_t block)
 {
-	struct buffer_head **bucket = map->hash + buffer_hash(block);
-	for (struct buffer_head *buffer = *bucket; buffer; buffer = buffer->hashlink)
+	struct hlist_head *bucket = map->hash + buffer_hash(block);
+	struct buffer_head *buffer;
+	struct hlist_node *node;
+	hlist_for_each_entry(buffer, node, bucket, hashlink)
 		if (buffer->index == block) {
 			buffer->count++;
 			return buffer;
@@ -246,8 +243,10 @@ struct buffer_head *peekblk(map_t *map, block_t block)
 
 struct buffer_head *blockget(map_t *map, block_t block)
 {
-	struct buffer_head **bucket = map->hash + buffer_hash(block), *buffer;
-	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
+	struct hlist_head *bucket = map->hash + buffer_hash(block);
+	struct buffer_head *buffer;
+	struct hlist_node *node;
+	hlist_for_each_entry(buffer, node, bucket, hashlink)
 		if (buffer->index == block) {
 			list_move_tail(&buffer->lru, &lru_buffers);
 			buffer->count++;
@@ -257,8 +256,7 @@ struct buffer_head *blockget(map_t *map, block_t block)
 	if (IS_ERR(buffer = new_buffer(map)))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
-	buffer->hashlink = *bucket;
-	*bucket = buffer;
+	hlist_add_head(&buffer->hashlink, bucket);
 	list_add_tail(&buffer->lru, &lru_buffers);
 	buffer_count++;
 	return buffer;
@@ -284,14 +282,13 @@ void evict_buffers(map_t *map)
 {
 	unsigned i;
 	for (i = 0; i < BUFFER_BUCKETS; i++) {
+		struct hlist_head *bucket = &map->hash[i];
 		struct buffer_head *buffer;
-		for (buffer = map->hash[i]; buffer;) {
-			struct buffer_head *next = buffer->hashlink;
+		struct hlist_node *node, *n;
+		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
 			if (!buffer->count)
 				evict_buffer(buffer);
-			buffer = next;
 		}
-		map->hash[i] = NULL; /* all buffers have been freed in this bucket */
 	}
 }
 
@@ -337,7 +334,7 @@ static void destroy_buffers(void)
 
 int preallocate_buffers(unsigned bufsize)
 {
-	struct buffer_head *heads = (struct buffer_head *)malloc(max_buffers*sizeof(struct buffer_head));
+	struct buffer_head *heads = malloc(max_buffers * sizeof(*heads));
 	unsigned char *data_pool = NULL;
 	int i, err = -ENOMEM; /* if malloc fails */
 
@@ -351,6 +348,7 @@ int preallocate_buffers(unsigned bufsize)
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for(i = 0; i < max_buffers; i++) {
 		heads[i] = (struct buffer_head){ .data = (data_pool + i*bufsize), .state = BUFFER_FREED };
+		INIT_HLIST_NODE(&heads[i].hashlink);
 		list_add_tail(&heads[i].link, buffers + BUFFER_FREED);
 	}
 
@@ -399,6 +397,8 @@ map_t *new_map(struct dev *dev, struct map_ops *ops)
 	map_t *map = malloc(sizeof(*map)); // error???
 	*map = (map_t){ .dev = dev, .ops = ops ? ops : &volmap_ops };
 	INIT_LIST_HEAD(&map->dirty);
+	for (int i = 0; i < BUFFER_BUCKETS; i++)
+		INIT_HLIST_HEAD(&map->hash[i]);
 	return map;
 }
 
