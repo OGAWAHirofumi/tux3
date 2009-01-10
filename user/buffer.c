@@ -7,7 +7,7 @@
 #include "err.h"
 
 #define BUFFER_PARANOIA_DEBUG
-#define buftrace trace_on
+#define buftrace trace_off
 
 /*
  * Emulate kernel buffers in userspace
