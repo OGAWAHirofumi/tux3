@@ -107,6 +107,7 @@ struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer)
 
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 {
+	assert(!buffer_empty(buffer));
 	list_move_tail(&buffer->link, buffers + BUFFER_EMPTY);
 	buffer->state = BUFFER_EMPTY;
 	return buffer;
@@ -215,8 +216,7 @@ struct buffer_head *new_buffer(map_t *map)
 have_buffer:
 	assert(!buffer->count);
 	assert(buffer->state == BUFFER_FREED);
-	list_move_tail(&buffer->link, buffers + BUFFER_EMPTY);
-	buffer->state = BUFFER_EMPTY;
+	set_buffer_empty(buffer);
 	buffer->map = map;
 	buffer->count++;
 	return buffer;
