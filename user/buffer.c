@@ -199,7 +199,10 @@ struct buffer_head *new_buffer(map_t *map)
 	buffer = (struct buffer_head *)malloc(sizeof(struct buffer_head));
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
-	*buffer = (struct buffer_head){ .link = LIST_HEAD_INIT(buffer->link) };
+	*buffer = (struct buffer_head){
+		.link = LIST_HEAD_INIT(buffer->link),
+		.lru = LIST_HEAD_INIT(buffer->lru),
+	};
 	INIT_HLIST_NODE(&buffer->hashlink);
 	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
@@ -347,7 +350,11 @@ int preallocate_buffers(unsigned bufsize)
 
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for(i = 0; i < max_buffers; i++) {
-		heads[i] = (struct buffer_head){ .data = (data_pool + i*bufsize), .state = BUFFER_FREED };
+		heads[i] = (struct buffer_head){
+			.data = (data_pool + i*bufsize),
+			.state = BUFFER_FREED,
+			.lru = LIST_HEAD_INIT(heads[i].lru),
+		};
 		INIT_HLIST_NODE(&heads[i].hashlink);
 		list_add_tail(&heads[i].link, buffers + BUFFER_FREED);
 	}
