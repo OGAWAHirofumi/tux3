@@ -77,11 +77,10 @@ void show_buffers(map_t *map)
 
 void show_dirty_buffers(map_t *map)
 {
-	struct list_head *list;
+	struct buffer_head *buffer;
 	unsigned count = 0;
 	printf("map %p dirty: ", map);
-	list_for_each(list, &map->dirty) {
-		struct buffer_head *buffer = list_entry(list, struct buffer_head, link);
+	list_for_each_entry(buffer, &map->dirty, link) {
 		show_buffer(buffer);
 		count++;
 	}
@@ -181,11 +180,10 @@ struct buffer_head *new_buffer(map_t *map)
 
 	if (buffer_count >= max_buffers) {
 		buftrace("try to evict buffers");
-		struct list_head *list, *safe;
+		struct buffer_head *safe, *victim;
 		int count = 0;
 	
-		list_for_each_safe(list, safe, &lru_buffers) {
-			struct buffer_head *victim = list_entry(list, struct buffer_head, lru);
+		list_for_each_entry_safe(victim, safe, &lru_buffers, lru) {
 			if (victim->count == 0 && buffer_uptodate(victim)) {
 				evict_buffer(victim);
 				if (++count == max_evict)
@@ -224,10 +222,9 @@ have_buffer:
 
 int count_buffers(void)
 {
+	struct buffer_head *safe, *buffer;
 	int count = 0;
-	struct list_head *list, *safe;
-	list_for_each_safe(list, safe, &lru_buffers) {
-		struct buffer_head *buffer = list_entry(list, struct buffer_head, lru);
+	list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
 		if (!buffer->count)
 			continue;
 		trace_off("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count);
@@ -278,7 +275,6 @@ struct buffer_head *blockread(map_t *map, block_t block)
 			brelse(buffer);
 			return NULL;
 		}
-//		set_buffer_uptodate(buffer);
 	}
 	return buffer;
 }
