@@ -335,14 +335,16 @@ static void destroy_buffers(void)
 }
 #endif
 
+struct buffer_head *prealloc_heads;
+static unsigned char *data_pool;
+
 int preallocate_buffers(unsigned bufsize)
 {
-	struct buffer_head *heads = malloc(max_buffers * sizeof(*heads));
-	unsigned char *data_pool = NULL;
 	int i, err = -ENOMEM; /* if malloc fails */
 
 	buftrace("Pre-allocating buffers...");
-	if (!heads)
+	prealloc_heads = malloc(max_buffers * sizeof(*prealloc_heads));
+	if (!prealloc_heads)
 		goto buffers_allocation_failure;
 	buftrace("Pre-allocating data for buffers...");
 	if ((err = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
@@ -350,13 +352,13 @@ int preallocate_buffers(unsigned bufsize)
 
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for(i = 0; i < max_buffers; i++) {
-		heads[i] = (struct buffer_head){
+		prealloc_heads[i] = (struct buffer_head){
 			.data = (data_pool + i*bufsize),
 			.state = BUFFER_FREED,
-			.lru = LIST_HEAD_INIT(heads[i].lru),
+			.lru = LIST_HEAD_INIT(prealloc_heads[i].lru),
 		};
-		INIT_HLIST_NODE(&heads[i].hashlink);
-		list_add_tail(&heads[i].link, buffers + BUFFER_FREED);
+		INIT_HLIST_NODE(&prealloc_heads[i].hashlink);
+		list_add_tail(&prealloc_heads[i].link, buffers + BUFFER_FREED);
 	}
 
 	return 0; /* sucess on pre-allocation of buffers */
