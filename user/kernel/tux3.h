@@ -607,8 +607,6 @@ static inline int bufcount(struct buffer_head *buffer)
 	return atomic_read(&buffer->b_count);
 }
 
-#define bufmap(map) NULL // just ignore this until we have peekblk
-
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
 	return buffer->b_page->mapping->host;
