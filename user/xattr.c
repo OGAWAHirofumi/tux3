@@ -8,6 +8,8 @@
  * the right to distribute those changes under any license.
  */
 
+#include "tux3.h"
+
 #ifndef main
 #define main notmain0
 #include "balloc.c"
@@ -22,7 +24,6 @@
 #define trace trace_on
 #endif
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "kernel/xattr.c"
 
 /* Xattr encode/decode */

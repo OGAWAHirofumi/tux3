@@ -43,9 +43,6 @@
 
 #define mark_inode_dirty(x)
 
-enum {DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
-typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
-
 #ifndef trace
 #define trace trace_off
 #endif

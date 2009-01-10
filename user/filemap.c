@@ -11,10 +11,10 @@
 
 #include "kernel/xattr.c"
 #include "kernel/dleaf.c"
-#include "kernel/ileaf.c"
-#include "kernel/balloc.c"
 #include "kernel/btree.c"
 #include "kernel/iattr.c"
+#include "kernel/ileaf.c"
+#include "kernel/balloc.c"
 #include "kernel/filemap.c"
 
 /*

@@ -8,8 +8,6 @@
  * the right to distribute those changes under any license.
  */
 
-#include "hexdump.c"
-
 #define iattr_included_from_ileaf
 #include "iattr.c"
 
@@ -17,7 +15,15 @@
 #define trace trace_off
 #endif
 
+#ifndef main
+#define mark_inode_dirty(x)
+#include "kernel/dir.c"
+#include "kernel/xattr.c"
+#endif
+
 #include "kernel/ileaf.c"
+
+#include "hexdump.c"
 
 #ifndef main
 struct ileaf *ileaf_create(struct btree *btree)
@@ -90,7 +96,6 @@ int main(int argc, char *argv[])
 		printf("goal 0x%x => 0x%Lx\n", i, (L)find_empty_inode(btree, leaf, i));
 	ileaf_purge(btree, 0x14, leaf);
 	ileaf_purge(btree, 0x18, leaf);
-hexdump(leaf, 16);
 	ileaf_check(btree, leaf);
 	ileaf_dump(btree, leaf);
 	ileaf_destroy(btree, leaf);

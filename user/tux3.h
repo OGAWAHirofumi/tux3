@@ -50,6 +50,8 @@
 	(void) (&_max1 == &_max2);		\
 	_max1 > _max2 ? _max1 : _max2; })
 
+#define printk printf
+
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -173,5 +175,8 @@ static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 	.blockbits = (dev)->bits,		\
 	.blocksize = 1 << (dev)->bits,		\
 	.blockmask = ((1 << (dev)->bits) - 1)
+
+enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
+typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
 
 #endif

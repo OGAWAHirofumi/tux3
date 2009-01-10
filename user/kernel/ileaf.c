@@ -96,17 +96,13 @@ static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 		else if (!size)
 			printf("<empty>\n");
 		else {
-#ifndef main
-			hexdump(leaf->table + offset, size);
-#else
-			struct inode inode = { .i_sb = btree->sb };
+			struct inode inode = { .i_sb = vfs_sb(btree->sb) };
 			unsigned xsize = decode_xsize(&inode, leaf->table + offset, size);
-			inode.xcache = xsize ? new_xcache(xsize) : NULL;
+			tux_inode(&inode)->xcache = xsize ? new_xcache(xsize) : NULL;
 			decode_attrs(&inode, leaf->table + offset, size);
 			dump_attrs(&inode);
 			xcache_dump(&inode);
-			free(inode.xcache);
-#endif
+			free(tux_inode(&inode)->xcache);
 		}
 		offset = limit;
 	}
