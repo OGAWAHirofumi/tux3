@@ -79,5 +79,5 @@ int main(int argc, char *argv[])
 	//hexdump(sb->logbuf->data, 0x40);
 	log_finish(sb);
 	replay(sb);
-	return 0;
+	exit(0);
 }
