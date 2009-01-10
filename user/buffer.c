@@ -6,7 +6,7 @@
 #include "trace.h"
 #include "err.h"
 
-#define buftrace trace_on
+#define buftrace trace_off
 
 /*
  * Emulate kernel buffers in userspace
