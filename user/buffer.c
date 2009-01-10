@@ -6,8 +6,7 @@
 #include "trace.h"
 #include "err.h"
 
-#define BUFFER_PARANOIA_DEBUG
-#define buftrace trace_off
+#define buftrace trace_on
 
 /*
  * Emulate kernel buffers in userspace
@@ -28,15 +27,13 @@
  * add async IO.
  */
 
-typedef long long L; // widen for printf on 64 bit systems
+#define SECTOR_BITS 9
+#define SECTOR_SIZE (1 << SECTOR_BITS)
+#undef BUFFER_PARANOIA_DEBUG
+typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
 
-struct list_head free_buffers;
-struct list_head lru_buffers;
-unsigned buffer_count;
-unsigned journaled_count;
-
-static unsigned max_buffers = 10000;
-static unsigned max_evict = 1000; /* free 10 percent of the buffers */
+static struct list_head buffers[BUFFER_STATES], lru_buffers;
+static unsigned max_buffers = 10000, max_evict = 1000, buffer_count;
 
 void show_buffer(struct buffer_head *buffer)
 {
@@ -81,41 +78,29 @@ void show_buffers(map_t *map)
 void show_dirty_buffers(map_t *map)
 {
 	struct list_head *list;
-
-	warn("%i dirty buffers: ", map->dirty_count);
+	unsigned count = 0;
+	printf("map %p dirty: ", map);
 	list_for_each(list, &map->dirty) {
 		struct buffer_head *buffer = list_entry(list, struct buffer_head, link);
 		show_buffer(buffer);
+		count++;
 	}
-	warn("end");
+	printf("(%i)\n", count);
 }
-
-#if 0
-void dump_buffer(struct buffer_head *buffer, unsigned offset, unsigned length)
-{
-	hexdump(buffer->data + offset, length);
-}
-#endif
 
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
 {
 	buftrace("set_buffer_dirty %Lx state = %u", buffer->index, buffer->state);
-	if (!buffer_dirty(buffer)) {
-		assert(!buffer->link.next);
-		assert(!buffer->link.prev);
-		list_add_tail(&buffer->link, &buffer->map->dirty);
-		buffer->state = BUFFER_DIRTY;
-		buffer->map->dirty_count++;
-	}
+	if (!buffer_dirty(buffer))
+		list_move_tail(&buffer->link, &buffer->map->dirty);
+	buffer->state = BUFFER_DIRTY;
 	return buffer;
 }
 
 struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer)
 {
-	if (buffer_dirty(buffer)) {
-		list_del(&buffer->link);
-		buffer->map->dirty_count--;
-	}
+	assert(!buffer_uptodate(buffer));
+	list_move_tail(&buffer->link, buffers + BUFFER_CLEAN);
 	buffer->state = BUFFER_CLEAN;
 	return buffer;
 }
@@ -143,19 +128,10 @@ void brelse_dirty(struct buffer_head *buffer)
 	brelse(buffer);
 }
 
-int write_buffer_to(struct buffer_head *buffer, block_t block)
-{
-	return (buffer->map->ops->blockwrite)(buffer);
-}
-
 int write_buffer(struct buffer_head *buffer)
 {
 	buftrace("write buffer %Lx", buffer->index);
-	set_buffer_uptodate(buffer);
-	int err = write_buffer_to(buffer, buffer->index);
-	if (err)
-		mark_buffer_dirty(buffer);
-	return err;
+	return (buffer->map->ops->blockwrite)(buffer);
 }
 
 unsigned buffer_hash(block_t block)
@@ -177,35 +153,17 @@ removed:
 	return buffer;
 }
 
-static void add_buffer_free(struct buffer_head *buffer)
-{
-	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
-	buffer->state = BUFFER_FREED;
-	list_add_tail(&buffer->link, &free_buffers);
-}
-
-static struct buffer_head *remove_buffer_free(void)
-{
-	struct buffer_head *buffer = NULL;
-	if (!list_empty(&free_buffers)) {
-		buffer = list_entry(free_buffers.next, struct buffer_head, link);
-		list_del(&buffer->link);
-	}
-	return buffer;
-}
-
 void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("Evict buffer [%Lx]", buffer->index);
+	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
         if (!remove_buffer_hash(buffer))
 		warn("buffer not in hash");
+	list_move(&buffer->link, buffers + BUFFER_FREED);
+	buffer->state = BUFFER_FREED;
 	list_del(&buffer->lru);
 	buffer_count--;
-	add_buffer_free(buffer);
 }
-
-#define SECTOR_BITS 9
-#define SECTOR_SIZE (1 << SECTOR_BITS)
 
 struct buffer_head *new_buffer(map_t *map)
 {
@@ -215,29 +173,31 @@ struct buffer_head *new_buffer(map_t *map)
 	if (max_buffers < min_buffers)
 		max_buffers = min_buffers;
 
-	/* check if we hit the MAX_BUFFER limit and if there are any free buffers avail */
-	if ((buffer = remove_buffer_free()))
+	if (!list_empty(buffers + BUFFER_FREED)) {
+		buffer = list_entry(buffers[BUFFER_FREED].next, struct buffer_head, link);
 		goto have_buffer;
+	}
 
-	if (buffer_count < max_buffers)
-		goto alloc_buffer;
-
-	buftrace("try to evict buffers");
-	struct list_head *list, *safe;
-	int count = 0;
-
-	list_for_each_safe(list, safe, &lru_buffers) {
-		struct buffer_head *victim = list_entry(list, struct buffer_head, lru);
-		if (victim->count == 0 && buffer_uptodate(victim)) {
-			evict_buffer(victim);
-			if (++count == max_evict)
-				break;
+	if (buffer_count >= max_buffers) {
+		buftrace("try to evict buffers");
+		struct list_head *list, *safe;
+		int count = 0;
+	
+		list_for_each_safe(list, safe, &lru_buffers) {
+			struct buffer_head *victim = list_entry(list, struct buffer_head, lru);
+			if (victim->count == 0 && buffer_uptodate(victim)) {
+				evict_buffer(victim);
+				if (++count == max_evict)
+					break;
+			}
+		}
+	
+		if (!list_empty(buffers + BUFFER_FREED)) {
+			buffer = list_entry(buffers[BUFFER_FREED].next, struct buffer_head, link);
+			goto have_buffer;
 		}
 	}
-	if ((buffer = remove_buffer_free()))
-		goto have_buffer;
 
-alloc_buffer:
 	buftrace("expand buffer pool");
 	if (buffer_count == max_buffers) {
 		warn("Maximum buffer count exceeded (%i)", buffer_count);
@@ -246,7 +206,7 @@ alloc_buffer:
 	buffer = (struct buffer_head *)malloc(sizeof(struct buffer_head));
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
-	*buffer = (struct buffer_head){ };
+	*buffer = (struct buffer_head){ .link = LIST_HEAD_INIT(buffer->link) };
 	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
@@ -255,6 +215,7 @@ alloc_buffer:
 have_buffer:
 	assert(!buffer->count);
 	assert(buffer->state == BUFFER_FREED);
+	list_move_tail(&buffer->link, buffers + BUFFER_EMPTY);
 	buffer->state = BUFFER_EMPTY;
 	buffer->map = map;
 	buffer->count++;
@@ -291,13 +252,11 @@ struct buffer_head *blockget(map_t *map, block_t block)
 	struct buffer_head **bucket = map->hash + buffer_hash(block), *buffer;
 	for (buffer = *bucket; buffer; buffer = buffer->hashlink)
 		if (buffer->index == block) {
-			buftrace("found buffer for %Lx, state = %i", block, buffer->state);
-			list_del(&buffer->lru);
-			list_add_tail(&buffer->lru, &lru_buffers);
+			list_move_tail(&buffer->lru, &lru_buffers);
 			buffer->count++;
 			return buffer;
 		}
-	buftrace("Get buffer [%Lx]", block);
+	buftrace("create buffer [%Lx]", block);
 	if (IS_ERR(buffer = new_buffer(map)))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
@@ -319,7 +278,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 			brelse(buffer);
 			return NULL;
 		}
-		set_buffer_uptodate(buffer);
+//		set_buffer_uptodate(buffer);
 	}
 	return buffer;
 }
@@ -359,18 +318,19 @@ int flush_buffers(map_t *map) // !!! should use lru list
 #ifdef BUFFER_PARANOIA_DEBUG
 static void __destroy_buffers(void)
 {
-	struct list_head *heads[] = { &free_buffers, &lru_buffers, NULL, };
-	struct list_head **head = heads;
-return; /* need to loop over buffer state list heads, not lru */
-	while (*head) {
-		while (!list_empty(*head)) {
-			struct buffer_head *buffer =
-				list_entry((*head)->next, struct buffer_head, link);
-			list_del(&buffer->link);
-			free(buffer->data);
-			free(buffer);
-		}
-		head++;
+	struct list_head *list = buffers + BUFFER_FREED;
+	while (!list_empty(list)) {
+		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, link);
+		list_del(list->next);
+		free(buffer->data);
+		free(buffer);
+	}
+	list = &lru_buffers;
+	while (!list_empty(list)) {
+		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, lru);
+		list_del(list->next);
+		free(buffer->data);
+		free(buffer);
 	}
 }
 
@@ -381,12 +341,12 @@ static void destroy_buffers(void)
 #endif
 
 int preallocate_buffers(unsigned bufsize) {
-	struct buffer_head *buffers = (struct buffer_head *)malloc(max_buffers*sizeof(struct buffer_head));
+	struct buffer_head *heads = (struct buffer_head *)malloc(max_buffers*sizeof(struct buffer_head));
 	unsigned char *data_pool = NULL;
 	int i, err = -ENOMEM; /* if malloc fails */
 
 	buftrace("Pre-allocating buffers...");
-	if (!buffers)
+	if (!heads)
 		goto buffers_allocation_failure;
 	buftrace("Pre-allocating data for buffers...");
 	if ((err = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
@@ -394,8 +354,8 @@ int preallocate_buffers(unsigned bufsize) {
 
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for(i = 0; i < max_buffers; i++) {
-		buffers[i] = (struct buffer_head){ .data = (data_pool + i*bufsize), .state = BUFFER_EMPTY };
-		add_buffer_free(&buffers[i]);
+		heads[i] = (struct buffer_head){ .data = (data_pool + i*bufsize), .state = BUFFER_FREED };
+		list_add_tail(&heads[i].link, buffers + BUFFER_FREED);
 	}
 
 	return 0; /* sucess on pre-allocation of buffers */
@@ -411,10 +371,9 @@ buffers_allocation_failure:
 void init_buffers(struct dev *dev, unsigned poolsize)
 {
 	INIT_LIST_HEAD(&lru_buffers);
-	INIT_LIST_HEAD(&free_buffers);
-#ifdef BUFFER_PARANOIA_DEBUG
-	destroy_buffers();
-#else
+	for (int i = 0; i < BUFFER_STATES; i++)
+		INIT_LIST_HEAD(buffers + i);
+#ifndef BUFFER_PARANOIA_DEBUG
 	unsigned bufsize = 1 << dev->bits;
 	max_buffers = poolsize / bufsize;
 	max_evict = max_buffers / 10;
@@ -427,7 +386,11 @@ int dev_blockread(struct buffer_head *buffer)
 	warn("read [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	return diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	int err = diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	if (err)
+		return err;
+	set_buffer_uptodate(buffer);
+	return 0;
 }
 
 int dev_blockwrite(struct buffer_head *buffer)
@@ -435,7 +398,11 @@ int dev_blockwrite(struct buffer_head *buffer)
 	warn("write [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	return diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	int err = diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	if (err)
+		return err;
+	set_buffer_uptodate(buffer);
+	return 0;
 }
 
 struct map_ops volmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
@@ -467,6 +434,7 @@ int main(int argc, char *argv[])
 	printf("get %p\n", blockget(map, 1));
 	printf("get %p\n", blockget(map, 2));
 	printf("get %p\n", blockget(map, 1));
+	show_dirty_buffers(map);
 	exit(0);
 }
 #endif

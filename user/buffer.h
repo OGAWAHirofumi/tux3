@@ -39,7 +39,6 @@ struct map {
 	struct dev *dev;
 	struct map_ops *ops;
 	struct buffer_head *hash[BUFFER_BUCKETS];
-	unsigned dirty_count;
 };
 
 typedef struct map map_t;

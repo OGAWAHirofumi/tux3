@@ -293,6 +293,7 @@ int main(int argc, char *argv[])
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 	brelse_dirty(blockread(mapping(inode), 0x1));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
+	evict_buffers(mapping(inode));
 	filemap_extent_io(blockget(mapping(inode), 1), 0);
 	exit(0);
 #endif
