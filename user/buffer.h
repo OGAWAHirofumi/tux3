@@ -24,8 +24,7 @@ struct dev { unsigned fd, bits; };
 
 struct buffer_head;
 
-struct map_ops
-{
+struct map_ops {
 	int (*blockio)(struct buffer_head *buffer, int write);
 };
 
@@ -41,8 +40,7 @@ struct map {
 
 typedef struct map map_t;
 
-struct buffer_head
-{
+struct buffer_head {
 	map_t *map;
 	struct buffer_head *hashlink;
 	struct list_head link;
@@ -52,10 +50,8 @@ struct buffer_head
 	void *data;
 };
 
-struct list_head dirty_buffers;
+extern struct list_head dirty_buffers;
 extern unsigned dirty_buffer_count;
-struct list_head journaled_buffers;
-extern unsigned journaled_count;
 
 void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
@@ -66,12 +62,10 @@ void brelse(struct buffer_head *buffer);
 void brelse_dirty(struct buffer_head *buffer);
 int write_buffer_to(struct buffer_head *buffer, block_t pos);
 int write_buffer(struct buffer_head *buffer);
-int read_buffer(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
 struct buffer_head *peekblk(map_t *map, block_t block);
 struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
-void add_buffer_journaled(struct buffer_head *buffer);
 int flush_buffers(map_t *map);
 void evict_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize);

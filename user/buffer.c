@@ -90,7 +90,7 @@ void show_dirty_buffers(map_t *map)
 
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
 {
-	buftrace("set_buffer_dirty %Lx state = %u", buffer->index, buffer->state);
+	buftrace("set_buffer_dirty %Lx state = %u", (L)buffer->index, buffer->state);
 	if (!buffer_dirty(buffer))
 		list_move_tail(&buffer->link, &buffer->map->dirty);
 	buffer->state = BUFFER_DIRTY;
@@ -115,22 +115,22 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 void brelse(struct buffer_head *buffer)
 {
 	assert(buffer != NULL);
-	buftrace("Release buffer %Lx, count = %i, state = %i", buffer->index, buffer->count, buffer->state);
+	buftrace("Release buffer %Lx, count = %i, state = %i", (L)buffer->index, buffer->count, buffer->state);
 	assert(buffer->count);
 	if (!--buffer->count)
-		trace_off("Free buffer %Lx", buffer->index);
+		buftrace("Free buffer %Lx", (L)buffer->index);
 }
 
 void brelse_dirty(struct buffer_head *buffer)
 {
-	buftrace("Release dirty buffer %Lx", buffer->index);
+	buftrace("Release dirty buffer %Lx", (L)buffer->index);
 	mark_buffer_dirty(buffer);
 	brelse(buffer);
 }
 
 int write_buffer(struct buffer_head *buffer)
 {
-	buftrace("write buffer %Lx", buffer->index);
+	buftrace("write buffer %Lx", (L)buffer->index);
 	return buffer->map->ops->blockio(buffer, 1);
 }
 
@@ -155,7 +155,7 @@ removed:
 
 void evict_buffer(struct buffer_head *buffer)
 {
-	buftrace("Evict buffer [%Lx]", buffer->index);
+	buftrace("Evict buffer [%Lx]", (L)buffer->index);
 	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
         if (!remove_buffer_hash(buffer))
 		warn("buffer not in hash");
@@ -256,7 +256,7 @@ struct buffer_head *blockget(map_t *map, block_t block)
 			buffer->count++;
 			return buffer;
 		}
-	buftrace("create buffer [%Lx]", block);
+	buftrace("create buffer [%Lx]", (L)block);
 	if (IS_ERR(buffer = new_buffer(map)))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
@@ -271,7 +271,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 {
 	struct buffer_head *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
-		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
+		buftrace("read buffer %Lx, state %i", (L)buffer->index, buffer->state);
 		int err = buffer->map->ops->blockio(buffer, 0);
 		if (err) {
 			warn("failed to read block %Lx (%s)", (L)block, strerror(-err));
@@ -287,8 +287,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 void evict_buffers(map_t *map)
 {
 	unsigned i;
-	for (i = 0; i < BUFFER_BUCKETS; i++)
-	{
+	for (i = 0; i < BUFFER_BUCKETS; i++) {
 		struct buffer_head *buffer;
 		for (buffer = map->hash[i]; buffer;) {
 			struct buffer_head *next = buffer->hashlink;
@@ -321,14 +320,14 @@ static void __destroy_buffers(void)
 	struct list_head *list = buffers + BUFFER_FREED;
 	while (!list_empty(list)) {
 		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, link);
-		list_del(list->next);
+		list_del(buffer->link);
 		free(buffer->data);
 		free(buffer);
 	}
 	list = &lru_buffers;
 	while (!list_empty(list)) {
 		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, lru);
-		list_del(list->next);
+		list_del(buffer->lru);
 		free(buffer->data);
 		free(buffer);
 	}
@@ -340,7 +339,8 @@ static void destroy_buffers(void)
 }
 #endif
 
-int preallocate_buffers(unsigned bufsize) {
+int preallocate_buffers(unsigned bufsize)
+{
 	struct buffer_head *heads = (struct buffer_head *)malloc(max_buffers*sizeof(struct buffer_head));
 	unsigned char *data_pool = NULL;
 	int i, err = -ENOMEM; /* if malloc fails */
