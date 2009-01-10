@@ -27,8 +27,6 @@ struct buffer_head;
 struct map_ops
 {
 	int (*blockio)(struct buffer_head *buffer, int write);
-	int (*blockwrite)(struct buffer_head *buffer);
-	int (*blockread)(struct buffer_head *buffer);
 };
 
 struct map {

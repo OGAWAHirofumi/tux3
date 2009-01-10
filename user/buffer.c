@@ -131,7 +131,7 @@ void brelse_dirty(struct buffer_head *buffer)
 int write_buffer(struct buffer_head *buffer)
 {
 	buftrace("write buffer %Lx", buffer->index);
-	return (buffer->map->ops->blockwrite)(buffer);
+	return buffer->map->ops->blockio(buffer, 1);
 }
 
 unsigned buffer_hash(block_t block)
@@ -191,7 +191,7 @@ struct buffer_head *new_buffer(map_t *map)
 					break;
 			}
 		}
-	
+
 		if (!list_empty(buffers + BUFFER_FREED)) {
 			buffer = list_entry(buffers[BUFFER_FREED].next, struct buffer_head, link);
 			goto have_buffer;
@@ -272,7 +272,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 	struct buffer_head *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
-		int err = buffer->map->ops->blockread(buffer);
+		int err = buffer->map->ops->blockio(buffer, 0);
 		if (err) {
 			warn("failed to read block %Lx (%s)", (L)block, strerror(-err));
 			brelse(buffer);
@@ -381,31 +381,22 @@ void init_buffers(struct dev *dev, unsigned poolsize)
 #endif
 }
 
-int dev_blockread(struct buffer_head *buffer)
+int dev_blockio(struct buffer_head *buffer, int write)
 {
 	warn("read [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
-	int err = diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
-	if (err)
-		return err;
-	set_buffer_uptodate(buffer);
-	return 0;
+	int err;
+	if (write)
+		err = diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	else
+		err = diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	if (!err)
+		set_buffer_uptodate(buffer);
+	return err;
 }
 
-int dev_blockwrite(struct buffer_head *buffer)
-{
-	warn("write [%Lx]", (L)buffer->index);
-	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 8 && dev->fd);
-	int err = diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
-	if (err)
-		return err;
-	set_buffer_uptodate(buffer);
-	return 0;
-}
-
-struct map_ops volmap_ops = { .blockread = dev_blockread, .blockwrite = dev_blockwrite };
+struct map_ops volmap_ops = { .blockio = dev_blockio };
 
 map_t *new_map(struct dev *dev, struct map_ops *ops)
 {

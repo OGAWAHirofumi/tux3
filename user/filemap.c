@@ -112,20 +112,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	return err;
 }
 
-int filemap_block_read(struct buffer_head *buffer)
-{
-	return filemap_extent_io(buffer, 0);
-}
-
-int filemap_block_write(struct buffer_head *buffer)
-{
-	return filemap_extent_io(buffer, 1);
-}
-
-struct map_ops filemap_ops = {
-	.blockread = filemap_block_read,
-	.blockwrite = filemap_block_write,
-};
+struct map_ops filemap_ops = { .blockio = filemap_extent_io };
 
 #ifndef filemap_included
 static void check_created_seg(struct seg *seg)
