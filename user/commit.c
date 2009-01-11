@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), };
 	sb->volmap = rapid_new_inode(sb, NULL, 0);
 	sb->bitmap = rapid_new_inode(sb, NULL, 0);
-	sb->logmap = rapid_new_inode(sb, &filemap_ops, 0);
+	sb->logmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
 	for (int block = 0; block < 10; block++) {
 		struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);

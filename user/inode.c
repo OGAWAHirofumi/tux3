@@ -52,7 +52,7 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 {
 	inode->i_rdev = rdev;
 	if (inode->inum != TUX_VOLMAP_INO)
-		inode->map->ops = &filemap_ops;
+		inode->map->io = filemap_extent_io;
 }
 
 struct inode *iget(struct sb *sb, inum_t inum)

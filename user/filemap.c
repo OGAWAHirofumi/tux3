@@ -113,8 +113,6 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	return err;
 }
 
-struct map_ops filemap_ops = { .blockio = filemap_extent_io };
-
 #ifndef filemap_included
 void change_begin(struct sb *sb) { };
 void change_end(struct sb *sb) { };
@@ -143,9 +141,9 @@ int main(int argc, char *argv[])
 		.volblocks = size >> dev->bits,
 	};
 	sb->volmap = rapid_new_inode(sb, NULL, 0);
-	sb->bitmap = rapid_new_inode(sb, &filemap_ops, 0);
+	sb->bitmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
-	struct inode *inode = rapid_new_inode(sb, &filemap_ops, 0);
+	struct inode *inode = rapid_new_inode(sb, filemap_extent_io, 0);
 	assert(!new_btree(&inode->btree, sb, &dtree_ops));
 
 	block_t nextalloc = sb->nextalloc;

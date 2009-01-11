@@ -171,12 +171,12 @@ static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 void change_begin(struct sb *sb);
 void change_end(struct sb *sb);
 
-#define rapid_new_inode(sb, ops, mode)	({			\
+#define rapid_new_inode(sb, io, mode)	({			\
 	struct inode *__inode = &(struct inode){		\
 		.i_sb = sb,					\
 		.i_mode = mode,					\
 	};							\
-	__inode->map = new_map((sb)->dev, ops);			\
+	__inode->map = new_map((sb)->dev, io);			\
 	assert(__inode->map);					\
 	__inode->map->inode = __inode;				\
 	__inode;						\

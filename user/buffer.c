@@ -132,7 +132,7 @@ void brelse_dirty(struct buffer_head *buffer)
 int write_buffer(struct buffer_head *buffer)
 {
 	buftrace("write buffer %Lx", (L)buffer->index);
-	return buffer->map->ops->blockio(buffer, 1);
+	return buffer->map->io(buffer, 1);
 }
 
 unsigned buffer_hash(block_t block)
@@ -278,7 +278,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 	struct buffer_head *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
 		buftrace("read buffer %Lx, state %i", (L)buffer->index, buffer->state);
-		int err = buffer->map->ops->blockio(buffer, 0);
+		int err = buffer->map->io(buffer, 0);
 		if (err) {
 			brelse(buffer);
 			return NULL; // ERR_PTR me!!!
@@ -478,12 +478,10 @@ int dev_blockio(struct buffer_head *buffer, int write)
 	return err;
 }
 
-struct map_ops volmap_ops = { .blockio = dev_blockio };
-
-map_t *new_map(struct dev *dev, struct map_ops *ops)
+map_t *new_map(struct dev *dev, blockio_t *io)
 {
 	map_t *map = malloc(sizeof(*map)); // error???
-	*map = (map_t){ .dev = dev, .ops = ops ? ops : &volmap_ops };
+	*map = (map_t){ .dev = dev, .io = io ? io : dev_blockio };
 	INIT_LIST_HEAD(&map->dirty);
 	for (int i = 0; i < BUFFER_BUCKETS; i++)
 		INIT_HLIST_HEAD(&map->hash[i]);

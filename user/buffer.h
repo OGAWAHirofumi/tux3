@@ -18,9 +18,7 @@ struct dev { unsigned fd, bits; };
 
 struct buffer_head;
 
-struct map_ops {
-	int (*blockio)(struct buffer_head *buffer, int write);
-};
+typedef int (blockio_t)(struct buffer_head *buffer, int write);
 
 struct map {
 #if 1 /* tux3 only */
@@ -28,7 +26,7 @@ struct map {
 #endif
 	struct list_head dirty;
 	struct dev *dev;
-	struct map_ops *ops;
+	blockio_t *io;
 	struct hlist_head hash[BUFFER_BUCKETS];
 };
 
@@ -102,6 +100,6 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return buffer->state == BUFFER_DIRTY;
 }
 
-map_t *new_map(struct dev *dev, struct map_ops *ops);
+map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
 #endif
