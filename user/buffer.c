@@ -306,6 +306,7 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		struct buffer_head *clone = new_buffer(buffer->map);
 		if (IS_ERR(buffer))
 			return PTR_ERR(buffer);
+		memcpy(bufdata(clone), bufdata(buffer), bufsize(buffer));
 		void *data = buffer->data;
 		buffer->data = clone->data;
 		clone->data = data;
