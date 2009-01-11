@@ -26,6 +26,9 @@
 #include "hexdump.c"
 
 #ifndef main
+void change_begin(struct sb *sb) { };
+void change_end(struct sb *sb) { };
+
 struct ileaf *ileaf_create(struct btree *btree)
 {
 	struct ileaf *leaf = malloc(btree->sb->blocksize);

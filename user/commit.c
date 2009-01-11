@@ -59,6 +59,37 @@ void replay(struct sb *sb)
 	}
 }
 
+static int stage_delta(struct sb *sb) { return 0; };
+static int commit_delta(struct sb *sb) { return 0; };
+
+static int need_delta(struct sb *sb)
+{
+	static unsigned crudehack;
+	return !(++crudehack % 10);
+};
+
+void change_begin(struct sb *sb)
+{
+	down_read(&sb->delta_lock);
+}
+
+void change_end(struct sb *sb)
+{
+	down_read(&sb->delta_lock);
+	if (need_delta(sb)) {
+		unsigned delta = sb->delta;
+		up_read(&sb->delta_lock);
+		down_write(&sb->delta_lock);
+		if (sb->delta == delta) {
+			++sb->delta;
+			stage_delta(sb);
+			commit_delta(sb);
+		}
+		up_write(&sb->delta_lock);
+	} else
+		up_read(&sb->delta_lock);
+}
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };

@@ -223,6 +223,7 @@ struct sb {
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */
 	unsigned delta;		/* delta commit counter */
+	struct rw_semaphore delta_lock; /* delta transition exclusive */
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
@@ -730,8 +731,16 @@ static inline void brelse_dirty(struct buffer_head *buffer)
 	mark_buffer_dirty(buffer);
 	brelse(buffer);
 }
-#endif /* !__KERNEL__ */
+
+static inline int blockdirty(struct buffer_head *buffer, unsigned newdelta)
+{
+	mark_buffer_dirty(buffer);
+	return 0;
+}
 
 static inline void change_begin(struct sb *sb) { };
 static inline void change_end(struct sb *sb) { };
+
+#endif /* __KERNEL__ */
+
 #endif

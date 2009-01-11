@@ -115,6 +115,9 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 struct map_ops filemap_ops = { .blockio = filemap_extent_io };
 
 #ifndef filemap_included
+void change_begin(struct sb *sb) { };
+void change_end(struct sb *sb) { };
+
 static void check_created_seg(struct seg *seg)
 {
 	assert(seg->block > 0);

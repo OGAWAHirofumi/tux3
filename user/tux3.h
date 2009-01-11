@@ -57,21 +57,32 @@ typedef uint64_t u64;
 
 typedef int fd_t;
 
+typedef unsigned atomic_t;
+typedef struct { } spinlock_t;
+
+static inline int atomic_dec_and_lock(atomic_t *count, spinlock_t *lock)
+{
+	return !--*count;
+}
+
+static inline void spin_lock(spinlock_t *lock) { }
+static inline void spin_unlock(spinlock_t *lock) { }
+
 struct rw_semaphore { };
 
-static inline void down_read_nested(struct rw_semaphore *sem, int sub) { };
-static inline void down_read(struct rw_semaphore *sem) { };
-static inline void down_write_nested(struct rw_semaphore *sem, int sub) { };
-static inline void down_write(struct rw_semaphore *sem) { };
-static inline void up_read(struct rw_semaphore *sem) { };
-static inline void up_write(struct rw_semaphore *sem) { };
-static inline void init_rwsem(struct rw_semaphore *sem) { };
+static inline void down_read_nested(struct rw_semaphore *lock, int sub) { };
+static inline void down_read(struct rw_semaphore *lock) { };
+static inline void down_write_nested(struct rw_semaphore *lock, int sub) { };
+static inline void down_write(struct rw_semaphore *lock) { };
+static inline void up_read(struct rw_semaphore *lock) { };
+static inline void up_write(struct rw_semaphore *lock) { };
+static inline void init_rwsem(struct rw_semaphore *lock) { };
 
 struct mutex { };
 
-static inline void mutex_lock_nested(struct mutex *mutex, unsigned int sub) { };
-static inline void mutex_lock(struct mutex *mutex) { };
-static inline void mutex_unlock(struct mutex *mutex) { };
+static inline void mutex_lock_nested(struct mutex *lock, unsigned int sub) { };
+static inline void mutex_lock(struct mutex *lock) { };
+static inline void mutex_unlock(struct mutex *lock) { };
 
 /* Bitmaps */
 
@@ -156,6 +167,9 @@ static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 {
 	return blockread(sb->volmap->map, block);
 }
+
+void change_begin(struct sb *sb);
+void change_end(struct sb *sb);
 
 #define rapid_new_inode(sb, ops, mode)	({			\
 	struct inode *__inode = &(struct inode){		\

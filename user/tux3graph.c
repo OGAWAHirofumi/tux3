@@ -14,6 +14,9 @@
 #include "inode.c"
 #include <popt.h>
 
+void change_begin(struct sb *sb) { };
+void change_end(struct sb *sb) { };
+
 static int fls(uint32_t v)
 {
 	uint32_t mask;

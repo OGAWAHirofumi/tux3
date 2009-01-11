@@ -36,6 +36,9 @@
 #ifndef main
 #include <fcntl.h>
 
+void change_begin(struct sb *sb) { };
+void change_end(struct sb *sb) { };
+
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
