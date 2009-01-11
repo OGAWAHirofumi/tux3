@@ -88,28 +88,36 @@ void show_dirty_buffers(map_t *map)
 	printf("(%i)\n", count);
 }
 
+static inline void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
+{
+	list_move_tail(&buffer->link, list);
+	buffer->state = state;
+}
+
+static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
+{
+	set_buffer_state_list(buffer, state, buffers + state);
+}
+
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
 {
 	buftrace("set_buffer_dirty %Lx state = %u", (L)buffer->index, buffer->state);
 	if (!buffer_dirty(buffer))
-		list_move_tail(&buffer->link, &buffer->map->dirty);
-	buffer->state = BUFFER_DIRTY;
+		set_buffer_state_list(buffer, BUFFER_DIRTY, &buffer->map->dirty);
 	return buffer;
 }
 
 struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer)
 {
 	assert(!buffer_uptodate(buffer));
-	list_move_tail(&buffer->link, buffers + BUFFER_CLEAN);
-	buffer->state = BUFFER_CLEAN;
+	set_buffer_state(buffer, BUFFER_CLEAN);
 	return buffer;
 }
 
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 {
 	assert(!buffer_empty(buffer));
-	list_move_tail(&buffer->link, buffers + BUFFER_EMPTY);
-	buffer->state = BUFFER_EMPTY;
+	set_buffer_state(buffer, BUFFER_EMPTY);
 	return buffer;
 }
 
@@ -157,8 +165,7 @@ void evict_buffer(struct buffer_head *buffer)
 	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
         if (!remove_buffer_hash(buffer))
 		warn("buffer not in hash");
-	list_move(&buffer->link, buffers + BUFFER_FREED);
-	buffer->state = BUFFER_FREED;
+	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
 #ifdef BUFFER_PARANOIA_DEBUG
 	list_del_init(&buffer->lru);
 #else
@@ -302,12 +309,10 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		void *data = buffer->data;
 		buffer->data = clone->data;
 		clone->data = data;
-		list_move(&clone->link, buffers + oldstate);
-		clone->state = oldstate;
+		set_buffer_state(clone, oldstate);
 		brelse(clone);
 	}
-	list_move(&buffer->link, &buffer->map->dirty);
-	buffer->state = BUFFER_DIRTY + newdelta;
+	set_buffer_state_list(buffer, BUFFER_DIRTY + newdelta, &buffer->map->dirty);
 	return 0;
 }
 
