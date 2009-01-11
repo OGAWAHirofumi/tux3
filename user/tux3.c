@@ -265,6 +265,8 @@ int main(int argc, const char *argv[])
 			goto eek;
 		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
 			goto eek;
+		if ((errno = -purge_inum(&inode->i_sb->itable, inum)))
+			goto eek;
 		if ((errno = -tux_delete_entry(buffer, entry)))
 			goto eek;
 		tux_dump_entries(blockread(sb->rootdir->map, 0));

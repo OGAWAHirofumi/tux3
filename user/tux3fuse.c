@@ -353,8 +353,12 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		goto eek;
 	if ((errno = -tree_chop(&inode.btree, &(struct delete_info){ .key = 0 }, -1)))
 		goto eek;
+	if ((errno = -purge_inum(&sb->itable, inum)))
+		goto eek;
 	if ((errno = -tux_delete_entry(buffer, entry)))
 		goto eek;
+	if ((errno = -sync_super(sb)))
+ 		goto eek;
 
 	fuse_reply_err(req, 0);
 	return;
