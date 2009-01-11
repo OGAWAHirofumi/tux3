@@ -29,7 +29,7 @@
  *
  * For both, stop when extent is "big enough", whatever that means.
  */
-void guess_region(struct buffer_head *buffer, block_t *start, block_t *limit, int write)
+void guess_region(struct buffer_head *buffer, block_t *start, unsigned *count, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
 	block_t ends[2] = { bufindex(buffer), bufindex(buffer) };
@@ -52,7 +52,7 @@ void guess_region(struct buffer_head *buffer, block_t *start, block_t *limit, in
 		}
 	}
 	*start = ends[0];
-	*limit = ends[1] + 1;
+	*count = ends[1] + 1 - ends[0];
 }
 
 int filemap_extent_io(struct buffer_head *buffer, int write)
@@ -69,13 +69,14 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	if (!write && buffer_dirty(buffer))
 		warn("egad, reading a dirty buffer");
 
-	block_t start, limit;
-	guess_region(buffer, &start, &limit, write);
-	printf("---- extent 0x%Lx/%Lx ----\n", (L)start, (L)limit - start);
+	block_t start;
+	unsigned count;
+	guess_region(buffer, &start, &count, write);
+	printf("---- extent 0x%Lx/%x ----\n", (L)start, count);
 
 	struct seg map[10];
 
-	int segs = map_region(inode, start, limit - start, map, ARRAY_SIZE(map), write);
+	int segs = map_region(inode, start, count, map, ARRAY_SIZE(map), write);
 	if (segs < 0)
 		return segs;
 
