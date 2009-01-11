@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 		set_buffer_uptodate(buffer);
 	}
 	for (int i = 0; i < 12; i++) {
-		block_t block = balloc_from_range(bitmap, 121, 10, 1);
+		block_t block = balloc_from_range(sb, 121, 10, 1);
 		printf("%Li\n", (L)block);
 	}
 	hexdump(bufdata(blockget(bitmap->map, 0)), dumpsize);

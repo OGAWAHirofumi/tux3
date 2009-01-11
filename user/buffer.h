@@ -3,18 +3,12 @@
 
 #include "list.h"
 
-enum {
-	BUFFER_FREED,
-	BUFFER_EMPTY,
-	BUFFER_CLEAN,
-	BUFFER_DIRTY0,
-	BUFFER_DIRTY1,
-	BUFFER_DIRTY2,
-	BUFFER_DIRTY3,
-	BUFFER_STATES
-};
+#define BUFFER_DIRTY_STATES 4
 
-enum { BUFFER_DIRTY = BUFFER_DIRTY0 };
+enum {
+	BUFFER_FREED, BUFFER_EMPTY, BUFFER_CLEAN, BUFFER_DIRTY,
+	BUFFER_STATES = BUFFER_DIRTY + BUFFER_DIRTY_STATES
+};
 
 #define BUFFER_BUCKETS 999
 
@@ -50,9 +44,7 @@ struct buffer_head {
 	void *data;
 };
 
-extern struct list_head dirty_buffers;
-extern unsigned dirty_buffer_count;
-
+struct buffer_head *new_buffer(map_t *map);
 void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer);
@@ -60,12 +52,12 @@ struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
 void brelse(struct buffer_head *buffer);
 void brelse_dirty(struct buffer_head *buffer);
-int write_buffer_to(struct buffer_head *buffer, block_t pos);
 int write_buffer(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
 struct buffer_head *peekblk(map_t *map, block_t block);
 struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
+int blockdirty(struct buffer_head *buffer, unsigned newdelta);
 int flush_buffers(map_t *map);
 void evict_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);

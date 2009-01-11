@@ -185,8 +185,9 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	return -1;
 }
 
-static block_t balloc_from_range(struct inode *inode, block_t start, unsigned count, unsigned blocks)
+static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
 {
+	struct inode *inode = sb->bitmap;
 	trace("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	assert(blocks > 0);
 	block_t limit = start + count;
@@ -225,8 +226,9 @@ static block_t balloc_from_range(struct inode *inode, block_t start, unsigned co
 					goto final_partial_byte;
 				}
 				found -= run - 1;
+				blockdirty(buffer, tux_sb(inode->i_sb)->delta);
 				set_bits(bufdata(buffer), found & mapmask, run);
-				brelse_dirty(buffer);
+				brelse(buffer);
 				tux_sb(inode->i_sb)->nextalloc = found + run;
 				tux_sb(inode->i_sb)->freeblocks -= run;
 				//set_sb_dirty(sb);
@@ -247,9 +249,9 @@ block_t balloc(struct sb *sb, unsigned blocks)
 	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	block_t goal = sb->nextalloc, total = sb->volblocks, block;
-	if ((block = balloc_from_range(sb->bitmap, goal, total - goal, blocks)) >= 0)
+	if ((block = balloc_from_range(sb, goal, total - goal, blocks)) >= 0)
 		goto found;
-	if ((block = balloc_from_range(sb->bitmap, 0, goal, blocks)) >= 0)
+	if ((block = balloc_from_range(sb, 0, goal, blocks)) >= 0)
 		goto found;
 	mutex_unlock(&sb->bitmap->i_mutex);
 	return -1;
@@ -273,6 +275,7 @@ void bfree(struct sb *sb, block_t start, unsigned blocks)
 		goto eek;
 	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
 		goto eeek;
+	blockdirty(buffer, sb->delta);
 	clear_bits(bufdata(buffer), start, blocks);
 	brelse_dirty(buffer);
 	sb->freeblocks += blocks;

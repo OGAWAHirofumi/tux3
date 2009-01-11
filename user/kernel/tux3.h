@@ -222,6 +222,7 @@ struct sb {
 	struct inode *rootdir;	/* root directory special file */
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */
+	unsigned delta;		/* delta commit counter */
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */

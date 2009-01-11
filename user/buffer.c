@@ -29,7 +29,7 @@
 
 #define SECTOR_BITS 9
 #define SECTOR_SIZE (1 << SECTOR_BITS)
-#undef BUFFER_PARANOIA_DEBUG
+#define BUFFER_PARANOIA_DEBUG
 typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
 
 static struct list_head buffers[BUFFER_STATES], lru_buffers;
@@ -287,6 +287,30 @@ struct buffer_head *blockread(map_t *map, block_t block)
 	return buffer;
 }
 
+int blockdirty(struct buffer_head *buffer, unsigned newdelta)
+{
+	unsigned oldstate = buffer->state;
+	assert(oldstate < BUFFER_STATES);
+	newdelta &= BUFFER_DIRTY_STATES - 1;
+	if (oldstate >= BUFFER_DIRTY) {
+		if (oldstate - BUFFER_DIRTY == newdelta)
+			return 0;
+		buftrace("fork buffer %p", buffer);
+		struct buffer_head *clone = new_buffer(buffer->map);
+		if (IS_ERR(buffer))
+			return PTR_ERR(buffer);
+		void *data = buffer->data;
+		buffer->data = clone->data;
+		clone->data = data;
+		list_move(&clone->link, buffers + oldstate);
+		clone->state = oldstate;
+		brelse(clone);
+	}
+	list_move(&buffer->link, &buffer->map->dirty);
+	buffer->state = BUFFER_DIRTY + newdelta;
+	return 0;
+}
+
 /* !!! only used for testing */
 void evict_buffers(map_t *map)
 {
@@ -336,9 +360,7 @@ static void __destroy_buffers(void)
 {
 	struct buffer_head *buffer, *safe;
 	struct list_head *head;
-	for (int i = 0; i < BUFFER_STATES; i++) {
-		if (BUFFER_DIRTY0 <= i && i <= BUFFER_DIRTY3)
-			continue;
+	for (int i = 0; i < BUFFER_DIRTY; i++) {
 		head = buffers + i;
 		list_for_each_entry_safe(buffer, safe, head, link) {
 			if (debug_buffer) {
