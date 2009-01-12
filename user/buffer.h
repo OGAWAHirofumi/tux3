@@ -51,7 +51,6 @@ struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
 void brelse(struct buffer_head *buffer);
 void brelse_dirty(struct buffer_head *buffer);
-int write_buffer(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
 struct buffer_head *peekblk(map_t *map, block_t block);
 struct buffer_head *blockget(map_t *map, block_t block);

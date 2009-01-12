@@ -32,7 +32,7 @@
 #define BUFFER_PARANOIA_DEBUG
 typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
 
-static struct list_head buffers[BUFFER_STATES], lru_buffers;
+struct list_head buffers[BUFFER_STATES], lru_buffers;
 static unsigned max_buffers = 10000, max_evict = 1000, buffer_count;
 
 void show_buffer(struct buffer_head *buffer)
@@ -146,12 +146,6 @@ void brelse_dirty(struct buffer_head *buffer)
 	buftrace("Release dirty buffer %Lx", (L)buffer->index);
 	mark_buffer_dirty(buffer);
 	brelse(buffer);
-}
-
-int write_buffer(struct buffer_head *buffer)
-{
-	buftrace("write buffer %Lx", (L)buffer->index);
-	return buffer->map->io(buffer, 1);
 }
 
 unsigned buffer_hash(block_t block)
@@ -343,17 +337,16 @@ void evict_buffers(map_t *map)
 	}
 }
 
-/* !!! only used for testing */
-int flush_buffers(map_t *map) // !!! should use lru list
+int flush_buffers(map_t *map)
 {
 	int err = 0;
-
 	while (!list_empty(&map->dirty)) {
 		struct list_head *entry = map->dirty.next;
 		struct buffer_head *buffer = list_entry(entry, struct buffer_head, link);
-		if (buffer_dirty(buffer))
-			if ((err = write_buffer(buffer)))
-				break;
+		buftrace("write buffer %Lx", (L)buffer->index);
+		assert(buffer_dirty(buffer));
+		if ((err = buffer->map->io(buffer, 1)))
+			break;
 	}
 	return err;
 }
