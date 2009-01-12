@@ -27,14 +27,16 @@
 #include "kernel/dleaf.c"
 
 #ifndef main
-block_t balloc(struct sb *sb, unsigned blocks)
+int balloc(struct sb *sb, unsigned blocks, block_t *block)
 {
-	return sb->nextalloc += blocks;
+	*block = sb->nextalloc += blocks;
+	return 0;
 }
 
-void bfree(struct sb *sb, block_t block, unsigned blocks)
+int bfree(struct sb *sb, block_t block, unsigned blocks)
 {
 	printf(" free %Lx, count %x\n", (L)block, blocks);
+	return 0;
 }
 
 struct dleaf *dleaf_create(struct btree *btree)

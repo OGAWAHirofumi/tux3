@@ -40,9 +40,10 @@ static inline unsigned bcount(struct bnode *node)
 // just report and keep going without a fuss.
 static struct buffer_head *new_block(struct btree *btree)
 {
-	block_t block = (btree->ops->balloc)(btree->sb, 1);
-	if (block == -1)
-		return NULL;
+	block_t block;
+	int err = btree->ops->balloc(btree->sb, 1, &block);
+	if (err)
+		return NULL; // ERR_PTR me!!!
 	struct buffer_head *buffer = sb_getblk(vfs_sb(btree->sb), block);
 	if (!buffer)
 		return NULL;

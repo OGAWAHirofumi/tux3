@@ -72,12 +72,13 @@ int main(int argc, char *argv[])
 	hexdump(bufdata(blockget(bitmap->map, 1)), dumpsize);
 	hexdump(bufdata(blockget(bitmap->map, 2)), dumpsize);
 
+	block_t block;
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 1; i++)
-		balloc(sb, 1);
+		balloc(sb, 1, &block);
 	sb->nextalloc++; // gap
 	for (int i = 0; i < 10; i++)
-		balloc(sb, 1);
+		balloc(sb, 1, &block);
 	hexdump(bufdata(blockget(bitmap->map, 0)), dumpsize);
 	hexdump(bufdata(blockget(bitmap->map, 1)), dumpsize);
 	hexdump(bufdata(blockget(bitmap->map, 2)), dumpsize);

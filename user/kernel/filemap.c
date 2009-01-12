@@ -102,9 +102,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 	for (int i = 0; i < segs; i++) {
 		if (map[i].state == SEG_HOLE) {
 			count = map[i].count;
-			block = balloc(sb, count); // goal ???
-			trace("fill in %Lx/%i ", (L)block, count);
-			if (block == -1) {
+			if ((err = balloc(sb, count, &block))) { // goal ???
 				/*
 				 * Out of space on file data allocation.  It happens.  Tread
 				 * carefully.  We have not stored anything in the btree yet,
@@ -119,9 +117,10 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				 * space for btree splits, free just the blocks for extents
 				 * we failed to store.
 				 */
-				segs = -ENOSPC;
+				segs = err;
 				goto out_create;
-			}
+			}	
+			trace("fill in %Lx/%i ", (L)block, count);
 			map[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
 		}
 	}

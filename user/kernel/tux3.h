@@ -476,8 +476,8 @@ struct btree_ops {
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(struct btree *btree, tuxkey_t key, vleaf *leaf);
 	void (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
-	block_t (*balloc)(struct sb *sb, unsigned blocks);
-	void (*bfree)(struct sb *sb, block_t block, unsigned blocks);
+	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
+	int (*bfree)(struct sb *sb, block_t block, unsigned blocks);
 };
 
 /*
@@ -509,8 +509,8 @@ static inline fixed32 tuxtime(struct timespec time)
 }
 
 void hexdump(void *data, unsigned size);
-block_t balloc(struct sb *sb, unsigned blocks);
-void bfree(struct sb *sb, block_t start, unsigned blocks);
+int balloc(struct sb *sb, unsigned blocks, block_t *block);
+int bfree(struct sb *sb, block_t start, unsigned blocks);
 int update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
 
 enum atkind {

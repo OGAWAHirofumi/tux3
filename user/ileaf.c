@@ -59,9 +59,10 @@ void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, int less)
 	attrs = ileaf_resize(btree, inum, leaf, size - less);
 }
 
-block_t balloc(struct sb *sb, unsigned blocks)
+int balloc(struct sb *sb, unsigned blocks, block_t *block)
 {
-	return sb->nextalloc += blocks;
+	*block = sb->nextalloc += blocks;
+	return 0;
 }
 
 int main(int argc, char *argv[])

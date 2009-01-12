@@ -118,7 +118,8 @@ int main(int argc, char *argv[])
 	if (1) {
 		for (int i = 0; i < 11; i++) {
 			change_begin(sb);
-			block_t block = balloc(sb, 1);
+			block_t block;
+			assert(!balloc(sb, 1, &block));
 			log_alloc(sb, block, 1, 1);
 			change_end(sb);
 		}
