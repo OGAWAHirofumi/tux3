@@ -57,6 +57,7 @@ struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
 int blockdirty(struct buffer_head *buffer, unsigned newdelta);
 int flush_buffers(map_t *map);
+int flush_state(unsigned state);
 void evict_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
 

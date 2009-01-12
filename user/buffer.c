@@ -315,6 +315,7 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		void *data = buffer->data;
 		buffer->data = clone->data;
 		clone->data = data;
+		clone->index = buffer->index;
 		set_buffer_state(clone, oldstate);
 		brelse(clone);
 	}
@@ -345,6 +346,19 @@ int flush_buffers(map_t *map)
 		struct buffer_head *buffer = list_entry(entry, struct buffer_head, link);
 		buftrace("write buffer %Lx", (L)buffer->index);
 		assert(buffer_dirty(buffer));
+		if ((err = buffer->map->io(buffer, 1)))
+			break;
+	}
+	return err;
+}
+
+int flush_state(unsigned state)
+{
+	int err = 0;
+	struct buffer_head *buffer, *safe;
+	struct list_head *head = buffers + state;
+	list_for_each_entry_safe(buffer, safe, head, link) {
+		buftrace("write buffer %Lx", (L)buffer->index);
 		if ((err = buffer->map->io(buffer, 1)))
 			break;
 	}

@@ -59,41 +59,52 @@ void replay(struct sb *sb)
 	}
 }
 
-int bitmap_io(struct buffer_head *buffer, int write)
-{
-	struct inode *inode = buffer_inode(buffer);
-	struct sb *sb = tux_sb(inode->i_sb);
-	if (!write)
-		return filemap_extent_io(buffer, 0);
-	void *data = buffer->data; /* get data before map in case of fork */
-	struct seg seg;
-	int segs = map_region(inode, buffer->index, 1, &seg, 1, write);
-	if (segs < 0)
-		return segs;
-	if (!segs)
-		return -EIO;
-	assert(sb->dev->bits >= 8 && sb->dev->fd);
-	int err = diskwrite(sb->dev->fd, data, sb->blocksize, seg.block);
-	if (!err)
-		set_buffer_uptodate(buffer);
-	return err;
-}
-
 static int need_delta(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 10);
 };
 
+int write_bitmap(struct buffer_head *buffer)
+{
+	struct sb *sb = tux_sb(buffer->map->inode->i_sb);
+	struct seg seg;
+	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1, 2);
+	if (err < 0)
+		return err;
+	assert(err == 1);
+	if (buffer->state == sb->delta)
+		return -EAGAIN;
+	trace("write bitmap %Lx", (L)buffer->index);
+	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block)))
+		set_buffer_uptodate(buffer);
+	return 0;
+}
+
+int bitmap_io(struct buffer_head *buffer, int write)
+{
+	if (!write)
+		return filemap_extent_io(buffer, 0);
+	return write_bitmap(buffer);
+}
+
 static int stage_delta(struct sb *sb)
 {
-	hexdump(blockget(sb->bitmap->map, 0)->data, 16);
-	printf("%s\n", strerror(-flush_buffers(mapping(sb->bitmap))));
-	hexdump(blockget(sb->bitmap->map, 0)->data, 16);
+	assert(sb->dev->bits >= 8 && sb->dev->fd);
+	struct buffer_head *buffer, *safe;
+	struct list_head *head = &mapping(sb->bitmap)->dirty;
+	list_for_each_entry_safe(buffer, safe, head, link) {
+		int err = write_bitmap(buffer);
+		if (err != -EAGAIN)
+			return err;
+	}
 	return 0;
 };
 
-static int commit_delta(struct sb *sb) { return 0; };
+static int commit_delta(struct sb *sb)
+{
+	return flush_state(BUFFER_DIRTY + ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
+};
 
 void change_begin(struct sb *sb)
 {
