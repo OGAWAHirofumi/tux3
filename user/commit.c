@@ -39,7 +39,7 @@ void replay(struct sb *sb)
 				u64 block;
 				unsigned count = *data++;
 				data = decode48(data, &block);
-				trace("%s 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", (L)block, count);
+				trace("%s bits 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", (L)block, count);
 				update_bitmap(sb, block, count, code == LOG_ALLOC);
 				break;
 			}
@@ -81,6 +81,7 @@ void change_end(struct sb *sb)
 		up_read(&sb->delta_lock);
 		down_write(&sb->delta_lock);
 		if (sb->delta == delta) {
+			trace("commit delta %u", sb->delta);
 			++sb->delta;
 			stage_delta(sb);
 			commit_delta(sb);
@@ -92,23 +93,41 @@ void change_end(struct sb *sb)
 
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .bits = 8 };
-	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), };
+	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU) };
+	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), .volblocks = 100 };
 	sb->volmap = rapid_new_inode(sb, NULL, 0);
-	sb->bitmap = rapid_new_inode(sb, NULL, 0);
+	sb->bitmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	sb->logmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
-	for (int block = 0; block < 10; block++) {
-		struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);
-		memset(bufdata(buffer), 0, sb->blocksize);
-		set_buffer_uptodate(buffer);
+
+	if (0) {
+		for (int block = 0; block < 10; block++) {
+			struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);
+			memset(bufdata(buffer), 0, sb->blocksize);
+			set_buffer_uptodate(buffer);
+		}
+	
+		log_alloc(sb, 9, 6, 1);
+		log_alloc(sb, 0x99, 3, 0);
+		log_update(sb, 0xbabe, 0xd00d, 0x666);
+		//hexdump(sb->logbuf->data, 0x40);
+		log_finish(sb);
+		replay(sb);
 	}
 
-	log_alloc(sb, 9, 6, 1);
-	log_alloc(sb, 0x99, 3, 0);
-	log_update(sb, 0xbabe, 0xd00d, 0x666);
-	//hexdump(sb->logbuf->data, 0x40);
-	log_finish(sb);
-	replay(sb);
+	if (1) {
+		for (int i = 0; i < 11; i++) {
+			change_begin(sb);
+			block_t block = balloc(sb, 1);
+			log_alloc(sb, block, 1, 1);
+			change_end(sb);
+		}
+		log_finish(sb);
+		replay(sb);
+		show_buffers_state(BUFFER_DIRTY + 0);
+		show_buffers_state(BUFFER_DIRTY + 1);
+		show_buffers_state(BUFFER_DIRTY + 2);
+		show_buffers_state(BUFFER_DIRTY + 3);
+	}
 	exit(0);
 }

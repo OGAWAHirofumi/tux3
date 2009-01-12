@@ -201,8 +201,10 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
 		struct buffer_head *buffer = blockread(mapping(inode), mapblock);
-		if (!buffer)
+		if (!buffer) {
+			warn("block read failed"); // !!! error return sucks here
 			return -1;
+		}
 		unsigned bytes = blocksize - offset, run = 0;
 		if (bytes > tail)
 			bytes = tail;

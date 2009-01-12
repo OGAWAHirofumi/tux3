@@ -76,16 +76,27 @@ void show_buffers(map_t *map)
 	show_buffers_(map, 1);
 }
 
-void show_dirty_buffers(map_t *map)
+void show_buffer_list(struct list_head *list)
 {
 	struct buffer_head *buffer;
 	unsigned count = 0;
-	printf("map %p dirty: ", map);
-	list_for_each_entry(buffer, &map->dirty, link) {
+	list_for_each_entry(buffer, list, link) {
 		show_buffer(buffer);
 		count++;
 	}
 	printf("(%i)\n", count);
+}
+
+void show_dirty_buffers(map_t *map)
+{
+	printf("map %p dirty: ", map);
+	show_buffer_list(&map->dirty);
+}
+
+void show_buffers_state(unsigned state)
+{
+	printf("buffers in state %u: ", state);
+	show_buffer_list(buffers + state);
 }
 
 static inline void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
@@ -302,7 +313,7 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	if (oldstate >= BUFFER_DIRTY) {
 		if (oldstate - BUFFER_DIRTY == newdelta)
 			return 0;
-		buftrace("fork buffer %p", buffer);
+		trace_on("---- fork buffer %p ----", buffer);
 		struct buffer_head *clone = new_buffer(buffer->map);
 		if (IS_ERR(buffer))
 			return PTR_ERR(buffer);

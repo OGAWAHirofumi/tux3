@@ -117,7 +117,7 @@ inodetest: inode
 commit: vfs.o commit.o
 	$(CC) $(CFLAGS) vfs.o commit.o -o commit
 committest: commit
-	$(VG) ./commit
+	$(VG) ./commit foodev
 
 tux3: vfs.o tux3.o
 	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
