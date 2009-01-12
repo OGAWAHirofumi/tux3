@@ -59,14 +59,21 @@ void replay(struct sb *sb)
 	}
 }
 
-static int stage_delta(struct sb *sb) { return 0; };
-static int commit_delta(struct sb *sb) { return 0; };
-
 static int need_delta(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 10);
 };
+
+static int stage_delta(struct sb *sb)
+{
+	hexdump(blockget(sb->bitmap->map, 0)->data, 16);
+	printf("%s\n", strerror(-flush_buffers(mapping(sb->bitmap))));
+	hexdump(blockget(sb->bitmap->map, 0)->data, 16);
+	return 0;
+};
+
+static int commit_delta(struct sb *sb) { return 0; };
 
 void change_begin(struct sb *sb)
 {
@@ -91,14 +98,18 @@ void change_end(struct sb *sb)
 		up_read(&sb->delta_lock);
 }
 
+extern struct list_head *buffers;
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU) };
 	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), .volblocks = 100 };
+	ftruncate(dev->fd, 1 << 24);
 	sb->volmap = rapid_new_inode(sb, NULL, 0);
 	sb->bitmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	sb->logmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
+	assert(!new_btree(&sb->bitmap->btree, sb, &dtree_ops));
 
 	if (0) {
 		for (int block = 0; block < 10; block++) {
@@ -116,7 +127,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (1) {
-		for (int i = 0; i < 11; i++) {
+		for (int i = 0; i < 21; i++) {
 			change_begin(sb);
 			block_t block;
 			assert(!balloc(sb, 1, &block));

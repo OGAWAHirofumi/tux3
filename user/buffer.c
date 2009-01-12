@@ -41,7 +41,7 @@ void show_buffer(struct buffer_head *buffer)
 		buffer_dirty(buffer) ? "*" :
 		buffer_uptodate(buffer) ? "" :
 		buffer->state == BUFFER_EMPTY ? "-" :
-		"???");
+		"?");
 }
 
 void show_buffers_(map_t *map, int all)

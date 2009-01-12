@@ -98,7 +98,7 @@ static inline int buffer_uptodate(struct buffer_head *buffer)
 
 static inline int buffer_dirty(struct buffer_head *buffer)
 {
-	return buffer->state == BUFFER_DIRTY;
+	return buffer->state >= BUFFER_DIRTY;
 }
 
 map_t *new_map(struct dev *dev, blockio_t *io);
