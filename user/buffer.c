@@ -338,31 +338,28 @@ void evict_buffers(map_t *map)
 	}
 }
 
-int flush_buffers(map_t *map)
+int flush_list(struct list_head *list)
 {
 	int err = 0;
-	while (!list_empty(&map->dirty)) {
-		struct list_head *entry = map->dirty.next;
-		struct buffer_head *buffer = list_entry(entry, struct buffer_head, link);
+	while (!list_empty(list)) {
+		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, link);
 		buftrace("write buffer %Lx", (L)buffer->index);
 		assert(buffer_dirty(buffer));
 		if ((err = buffer->map->io(buffer, 1)))
 			break;
+		assert(buffer_uptodate(buffer));
 	}
 	return err;
 }
 
+int flush_buffers(map_t *map)
+{
+	return flush_list(&map->dirty);
+}
+
 int flush_state(unsigned state)
 {
-	int err = 0;
-	struct buffer_head *buffer, *safe;
-	struct list_head *head = buffers + state;
-	list_for_each_entry_safe(buffer, safe, head, link) {
-		buftrace("write buffer %Lx", (L)buffer->index);
-		if ((err = buffer->map->io(buffer, 1)))
-			break;
-	}
-	return err;
+	return flush_list(buffers + state);
 }
 
 static int debug_buffer;
