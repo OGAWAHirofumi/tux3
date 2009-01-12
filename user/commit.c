@@ -14,7 +14,7 @@
 
 #define include_inode_c
 #include "inode.c"
-//#include "kernel/commit.c"
+#include "kernel/log.c"
 
 void replay(struct sb *sb)
 {

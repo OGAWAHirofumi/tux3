@@ -246,6 +246,12 @@ struct sb {
 #endif
 };
 
+/* logging  */
+
+struct logblock { be_u16 magic, bytes; be_u64 prevlog; unsigned char data[]; };
+enum { LOG_ALLOC, LOG_FREE, LOG_UPDATE };
+struct commit_entry { be_u64 previous; };
+
 #ifdef __KERNEL__
 /*
  * In kernel an inode has a generic part and a filesystem-specific part
