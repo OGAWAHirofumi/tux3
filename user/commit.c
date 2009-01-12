@@ -59,6 +59,26 @@ void replay(struct sb *sb)
 	}
 }
 
+int bitmap_io(struct buffer_head *buffer, int write)
+{
+	struct inode *inode = buffer_inode(buffer);
+	struct sb *sb = tux_sb(inode->i_sb);
+	if (!write)
+		return filemap_extent_io(buffer, 0);
+	void *data = buffer->data; /* get data before map in case of fork */
+	struct seg seg;
+	int segs = map_region(inode, buffer->index, 1, &seg, 1, write);
+	if (segs < 0)
+		return segs;
+	if (!segs)
+		return -EIO;
+	assert(sb->dev->bits >= 8 && sb->dev->fd);
+	int err = diskwrite(sb->dev->fd, data, sb->blocksize, seg.block);
+	if (!err)
+		set_buffer_uptodate(buffer);
+	return err;
+}
+
 static int need_delta(struct sb *sb)
 {
 	static unsigned crudehack;
@@ -106,7 +126,7 @@ int main(int argc, char *argv[])
 	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), .volblocks = 100 };
 	ftruncate(dev->fd, 1 << 24);
 	sb->volmap = rapid_new_inode(sb, NULL, 0);
-	sb->bitmap = rapid_new_inode(sb, filemap_extent_io, 0);
+	sb->bitmap = rapid_new_inode(sb, bitmap_io, 0);
 	sb->logmap = rapid_new_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
 	assert(!new_btree(&sb->bitmap->btree, sb, &dtree_ops));
