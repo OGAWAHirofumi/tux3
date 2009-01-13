@@ -103,11 +103,10 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		dwalk_copy(walk, tail);
 	}
 
+	/* Save blocks before change map[] for below or above. */
 	block_t below_block, above_block;
-	if (below)
-		below_block = map[0].block - below;
-	if (above)
-		above_block = map[segs - 1].block + map[segs - 1].count;
+	below_block = map[0].block - below;
+	above_block = map[segs - 1].block + map[segs - 1].count;
 	if (create == 2) {
 		count = 0;
 		for (int i = 0; i < segs; i++) {
