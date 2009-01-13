@@ -31,7 +31,7 @@ diskiodeps	= diskio.c diskio.h
 bufferdeps	= buffer.c buffer.h diskio.h err.h list.h
 vfsdeps		= $(bufferdeps) $(diskiodeps) vfs.c
 basedeps	= $(tuxdeps) err.h list.h buffer.h diskio.h tux3.h \
-	kernel/tux3.h hexdump.c
+	kernel/tux3.h hexdump.c lockdebug.h
 ballocdeps	= kernel/balloc.c
 btreedeps	= balloc-dummy.c kernel/btree.c
 commitdeps	= $(inodedeps)

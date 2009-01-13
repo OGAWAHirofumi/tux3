@@ -17,6 +17,7 @@
 #include "err.h"
 #include "buffer.h"
 #include "trace.h"
+#include "lockdebug.h"
 
 #ifdef __CHECKER__
 #define __force		__attribute__((force))
@@ -56,33 +57,6 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 
 typedef int fd_t;
-
-typedef unsigned atomic_t;
-typedef struct { } spinlock_t;
-
-static inline int atomic_dec_and_lock(atomic_t *count, spinlock_t *lock)
-{
-	return !--*count;
-}
-
-static inline void spin_lock(spinlock_t *lock) { }
-static inline void spin_unlock(spinlock_t *lock) { }
-
-struct rw_semaphore { };
-
-static inline void down_read_nested(struct rw_semaphore *lock, int sub) { };
-static inline void down_read(struct rw_semaphore *lock) { };
-static inline void down_write_nested(struct rw_semaphore *lock, int sub) { };
-static inline void down_write(struct rw_semaphore *lock) { };
-static inline void up_read(struct rw_semaphore *lock) { };
-static inline void up_write(struct rw_semaphore *lock) { };
-static inline void init_rwsem(struct rw_semaphore *lock) { };
-
-struct mutex { };
-
-static inline void mutex_lock_nested(struct mutex *lock, unsigned int sub) { };
-static inline void mutex_lock(struct mutex *lock) { };
-static inline void mutex_unlock(struct mutex *lock) { };
 
 /* Bitmaps */
 
@@ -174,12 +148,16 @@ void change_end(struct sb *sb);
 #define INIT_INODE(sb, mode)				\
 	.i_sb = sb,					\
 	.i_mode = mode,					\
+	.i_mutex = __MUTEX_INITIALIZER,			\
 	.i_version = 1,					\
 	.i_nlink = 1
 
 #define rapid_open_inode(sb, io, mode)	({		\
 	struct inode *__inode = &(struct inode){	\
 		INIT_INODE(sb, mode),			\
+		.btree = {				\
+			.lock = __RWSEM_INITIALIZER,	\
+		},					\
 	};						\
 	__inode->map = new_map((sb)->dev, io);		\
 	assert(__inode->map);				\
@@ -191,7 +169,9 @@ void change_end(struct sb *sb);
 	.dev = dev,					\
 	.blockbits = (dev)->bits,			\
 	.blocksize = 1 << (dev)->bits,			\
-	.blockmask = ((1 << (dev)->bits) - 1)
+	.blockmask = ((1 << (dev)->bits) - 1),		\
+	.delta_lock = __RWSEM_INITIALIZER,		\
+	.loglock = __MUTEX_INITIALIZER
 
 enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
