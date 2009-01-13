@@ -81,13 +81,6 @@ int write_bitmap(struct buffer_head *buffer)
 	return 0;
 }
 
-int bitmap_io(struct buffer_head *buffer, int write)
-{
-	if (!write)
-		return filemap_extent_io(buffer, 0);
-	return write_bitmap(buffer);
-}
-
 static int stage_delta(struct sb *sb)
 {
 	assert(sb->dev->bits >= 8 && sb->dev->fd);
@@ -129,7 +122,10 @@ void change_end(struct sb *sb)
 		up_read(&sb->delta_lock);
 }
 
-extern struct list_head *buffers;
+int bitmap_io(struct buffer_head *buffer, int write)
+{
+	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
+}
 
 int main(int argc, char *argv[])
 {
