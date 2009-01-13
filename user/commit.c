@@ -73,7 +73,7 @@ int write_bitmap(struct buffer_head *buffer)
 	if (err < 0)
 		return err;
 	assert(err == 1);
-	if (buffer->state == sb->delta)
+	if (buffer->state - BUFFER_DIRTY == (sb->delta & (BUFFER_DIRTY_STATES - 1)))
 		return -EAGAIN;
 	trace("write bitmap %Lx", (L)buffer->index);
 	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block)))
