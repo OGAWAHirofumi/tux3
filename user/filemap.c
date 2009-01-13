@@ -92,9 +92,9 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 
 	int err = 0;
 	for (int i = 0, index = start; !err && i < segs; i++) {
-		int count = map[i].count, hole = map[i].state == SEG_HOLE;
-		trace_on("extent 0x%Lx/%x => %Lx", (L)index, count, (L)map[i].block);
-		for (int j = 0; !err && j < count; j++) {
+		int hole = map[i].state == SEG_HOLE;
+		trace_on("extent 0x%Lx/%x => %Lx", (L)index, map[i].count, (L)map[i].block);
+		for (int j = 0; !err && j < map[i].count; j++) {
 			block_t block = map[i].block + j;
 			buffer = blockget(mapping(inode), index + j);
 			trace_on("block 0x%Lx => %Lx", (L)bufindex(buffer), (L)block);
@@ -108,7 +108,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 			}
 			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
 		}
-		index += count;
+		index += map[i].count;
 	}
 	return err;
 }
