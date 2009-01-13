@@ -714,6 +714,10 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
 
+/* log.c */
+void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
+void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
+
 /* commit.c */
 int unpack_sb(struct sb *sb, struct disksuper *super, int silent);
 void pack_sb(struct sb *sb, struct disksuper *super);
