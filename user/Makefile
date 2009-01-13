@@ -19,15 +19,19 @@ VG=valgrind --error-exitcode=200 --leak-check=full
 
 TESTDIR = .
 
-binaries = buffer balloc dleaf ileaf iattr xattr btree dir filemap inode commit tux3 tux3fuse tux3graph
+testbin = buffer balloc dleaf ileaf iattr xattr btree dir filemap inode commit
+binaries = $(testbin) tux3 tux3fuse tux3graph
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
 endif
 
-basedeps	= Makefile err.h buffer.h diskio.h list.h trace.h \
-	kernel/trace.h tux3.h kernel/tux3.h hexdump.c kernel/hexdump.c
-vfsdeps		= vfs.c buffer.c diskio.c
+tuxdeps		= Makefile trace.h kernel/trace.h
+diskiodeps	= diskio.c diskio.h
+bufferdeps	= buffer.c buffer.h diskio.h err.h list.h
+vfsdeps		= $(bufferdeps) $(diskiodeps) vfs.c
+basedeps	= $(tuxdeps) err.h list.h buffer.h diskio.h tux3.h \
+	kernel/tux3.h hexdump.c
 ballocdeps	= balloc.c kernel/balloc.c
 btreedeps	= btree.c kernel/btree.c
 dirdeps		= dir.c kernel/dir.c
@@ -43,79 +47,77 @@ xattrdeps	= $(ballocdeps) $(dirdeps) $(ileafdeps) xattr.c kernel/xattr.c
 all: $(binaries)
 tests: buffertest balloctest committest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
 
+# standalone and library
+buffer.o: $(tuxdeps) $(bufferdeps)
+diskio.o: $(tuxdeps) $(diskiodeps)
+vfs.o: $(tuxdeps) $(vfsdeps)
+# standalone
 balloc.o: $(basedeps) $(ballocdeps)
 btree.o: $(basedeps) $(btreedeps)
+commit.o: $(basedeps) $(inodedeps)
 dir.o: $(basedeps) $(dirdeps)
 dleaf.o: $(basedeps) $(dleafdeps)
 filemap.o: $(basedeps) $(filemapdeps)
 iattr.o: $(basedeps) $(iattrdeps)
 ileaf.o: $(basedeps) $(ileafdeps)
 inode.o: $(basedeps) $(inodedeps)
-commit.o: $(basedeps) $(inodedeps)
+xattr.o:$(basedeps) $(xattrdeps)
+# programs
 tux3.o:$(basedeps) $(superdeps)
 tux3fuse.o:$(basedeps) $(superdeps)
 tux3graph.o:$(basedeps) $(superdeps)
-vfs.o: $(basedeps) $(vfsdeps)
-xattr.o:$(basedeps) $(xattrdeps)
+
+buffer: buffer.o diskio.o
+dleaf: vfs.o dleaf.o
+balloc: vfs.o balloc.o
+ileaf: vfs.o ileaf.o
+btree: vfs.o btree.o
+dir: vfs.o dir.o
+iattr: vfs.o iattr.o
+xattr: vfs.o xattr.o
+inode: vfs.o inode.o
+filemap: vfs.o filemap.o
+commit: vfs.o commit.o
 
 .c.o:
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
 ifeq ($(CHECK),1)
-	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
+	$(CHECKER) $(CFLAGS) -Dbuild_$(<:.c=) $(CHECKFLAGS) -c $<
 endif
 
-buffer: buffer.c buffer.h diskio.c diskio.h Makefile
-	$(CC) $(CFLAGS) buffer.c diskio.c -o buffer
+$(testbin):
+	$(CC) $(CFLAGS) $^ -o $@
+
 buffertest: buffer
 	$(VG) ./buffer
 
-balloc: vfs.o balloc.o
-	$(CC) $(CFLAGS) vfs.o balloc.o -o balloc
 balloctest: balloc
 	$(VG) ./balloc
 
-dleaf: vfs.o dleaf.o
-	$(CC) $(CFLAGS) vfs.o dleaf.o -o dleaf
 dleaftest: dleaf
 	$(VG) ./dleaf
 
-ileaf: vfs.o ileaf.o
-	$(CC) $(CFLAGS) vfs.o ileaf.o -o ileaf
 ileaftest: ileaf
 	$(VG) ./ileaf
 
-btree: vfs.o btree.o
-	$(CC) $(CFLAGS) vfs.o btree.o -o btree
 btreetest: btree
 	$(VG) ./btree foodev
 
-dir: vfs.o dir.o
-	$(CC) $(CFLAGS) vfs.o dir.o -o dir
 dirtest: dir
 	$(VG) ./dir
 
-iattr: vfs.o iattr.o
-	$(CC) $(CFLAGS) vfs.o iattr.o -o iattr
 iattrtest: iattr
 	$(VG) ./iattr
 
-xattr: vfs.o xattr.o
-	$(CC) $(CFLAGS) vfs.o xattr.o -o xattr
 xattrtest: xattr
 	$(VG) ./xattr foodev
 
-filemap: vfs.o filemap.o
-	$(CC) $(CFLAGS) vfs.o filemap.o -o filemap
 filemaptest: filemap
 	$(VG) ./filemap foodev
 
-inode: vfs.o inode.o
-	$(CC) $(CFLAGS) vfs.o inode.o -o inode
 inodetest: inode
 	$(VG) ./inode foodev
 
-commit: vfs.o commit.o
-	$(CC) $(CFLAGS) vfs.o commit.o -o commit
 committest: commit
 	$(VG) ./commit foodev
 
