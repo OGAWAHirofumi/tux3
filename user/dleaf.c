@@ -8,36 +8,18 @@
  * the right to distribute those changes under any license.
  */
 
-#include <stdio.h>
-#include <inttypes.h>
-#include <string.h>
-#include <stdlib.h>
+#include "tux3.h"
 #include "hexdump.c"
-#include "trace.h"
 
 #ifndef trace
 #define trace trace_on
 #endif
 
-#include "tux3.h"
-#ifndef main
+#include "balloc-dummy.c"
+
 #undef MAX_GROUP_ENTRIES
 #define MAX_GROUP_ENTRIES 7
-#endif
 #include "kernel/dleaf.c"
-
-#ifndef main
-int balloc(struct sb *sb, unsigned blocks, block_t *block)
-{
-	*block = sb->nextalloc += blocks;
-	return 0;
-}
-
-int bfree(struct sb *sb, block_t block, unsigned blocks)
-{
-	printf(" free %Lx, count %x\n", (L)block, blocks);
-	return 0;
-}
 
 struct dleaf *dleaf_create(struct btree *btree)
 {
@@ -344,4 +326,3 @@ int main(int argc, char *argv[])
 	}
 	return 0;
 }
-#endif

@@ -8,15 +8,15 @@
  * the right to distribute those changes under any license.
  */
 
+#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
+
 #ifndef trace
 #define trace trace_off
 #endif
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "hexdump.c"
 #include "kernel/balloc.c"
 
-#ifndef main
 int main(int argc, char *argv[])
 {
 	if (1) {
@@ -90,4 +90,3 @@ int main(int argc, char *argv[])
 	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
 	exit(0);
 }
-#endif

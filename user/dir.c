@@ -78,6 +78,7 @@ int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned i
 	return 0;
 }
 
+#ifdef build_dir
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
@@ -113,3 +114,4 @@ int main(int argc, char *argv[])
 	show_buffers(dir->map);
 	exit(0);
 }
+#endif

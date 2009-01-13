@@ -9,23 +9,15 @@
  * the right to distribute those changes under any license.
  */
 
-#include <stdlib.h>
-#include <stddef.h>
-#include <time.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <errno.h>
-#include "diskio.h"
+#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 
 #ifndef trace
 #define trace trace_off
 #endif
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
+#include "balloc-dummy.c"
 #include "kernel/btree.c"
 
-#ifndef main
 struct uleaf { u32 magic, count; struct uentry { u16 key, val; } entries[]; };
 
 static inline struct uleaf *to_uleaf(vleaf *leaf)
@@ -135,18 +127,6 @@ struct btree_ops ops = {
 	.bfree = bfree,
 };
 
-int balloc(struct sb *sb, unsigned blocks, block_t *block)
-{
-	*block = sb->nextalloc += blocks;
-	return 0;
-}
-
-int bfree(struct sb *sb, block_t block, unsigned blocks)
-{
-	printf(" free %Lx, count %x\n", (L)block, blocks);
-	return 0;
-}
-
 int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
@@ -238,4 +218,3 @@ int main(int argc, char *argv[])
 	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 	exit(0);
 }
-#endif

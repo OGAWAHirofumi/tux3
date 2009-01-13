@@ -10,31 +10,16 @@
 
 #include "tux3.h"
 
-#ifndef main
-#define main notmain0
-#include "balloc.c"
-#undef main
-
-#define main notmain3
-#include "dir.c"
-#undef main
-#endif
-
 #ifndef trace
 #define trace trace_on
 #endif
 
+#include "kernel/balloc.c"
+#include "dir.c"
+#include "btree-dummy.c"
+#include "kernel/iattr.c"
 #include "kernel/xattr.c"
-
-/* Xattr encode/decode */
-#ifndef main
-#define main notmain2
-#include "ileaf.c"
-#undef main
-#endif
-
-#ifndef main
-#include <fcntl.h>
+#include "kernel/ileaf.c"
 
 void change_begin(struct sb *sb) { };
 void change_end(struct sb *sb) { };
@@ -154,4 +139,3 @@ int main(int argc, char *argv[])
 	show_buffers(inode->map);
 	exit(0);
 }
-#endif

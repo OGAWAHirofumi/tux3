@@ -8,30 +8,16 @@
  * the right to distribute those changes under any license.
  */
 
-#include <stdlib.h>
-#include <stddef.h>
-#include <errno.h>
 #include "tux3.h"
 #include "hexdump.c"
-
-#ifndef iattr_notmain_from_inode
-static struct btree_ops dtree_ops;
-static void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops)
-{
-	btree->sb = sb;
-	btree->root = root;
-	btree->ops = ops;
-	btree->entries_per_leaf = 0;
-}
-#endif
 
 #ifndef trace
 #define trace trace_off
 #endif
 
+#include "btree-dummy.c"
 #include "kernel/iattr.c"
 
-#ifndef iattr_included_from_ileaf
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
@@ -52,4 +38,3 @@ int main(int argc, char *argv[])
 	dump_attrs(inode);
 	exit(0);
 }
-#endif

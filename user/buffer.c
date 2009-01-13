@@ -515,7 +515,7 @@ void free_map(map_t *map)
 	free(map);
 }
 
-#ifndef include_buffer
+#ifdef build_buffer
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };

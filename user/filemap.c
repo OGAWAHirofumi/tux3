@@ -5,10 +5,7 @@
 #define trace trace_on
 #endif
 
-#define main notmain
 #include "dir.c"
-#undef main
-
 #include "kernel/xattr.c"
 #include "kernel/dleaf.c"
 #include "kernel/btree.c"
@@ -113,7 +110,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	return err;
 }
 
-#ifndef filemap_included
+#ifdef build_filemap
 void change_begin(struct sb *sb) { };
 void change_end(struct sb *sb) { };
 

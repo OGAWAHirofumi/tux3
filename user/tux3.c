@@ -8,7 +8,6 @@
  * the right to distribute those changes under any license.
  */
 
-#define include_inode_c
 #include "inode.c"
 #include <popt.h>
 

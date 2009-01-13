@@ -43,7 +43,6 @@
 #include <fuse.h>
 #include <fuse/fuse_lowlevel.h>
 
-#define include_inode_c
 #include "inode.c"
 
 void change_begin(struct sb *sb) { };

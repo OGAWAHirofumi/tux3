@@ -32,17 +32,20 @@ bufferdeps	= buffer.c buffer.h diskio.h err.h list.h
 vfsdeps		= $(bufferdeps) $(diskiodeps) vfs.c
 basedeps	= $(tuxdeps) err.h list.h buffer.h diskio.h tux3.h \
 	kernel/tux3.h hexdump.c
-ballocdeps	= balloc.c kernel/balloc.c
-btreedeps	= btree.c kernel/btree.c
+ballocdeps	= kernel/balloc.c
+btreedeps	= balloc-dummy.c kernel/btree.c
+commitdeps	= $(inodedeps) kernel/log.c
 dirdeps		= dir.c kernel/dir.c
-dleafdeps	= dleaf.c kernel/dleaf.c
-filemapdeps	= $(btreedeps) $(ballocdeps) $(dleafdeps) $(dirdeps) \
-	$(xattrdeps) $(ileafdeps) filemap.c kernel/filemap.c
-iattrdeps	= iattr.c kernel/iattr.c
-ileafdeps	= $(iattrdeps) ileaf.c kernel/ileaf.c
+dleafdeps	= balloc-dummy.c kernel/dleaf.c
+filemapdeps	= $(dirdeps) kernel/xattr.c kernel/dleaf.c kernel/btree.c \
+	kernel/iattr.c kernel/ileaf.c kernel/balloc.c filemap.c kernel/filemap.c
+iattrdeps	= btree-dummy.c kernel/iattr.c
+xattrcommondeps	= $(dirdeps) btree-dummy.c kernel/iattr.c \
+	kernel/xattr.c kernel/ileaf.c
+ileafdeps	= balloc-dummy.c $(xattrcommondeps)
 inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c
 superdeps	= $(inodedeps) kernel/commit.c super.c kernel/super.c
-xattrdeps	= $(ballocdeps) $(dirdeps) $(ileafdeps) xattr.c kernel/xattr.c
+xattrdeps	= kernel/balloc.c $(xattrcommondeps)
 
 all: $(binaries)
 tests: buffertest balloctest committest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
@@ -54,7 +57,7 @@ vfs.o: $(tuxdeps) $(vfsdeps)
 # standalone
 balloc.o: $(basedeps) $(ballocdeps)
 btree.o: $(basedeps) $(btreedeps)
-commit.o: $(basedeps) $(inodedeps)
+commit.o: $(basedeps) $(commitdeps)
 dir.o: $(basedeps) $(dirdeps)
 dleaf.o: $(basedeps) $(dleafdeps)
 filemap.o: $(basedeps) $(filemapdeps)

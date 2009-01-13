@@ -8,24 +8,20 @@
  * the right to distribute those changes under any license.
  */
 
-#define iattr_included_from_ileaf
-#include "iattr.c"
+#include "tux3.h"
+#include "hexdump.c"
 
 #ifndef trace
 #define trace trace_off
 #endif
 
-#ifndef main
-#define mark_inode_dirty(x)
-#include "kernel/dir.c"
+#include "dir.c"
+#include "balloc-dummy.c"
+#include "btree-dummy.c"
+#include "kernel/iattr.c"
 #include "kernel/xattr.c"
-#endif
-
 #include "kernel/ileaf.c"
 
-#include "hexdump.c"
-
-#ifndef main
 void change_begin(struct sb *sb) { };
 void change_end(struct sb *sb) { };
 
@@ -57,12 +53,6 @@ void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, int less)
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
 	printf("attrs size = %i\n", size);
 	attrs = ileaf_resize(btree, inum, leaf, size - less);
-}
-
-int balloc(struct sb *sb, unsigned blocks, block_t *block)
-{
-	*block = sb->nextalloc += blocks;
-	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -106,4 +96,3 @@ int main(int argc, char *argv[])
 	ileaf_destroy(btree, dest);
 	exit(0);
 }
-#endif

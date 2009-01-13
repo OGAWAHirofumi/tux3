@@ -14,9 +14,7 @@
 #define trace trace_on
 #endif
 
-#define filemap_included
 #include "filemap.c"
-#undef main
 
 struct inode *new_inode(struct sb *sb)
 {
@@ -45,7 +43,6 @@ void free_inode(struct inode *inode)
 	free(inode);
 }
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 #include "kernel/inode.c"
 
 static void tux_setup_inode(struct inode *inode, dev_t rdev)
@@ -188,7 +185,7 @@ void tuxclose(struct inode *inode)
 
 #include "super.c"
 
-#ifndef include_inode_c
+#ifdef build_inode
 void change_begin(struct sb *sb) { };
 void change_end(struct sb *sb) { };
 

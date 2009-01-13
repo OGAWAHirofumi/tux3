@@ -12,7 +12,6 @@
 #define trace trace_on
 #endif
 
-#define include_inode_c
 #include "inode.c"
 #include "kernel/log.c"
 

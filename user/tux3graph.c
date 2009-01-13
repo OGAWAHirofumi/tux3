@@ -10,7 +10,6 @@
  * $ viewer volname.dot.png
  */
 
-#define include_inode_c
 #include "inode.c"
 #include <popt.h>
 
