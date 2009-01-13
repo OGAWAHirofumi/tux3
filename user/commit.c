@@ -105,7 +105,6 @@ void change_begin(struct sb *sb)
 
 void change_end(struct sb *sb)
 {
-	down_read(&sb->delta_lock);
 	if (need_delta(sb)) {
 		unsigned delta = sb->delta;
 		up_read(&sb->delta_lock);
