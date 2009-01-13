@@ -21,23 +21,27 @@ void show_segs(struct seg map[], unsigned segs)
 static int map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct cursor *cursor = alloc_cursor(&tux_inode(inode)->btree, 1); /* allows for depth increase */
-	if (!cursor)
-		return -ENOMEM;
+	struct btree *btree = &tux_inode(inode)->btree;
+	int segs = 0;
+
+	assert(max_segs > 0);
+	if (!btree->root.depth)
+		goto out;
+
+	struct cursor *cursor = alloc_cursor(btree, 1); /* allows for depth increase */
+	if (!cursor) {
+		segs = -ENOMEM;
+		goto out;
+	}
 
 	if (create)
 		down_write_nested(&cursor->btree->lock, inode == sb->bitmap);
 	else
 		down_read_nested(&cursor->btree->lock, inode == sb->bitmap);
 
-	assert(max_segs > 0);
 	block_t limit = start + count;
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
-	struct btree *btree = cursor->btree;
-	int err, segs = 0;
-
-	if (!btree->root.depth)
-		goto out_unlock;
+	int err;
 
 	if ((err = probe(btree, start, cursor))) {
 		segs = err;
@@ -193,6 +197,7 @@ out_unlock:
 	else
 		up_read(&cursor->btree->lock);
 	free_cursor(cursor);
+out:
 	return segs;
 }
 
