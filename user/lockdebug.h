@@ -1,7 +1,7 @@
 #ifndef USER_TUX3_LOCKDEBUG_H
 #define USER_TUX3_LOCKDEBUG_H
 
-#undef LOCK_DEBUG
+#define LOCK_DEBUG
 
 #define SPINLOCK_MAGIC		0xdead4ead
 typedef struct {
