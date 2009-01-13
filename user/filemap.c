@@ -121,6 +121,49 @@ static void check_created_seg(struct seg *seg)
 	assert(seg->count > 0);
 }
 
+static void add_maps(struct inode *inode, block_t index, struct seg map[], int segs)
+{
+	struct buffer_head *buffer;
+	for (int i = 0; i < segs; i++) {
+		for (unsigned j = 0; j < map[i].count; j++) {
+			buffer = blockget(inode->map, index + j);
+			*(block_t *)buffer->data = map[i].block + j;
+			brelse(buffer);
+		}
+		index += map[i].count;
+	}
+}
+
+static void check_maps(struct inode *inode, block_t index, struct seg map[], int segs)
+{
+	struct buffer_head *buffer;
+	for (int i = 0; i < segs; i++) {
+		for (unsigned j = 0; j < map[i].count; j++) {
+			buffer = peekblk(inode->map, index + j);
+			if (map[i].state == SEG_HOLE)
+				assert(buffer == NULL);
+			else {
+				block_t block = *(block_t *)buffer->data;
+				assert(block == map[i].block + j);
+				brelse(buffer);
+			}
+		}
+		index += map[i].count;
+	}
+}
+
+static int d_map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
+{
+	int segs = map_region(inode, start, count, map, max_segs, create);
+	if (segs) {
+		if (create)
+			add_maps(inode, start, map, segs);
+		else
+			check_maps(inode, start, map, segs);
+	}
+	return segs;
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -156,6 +199,21 @@ int main(int argc, char *argv[])
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
+		sb->nextalloc = nextalloc;
+	}
+
+	if (1) { /* redirect test */
+		segs = d_map_region(inode, 5, 64, map, 10, 1);
+		block_t redirect_block = map[0].block + 5;
+		segs = d_map_region(inode, 10, 20, map, 10, 2);
+		segs = d_map_region(inode, 80, 10, map, 10, 2);
+		segs = d_map_region(inode, 0, 200, map, 10, 0);
+		evict_buffers(inode->map);
+		struct delete_info delinfo = { .key = 0, };
+		segs = tree_chop(&inode->btree, &delinfo, 0);
+		assert(!segs);
+		/* free leaked blocks by redirect */
+		assert(!bfree(sb, redirect_block, 20));
 		sb->nextalloc = nextalloc;
 	}
 
