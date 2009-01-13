@@ -46,15 +46,14 @@ int main(int argc, char *argv[])
 	ftruncate(dev->fd, 1 << 24);
 	init_buffers(dev, 1 << 20, 0);
 	struct sb *sb = &(struct sb){
-		RAPID_INIT_SB(dev),
+		INIT_SB(dev),
 		.version = 0,
 		.atomref_base = 1 << 10,
 		.unatom_base = 1 << 11,
 		.atomgen = 1,
 	};
 	struct inode *inode = &(struct inode){
-		.i_sb = sb,
-		.i_mode = S_IFDIR | 0x666,
+		INIT_INODE(sb, S_IFDIR | 0x666),
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
 		.i_ctime = spectime(0xdec0debeadULL),

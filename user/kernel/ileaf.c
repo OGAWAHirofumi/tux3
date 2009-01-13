@@ -96,6 +96,7 @@ static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 		else if (!size)
 			printf("<empty>\n");
 		else {
+			/* FIXME: this doesn't work in kernel */
 			struct inode inode = { .i_sb = vfs_sb(btree->sb) };
 			unsigned xsize = decode_xsize(&inode, leaf->table + offset, size);
 			tux_inode(&inode)->xcache = xsize ? new_xcache(xsize) : NULL;

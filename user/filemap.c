@@ -135,15 +135,15 @@ int main(int argc, char *argv[])
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
 	struct sb *sb = &(struct sb){
-		RAPID_INIT_SB(dev),
+		INIT_SB(dev),
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.volblocks = size >> dev->bits,
 	};
-	sb->volmap = rapid_new_inode(sb, NULL, 0);
-	sb->bitmap = rapid_new_inode(sb, filemap_extent_io, 0);
+	sb->volmap = rapid_open_inode(sb, NULL, 0);
+	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
-	struct inode *inode = rapid_new_inode(sb, filemap_extent_io, 0);
+	struct inode *inode = rapid_open_inode(sb, filemap_extent_io, 0);
 	assert(!new_btree(&inode->btree, sb, &dtree_ops));
 
 	block_t nextalloc = sb->nextalloc;

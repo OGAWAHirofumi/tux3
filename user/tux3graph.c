@@ -744,12 +744,7 @@ int main(int argc, const char *argv[])
 	};
 	init_buffers(dev, 1 << 20, 1);
 
-	struct sb *sb = &(struct sb){
-		.dev			= dev,
-		.blockbits		= dev->bits,
-		.blocksize		= 1 << dev->bits,
-		.blockmask		= (1 << dev->bits) - 1,
-	};
+	struct sb *sb = &(struct sb){ INIT_SB(dev), };
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)

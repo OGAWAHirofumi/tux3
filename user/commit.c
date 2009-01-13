@@ -130,11 +130,11 @@ int bitmap_io(struct buffer_head *buffer, int write)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU) };
-	struct sb *sb = &(struct sb){ RAPID_INIT_SB(dev), .volblocks = 100 };
+	struct sb *sb = &(struct sb){ INIT_SB(dev), .volblocks = 100 };
 	ftruncate(dev->fd, 1 << 24);
-	sb->volmap = rapid_new_inode(sb, NULL, 0);
-	sb->bitmap = rapid_new_inode(sb, bitmap_io, 0);
-	sb->logmap = rapid_new_inode(sb, filemap_extent_io, 0);
+	sb->volmap = rapid_open_inode(sb, NULL, 0);
+	sb->bitmap = rapid_open_inode(sb, bitmap_io, 0);
+	sb->logmap = rapid_open_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
 	assert(!new_btree(&sb->bitmap->btree, sb, &dtree_ops));
 

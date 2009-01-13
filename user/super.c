@@ -73,10 +73,7 @@ static int clear_other_magic(struct sb *sb)
 
 int make_tux3(struct sb *sb)
 {
-	struct inode *dir = &(struct inode){
-		.i_sb	= sb,
-		.i_mode	= S_IFDIR | 0755,
-	};
+	struct inode *dir = &(struct inode){ INIT_INODE(sb, S_IFDIR | 0755) };
 
 	int err = clear_other_magic(sb);
 	if (err)

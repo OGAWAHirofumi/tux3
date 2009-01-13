@@ -171,21 +171,26 @@ static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
 void change_begin(struct sb *sb);
 void change_end(struct sb *sb);
 
-#define rapid_new_inode(sb, io, mode)	({			\
-	struct inode *__inode = &(struct inode){		\
-		.i_sb = sb,					\
-		.i_mode = mode,					\
-	};							\
-	__inode->map = new_map((sb)->dev, io);			\
-	assert(__inode->map);					\
-	__inode->map->inode = __inode;				\
-	__inode;						\
+#define INIT_INODE(sb, mode)				\
+	.i_sb = sb,					\
+	.i_mode = mode,					\
+	.i_version = 1,					\
+	.i_nlink = 1
+
+#define rapid_open_inode(sb, io, mode)	({		\
+	struct inode *__inode = &(struct inode){	\
+		INIT_INODE(sb, mode),			\
+	};						\
+	__inode->map = new_map((sb)->dev, io);		\
+	assert(__inode->map);				\
+	__inode->map->inode = __inode;			\
+	__inode;					\
 })
 
-#define RAPID_INIT_SB(dev)			\
-	.dev = dev,				\
-	.blockbits = (dev)->bits,		\
-	.blocksize = 1 << (dev)->bits,		\
+#define INIT_SB(dev)					\
+	.dev = dev,					\
+	.blockbits = (dev)->bits,			\
+	.blocksize = 1 << (dev)->bits,			\
 	.blockmask = ((1 << (dev)->bits) - 1)
 
 enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };

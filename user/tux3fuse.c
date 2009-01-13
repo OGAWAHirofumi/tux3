@@ -346,12 +346,17 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		goto eek;
 	}
 	inum_t inum = from_be_u64(entry->inum);
-	//brelse(buffer); //brelse: Failed assertion "buffer->count"!
-	struct inode inode = { .i_sb = sb, .inum = inum, };
-
-	if ((errno = -open_inode(&inode)))
+	errno = ENOMEM;
+	struct inode *inode = iget(sb, inum);
+	if (!inode)
 		goto eek;
-	if ((errno = -tree_chop(&inode.btree, &(struct delete_info){ .key = 0 }, -1)))
+	if ((errno = -open_inode(inode))) {
+		free_inode(inode);
+		goto eek;
+	}
+	errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1);
+	free_inode(inode);
+	if (errno)
 		goto eek;
 	if ((errno = -purge_inum(&sb->itable, inum)))
 		goto eek;
@@ -381,12 +386,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	*dev = (struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1<<20, 1);
 	sb = malloc(sizeof(*sb));
-	*sb = (struct sb){
-		.dev = dev,
-		.blockbits = dev->bits,
-		.blocksize = 1 << dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
-	};
+	*sb = (struct sb){ INIT_SB(dev), };
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;

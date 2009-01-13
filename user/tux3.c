@@ -72,12 +72,9 @@ int main(int argc, const char *argv[])
 	init_buffers(dev, 1 << 20, 1);
 
 	struct sb *sb = &(struct sb){
-		.dev = dev,
+		INIT_SB(dev),
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.blockbits = dev->bits,
-		.blocksize = 1 << dev->bits,
-		.blockmask = (1 << dev->bits) - 1,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits,
 	};
@@ -237,18 +234,13 @@ int main(int argc, const char *argv[])
 
 	if (!strcmp(command, "stat")) {
 		printf("---- stat file ----\n");
-		struct buffer_head *buffer;
-		tux_dirent *entry = tux_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-		if (IS_ERR(entry)) {
-			errno = -PTR_ERR(entry);
+		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+		if (!inode) {
+			errno = ENOENT;
 			goto eek;
 		}
-		inum_t inum = from_be_u64(entry->inum);
-		brelse(buffer);
-		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum, };
-		if ((errno = -open_inode(inode)))
-			goto eek;
 		dump_attrs(inode);
+		free_inode(inode);
 	}
 
 	if (!strcmp(command, "delete")) {
@@ -260,12 +252,16 @@ int main(int argc, const char *argv[])
 			goto eek;
 		}
 		inum_t inum = from_be_u64(entry->inum);
-		struct inode *inode = &(struct inode){ .i_sb = sb, .inum = inum, };
-		if ((errno = -open_inode(inode)))
+		struct inode *inode = iget(sb, inum);
+		if ((errno = -open_inode(inode))) {
+			free_inode(inode);
 			goto eek;
-		if ((errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1)))
+		}
+		errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1);
+		free_inode(inode);
+		if (errno)
 			goto eek;
-		if ((errno = -purge_inum(&inode->i_sb->itable, inum)))
+		if ((errno = -purge_inum(&sb->itable, inum)))
 			goto eek;
 		if ((errno = -tux_delete_entry(buffer, entry)))
 			goto eek;

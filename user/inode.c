@@ -23,7 +23,7 @@ struct inode *new_inode(struct sb *sb)
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto error;
-	*inode = (struct inode){ .i_sb = sb, .i_version = 1, .i_nlink = 1, };
+	*inode = (struct inode){ INIT_INODE(sb, 0), };
 	inode->map = new_map(sb->dev, NULL);
 	if (!inode->map)
 		goto error_map;
@@ -206,12 +206,12 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 20, 0);
 	struct sb *sb = &(struct sb){
-		RAPID_INIT_SB(dev),
+		INIT_SB(dev),
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.volblocks = size >> dev->bits,
 	};
-	sb->volmap = rapid_new_inode(sb, NULL, 0);
+	sb->volmap = rapid_open_inode(sb, NULL, 0);
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))
