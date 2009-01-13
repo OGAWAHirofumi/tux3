@@ -381,10 +381,12 @@ static void __destroy_buffers(void)
 {
 	struct buffer_head *buffer, *safe;
 	struct list_head *head;
-	for (int i = 0; i < BUFFER_DIRTY; i++) {
+	for (int i = 0; i < BUFFER_STATES; i++) {
 		head = buffers + i;
 		list_for_each_entry_safe(buffer, safe, head, link) {
 			if (debug_buffer) {
+				if (BUFFER_DIRTY <= i)
+					continue;
 				if (buffer->count || i != buffer->state)
 					continue;
 			}
@@ -403,7 +405,7 @@ static void __destroy_buffers(void)
 #if 1
 	int has_dirty = 0;
 	list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
-		if (buffer_dirty(buffer)) {
+		if (BUFFER_DIRTY <= buffer->state) {
 			if (!debug_buffer)
 				free_buffer(buffer);
 			else
@@ -413,7 +415,7 @@ static void __destroy_buffers(void)
 	if (has_dirty) {
 		warn("dirty buffer leak, or list corruption?");
 		list_for_each_entry(buffer, &lru_buffers, lru) {
-			if (buffer_dirty(buffer)) {
+			if (BUFFER_DIRTY <= buffer->state) {
 				printf("map [%p] ", buffer->map);
 				show_buffer(buffer);
 			}
