@@ -5,6 +5,7 @@
 #define trace trace_on
 #endif
 
+#include "kernel/log.c"
 #include "dir.c"
 #include "kernel/xattr.c"
 #include "kernel/dleaf.c"
@@ -138,6 +139,7 @@ int main(int argc, char *argv[])
 		.volblocks = size >> dev->bits,
 	};
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
+	sb->logmap = rapid_open_inode(sb, NULL, 0);
 	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
 	struct inode *inode = rapid_open_inode(sb, filemap_extent_io, 0);

@@ -103,6 +103,23 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		dwalk_copy(walk, tail);
 	}
 
+	block_t below_block, above_block;
+	if (below)
+		below_block = map[0].block - below;
+	if (above)
+		above_block = map[segs - 1].block + map[segs - 1].count;
+	if (create == 2) {
+		count = 0;
+		for (int i = 0; i < segs; i++) {
+			if (map[i].state != SEG_HOLE)
+				log_alloc(sb, map[i].block, map[i].count, 0);
+			count += map[i].count;
+		}
+		segs = 1;
+		map[0].block = 0;
+		map[0].count = count;
+		map[0].state = SEG_HOLE;
+	}
 	for (int i = 0; i < segs; i++) {
 		if (map[i].state == SEG_HOLE) {
 			count = map[i].count;
@@ -123,9 +140,14 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				 */
 				segs = err;
 				goto out_create;
-			}	
+			}
 			trace("fill in %Lx/%i ", (L)block, count);
-			map[i] = (struct seg){ .block = block, .count = count, .state = SEG_NEW, };
+			map[i] = (struct seg){
+				.block = block,
+				.count = count,
+				/* if create == 2, buffer should be dirty */
+				.state = create == 2 ? 0 : SEG_NEW,
+			};
 		}
 	}
 	/* Go back to region start and pack in new segs */
@@ -151,12 +173,12 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		}
 		if (i < 0) {
 			trace("emit below");
-			dwalk_add(&headwalk, index - below, make_extent(map[0].block - below, below));
+			dwalk_add(&headwalk, seg_start, make_extent(below_block, below));
 			continue;
 		}
 		if (i == segs) {
 			trace("emit above");
-			dwalk_add(&headwalk, index, make_extent(map[segs - 1].block + map[segs - 1].count, above));
+			dwalk_add(&headwalk, index, make_extent(above_block, above));
 			continue;
 		}
 		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)map[i].block, map[i].count);

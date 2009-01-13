@@ -13,7 +13,6 @@
 #endif
 
 #include "inode.c"
-#include "kernel/log.c"
 
 void replay(struct sb *sb)
 {

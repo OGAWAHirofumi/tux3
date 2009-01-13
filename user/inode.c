@@ -209,6 +209,7 @@ int main(int argc, char *argv[])
 		.volblocks = size >> dev->bits,
 	};
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
+	sb->logmap = rapid_open_inode(sb, NULL, 0);
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))

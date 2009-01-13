@@ -34,11 +34,12 @@ basedeps	= $(tuxdeps) err.h list.h buffer.h diskio.h tux3.h \
 	kernel/tux3.h hexdump.c
 ballocdeps	= kernel/balloc.c
 btreedeps	= balloc-dummy.c kernel/btree.c
-commitdeps	= $(inodedeps) kernel/log.c
+commitdeps	= $(inodedeps)
 dirdeps		= dir.c kernel/dir.c
 dleafdeps	= balloc-dummy.c kernel/dleaf.c
-filemapdeps	= $(dirdeps) kernel/xattr.c kernel/dleaf.c kernel/btree.c \
-	kernel/iattr.c kernel/ileaf.c kernel/balloc.c filemap.c kernel/filemap.c
+filemapdeps	= $(dirdeps) kernel/log.c kernel/xattr.c kernel/dleaf.c \
+	kernel/btree.c kernel/iattr.c kernel/ileaf.c kernel/balloc.c \
+	filemap.c kernel/filemap.c
 iattrdeps	= btree-dummy.c kernel/iattr.c
 xattrcommondeps	= $(dirdeps) btree-dummy.c kernel/iattr.c \
 	kernel/xattr.c kernel/ileaf.c
