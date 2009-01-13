@@ -191,8 +191,8 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 	trace_off("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
 	assert(blocks > 0);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
-	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
+	unsigned blocksize = 1 << sb->blockbits;
+	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -228,11 +228,11 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 					goto final_partial_byte;
 				}
 				found -= run - 1;
-				blockdirty(buffer, tux_sb(inode->i_sb)->delta);
+				blockdirty(buffer, sb->delta);
 				set_bits(bufdata(buffer), found & mapmask, run);
 				brelse(buffer);
-				tux_sb(inode->i_sb)->nextalloc = found + run;
-				tux_sb(inode->i_sb)->freeblocks -= run;
+				sb->nextalloc = found + run;
+				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
 				return found;
 			}
