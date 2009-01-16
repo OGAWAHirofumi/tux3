@@ -3,7 +3,7 @@
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
  * Portions copyright (c) 2006-2008 Google Inc.
- * Licensed under the GPL version 3
+ * Licensed under the GPL version 2
  *
  * By contributing changes to this file you grant the original copyright holder
  * the right to distribute those changes under any license.

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2008, Daniel Phillips
  * Copyright (c) 2008, OGAWA Hirofumi
+ * Licensed under the GPL version 2
  */
 
 #include <linux/module.h>

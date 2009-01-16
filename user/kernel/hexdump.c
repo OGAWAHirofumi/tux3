@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009 Daniel Phillips <phillips@phunq.net>, GPL v2 */
+/* Copyright (c) 2008 Daniel Phillips <phillips@phunq.net>, GPL v2 */
 
 #include <linux/kernel.h>
 

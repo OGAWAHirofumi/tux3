@@ -1,3 +1,13 @@
+/*
+ * Map logical file extents to physical disk
+ *
+ * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
+ * Licensed under the GPL version 2
+ *
+ * By contributing changes to this file you grant the original copyright holder
+ * the right to distribute those changes under any license.
+ */
+
 #include "tux3.h"
 
 #ifndef trace

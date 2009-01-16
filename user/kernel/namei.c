@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2008, Daniel Phillips
+ * Copyright (c) 2008, OGAWA Hirofumi
+ * Licensed under the GPL version 2
+ */
+
 #include "tux3.h"
 
 static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)

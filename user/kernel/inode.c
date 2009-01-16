@@ -1,8 +1,8 @@
 /*
- * Tux3 versioning filesystem in user space
+ * Tux3 versioning filesystem inode operations
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
- * Licensed under the GPL version 3
+ * Licensed under the GPL version 2
  *
  * By contributing changes to this file you grant the original copyright holder
  * the right to distribute those changes under any license.
