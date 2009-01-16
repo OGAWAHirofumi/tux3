@@ -30,9 +30,9 @@
  *    Install fuse-utils: sudo apt-get install fuse-utils
  *    build fuse kernel module: cd linux && make ;-)
  *    insert fuse kernel module: sudo insmod fs/fuse/fuse.ko
- * 1. Create a tux3 fs on __fuse__tux3fs using some combination of dd
- *    and ./tux3 make __fuse__tux3fs.
- * 2. Mount on foo/ like: ./fuse-tux3 __fuse__tux3fs -f foo/ (-f for foreground)
+ * 1. Create a tux3 fs on testvol using some combination of dd
+ *    and ./tux3 make testvol (or use make mkfs)
+ * 2. Mount on foo/ like: ./tux3fuse testvol -f foo/ (-f for foreground)
  */
 
 //#include <sys/xattr.h>
