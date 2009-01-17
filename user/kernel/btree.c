@@ -146,11 +146,6 @@ static void level_pop_brelse(struct cursor *cursor)
 	brelse(level_pop(cursor));
 }
 
-void level_pop_brelse_dirty(struct cursor *cursor)
-{
-	brelse_dirty(level_pop(cursor));
-}
-
 static inline int level_finished(struct cursor *cursor, int level)
 {
 	struct bnode *node = cursor_node(cursor, level);
@@ -571,8 +566,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			level_replace_brelse(cursor, depth, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
-		} else
-			mark_buffer_dirty(newbuf);
+		}
 		add_child(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
@@ -595,7 +589,6 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.depth++;
 	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
 	//set_sb_dirty(sb);
-	mark_buffer_dirty(newbuf);
 	cursor_check(cursor);
 	return 0;
 eek:
@@ -620,16 +613,8 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 	}
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
-	int keep;
-	trace_off("use upper? %Li %Li", key, newkey);
-	if (key >= newkey) {
-		mark_buffer_dirty(leafbuf);
-		keep = 0;
-	} else {
-		mark_buffer_dirty(newbuf);
-		keep = 1;
-	}
-	return insert_leaf(cursor, newkey, newbuf, keep);
+	mark_buffer_dirty(leafbuf);
+	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
 void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor)
@@ -672,8 +657,8 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	rootnode->count = to_be_u32(1);
 	printf("root at %Lx\n", (L)bufindex(rootbuf));
 	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
-	brelse_dirty(rootbuf);
-	brelse_dirty(leafbuf);
+	brelse(rootbuf);
+	brelse(leafbuf);
 	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 	return 0;
 eek:
