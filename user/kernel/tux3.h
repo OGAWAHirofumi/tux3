@@ -235,6 +235,7 @@ struct sb {
 	loff_t dictsize;	/* Atom dictionary size */
 	struct inode *volmap;	/* Volume metadata cache */
 	struct inode *logmap;	/* Prototype log block cache */
+	unsigned logbase;	/* Index of oldest log block in log map */
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
