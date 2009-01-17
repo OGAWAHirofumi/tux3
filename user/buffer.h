@@ -47,7 +47,7 @@ void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
 void show_buffers_state(unsigned state);
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer);
-struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer);
+struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
 void brelse(struct buffer_head *buffer);
 void brelse_dirty(struct buffer_head *buffer);
@@ -91,7 +91,7 @@ static inline int buffer_empty(struct buffer_head *buffer)
 	return buffer->state == BUFFER_EMPTY;
 }
 
-static inline int buffer_uptodate(struct buffer_head *buffer)
+static inline int buffer_clean(struct buffer_head *buffer)
 {
 	return buffer->state == BUFFER_CLEAN;
 }

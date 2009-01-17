@@ -39,7 +39,7 @@ void show_buffer(struct buffer_head *buffer)
 {
 	printf("%Lx/%i%s ", (L)buffer->index, buffer->count,
 		buffer_dirty(buffer) ? "*" :
-		buffer_uptodate(buffer) ? "" :
+		buffer_clean(buffer) ? "" :
 		buffer->state == BUFFER_EMPTY ? "-" :
 		"?");
 }
@@ -118,9 +118,9 @@ struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
 	return buffer;
 }
 
-struct buffer_head *set_buffer_uptodate(struct buffer_head *buffer)
+struct buffer_head *set_buffer_clean(struct buffer_head *buffer)
 {
-	assert(!buffer_uptodate(buffer));
+	assert(!buffer_clean(buffer));
 	set_buffer_state(buffer, BUFFER_CLEAN);
 	return buffer;
 }
@@ -167,7 +167,7 @@ static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
 void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
-	assert(buffer_uptodate(buffer) || buffer_empty(buffer));
+	assert(buffer_clean(buffer) || buffer_empty(buffer));
         if (!remove_buffer_hash(buffer))
 		warn("buffer not in hash");
 	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
@@ -198,7 +198,7 @@ struct buffer_head *new_buffer(map_t *map)
 		int count = 0;
 	
 		list_for_each_entry_safe(victim, safe, &lru_buffers, lru) {
-			if (victim->count == 0 && buffer_uptodate(victim)) {
+			if (victim->count == 0 && buffer_clean(victim)) {
 				evict_buffer(victim);
 				if (++count == max_evict)
 					break;
@@ -347,7 +347,7 @@ int flush_list(struct list_head *list)
 		assert(buffer_dirty(buffer));
 		if ((err = buffer->map->io(buffer, 1)))
 			break;
-		assert(buffer_uptodate(buffer));
+		assert(buffer_clean(buffer));
 	}
 	return err;
 }
@@ -497,7 +497,7 @@ int dev_blockio(struct buffer_head *buffer, int write)
 	else
 		err = diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 	if (!err)
-		set_buffer_uptodate(buffer);
+		set_buffer_clean(buffer);
 	return err;
 }
 

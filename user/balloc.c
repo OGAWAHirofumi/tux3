@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 	for (int block = 0; block < 10; block++) {
 		struct buffer_head *buffer = blockget(bitmap->map, block);
 		memset(bufdata(buffer), 0, blocksize);
-		set_buffer_uptodate(buffer);
+		set_buffer_clean(buffer);
 	}
 	for (int i = 0; i < 12; i++) {
 		block_t block = balloc_from_range(sb, 121, 10, 1);

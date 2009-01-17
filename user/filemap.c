@@ -82,7 +82,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 		if (!write) {
 			trace("unmapped block %Lx", (L)bufindex(buffer));
 			memset(bufdata(buffer), 0, sb->blocksize);
-			set_buffer_uptodate(buffer);
+			set_buffer_clean(buffer);
 			return 0;
 		}
 		return -EIO;
@@ -104,7 +104,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 				else
 					err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			}
-			brelse(set_buffer_uptodate(buffer)); // leave empty if error ???
+			brelse(set_buffer_clean(buffer)); // leave empty if error ???
 		}
 		index += map[i].count;
 	}

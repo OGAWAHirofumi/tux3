@@ -75,7 +75,7 @@ int write_bitmap(struct buffer_head *buffer)
 		return -EAGAIN;
 	trace("write bitmap %Lx", (L)buffer->index);
 	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block)))
-		set_buffer_uptodate(buffer);
+		set_buffer_clean(buffer);
 	return 0;
 }
 
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
 		for (int block = 0; block < 10; block++) {
 			struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);
 			memset(bufdata(buffer), 0, sb->blocksize);
-			set_buffer_uptodate(buffer);
+			set_buffer_clean(buffer);
 		}
 	
 		log_alloc(sb, 9, 6, 1);
