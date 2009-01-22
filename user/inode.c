@@ -86,13 +86,15 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			err = -EIO;
 			break;
 		}
-		if (write)
+		if (write){
+			mark_buffer_dirty(buffer);
 			memcpy(bufdata(buffer) + from, data, some);
+		}
 		else
 			memcpy(data, bufdata(buffer) + from, some);
-		printf("transfer %u bytes, block 0x%Lx, buffer %p\n", some, (L)bufindex(buffer), buffer);
-		hexdump(bufdata(buffer) + from, some);
-		brelse_dirty(buffer);
+		trace_off("transfer %u bytes, block 0x%Lx, buffer %p", some, (L)bufindex(buffer), buffer);
+		//hexdump(bufdata(buffer) + from, some);
+		brelse(buffer);
 		tail -= some;
 		data += some;
 		pos += some;
