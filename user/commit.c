@@ -14,6 +14,32 @@
 
 #include "inode.c"
 
+int cursor_redirect(struct cursor *cursor, unsigned level)
+{
+	struct btree *btree = cursor->btree;
+	struct sb *sb = btree->sb;
+	struct buffer_head *buffer = cursor->path[level].buffer;
+	assert(buffer->state >= BUFFER_DIRTY);
+	struct index_entry *entry = cursor->path[level - 1].next - 1;
+	block_t parent = bufindex(cursor->path[level - 1].buffer);
+	block_t oldblock = from_be_u64(entry->block), newblock;
+	int err = balloc(sb, 1, &newblock);
+	if (err)
+		return err;
+	struct buffer_head *clone = blockget(mapping(sb->volmap), newblock);
+	if (!clone)
+		return -ENOMEM; // ERR_PTR me!!!
+	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
+	cursor->path[level].buffer = clone;
+	cursor->path[level].next += bufdata(clone) - bufdata(buffer);
+	entry->block = to_be_u64(newblock);
+	log_alloc(sb, oldblock, 1, 0);
+	log_alloc(sb, newblock, 1, 1);
+	log_update(sb, newblock, parent, from_be_u64(entry->key));
+	// add old block to free-at-end-of-delta list
+	return 0;
+}
+
 void replay(struct sb *sb)
 {
 	//char *why = "something broke";
