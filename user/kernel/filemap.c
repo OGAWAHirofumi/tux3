@@ -407,7 +407,11 @@ static int tux3_write_begin(struct file *file, struct address_space *mapping,
 
 static int tux3_writepage(struct page *page, struct writeback_control *wbc)
 {
-	return block_write_full_page(page, tux3_get_block, wbc);
+	struct sb *sb = tux_sb(page->mapping->host->i_sb);
+	change_begin(sb);
+	int err = block_write_full_page(page, tux3_get_block, wbc);
+	change_end(sb);
+	return err;
 }
 
 static int tux3_writepages(struct address_space *mapping,
