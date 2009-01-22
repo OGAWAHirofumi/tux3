@@ -102,6 +102,7 @@ static void tux3_put_super(struct super_block *sb)
 	/* FIXME: remove this, then use sb->s_dirt instead */
 	tux3_write_super(sb);
 
+	destroy_defree(sbi);
 	iput(sbi->atable);
 	iput(sbi->bitmap);
 	iput(sbi->volmap);
@@ -219,6 +220,17 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	if (!sbi->logmap)
 		goto error_logmap;
 
+	/* initialize deferred free log */
+	struct page *page = alloc_pages(GFP_KERNEL, 0);
+	if (!page) {
+		err = -ENOMEM;
+		goto error_alloc_defree;
+	}
+	page_link(page)->next = page_link(page);
+	sbi->defree = page_link(page),
+	sbi->defreepos = page_address(page),
+	sbi->defreetop = page_address(page) + PAGE_SIZE,
+
 	sb->s_root = d_alloc_root(sbi->rootdir);
 	if (!sb->s_root)
 		goto error_alloc_root;
@@ -226,6 +238,8 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
 error_alloc_root:
+	__free_pages(page, 0);
+error_alloc_defree:
 	iput(sbi->logmap);
 error_logmap:
 	iput(sbi->atable);

@@ -60,11 +60,6 @@ void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
 
 /* Deferred free list */
 
-static inline struct link *page_link(struct page *page)
-{
-	return (void *)&page->private;
-}
-
 int defree(struct sb *sb, block_t block, unsigned count)
 {
 	if (sb->defreepos == sb->defreetop) {
@@ -95,4 +90,15 @@ void retire_defree(struct sb *sb)
 		__free_pages(page, 0);
 	}
 	sb->defreepos = sb->defreetop - PAGE_SIZE;
+}
+
+void destroy_defree(struct sb *sb)
+{
+	struct link *link = sb->defree;
+	do {
+		struct page *page = container_of((void *)link, struct page, private);
+		link = link->next;
+		__free_pages(page, 0);
+	} while (link != sb->defree);
+	sb->defree = NULL;
 }

@@ -139,6 +139,11 @@ static inline void link_del_next(struct link *list)
 	list->next = list->next->next;
 }
 
+static inline struct link *page_link(struct page *page)
+{
+	return (void *)&page->private;
+}
+
 /* Tux3 disk format */
 
 #define SB_MAGIC_SIZE 8
@@ -738,6 +743,9 @@ unsigned encode_xsize(struct inode *inode);
 /* log.c */
 void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
+int defree(struct sb *sb, block_t block, unsigned count);
+void retire_defree(struct sb *sb);
+void destroy_defree(struct sb *sb);
 
 /* commit.c */
 int unpack_sb(struct sb *sb, struct disksuper *super, int silent);
