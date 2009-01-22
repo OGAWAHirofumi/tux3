@@ -36,8 +36,7 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	log_alloc(sb, oldblock, 1, 0);
 	log_alloc(sb, newblock, 1, 1);
 	log_update(sb, newblock, parent, from_be_u64(entry->key));
-	// add old block to free-at-end-of-delta list
-	return 0;
+	return defree(sb, oldblock, 1);
 }
 
 void replay(struct sb *sb)
