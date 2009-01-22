@@ -124,7 +124,23 @@ static inline void *decode48(void *at, u64 *val)
 	return at;
 }
 
+/* Single linked list support */
+
+struct link { struct link *next; };
+
+static inline void link_add(struct link *node, struct link *list)
+{
+	node->next = list->next;
+	list->next = node;
+}
+
+static inline void link_del_next(struct link *list)
+{
+	list->next = list->next->next;
+}
+
 /* Tux3 disk format */
+
 #define SB_MAGIC_SIZE 8
 #define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x12, 0x12 } /* date of latest incompatible sb format */
 /*
@@ -215,6 +231,8 @@ struct cursor {
 
 /* Tux3-specific sb is a handle for the entire volume state */
 
+typedef struct { unsigned count:8, block:24; } extent_t;
+
 struct sb {
 	struct disksuper super;
 	struct btree itable;	/* Cached root of the inode table */
@@ -240,6 +258,9 @@ struct sb {
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock; /* serialize log entries (spinlock me) */
+	struct link *defree;
+	extent_t *defreepos;
+	extent_t *defreetop;
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else

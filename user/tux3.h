@@ -176,4 +176,30 @@ void change_end(struct sb *sb);
 enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
 
+/* Kernel page emulation for deferred free support */
+
+struct page { void *address; void *private; };
+
+#define PAGE_SIZE (1 << 6)
+
+static inline void *page_address(struct page *page)
+{
+	return page->address;
+}
+
+enum { GFP_KERNEL };
+
+struct page *alloc_pages(unsigned flags, unsigned order)
+{
+	struct page *page = malloc(sizeof(*page));
+	*page = (struct page){ .address = malloc(PAGE_SIZE) };
+	return page;
+}
+
+void __free_pages(struct page *page, unsigned order)
+{
+	free(page_address(page));
+	free(page);
+}
+
 #endif

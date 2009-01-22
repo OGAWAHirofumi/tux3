@@ -57,3 +57,42 @@ void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
 	data = encode48(data, parent);
 	log_end(sb, encode48(data, key));
 }
+
+/* Deferred free list */
+
+static inline struct link *page_link(struct page *page)
+{
+	return (void *)&page->private;
+}
+
+int defree(struct sb *sb, block_t block, unsigned count)
+{
+	if (sb->defreepos == sb->defreetop) {
+		struct page *page = alloc_pages(GFP_KERNEL, 0);
+		link_add(page_link(page), sb->defree);
+		sb->defree = sb->defree->next;
+		sb->defreepos = page_address(page);
+		sb->defreetop = page_address(page) + PAGE_SIZE;
+	}
+	*sb->defreepos++ = (extent_t){ .block = block, .count = count };
+	return 0;
+}
+
+void retire_defree(struct sb *sb)
+{
+	while (1) {
+		struct page *page = container_of((void *)sb->defree->next, struct page, private);
+		extent_t *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
+		if (top == sb->defreetop)
+			top = sb->defreepos;
+		printf("free extents: ");
+		for (; vec < top; vec++)
+			bfree(sb, vec->block, vec->count);
+		printf("\n");
+		if (sb->defree == sb->defree->next)
+			break;
+		link_del_next(sb->defree);
+		__free_pages(page, 0);
+	}
+	sb->defreepos = sb->defreetop - PAGE_SIZE;
+}
