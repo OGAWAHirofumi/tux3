@@ -109,7 +109,7 @@ static int need_delta(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 10);
-};
+}
 
 int write_bitmap(struct buffer_head *buffer)
 {
@@ -138,12 +138,12 @@ static int stage_delta(struct sb *sb)
 			return err;
 	}
 	return 0;
-};
+}
 
 static int commit_delta(struct sb *sb)
 {
 	return flush_state(BUFFER_DIRTY + ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
-};
+}
 
 void change_begin(struct sb *sb)
 {

@@ -45,8 +45,8 @@
 
 #include "inode.c"
 
-void change_begin(struct sb *sb) { };
-void change_end(struct sb *sb) { };
+void change_begin(struct sb *sb) { }
+void change_end(struct sb *sb) { }
 
 static u64 volsize;
 static struct sb *sb;

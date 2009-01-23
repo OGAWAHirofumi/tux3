@@ -792,8 +792,8 @@ static inline int blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	return 0;
 }
 
-static inline void change_begin(struct sb *sb) { };
-static inline void change_end(struct sb *sb) { };
+static inline void change_begin(struct sb *sb) { }
+static inline void change_end(struct sb *sb) { }
 
 #endif /* __KERNEL__ */
 
