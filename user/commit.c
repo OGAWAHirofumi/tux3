@@ -19,7 +19,7 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
 	struct buffer_head *buffer = cursor->path[level].buffer;
-	assert(buffer->state >= BUFFER_DIRTY);
+	assert(buffer_clean(buffer));
 
 	block_t oldblock = bufindex(buffer), newblock;
 	int err = balloc(sb, 1, &newblock);
@@ -29,10 +29,12 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	if (!clone)
 		return -ENOMEM; // ERR_PTR me!!!
 	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
+	mark_buffer_dirty(clone);
 	cursor->path[level].buffer = clone;
 	cursor->path[level].next += bufdata(clone) - bufdata(buffer);
 	log_alloc(sb, newblock, 1, 1);
 	defree(sb, oldblock, 1);
+	brelse(buffer);
 
 	if (level) {
 		struct index_entry *entry = cursor->path[level - 1].next - 1;
