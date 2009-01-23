@@ -654,14 +654,14 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	struct buffer_head *leafbuf = new_leaf(btree);
 	if (!rootbuf || !leafbuf)
 		goto eek;
+	trace("root at %Lx\n", (L)bufindex(rootbuf));
+	trace("leaf at %Lx\n", (L)bufindex(leafbuf));
 	struct bnode *rootnode = bufdata(rootbuf);
 	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
 	rootnode->count = to_be_u32(1);
-	printf("root at %Lx\n", (L)bufindex(rootbuf));
-	printf("leaf at %Lx\n", (L)bufindex(leafbuf));
+	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 	brelse(rootbuf);
 	brelse(leafbuf);
-	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 	return 0;
 eek:
 	if (rootbuf)
