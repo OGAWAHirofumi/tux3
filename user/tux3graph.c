@@ -116,7 +116,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(u8)txsb->magic[6], (u8)txsb->magic[7],
 		(L)from_be_u64(txsb->birthdate),
 		(L)from_be_u64(txsb->flags), (L)from_be_u64(txsb->iroot),
-		sb->itable.root.depth, (L)sb->itable.root.block,
+		itable_btree(sb)->root.depth, (L)itable_btree(sb)->root.block,
 		(L)from_be_u64(txsb->aroot), sb->blockbits, sb->blocksize,
 		(L)from_be_u64(txsb->volblocks),
 		(L)from_be_u64(txsb->freeblocks),
@@ -124,7 +124,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen));
 
 	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
-		gi->bname, (L)sb->itable.root.block);
+		gi->bname, (L)itable_btree(sb)->root.block);
 }
 
 static void draw_bnode(struct graph_info *gi, int depth, int level,
@@ -783,7 +783,7 @@ int main(int argc, const char *argv[])
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
 	};
 	draw_sb(&ginfo, sb);
-	draw_tree(&ginfo, &sb->itable, draw_ileaf);
+	draw_tree(&ginfo, itable_btree(sb), draw_ileaf);
 	merge_tmpfiles(&ginfo);
 
 	fprintf(ginfo.f, "}\n");

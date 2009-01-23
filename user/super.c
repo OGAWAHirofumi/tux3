@@ -19,12 +19,14 @@
 int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
+	struct root iroot;
 	int err = diskread(sb->dev->fd, super, sizeof(*super), SB_LOC);
 	if (err)
 		return err;
-	err = unpack_sb(sb, super, 0);
+	err = unpack_sb(sb, super, &iroot, 0);
 	if (err)
 		return err;
+	init_btree(itable_btree(sb), sb, iroot, &itable_ops);
 	return 0;
 }
 
@@ -92,7 +94,7 @@ int make_tux3(struct sb *sb)
 	}
 
 	trace("create inode table");
-	err = new_btree(&sb->itable, sb, &itable_ops);
+	err = new_btree(itable_btree(sb), sb, &itable_ops);
 	if (err)
 		goto eek;
 	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
@@ -127,9 +129,7 @@ int make_tux3(struct sb *sb)
 eek:
 	if (err)
 		warn("eek, %s", strerror(-err));
-	free_btree(&sb->itable);
 	free_inode(sb->bitmap);
 	sb->bitmap = NULL;
-	sb->itable = (struct btree){ };
 	return err ? err : -ENOSPC; // just guess
 }

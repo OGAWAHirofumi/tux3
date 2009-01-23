@@ -60,7 +60,7 @@ static void tux3_destroy_inode(struct inode *inode)
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 
-static int tux_load_sb(struct super_block *sb, int silent)
+static int tux_load_sb(struct super_block *sb, struct root *iroot, int silent)
 {
 	struct buffer_head *bh;
 	int err;
@@ -72,7 +72,7 @@ static int tux_load_sb(struct super_block *sb, int silent)
 			printk(KERN_ERR "TUX3: unable to read superblock\n");
 		return -EIO;
 	}
-	err = unpack_sb(tux_sb(sb), bufdata(bh), silent);
+	err = unpack_sb(tux_sb(sb), bufdata(bh), iroot, silent);
 	/* FIXME: this is needed? */
 	memcpy(&tux_sb(sb)->super, bufdata(bh), sizeof(tux_sb(sb)->super));
 	brelse(bh);
@@ -149,6 +149,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 {
 	static struct tux_iattr iattr;
 	struct sb *sbi;
+	struct root iroot;
 	int err, blocksize;
 
 	sbi = kzalloc(sizeof(struct sb), GFP_KERNEL);
@@ -172,14 +173,11 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	}
 
-	err = tux_load_sb(sb, silent);
+	err = tux_load_sb(sb, &iroot, silent);
 	if (err)
 		goto error;
-	printk("%s: sb %p, ops %p, depth %Lu, block %Lu, entries_per_leaf %d\n",
-	       __func__,
-	       sbi->itable.sb, sbi->itable.ops,
-	       (L)sbi->itable.root.depth, (L)sbi->itable.root.block,
-	       sbi->itable.entries_per_leaf);
+	printk("%s: depth %Lu, block %Lu\n",
+	       __func__, (L)iroot.depth, (L)iroot.block);
 	printk("%s: blocksize %u, blockbits %u, blockmask %08x\n",
 	       __func__, sbi->blocksize, sbi->blockbits, sbi->blockmask);
 	printk("%s: volblocks %Lu, freeblocks %Lu, nextalloc %Lu\n",
@@ -199,6 +197,9 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->volmap = tux_new_volmap(tux_sb(sb));
 	if (!sbi->volmap)
 		goto error;
+
+	/* Initialize itable btree */
+	init_btree(itable_btree(sbi), sbi, iroot, &itable_ops);
 
 //	struct inode *vtable;
 	sbi->bitmap = tux3_iget(sb, TUX_BITMAP_INO);

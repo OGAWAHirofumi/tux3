@@ -103,21 +103,22 @@ struct inode *tux_new_volmap(struct sb *sb)
 static int open_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	struct btree *itable = itable_btree(sb);
 	int err;
-	struct cursor *cursor = alloc_cursor(&sb->itable, 0);
+	struct cursor *cursor = alloc_cursor(itable, 0);
 	if (!cursor)
 		return -ENOMEM;
 	down_read(&cursor->btree->lock);
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor)))
+	if ((err = probe(itable, tux_inode(inode)->inum, cursor)))
 		goto out;
 	unsigned size;
-	void *attrs = ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
+	void *attrs = ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
 	if (!attrs) {
 		err = -ENOENT;
 		goto release;
 	}
 	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(&sb->itable, bufdata(cursor[depth].buffer));
+	//ileaf_dump(itable, bufdata(cursor[depth].buffer));
 	//hexdump(attrs, size);
 	unsigned xsize = decode_xsize(inode, attrs, size);
 	err = -ENOMEM;
@@ -141,7 +142,7 @@ out:
 static int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
-	void *base = tree_expand(&tux_sb(inode->i_sb)->itable, tux_inode(inode)->inum, size, cursor);
+	void *base = tree_expand(itable_btree(tux_sb(inode->i_sb)), tux_inode(inode)->inum, size, cursor);
 	if (!base)
 		return -ENOMEM; // ERR_PTR me!!!
 	void *attr = encode_attrs(inode, base, size);
@@ -177,12 +178,13 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 static int make_inode(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	int err = -ENOENT, depth = sb->itable.root.depth;
-	struct cursor *cursor = alloc_cursor(&sb->itable, 1); /* +1 for now depth */
+	struct btree *itable = itable_btree(sb);
+	int err = -ENOENT, depth = itable->root.depth;
+	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for now depth */
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
-	if ((err = probe(&sb->itable, goal, cursor)))
+	if ((err = probe(itable, goal, cursor)))
 		goto out;
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 
@@ -192,11 +194,11 @@ static int make_inode(struct inode *inode, inum_t goal)
 	assert(goal < next_key(cursor, depth));
 	while (1) {
 		trace_off("find empty inode in [%Lx] base %Lx", (L)bufindex(leafbuf), (L)ibase(leaf));
-		goal = find_empty_inode(&sb->itable, bufdata(leafbuf), goal);
+		goal = find_empty_inode(itable, bufdata(leafbuf), goal);
 		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)next_key(cursor, depth));
 		if (goal < next_key(cursor, depth))
 			break;
-		int more = advance(&sb->itable, cursor);
+		int more = advance(itable, cursor);
 		if (more < 0) {
 			err = more;
 			goto out;
@@ -227,16 +229,17 @@ static int save_inode(struct inode *inode)
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	struct sb *sb = tux_sb(inode->i_sb);
+	struct btree *itable = itable_btree(sb);
 	int err;
-	struct cursor *cursor = alloc_cursor(&sb->itable, 1); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
-	if ((err = probe(&sb->itable, tux_inode(inode)->inum, cursor)))
+	if ((err = probe(itable, tux_inode(inode)->inum, cursor)))
 		goto out;
 	/* paranoia check */
 	unsigned size;
-	if (!(ileaf_lookup(&sb->itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size))) {
+	if (!(ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size))) {
 		err = -EINVAL;
 		goto release;
 	}
@@ -250,18 +253,19 @@ out:
 	return err;
 }
 
-static int purge_inum(struct btree *btree, inum_t inum)
+static int purge_inum(struct sb *sb, inum_t inum)
 {
-	struct cursor *cursor = alloc_cursor(btree, 0);
+	struct btree *itable = itable_btree(sb);
+	struct cursor *cursor = alloc_cursor(itable, 0);
 	if (!cursor)
 		return -ENOMEM;
 
 	int err = -ENOENT;
-	if (!(err = probe(btree, inum, cursor))) {
+	if (!(err = probe(itable, inum, cursor))) {
 		/* FIXME: truncate the bnode and leaf if empty. */
 		struct buffer_head *ileafbuf = cursor_leafbuf(cursor);
 		struct ileaf *ileaf = to_ileaf(bufdata(ileafbuf));
-		err = ileaf_purge(btree, inum, ileaf);
+		err = ileaf_purge(itable, inum, ileaf);
 		if (!err)
 			mark_buffer_dirty(ileafbuf);
 		release_cursor(cursor);
@@ -325,7 +329,7 @@ void tux3_delete_inode(struct inode *inode)
 
 	/* clear_inode() before freeing this ino. */
 	clear_inode(inode);
-	purge_inum(&sb->itable, inum);
+	purge_inum(sb, inum);
 	change_end(sb);
 }
 

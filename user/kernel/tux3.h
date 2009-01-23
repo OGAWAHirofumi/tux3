@@ -254,7 +254,8 @@ typedef struct { unsigned count:8, block:24; } extent_t;
 
 struct sb {
 	struct disksuper super;
-	struct btree itable;	/* Cached root of the inode table */
+	struct inode *volmap;	/* Volume metadata cache (like blockdev).
+				 * Note, ->btree is the btree for itable. */
 	struct inode *bitmap;	/* allocation bitmap special file */
 	struct inode *rootdir;	/* root directory special file */
 	struct inode *vtable;	/* version table special file */
@@ -270,7 +271,6 @@ struct sb {
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 	loff_t dictsize;	/* Atom dictionary size */
-	struct inode *volmap;	/* Volume metadata cache */
 	struct inode *logmap;	/* Prototype log block cache */
 	unsigned logbase;	/* Index of oldest log block in log map */
 	unsigned lognext;	/* Index of next log block in log map */
@@ -327,6 +327,11 @@ static inline tuxnode_t *tux_inode(struct inode *inode)
 	return container_of(inode, tuxnode_t, vfs_inode);
 }
 
+static inline struct inode *btree_inode(struct btree *btree)
+{
+	return &container_of(btree, tuxnode_t, btree)->vfs_inode;
+}
+
 typedef struct address_space map_t;
 
 static inline map_t *mapping(struct inode *inode)
@@ -381,11 +386,21 @@ static inline struct inode *tux_inode(struct inode *inode)
 	return inode;
 }
 
+static inline struct inode *btree_inode(struct btree *btree)
+{
+	return container_of(btree, struct inode, btree);
+}
+
 static inline map_t *mapping(struct inode *inode)
 {
 	return inode->map;
 }
 #endif /* !__KERNEL__ */
+
+static inline struct btree *itable_btree(struct sb *sb)
+{
+	return &tux_inode(sb->volmap)->btree;
+}
 
 #define TUX_LINK_MAX 64		/* just for debug for now */
 
@@ -763,7 +778,7 @@ void init_defree(struct sb *sb);
 void destroy_defree(struct sb *sb);
 
 /* commit.c */
-int unpack_sb(struct sb *sb, struct disksuper *super, int silent);
+int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent);
 void pack_sb(struct sb *sb, struct disksuper *super);
 
 /* temporary hack for buffer */

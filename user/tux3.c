@@ -80,7 +80,7 @@ int main(int argc, const char *argv[])
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
-	init_btree(&sb->itable, sb, (struct root){}, &itable_ops);
+	init_btree(itable_btree(sb), sb, (struct root){}, &itable_ops);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (poptPeekArg(popt))
@@ -89,7 +89,7 @@ int main(int argc, const char *argv[])
 		printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
 		if ((errno = -make_tux3(sb)))
 			goto eek;
-		show_tree_range(&sb->itable, 0, -1);
+		show_tree_range(itable_btree(sb), 0, -1);
 		return 0;
 	}
 	if ((errno = -load_sb(sb)))
@@ -260,7 +260,7 @@ int main(int argc, const char *argv[])
 		free_inode(inode);
 		if (errno)
 			goto eek;
-		if ((errno = -purge_inum(&sb->itable, inum)))
+		if ((errno = -purge_inum(sb, inum)))
 			goto eek;
 		if ((errno = -tux_delete_entry(buffer, entry)))
 			goto eek;

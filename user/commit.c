@@ -49,8 +49,8 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 		return 0;
 	}
 
-	if (btree != &sb->itable) {
-		struct inode *inode = container_of(btree, struct inode, btree);
+	if (btree != itable_btree(sb)) {
+		struct inode *inode = btree_inode(btree);
 		assert(oldblock == btree->root.block);
 		btree->root.block = newblock;
 		log_droot(sb, newblock, oldblock, inode->inum);

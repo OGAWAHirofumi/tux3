@@ -357,7 +357,7 @@ static void tux3_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	free_inode(inode);
 	if (errno)
 		goto eek;
-	if ((errno = -purge_inum(&sb->itable, inum)))
+	if ((errno = -purge_inum(sb, inum)))
 		goto eek;
 	if ((errno = -tux_delete_entry(buffer, entry)))
 		goto eek;

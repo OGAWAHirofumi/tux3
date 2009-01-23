@@ -159,7 +159,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 		goto error; // err ???
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
 		return inode;
-	purge_inum(&tux_sb(dir->i_sb)->itable, inode->inum); // test me!!!
+	purge_inum(tux_sb(dir->i_sb), inode->inum); // test me!!!
 error:
 	free_inode(inode);
 	inode = NULL;
@@ -257,7 +257,7 @@ int main(int argc, char *argv[])
 	show_buffers(mapping(sb->rootdir));
 	show_buffers(sb->volmap->map);
 	bitmap_dump(sb->bitmap, 0, sb->volblocks);
-	show_tree_range(&sb->itable, 0, -1);
+	show_tree_range(itable_btree(sb), 0, -1);
 	exit(0);
 eek:
 	return error("Eek! %s", strerror(errno));

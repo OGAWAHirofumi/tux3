@@ -9,9 +9,9 @@
 #define trace trace_off
 #endif
 
-int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
+int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent)
 {
-	u64 iroot = from_be_u64(super->iroot);
+	u64 iroot_val = from_be_u64(super->iroot);
 	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic))) {
 		if (!silent)
 			printf("invalid superblock [%Lx]\n",
@@ -36,7 +36,7 @@ int unpack_sb(struct sb *sb, struct disksuper *super, int silent)
 	sb->freeatom = from_be_u32(super->freeatom);
 	sb->dictsize = from_be_u64(super->dictsize);
 
-	init_btree(&sb->itable, sb, unpack_root(iroot), &itable_ops);
+	*iroot = unpack_root(iroot_val);
 
 	return 0;
 }
@@ -50,5 +50,5 @@ void pack_sb(struct sb *sb, struct disksuper *super)
 	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
 	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
 	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
-	super->iroot = to_be_u64(pack_root(&sb->itable.root));
+	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
 }
