@@ -651,6 +651,12 @@ struct tux_iattr {
 	unsigned mode, uid, gid;
 };
 
+static inline void mark_btree_dirty(struct btree *btree)
+{
+	if (btree != itable_btree(btree->sb))
+		mark_inode_dirty(btree_inode(btree));
+}
+
 static inline void *bufdata(struct buffer_head *buffer)
 {
 	return buffer->b_data;

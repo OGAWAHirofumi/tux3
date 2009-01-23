@@ -458,6 +458,7 @@ keep_prev_node:
 				while (depth > 1 && bcount(bufdata(prev[0])) == 1) {
 					trace("drop btree level");
 					btree->root.block = bufindex(prev[1]);
+					mark_btree_dirty(btree);
 					brelse_free(btree, prev[0]);
 					//dirty_buffer_count_check(sb);
 					depth = --btree->root.depth;
@@ -590,7 +591,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.block = bufindex(newbuf);
 	btree->root.depth++;
 	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
-	//set_sb_dirty(sb);
+	mark_btree_dirty(btree);
 	cursor_check(cursor);
 	return 0;
 eek:
