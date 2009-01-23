@@ -311,7 +311,7 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 	int err, offset;
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
-	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
+	offset = iblock & ((1 << (PAGE_CACHE_SHIFT - inode->i_blkbits)) - 1);
 
 	bh = get_buffer(mapping, index, offset);
 	if (bh)
@@ -361,7 +361,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	int err, offset;
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
-	offset = iblock & ((PAGE_CACHE_SHIFT - inode->i_blkbits) - 1);
+	offset = iblock & ((1 << (PAGE_CACHE_SHIFT - inode->i_blkbits)) - 1);
 
 	err = mapping->a_ops->write_begin(NULL, mapping,
 					  iblock << inode->i_blkbits,
@@ -373,10 +373,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 
 	assert(page_has_buffers(page));
 
-	bh = page_buffers(page);
-	while (offset--)
-		bh = bh->b_this_page;
-	get_bh(bh);
+	bh = find_get_buffer(page, offset);
 	set_buffer_uptodate(bh);
 
 	unlock_page(page);
