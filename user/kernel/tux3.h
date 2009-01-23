@@ -276,7 +276,7 @@ struct sb {
 /* logging  */
 
 struct logblock { be_u16 magic, bytes; be_u64 prevlog; unsigned char data[]; };
-enum { LOG_ALLOC, LOG_FREE, LOG_UPDATE };
+enum { LOG_ALLOC, LOG_FREE, LOG_UPDATE, LOG_DROOT, LOG_IROOT };
 struct commit_entry { be_u64 previous; };
 
 #ifdef __KERNEL__

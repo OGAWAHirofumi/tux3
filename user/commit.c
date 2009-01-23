@@ -20,9 +20,8 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	struct sb *sb = btree->sb;
 	struct buffer_head *buffer = cursor->path[level].buffer;
 	assert(buffer->state >= BUFFER_DIRTY);
-	struct index_entry *entry = cursor->path[level - 1].next - 1;
-	block_t parent = bufindex(cursor->path[level - 1].buffer);
-	block_t oldblock = from_be_u64(entry->block), newblock;
+
+	block_t oldblock = bufindex(buffer), newblock;
 	int err = balloc(sb, 1, &newblock);
 	if (err)
 		return err;
@@ -32,11 +31,29 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
 	cursor->path[level].buffer = clone;
 	cursor->path[level].next += bufdata(clone) - bufdata(buffer);
-	entry->block = to_be_u64(newblock);
-	log_alloc(sb, oldblock, 1, 0);
 	log_alloc(sb, newblock, 1, 1);
-	log_update(sb, newblock, parent, from_be_u64(entry->key));
-	return defree(sb, oldblock, 1);
+	defree(sb, oldblock, 1);
+
+	if (level) {
+		struct index_entry *entry = cursor->path[level - 1].next - 1;
+		block_t parent = bufindex(cursor->path[level - 1].buffer);
+		assert(oldblock == from_be_u64(entry->block));
+		entry->block = to_be_u64(newblock);
+		log_update(sb, newblock, parent, from_be_u64(entry->key));
+		return 0;
+	}
+
+	if (btree != &sb->itable) {
+		struct inode *inode = container_of(btree, struct inode, btree);
+		assert(oldblock == btree->root.block);
+		btree->root.block = newblock;
+		log_droot(sb, newblock, oldblock, inode->inum);
+		return 0;
+	}
+
+	assert(oldblock == from_be_u64(sb->super.iroot));
+	log_iroot(sb, newblock, oldblock);
+	return 0;
 }
 
 void replay(struct sb *sb)
