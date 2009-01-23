@@ -89,7 +89,7 @@ void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 int defer_free(struct sb *sb, block_t block, unsigned count)
 {
 	if (sb->defreepos == sb->defreetop) {
-		struct page *page = alloc_page(GFP_KERNEL);
+		struct page *page = alloc_page(GFP_NOFS);
 		link_add(page_link(page), &sb->defree);
 		sb->defreepos = page_address(page);
 		sb->defreetop = page_address(page) + PAGE_SIZE;
