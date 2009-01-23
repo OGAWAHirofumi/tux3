@@ -86,7 +86,7 @@ void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 
 /* Deferred free list */
 
-int defree(struct sb *sb, block_t block, unsigned count)
+int defer_free(struct sb *sb, block_t block, unsigned count)
 {
 	if (sb->defreepos == sb->defreetop) {
 		struct page *page = alloc_pages(GFP_KERNEL, 0);

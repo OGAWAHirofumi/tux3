@@ -743,7 +743,7 @@ unsigned encode_xsize(struct inode *inode);
 /* log.c */
 void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
-int defree(struct sb *sb, block_t block, unsigned count);
+int defer_free(struct sb *sb, block_t block, unsigned count);
 void retire_defree(struct sb *sb);
 void destroy_defree(struct sb *sb);
 
