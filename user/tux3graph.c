@@ -53,7 +53,7 @@ struct link_info {
 	char link[256];
 	struct list_head list;
 };
-#define link_entry(x)		list_entry(x, struct link_info, list)
+#define linfo_entry(x)		list_entry(x, struct link_info, list)
 
 struct dtree_info {
 	FILE *f;
@@ -82,7 +82,7 @@ static void write_link(struct graph_info *gi)
 	if (!list_empty(&gi->link_head)) {
 		fprintf(gi->f, "\n");
 		while (!list_empty(&gi->link_head)) {
-			struct link_info *l = link_entry(gi->link_head.next);
+			struct link_info *l = linfo_entry(gi->link_head.next);
 			list_del(&l->list);
 			fputs(l->link, gi->f);
 			free(l);

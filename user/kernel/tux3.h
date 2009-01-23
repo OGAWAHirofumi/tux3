@@ -128,15 +128,29 @@ static inline void *decode48(void *at, u64 *val)
 
 struct link { struct link *next; };
 
-static inline void link_add(struct link *node, struct link *list)
+#define LINK_HEAD_INIT(name)	{ &(name), }
+#define link_entry(ptr, type, member) \
+	container_of((typeof(((type *)0)->member) *)ptr, type, member)
+
+static inline void init_link_head(struct link *head)
 {
-	node->next = list->next;
-	list->next = node;
+	head->next = head;
 }
 
-static inline void link_del_next(struct link *list)
+static inline int link_empty(const struct link *head)
 {
-	list->next = list->next->next;
+	return head->next == head;
+}
+
+static inline void link_add(struct link *node, struct link *head)
+{
+	node->next = head->next;
+	head->next = node;
+}
+
+static inline void link_del_next(struct link *node)
+{
+	node->next = node->next->next;
 }
 
 static inline struct link *page_link(struct page *page)
@@ -263,7 +277,7 @@ struct sb {
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock; /* serialize log entries (spinlock me) */
-	struct link *defree;
+	struct link defree;
 	extent_t *defreepos;
 	extent_t *defreetop;
 #ifdef __KERNEL__
@@ -745,6 +759,7 @@ void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
 int defer_free(struct sb *sb, block_t block, unsigned count);
 void retire_defree(struct sb *sb);
+void init_defree(struct sb *sb);
 void destroy_defree(struct sb *sb);
 
 /* commit.c */

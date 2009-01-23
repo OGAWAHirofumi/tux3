@@ -90,8 +90,7 @@ int defer_free(struct sb *sb, block_t block, unsigned count)
 {
 	if (sb->defreepos == sb->defreetop) {
 		struct page *page = alloc_page(GFP_KERNEL);
-		link_add(page_link(page), sb->defree);
-		sb->defree = sb->defree->next;
+		link_add(page_link(page), &sb->defree);
 		sb->defreepos = page_address(page);
 		sb->defreetop = page_address(page) + PAGE_SIZE;
 	}
@@ -101,30 +100,35 @@ int defer_free(struct sb *sb, block_t block, unsigned count)
 
 void retire_defree(struct sb *sb)
 {
-	while (1) {
-		struct page *page = container_of((void *)sb->defree->next, struct page, private);
-		extent_t *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
-		if (top == sb->defreetop)
-			top = sb->defreepos;
+	struct link *head = &sb->defree;
+	while (!link_empty(head)) {
+		struct page *page = link_entry(head->next, struct page, private);
+		extent_t *vec = page_address(page);
 		printf("free extents: ");
-		for (; vec < top; vec++)
+		for (; vec < sb->defreepos; vec++)
 			bfree(sb, vec->block, vec->count);
 		printf("\n");
-		if (sb->defree == sb->defree->next)
-			break;
-		link_del_next(sb->defree);
+		link_del_next(head);
 		__free_page(page);
 	}
-	sb->defreepos = sb->defreetop - PAGE_SIZE;
+	sb->defreepos = sb->defreetop = NULL;
+}
+
+void init_defree(struct sb *sb)
+{
+	init_link_head(&sb->defree);
+	sb->defreepos = sb->defreetop = NULL;
 }
 
 void destroy_defree(struct sb *sb)
 {
-	struct link *link = sb->defree;
-	do {
-		struct page *page = container_of((void *)link, struct page, private);
-		link = link->next;
+	struct link *head = &sb->defree;
+	if (!link_empty(head))
+		warn("defree is not empty");
+	/* Is this needed? */
+	while (!link_empty(head)) {
+		struct page *page = link_entry(head->next, struct page, private);
+		link_del_next(head);
 		__free_page(page);
-	} while (link != sb->defree);
-	sb->defree = NULL;
+	}
 }

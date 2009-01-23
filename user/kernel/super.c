@@ -162,6 +162,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_time_gran = 1;
 
 	mutex_init(&sbi->loglock);
+	init_defree(sbi);
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);
@@ -220,17 +221,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	if (!sbi->logmap)
 		goto error_logmap;
 
-	/* initialize deferred free log */
-	struct page *page = alloc_page(GFP_KERNEL);
-	if (!page) {
-		err = -ENOMEM;
-		goto error_alloc_defree;
-	}
-	page_link(page)->next = page_link(page);
-	sbi->defree = page_link(page),
-	sbi->defreepos = page_address(page),
-	sbi->defreetop = page_address(page) + PAGE_SIZE,
-
 	sb->s_root = d_alloc_root(sbi->rootdir);
 	if (!sb->s_root)
 		goto error_alloc_root;
@@ -238,8 +228,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
 error_alloc_root:
-	__free_page(page);
-error_alloc_defree:
 	iput(sbi->logmap);
 error_logmap:
 	iput(sbi->atable);
