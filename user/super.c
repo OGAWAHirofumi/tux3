@@ -125,13 +125,11 @@ int make_tux3(struct sb *sb)
 	show_buffers(sb->volmap->map);
 	return 0;
 eek:
+	if (err)
+		warn("eek, %s", strerror(-err));
 	free_btree(&sb->itable);
 	free_inode(sb->bitmap);
 	sb->bitmap = NULL;
 	sb->itable = (struct btree){ };
-	if (err) {
-		warn("eek, %s", strerror(-err));
-		return err;
-	}
-	return -ENOSPC; // just guess
+	return err ? err : -ENOSPC; // just guess
 }
