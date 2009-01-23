@@ -21,6 +21,8 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	struct buffer_head *buffer = cursor->path[level].buffer;
 	assert(buffer_clean(buffer));
 
+	/* Redirect Block */
+
 	block_t oldblock = bufindex(buffer), newblock;
 	int err = balloc(sb, 1, &newblock);
 	if (err)
@@ -32,9 +34,11 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	mark_buffer_dirty(clone);
 	cursor->path[level].buffer = clone;
 	cursor->path[level].next += bufdata(clone) - bufdata(buffer);
-	log_alloc(sb, newblock, 1, 1);
+	log_redirect(sb, oldblock, newblock);
 	defree(sb, oldblock, 1);
 	brelse(buffer);
+
+	/* Update Parent */
 
 	if (level) {
 		struct index_entry *entry = cursor->path[level - 1].next - 1;

@@ -75,6 +75,15 @@ void log_iroot(struct sb *sb, block_t newroot, block_t oldroot)
 	log_end(sb, encode48(data, oldroot));
 }
 
+void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+{
+	unsigned char *data = log_begin(sb, 19);
+	*data++ = LOG_REDIRECT;
+	data = encode48(data, newblock);
+	log_end(sb, encode48(data, oldblock));
+}
+
+
 /* Deferred free list */
 
 int defree(struct sb *sb, block_t block, unsigned count)
