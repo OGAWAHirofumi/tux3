@@ -221,7 +221,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error_logmap;
 
 	/* initialize deferred free log */
-	struct page *page = alloc_pages(GFP_KERNEL, 0);
+	struct page *page = alloc_page(GFP_KERNEL);
 	if (!page) {
 		err = -ENOMEM;
 		goto error_alloc_defree;
@@ -238,7 +238,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
 error_alloc_root:
-	__free_pages(page, 0);
+	__free_page(page);
 error_alloc_defree:
 	iput(sbi->logmap);
 error_logmap:

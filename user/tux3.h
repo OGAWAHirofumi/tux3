@@ -116,7 +116,12 @@ static inline be_u64 to_be_u64(u64 val)
 
 /* Kernel page emulation for deferred free support */
 
-struct page { void *address; void *private; };
+typedef unsigned __bitwise__ gfp_t;
+
+#define GFP_KERNEL	(__force gfp_t)0x10u
+#define GFP_NOFS	(__force gfp_t)0x20u
+
+struct page { void *address; unsigned long private; };
 
 #define PAGE_SIZE (1 << 6)
 
@@ -125,20 +130,30 @@ static inline void *page_address(struct page *page)
 	return page->address;
 }
 
-enum { GFP_KERNEL };
-
-struct page *alloc_pages(unsigned flags, unsigned order)
+struct page *alloc_pages(gfp_t gfp_mask, unsigned order)
 {
 	struct page *page = malloc(sizeof(*page));
-	*page = (struct page){ .address = malloc(PAGE_SIZE) };
+	void *data = malloc(PAGE_SIZE);
+	if (!page || !data)
+		goto error;
+	*page = (struct page){ .address = data };
 	return page;
+
+error:
+	if (page)
+		free(page);
+	if (data)
+		free(data);
+	return NULL;
 }
+#define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
 
 void __free_pages(struct page *page, unsigned order)
 {
 	free(page_address(page));
 	free(page);
 }
+#define __free_page(page) __free_pages((page), 0)
 
 #include "kernel/tux3.h"
 
