@@ -85,6 +85,11 @@ void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 
 /* Deferred free list */
 
+static inline struct link *page_link(struct page *page)
+{
+	return (void *)&page->private;
+}
+
 int stash_value(struct stash *stash, u64 value)
 {
 	if (stash->pos == stash->top) {

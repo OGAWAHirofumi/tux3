@@ -153,11 +153,6 @@ static inline void link_del_next(struct link *node)
 	node->next = node->next->next;
 }
 
-static inline struct link *page_link(struct page *page)
-{
-	return (void *)&page->private;
-}
-
 /* Tux3 disk format */
 
 #define SB_MAGIC_SIZE 8
