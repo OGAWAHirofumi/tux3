@@ -45,6 +45,8 @@ struct buffer_head {
 struct buffer_head *new_buffer(map_t *map);
 void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
+void show_active_buffers(map_t *map);
+void show_dirty_buffers(map_t *map);
 void show_buffers_state(unsigned state);
 struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer);
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
