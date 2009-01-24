@@ -40,14 +40,14 @@ int save_sb(struct sb *sb)
 int sync_super(struct sb *sb)
 {
 	int err;
-	printf("sync bitmap\n");
-	if ((err = tuxsync(sb->bitmap)))
-		return err;
 	printf("sync rootdir\n");
 	if ((err = tuxsync(sb->rootdir)))
 		return err;
 	printf("sync atom table\n");
 	if ((err = tuxsync(sb->atable)))
+		return err;
+	printf("sync bitmap\n");
+	if ((err = tuxsync(sb->bitmap)))
 		return err;
 	printf("sync volmap\n");
 	if ((err = flush_buffers(sb->volmap->map)))
