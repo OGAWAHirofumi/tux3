@@ -41,7 +41,7 @@ void guess_region(struct buffer_head *buffer, block_t *start, unsigned *count, i
 				if (next > inode->i_size >> tux_sb(inode->i_sb)->blockbits)
 					break;
 			} else {
-				unsigned stop = write ? !buffer_dirty(nextbuf) : buffer_empty(nextbuf);
+				unsigned stop = write ? !buffer_dirty(nextbuf) : !buffer_empty(nextbuf);
 				brelse(nextbuf);
 				if (stop)
 					break;
