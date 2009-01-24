@@ -543,9 +543,14 @@ static void tux3_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 
 static void tux3_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+	trace("release (%Lx)", (L)ino);
 	if (ino != FUSE_ROOT_ID) {
 		struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 		tuxclose(inode);
+		if ((errno = -sync_super(sb))) {
+			fuse_reply_err(req, errno);
+			return;
+		}
 	}
 	fuse_reply_err(req, 0);
 }
