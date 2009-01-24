@@ -83,52 +83,62 @@ void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 	log_end(sb, encode48(data, oldblock));
 }
 
-
 /* Deferred free list */
 
-int defer_free(struct sb *sb, block_t block, unsigned count)
+int stash_value(struct stash *stash, u64 value)
 {
-	if (sb->defreepos == sb->defreetop) {
-		struct page *page = alloc_page(GFP_NOFS);
-		link_add(page_link(page), &sb->defree);
-		sb->defreepos = page_address(page);
-		sb->defreetop = page_address(page) + PAGE_SIZE;
+	if (stash->pos == stash->top) {
+		struct page *page = alloc_page(GFP_KERNEL);
+		if (!page)
+			return -ENOMEM;
+		stash->top = page_address(page) + PAGE_SIZE;
+		stash->pos = page_address(page);
+		if (stash->tail) {
+			link_add(page_link(page), stash->tail);
+			stash->tail = stash->tail->next;
+		} else {
+			stash->tail = page_link(page);
+			stash->tail->next = stash->tail;
+		}
 	}
-	*sb->defreepos++ = (extent_t){ .block = block, .count = count };
+	*stash->pos++ = value;
 	return 0;
 }
 
-void retire_defree(struct sb *sb)
+void empty_stash(struct stash *stash)
 {
-	struct link *head = &sb->defree;
-	while (!link_empty(head)) {
-		struct page *page = link_entry(head->next, struct page, private);
-		extent_t *vec = page_address(page);
-		printf("free extents: ");
-		for (; vec < sb->defreepos; vec++)
-			bfree(sb, vec->block, vec->count);
-		printf("\n");
-		link_del_next(head);
+	struct link *tail = stash->tail;
+	if (!tail)
+		return;
+	do {
+		struct page *page = link_entry(tail, struct page, private);
+		tail = tail->next;
 		__free_page(page);
-	}
-	sb->defreepos = sb->defreetop = NULL;
+	} while (tail != stash->tail);
+	stash->tail = NULL;
 }
 
-void init_defree(struct sb *sb)
+int stash_free(struct stash *stash, block_t block, unsigned count)
 {
-	init_link_head(&sb->defree);
-	sb->defreepos = sb->defreetop = NULL;
+	return stash_value(stash, ((u64)count << 48) + block);
 }
 
-void destroy_defree(struct sb *sb)
+int retire_frees(struct sb *sb, struct stash *stash)
 {
-	struct link *head = &sb->defree;
-	if (!link_empty(head))
-		warn("defree is not empty");
-	/* Is this needed? */
-	while (!link_empty(head)) {
-		struct page *page = link_entry(head->next, struct page, private);
-		link_del_next(head);
+	while (1) {
+		int err;
+		struct page *page = link_entry(stash->tail->next, struct page, private);
+		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
+		if (top == stash->top)
+			top = stash->pos;
+		for (; vec < top; vec++)
+			if ((err = bfree(sb, *vec & ~(-1ULL << 48), *vec >> 48)))
+				return err;
+		if (stash->tail == stash->tail->next)
+			break;
+		link_del_next(stash->tail);
 		__free_page(page);
 	}
+	stash->pos = stash->top - PAGE_SIZE;
+	return 0;
 }

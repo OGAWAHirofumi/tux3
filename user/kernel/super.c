@@ -102,7 +102,7 @@ static void tux3_put_super(struct super_block *sb)
 	/* FIXME: remove this, then use sb->s_dirt instead */
 	tux3_write_super(sb);
 
-	destroy_defree(sbi);
+	empty_stash(&sbi->defree);
 	iput(sbi->atable);
 	iput(sbi->bitmap);
 	iput(sbi->volmap);
@@ -163,7 +163,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_time_gran = 1;
 
 	mutex_init(&sbi->loglock);
-	init_defree(sbi);
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);

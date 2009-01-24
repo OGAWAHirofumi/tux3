@@ -132,7 +132,7 @@ struct link { struct link *next; };
 #define link_entry(ptr, type, member) \
 	container_of((typeof(((type *)0)->member) *)ptr, type, member)
 
-static inline void init_link_head(struct link *head)
+static inline void init_circular(struct link *head)
 {
 	head->next = head;
 }
@@ -248,9 +248,9 @@ struct cursor {
 	} path[];
 };
 
-/* Tux3-specific sb is a handle for the entire volume state */
+struct stash { struct link *tail; u64 *pos, *top; };
 
-typedef struct { unsigned count:8, block:24; } extent_t;
+/* Tux3-specific sb is a handle for the entire volume state */
 
 struct sb {
 	struct disksuper super;
@@ -276,10 +276,8 @@ struct sb {
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
-	struct mutex loglock; /* serialize log entries (spinlock me) */
-	struct link defree;
-	extent_t *defreepos;
-	extent_t *defreetop;
+	struct mutex loglock;	/* serialize log entries (spinlock me) */
+	struct stash defree;	/* defer extent frees until affer commit */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
@@ -778,10 +776,9 @@ unsigned encode_xsize(struct inode *inode);
 /* log.c */
 void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
-int defer_free(struct sb *sb, block_t block, unsigned count);
-void retire_defree(struct sb *sb);
-void init_defree(struct sb *sb);
-void destroy_defree(struct sb *sb);
+int stash_free(struct stash *stash, block_t block, unsigned count);
+int retire_frees(struct sb *sb, struct stash *stash);
+void empty_stash(struct stash *stash);
 
 /* commit.c */
 int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent);
