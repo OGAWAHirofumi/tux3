@@ -8,6 +8,36 @@
  * the right to distribute those changes under any license.
  */
 
+/*
+ * Locking order: Take care about memory allocation. (It may call our fs.)
+ *
+ * down_write(itable: btree->lock) (open_inode)
+ * down_read(itable: btree->lock) (make_inode, save_inode)
+ *    balloc()
+ *
+ * down_write(inode: btree->lock) (tree_chop, map_region for write)
+ *     bitmap->i_mutex (balloc, bfree)
+ *         down_read(bitmap: btree->lock) (map_region for read)
+ * down_read(inode: btree->lock) (map_region for read)
+ *
+ * This lock may be first lock except vfs locks (lock_super, i_mutex).
+ * sb->delta_lock (change_begin, change_end)
+ *
+ * This lock may be last lock. (care about blockget())
+ * sb->loglock (log_begin, log_end)
+ *
+ * memory allocation: (blockread, blockget, kmalloc, etc.)
+ *     lock_page() (for write)
+ *         write (bitmap) dirty buffers:
+ *             down_write(bitmap: btree->lock) (map_region for write)
+ *                 bitmap->i_mutex (balloc)
+ *                     lock_page() (blockread for read)
+ *                         down_read(bitmap: btree->lock) (map_region for read)
+ *
+ * So, to prevent reentering into our fs recursively by memory reclaim
+ * from memory allocation, lower layer wouldn't use __GFP_FS.
+ */
+
 #include "tux3.h"
 
 #ifndef trace
