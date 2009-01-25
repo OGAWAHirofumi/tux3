@@ -231,6 +231,7 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 				found -= run - 1;
 				blockdirty(buffer, sb->delta);
 				set_bits(bufdata(buffer), found & mapmask, run);
+				mark_buffer_dirty(buffer);
 				brelse(buffer);
 				sb->nextalloc = found + run;
 				sb->freeblocks -= run;
@@ -279,7 +280,8 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 		goto eeek;
 	blockdirty(buffer, sb->delta);
 	clear_bits(bufdata(buffer), start, blocks);
-	brelse_dirty(buffer);
+	mark_buffer_dirty(buffer);
+	brelse(buffer);
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
 	mutex_unlock(&sb->bitmap->i_mutex);

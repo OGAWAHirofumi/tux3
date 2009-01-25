@@ -51,8 +51,9 @@ static struct buffer_head *new_block(struct btree *btree)
 	/* FIXME */
 #ifdef __KERNEL__
 	set_buffer_uptodate(buffer);
-#endif
+#else
 	mark_buffer_dirty(buffer);
+#endif
 	return buffer;
 }
 
@@ -573,7 +574,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			level_replace_brelse(cursor, depth, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
-		}
+		} else
+			mark_buffer_dirty(newbuf);
 		add_child(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
@@ -595,6 +597,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.block = bufindex(newbuf);
 	btree->root.depth++;
 	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
+	mark_buffer_dirty(newbuf);
 	mark_btree_dirty(btree);
 	cursor_check(cursor);
 	return 0;
@@ -620,7 +623,10 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 	}
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
-	mark_buffer_dirty(leafbuf);
+	if (key >= newkey)
+		mark_buffer_dirty(leafbuf);
+	else
+		mark_buffer_dirty(newbuf);
 	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
@@ -665,8 +671,8 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
 	rootnode->count = to_be_u32(1);
 	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
-	brelse(rootbuf);
-	brelse(leafbuf);
+	brelse_dirty(rootbuf);
+	brelse_dirty(leafbuf);
 	return 0;
 eek:
 	if (rootbuf)
