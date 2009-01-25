@@ -48,6 +48,10 @@ static struct buffer_head *new_block(struct btree *btree)
 	if (!buffer)
 		return NULL;
 	memset(bufdata(buffer), 0, bufsize(buffer));
+	/* FIXME */
+#ifdef __KERNEL__
+	set_buffer_uptodate(buffer);
+#endif
 	mark_buffer_dirty(buffer);
 	return buffer;
 }
