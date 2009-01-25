@@ -46,8 +46,6 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 
 	/* uninitialized stuff by alloc_inode() */
 	tuxi->vfs_inode.i_version = 1;
-	tuxi->vfs_inode.i_uid = 0;
-	tuxi->vfs_inode.i_gid = 0;
 	tuxi->vfs_inode.i_atime = epoch;
 	tuxi->vfs_inode.i_mtime = epoch;
 	tuxi->vfs_inode.i_ctime = epoch;
