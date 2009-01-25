@@ -341,6 +341,7 @@ void tux3_clear_inode(struct inode *inode)
 
 int tux3_write_inode(struct inode *inode, int do_sync)
 {
+	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
 	BUG_ON(tux_inode(inode)->inum == TUX_BITMAP_INO ||
 	       tux_inode(inode)->inum == TUX_VOLMAP_INO ||
 	       tux_inode(inode)->inum == TUX_VTABLE_INO ||

@@ -85,7 +85,7 @@ static void tux3_write_super(struct super_block *sb)
 	struct buffer_head *bh;
 
 	BUG_ON(SB_LOC < sb->s_blocksize);
-	bh = sb_bread(sb, SB_LOC >> sb->s_blocksize_bits);
+	bh = vol_bread(tux_sb(sb), SB_LOC >> sb->s_blocksize_bits);
 	if (!bh) {
 		printk(KERN_ERR "TUX3: unable to read superblock\n");
 		return;
@@ -196,6 +196,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->volmap = tux_new_volmap(tux_sb(sb));
 	if (!sbi->volmap)
 		goto error;
+	insert_inode_hash(sbi->volmap);
 
 	/* Initialize itable btree */
 	init_btree(itable_btree(sbi), sbi, iroot, &itable_ops);

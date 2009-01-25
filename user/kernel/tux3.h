@@ -702,6 +702,11 @@ static inline void mark_btree_dirty(struct btree *btree)
 		mark_inode_dirty(btree_inode(btree));
 }
 
+static inline struct inode *buffer_inode(struct buffer_head *buffer)
+{
+	return buffer->b_page->mapping->host;
+}
+
 static inline void *bufdata(struct buffer_head *buffer)
 {
 	return buffer->b_data;
@@ -714,17 +719,20 @@ static inline size_t bufsize(struct buffer_head *buffer)
 
 static inline block_t bufindex(struct buffer_head *buffer)
 {
-	return buffer->b_blocknr;
+	/*
+	 * We don't guarantee the buffer is buffer_mapped(), so we
+	 * calc it from page->index.
+	 */
+	struct inode *inode = buffer_inode(buffer);
+	struct page *page = buffer->b_page;
+	unsigned offset = (void *)buffer->b_data - page_address(page);
+	assert(inode == tux_sb(inode->i_sb)->volmap);
+	return (page_offset(page) + offset) >> inode->i_blkbits;
 }
 
 static inline int bufcount(struct buffer_head *buffer)
 {
 	return atomic_read(&buffer->b_count);
-}
-
-static inline struct inode *buffer_inode(struct buffer_head *buffer)
-{
-	return buffer->b_page->mapping->host;
 }
 
 /* btree.c */
@@ -862,4 +870,13 @@ static inline void change_end(struct sb *sb) { }
 
 #endif /* __KERNEL__ */
 
+static inline struct buffer_head *vol_getblk(struct sb *sb, block_t block)
+{
+	return blockget(mapping(sb->volmap), block);
+}
+
+static inline struct buffer_head *vol_bread(struct sb *sb, block_t block)
+{
+	return blockread(mapping(sb->volmap), block);
+}
 #endif

@@ -598,13 +598,7 @@ static int tux3_vol_readpage(struct file *file, struct page *page)
 
 static int tux3_vol_writepage(struct page *page, struct writeback_control *wbc)
 {
-#if 1
 	return block_write_full_page(page, tux3_vol_get_block, wbc);
-#else
-	/* This shouldn't be called */
-	BUG_ON(1);
-	return 0;
-#endif
 }
 
 static int tux3_vol_write_begin(struct file *file,

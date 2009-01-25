@@ -173,16 +173,6 @@ struct tux_iattr {
 	unsigned mode, uid, gid;
 };
 
-static inline struct buffer_head *sb_getblk(struct sb *sb, block_t block)
-{
-	return blockget(sb->volmap->map, block);
-}
-
-static inline struct buffer_head *sb_bread(struct sb *sb, block_t block)
-{
-	return blockread(sb->volmap->map, block);
-}
-
 #define mark_btree_dirty(x) do {} while (0)
 
 void change_begin(struct sb *sb);

@@ -44,7 +44,7 @@ static struct buffer_head *new_block(struct btree *btree)
 	int err = btree->ops->balloc(btree->sb, 1, &block);
 	if (err)
 		return NULL; // ERR_PTR me!!!
-	struct buffer_head *buffer = sb_getblk(vfs_sb(btree->sb), block);
+	struct buffer_head *buffer = vol_getblk(btree->sb, block);
 	if (!buffer)
 		return NULL;
 	memset(bufdata(buffer), 0, bufsize(buffer));
@@ -221,7 +221,7 @@ void free_cursor(struct cursor *cursor)
 int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor)
 {
 	unsigned i, depth = btree->root.depth;
-	struct buffer_head *buffer = sb_bread(vfs_sb(btree->sb), btree->root.block);
+	struct buffer_head *buffer = vol_bread(btree->sb, btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = bufdata(buffer);
@@ -233,7 +233,7 @@ int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor)
 				break;
 		trace("probe level %i, %ti of %i", i, next - node->entries, bcount(node));
 		level_push(cursor, buffer, next);
-		if (!(buffer = sb_bread(vfs_sb(btree->sb), from_be_u64((next - 1)->block))))
+		if (!(buffer = vol_bread(btree->sb, from_be_u64((next - 1)->block))))
 			goto eek;
 		node = (struct bnode *)bufdata(buffer);
 	}
@@ -257,7 +257,7 @@ int advance(struct btree *btree, struct cursor *cursor)
 		level--;
 	} while (level_finished(cursor, level));
 	while (1) {
-		buffer = sb_bread(vfs_sb(btree->sb), from_be_u64(cursor->path[level].next->block));
+		buffer = vol_bread(btree->sb, from_be_u64(cursor->path[level].next->block));
 		if (!buffer)
 			goto eek;
 		cursor->path[level].next++;
@@ -362,12 +362,7 @@ static void brelse_free(struct btree *btree, struct buffer_head *buffer)
 {
 	struct sb *sb = btree->sb;
 	block_t block = bufindex(buffer);
-#ifdef __KERNEL__
-	/* bh_lru may be holding this buffer_head */
-	if (bufcount(buffer) > 2) {
-#else
 	if (bufcount(buffer) != 1) {
-#endif
 		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
 		brelse(buffer);
 		assert(bufcount(buffer) == 0);
@@ -482,7 +477,7 @@ keep_prev_node:
 
 		/* push back down to leaf level */
 		while (level < depth - 1) {
-			struct buffer_head *buffer = sb_bread(vfs_sb(sb), from_be_u64(cursor->path[level++].next++->block));
+			struct buffer_head *buffer = vol_bread(sb, from_be_u64(cursor->path[level++].next++->block));
 			if (!buffer) {
 				ret = -EIO;
 				goto out;
@@ -492,7 +487,7 @@ keep_prev_node:
 		}
 		//dirty_buffer_count_check(sb);
 		/* go to next leaf */
-		if (!(leafbuf = sb_bread(vfs_sb(sb), from_be_u64(cursor->path[level].next++->block)))) {
+		if (!(leafbuf = vol_bread(sb, from_be_u64(cursor->path[level].next++->block)))) {
 			ret = -EIO;
 			goto out;
 		}
