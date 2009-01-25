@@ -458,10 +458,10 @@ keep_prev_node:
 				while (depth > 1 && bcount(bufdata(prev[0])) == 1) {
 					trace("drop btree level");
 					btree->root.block = bufindex(prev[1]);
-					mark_btree_dirty(btree);
 					brelse_free(btree, prev[0]);
 					//dirty_buffer_count_check(sb);
 					depth = --btree->root.depth;
+					mark_btree_dirty(btree);
 					vecmove(prev, prev + 1, depth);
 					//set_sb_dirty(sb);
 				}
