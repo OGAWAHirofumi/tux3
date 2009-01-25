@@ -102,7 +102,7 @@ static void tux3_put_super(struct super_block *sb)
 	/* FIXME: remove this, then use sb->s_dirt instead */
 	tux3_write_super(sb);
 
-	empty_stash(&sbi->defree);
+	destroy_defree(&sbi->defree);
 	iput(sbi->atable);
 	iput(sbi->bitmap);
 	iput(sbi->volmap);

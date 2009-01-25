@@ -83,11 +83,17 @@ void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 	log_end(sb, encode48(data, oldblock));
 }
 
-/* Deferred free list */
+/* Stash infrastructure (struct stash must be initialized by zero clear) */
 
 static inline struct link *page_link(struct page *page)
 {
 	return (void *)&page->private;
+}
+
+static void stash_init(struct stash *stash)
+{
+	stash->tail = NULL;
+	stash->pos = stash->top = NULL;
 }
 
 int stash_value(struct stash *stash, u64 value)
@@ -120,30 +126,37 @@ void empty_stash(struct stash *stash)
 		tail = tail->next;
 		__free_page(page);
 	} while (tail != stash->tail);
-	stash->tail = NULL;
+	stash_init(stash);
 }
 
-int stash_free(struct stash *stash, block_t block, unsigned count)
+/* Deferred free list */
+
+int defer_free(struct stash *defree, block_t block, unsigned count)
 {
-	return stash_value(stash, ((u64)count << 48) + block);
+	return stash_value(defree, ((u64)count << 48) + block);
 }
 
-int retire_frees(struct sb *sb, struct stash *stash)
+int retire_frees(struct sb *sb, struct stash *defree)
 {
 	while (1) {
 		int err;
-		struct page *page = link_entry(stash->tail->next, struct page, private);
+		struct page *page = link_entry(defree->tail->next, struct page, private);
 		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
-		if (top == stash->top)
-			top = stash->pos;
+		if (top == defree->top)
+			top = defree->pos;
 		for (; vec < top; vec++)
 			if ((err = bfree(sb, *vec & ~(-1ULL << 48), *vec >> 48)))
 				return err;
-		if (stash->tail == stash->tail->next)
+		if (defree->tail == defree->tail->next)
 			break;
-		link_del_next(stash->tail);
+		link_del_next(defree->tail);
 		__free_page(page);
 	}
-	stash->pos = stash->top - PAGE_SIZE;
+	defree->pos = defree->top - PAGE_SIZE;
 	return 0;
+}
+
+void destroy_defree(struct stash *defree)
+{
+	empty_stash(defree);
 }

@@ -771,9 +771,9 @@ unsigned encode_xsize(struct inode *inode);
 /* log.c */
 void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
-int stash_free(struct stash *stash, block_t block, unsigned count);
-int retire_frees(struct sb *sb, struct stash *stash);
-void empty_stash(struct stash *stash);
+int defer_free(struct stash *defree, block_t block, unsigned count);
+int retire_frees(struct sb *sb, struct stash *defree);
+void destroy_defree(struct stash *defree);
 
 /* commit.c */
 int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent);

@@ -35,7 +35,7 @@ int cursor_redirect(struct cursor *cursor, unsigned level)
 	cursor->path[level].buffer = clone;
 	cursor->path[level].next += bufdata(clone) - bufdata(buffer);
 	log_redirect(sb, oldblock, newblock);
-	stash_free(&sb->defree, oldblock, 1);
+	defer_free(&sb->defree, oldblock, 1);
 	brelse(buffer);
 
 	/* Update Parent */
