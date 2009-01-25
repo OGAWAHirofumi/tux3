@@ -92,7 +92,7 @@ static inline struct link *page_link(struct page *page)
 
 static void stash_init(struct stash *stash)
 {
-	stash->tail = NULL;
+	init_flink_head(&stash->head);
 	stash->pos = stash->top = NULL;
 }
 
@@ -104,13 +104,10 @@ int stash_value(struct stash *stash, u64 value)
 			return -ENOMEM;
 		stash->top = page_address(page) + PAGE_SIZE;
 		stash->pos = page_address(page);
-		if (stash->tail) {
-			link_add(page_link(page), stash->tail);
-			stash->tail = stash->tail->next;
-		} else {
-			stash->tail = page_link(page);
-			stash->tail->next = stash->tail;
-		}
+		if (!flink_empty(&stash->head))
+			flink_add(page_link(page), &stash->head);
+		else
+			flink_first_add(page_link(page), &stash->head);
 	}
 	*stash->pos++ = value;
 	return 0;
@@ -118,15 +115,19 @@ int stash_value(struct stash *stash, u64 value)
 
 void empty_stash(struct stash *stash)
 {
-	struct link *tail = stash->tail;
-	if (!tail)
-		return;
-	do {
-		struct page *page = link_entry(tail, struct page, private);
-		tail = tail->next;
+	struct flink_head *head = &stash->head;
+	if (!flink_empty(head)) {
+		struct page *page;
+		while (1) {
+			page = flink_next_entry(head, struct page, private);
+			if (flink_is_last(head))
+				break;
+			flink_del_next(head);
+			__free_page(page);
+		}
 		__free_page(page);
-	} while (tail != stash->tail);
-	stash_init(stash);
+		stash_init(stash);
+	}
 }
 
 /* Deferred free list */
@@ -138,21 +139,22 @@ int defer_free(struct stash *defree, block_t block, unsigned count)
 
 int retire_frees(struct sb *sb, struct stash *defree)
 {
+	struct flink_head *head = &defree->head;
 	struct page *page;
-	if (!defree->tail)
+	if (flink_empty(head))
 		return 0;
 	while (1) {
 		int err;
-		page = link_entry(defree->tail->next, struct page, private);
+		page = flink_next_entry(head, struct page, private);
 		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
 		if (top == defree->top)
 			top = defree->pos;
 		for (; vec < top; vec++)
 			if ((err = bfree(sb, *vec & ~(-1ULL << 48), *vec >> 48)))
 				return err;
-		if (defree->tail == defree->tail->next)
+		if (flink_is_last(head))
 			break;
-		link_del_next(defree->tail);
+		flink_del_next(head);
 		__free_page(page);
 	}
 	defree->pos = page_address(page);
