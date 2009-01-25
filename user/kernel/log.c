@@ -138,9 +138,12 @@ int defer_free(struct stash *defree, block_t block, unsigned count)
 
 int retire_frees(struct sb *sb, struct stash *defree)
 {
+	struct page *page;
+	if (!defree->tail)
+		return 0;
 	while (1) {
 		int err;
-		struct page *page = link_entry(defree->tail->next, struct page, private);
+		page = link_entry(defree->tail->next, struct page, private);
 		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
 		if (top == defree->top)
 			top = defree->pos;
@@ -152,7 +155,7 @@ int retire_frees(struct sb *sb, struct stash *defree)
 		link_del_next(defree->tail);
 		__free_page(page);
 	}
-	defree->pos = defree->top - PAGE_SIZE;
+	defree->pos = page_address(page);
 	return 0;
 }
 
