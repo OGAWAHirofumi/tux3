@@ -299,8 +299,9 @@ out:
 #ifdef __KERNEL__
 #include <linux/mpage.h>
 
-int tux3_get_block(struct inode *inode, sector_t iblock,
-		   struct buffer_head *bh_result, int create)
+/* create modes: 0 - read, 1 - write, 2 - redirect, 3 - delalloc */
+static int __tux3_get_block(struct inode *inode, sector_t iblock,
+			    struct buffer_head *bh_result, int create)
 {
 	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
 	      (L)tux_inode(inode)->inum, (L)iblock, bh_result->b_size, create);
@@ -313,6 +314,13 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 		return 0;
 	}
 
+	int delalloc;
+	if (create == 3) {
+		delalloc = 1;
+		create = 0;
+	} else
+		delalloc = 0;
+
 	struct seg seg;
 	int segs = map_region(inode, iblock, max_blocks, &seg, 1, create);
 	if (segs < 0) {
@@ -321,20 +329,50 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 	assert(segs == 1);
 	size_t blocks = min_t(size_t, max_blocks, seg.count);
-	if (seg.state == SEG_NEW) {
+	switch (seg.state) {
+	case SEG_HOLE:
+		if (delalloc && !buffer_delay(bh_result)) {
+			map_bh(bh_result, inode->i_sb, 0);
+			set_buffer_new(bh_result);
+			set_buffer_delay(bh_result);
+			bh_result->b_size = blocks << sb->blockbits;
+		}
+		break;
+	case SEG_NEW:
+		assert(create && !delalloc);
 		assert(seg.block);
-		set_buffer_new(bh_result);
 		inode->i_blocks += blocks << (sb->blockbits - 9);
-	}
-	if (seg.state != SEG_HOLE) {
+		if (buffer_delay(bh_result)) {
+			/* for now, block_write_full_page() clear delay */
+//			clear_buffer_delay(bh_result);
+			bh_result->b_blocknr = seg.block;
+			break;
+		}
+		set_buffer_new(bh_result);
+		/* FALLTHROUGH */
+	default:
 		map_bh(bh_result, inode->i_sb, seg.block);
 		bh_result->b_size = blocks << sb->blockbits;
+		break;
 	}
 	trace("<== inum %Lu, mapped %d, block %Lu, size %zu",
 	      (L)tux_inode(inode)->inum, buffer_mapped(bh_result),
 	      (L)bh_result->b_blocknr, bh_result->b_size);
 
 	return 0;
+}
+
+static int tux3_da_get_block(struct inode *inode, sector_t iblock,
+			     struct buffer_head *bh_result, int create)
+{
+	/* FIXME: We should reserve the space */
+	return __tux3_get_block(inode, iblock, bh_result, 3);
+}
+
+int tux3_get_block(struct inode *inode, sector_t iblock,
+		   struct buffer_head *bh_result, int create)
+{
+	return __tux3_get_block(inode, iblock, bh_result, create);
 }
 
 static struct buffer_head *find_get_buffer(struct page *page, int offset)
@@ -461,13 +499,13 @@ static int tux3_readpages(struct file *file, struct address_space *mapping,
 	return mpage_readpages(mapping, pages, nr_pages, tux3_get_block);
 }
 
-static int tux3_write_begin(struct file *file, struct address_space *mapping,
-			    loff_t pos, unsigned len, unsigned flags,
-			    struct page **pagep, void **fsdata)
+static int tux3_da_write_begin(struct file *file, struct address_space *mapping,
+			       loff_t pos, unsigned len, unsigned flags,
+			       struct page **pagep, void **fsdata)
 {
 	*pagep = NULL;
 	return block_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
-				 tux3_get_block);
+				 tux3_da_get_block);
 }
 
 static int tux3_writepage(struct page *page, struct writeback_control *wbc)
@@ -478,13 +516,14 @@ static int tux3_writepage(struct page *page, struct writeback_control *wbc)
 	change_end(sb);
 	return err;
 }
-
+#if 0
+/* mpage_writepages() uses dummy bh, so we can't check buffer_delay. */
 static int tux3_writepages(struct address_space *mapping,
 			   struct writeback_control *wbc)
 {
 	return mpage_writepages(mapping, wbc, tux3_get_block);
 }
-
+#endif
 static ssize_t tux3_direct_IO(int rw, struct kiocb *iocb,
 			      const struct iovec *iov,
 			      loff_t offset, unsigned long nr_segs)
@@ -510,9 +549,9 @@ const struct address_space_operations tux_aops = {
 	.readpage		= tux3_readpage,
 	.readpages		= tux3_readpages,
 	.writepage		= tux3_writepage,
-	.writepages		= tux3_writepages,
+//	.writepages		= tux3_writepages,
 	.sync_page		= block_sync_page,
-	.write_begin		= tux3_write_begin,
+	.write_begin		= tux3_da_write_begin,
 	.write_end		= generic_write_end,
 	.bmap			= tux3_bmap,
 //	.invalidatepage		= ext4_da_invalidatepage,
@@ -535,9 +574,9 @@ static int tux3_blk_writepage(struct page *page, struct writeback_control *wbc)
 const struct address_space_operations tux_blk_aops = {
 	.readpage	= tux3_blk_readpage,
 	.writepage	= tux3_blk_writepage,
-	.writepages	= tux3_writepages,
+//	.writepages	= tux3_writepages,
 	.sync_page	= block_sync_page,
-	.write_begin	= tux3_write_begin,
+	.write_begin	= tux3_da_write_begin,
 	.bmap		= tux3_bmap,
 };
 
