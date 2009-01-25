@@ -10,10 +10,6 @@
 #include <linux/buffer_head.h>
 #include <linux/mutex.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
-#include <linux/cred.h> // fsuid
-#endif
-
 typedef loff_t block_t;
 
 #define printf printk

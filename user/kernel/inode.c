@@ -489,13 +489,8 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 {
 	struct tux_iattr iattr = {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 		.uid	= current_fsuid(),
 		.gid	= current_fsgid(),
-#else
-		.uid	= current->fsuid,
-		.gid	= current->fsgid,
-#endif
 		.mode	= mode,
 	};
 	struct inode *inode = tux_new_inode(dir, &iattr, rdev);
