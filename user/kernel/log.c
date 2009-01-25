@@ -99,7 +99,7 @@ static void stash_init(struct stash *stash)
 int stash_value(struct stash *stash, u64 value)
 {
 	if (stash->pos == stash->top) {
-		struct page *page = alloc_page(GFP_KERNEL);
+		struct page *page = alloc_page(GFP_NOFS);
 		if (!page)
 			return -ENOMEM;
 		stash->top = page_address(page) + PAGE_SIZE;
