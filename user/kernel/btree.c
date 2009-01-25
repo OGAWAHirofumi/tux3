@@ -362,8 +362,13 @@ static void brelse_free(struct btree *btree, struct buffer_head *buffer)
 {
 	struct sb *sb = btree->sb;
 	block_t block = bufindex(buffer);
+#ifdef __KERNEL__
+	/* bh_lru may be holding this buffer_head */
+	if (bufcount(buffer) > 2) {
+#else
 	if (bufcount(buffer) != 1) {
-		warn("free block %Lx still in use!", (L)bufindex(buffer));
+#endif
+		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
 		brelse(buffer);
 		assert(bufcount(buffer) == 0);
 		return;
