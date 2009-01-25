@@ -359,15 +359,19 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	struct buffer_head *bh;
 	void *fsdata;
 	int err, offset;
+	unsigned aop_flags = AOP_FLAG_UNINTERRUPTIBLE;
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
 	offset = iblock & ((1 << (PAGE_CACHE_SHIFT - inode->i_blkbits)) - 1);
 
+	/* Prevent reentering into our fs recursively by memory allocation. */
+	if (!(mapping_gfp_mask(mapping) & __GFP_FS))
+		aop_flags |= AOP_FLAG_NOFS;
+
 	err = mapping->a_ops->write_begin(NULL, mapping,
 					  iblock << inode->i_blkbits,
 					  1 << inode->i_blkbits,
-					  AOP_FLAG_UNINTERRUPTIBLE,
-					  &page, &fsdata);
+					  aop_flags, &page, &fsdata);
 	if (err)
 		return NULL;
 

@@ -456,17 +456,32 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 		inode->i_mapping->a_ops = &tux_aops;
 		break;
 	case 0:
+	{
+		inum_t inum = tux_inode(inode)->inum;
+//		gfp_t gfp_mask = GFP_USER_PAGECACHE;
+		gfp_t gfp_mask = GFP_USER;
+
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
-		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
+		if (inum == TUX_VOLMAP_INO)
 			inode->i_mapping->a_ops = &tux_vol_aops;
 		else {
 			/* set fake i_size to escape the check of block_* */
 			inode->i_size = MAX_LFS_FILESIZE;
 			inode->i_mapping->a_ops = &tux_blk_aops;
 		}
-//		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
-		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
+
+		/* Prevent reentering into our fs recursively by mem reclaim */
+		switch (inum) {
+		case TUX_VOLMAP_INO:
+		case TUX_BITMAP_INO:
+		/* FIXME: this means logmap for now */
+		case TUX_INVALID_INO:
+			gfp_mask &= ~__GFP_FS;
+			break;
+		}
+		mapping_set_gfp_mask(inode->i_mapping, gfp_mask);
 		break;
+	}
 	}
 }
 
