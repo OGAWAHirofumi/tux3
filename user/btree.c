@@ -12,10 +12,11 @@
 #include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
 
 #ifndef trace
-#define trace trace_off
+#define trace trace_on
 #endif
 
 #include "balloc-dummy.c"
+#include "kernel/log.c"
 #include "kernel/btree.c"
 
 struct uleaf { u32 magic, count; struct uentry { u16 key, val; } entries[]; };
@@ -102,7 +103,7 @@ void *uleaf_resize(struct btree *btree, tuxkey_t key, vleaf *data, unsigned one)
 		goto out;
 	if (uleaf_free(btree, leaf) < one)
 		return NULL;
-	printf("expand leaf at 0x%x by %i\n", at, one);
+	trace_off("expand leaf at 0x%x by %i", at, one);
 	vecmove(leaf->entries + at + one, leaf->entries + at, leaf->count++ - at);
 out:
 	return leaf->entries + at;
@@ -146,6 +147,7 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	struct uentry *entry = tree_expand(btree, key, 1, cursor);
 	*entry = (struct uentry){ .key = key, .val = key + 0x100 };
 	mark_buffer_dirty(cursor_leafbuf(cursor));
+	cursor_redirect(cursor);
 	block_t block = bufindex(cursor_leafbuf(cursor));
 	release_cursor(cursor);
 
@@ -156,11 +158,17 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	release_cursor(cursor);
 }
 
+int errio(struct buffer_head *buffer, int write)
+{
+	return -EINVAL;
+}
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	struct sb *sb = &(struct sb){ INIT_SB(dev), };
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
+	sb->logmap = rapid_open_inode(sb, errio, 0);
 	init_buffers(dev, 1 << 20, 0);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);
@@ -181,12 +189,12 @@ int main(int argc, char *argv[])
 	int until_new_depth = sb->entries_per_node * btree.entries_per_leaf + 1;
 	for (int key = 0; key < until_new_depth; key++)
 		tree_expand_test(cursor, key);
-	show_tree_range(&btree, 0, -1);
+	show_tree(&btree);
 	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 
 	for (int key = until_new_depth * 100; key >= 0; key -= 100)
 		tree_expand_test(cursor, key);
-	show_tree_range(&btree, 0, -1);
+	show_tree(&btree);
 	free_cursor(cursor);
 	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
 

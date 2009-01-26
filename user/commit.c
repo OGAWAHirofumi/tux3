@@ -14,54 +14,6 @@
 
 #include "inode.c"
 
-int cursor_redirect(struct cursor *cursor, unsigned level)
-{
-	struct btree *btree = cursor->btree;
-	struct sb *sb = btree->sb;
-	struct buffer_head *buffer = cursor->path[level].buffer;
-	assert(buffer_clean(buffer));
-
-	/* Redirect Block */
-
-	block_t oldblock = bufindex(buffer), newblock;
-	int err = balloc(sb, 1, &newblock);
-	if (err)
-		return err;
-	struct buffer_head *clone = blockget(mapping(sb->volmap), newblock);
-	if (!clone)
-		return -ENOMEM; // ERR_PTR me!!!
-	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
-	mark_buffer_dirty(clone);
-	cursor->path[level].buffer = clone;
-	cursor->path[level].next += bufdata(clone) - bufdata(buffer);
-	log_redirect(sb, oldblock, newblock);
-	defer_free(&sb->defree, oldblock, 1);
-	brelse(buffer);
-
-	/* Update Parent */
-
-	if (level) {
-		struct index_entry *entry = cursor->path[level - 1].next - 1;
-		block_t parent = bufindex(cursor->path[level - 1].buffer);
-		assert(oldblock == from_be_u64(entry->block));
-		entry->block = to_be_u64(newblock);
-		log_update(sb, newblock, parent, from_be_u64(entry->key));
-		return 0;
-	}
-
-	if (btree != itable_btree(sb)) {
-		struct inode *inode = btree_inode(btree);
-		assert(oldblock == btree->root.block);
-		btree->root.block = newblock;
-		log_droot(sb, newblock, oldblock, inode->inum);
-		return 0;
-	}
-
-	assert(oldblock == from_be_u64(sb->super.iroot));
-	log_iroot(sb, newblock, oldblock);
-	return 0;
-}
-
 void replay(struct sb *sb)
 {
 	//char *why = "something broke";

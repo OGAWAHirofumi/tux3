@@ -731,6 +731,11 @@ static inline int bufcount(struct buffer_head *buffer)
 	return atomic_read(&buffer->b_count);
 }
 
+static inline int buffer_clean(struct buffer_head *buffer)
+{
+	return !buffer_dirty(buffer) || buffer_uptodate(buffer);
+}
+
 /* btree.c */
 struct buffer_head *cursor_leafbuf(struct cursor *cursor);
 void release_cursor(struct cursor *cursor);
@@ -827,6 +832,9 @@ unsigned encode_xsize(struct inode *inode);
 /* log.c */
 void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
+void log_redirect(struct sb *sb, block_t newblock, block_t oldblock);
+void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);
+void log_iroot(struct sb *sb, block_t newroot, block_t oldroot);
 int defer_free(struct stash *defree, block_t block, unsigned count);
 int retire_frees(struct sb *sb, struct stash *defree);
 void destroy_defree(struct stash *defree);

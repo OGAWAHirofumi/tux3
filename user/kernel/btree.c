@@ -317,6 +317,55 @@ void show_tree(struct btree *btree)
 	show_tree_range(btree, 0, -1);
 }
 
+int cursor_redirect(struct cursor *cursor)
+{
+	struct btree *btree = cursor->btree;
+	unsigned level = btree->root.depth;
+	struct sb *sb = btree->sb;
+	while (1) {
+		struct buffer_head *buffer = cursor->path[level].buffer;
+//		if (buffer_dirty(buffer))
+//			return 0;
+
+		struct buffer_head *clone = new_block(btree);
+		if (IS_ERR(clone))
+			return PTR_ERR(clone);
+		block_t oldblock = bufindex(buffer), newblock = bufindex(clone);
+		trace("redirect block %Lx to %Lx", oldblock, newblock);
+		memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
+		cursor->path[level].buffer = clone;
+		cursor->path[level].next += bufdata(clone) - bufdata(buffer);
+		brelse(buffer);
+		log_redirect(sb, oldblock, newblock);
+		defer_free(&sb->defree, oldblock, 1);
+
+		if (!level--) {
+			trace("redirect root");
+			if (btree != itable_btree(sb)) {
+				assert(oldblock == btree->root.block);
+				btree->root.block = newblock;
+				log_droot(sb, newblock, oldblock, tux_inode(btree_inode(btree))->inum);
+				return 0;
+			}
+
+			assert(oldblock == from_be_u64(sb->super.iroot));
+			log_iroot(sb, newblock, oldblock);
+			return 0;
+		}
+
+		trace("update parent");
+		struct index_entry *entry = cursor->path[level].next - 1;
+		block_t parent = bufindex(cursor->path[level].buffer);
+		assert(oldblock == from_be_u64(entry->block));
+		entry->block = to_be_u64(newblock);
+		log_update(sb, newblock, parent, from_be_u64(entry->key));
+		/*
+		 * Note: this may change a clean buffer which is then copied
+		 * and discarded, which seems a little strange but does no harm.
+		 */
+	}
+}
+
 /* Deletion */
 
 static void remove_index(struct cursor *cursor, int level)
@@ -663,8 +712,8 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	struct buffer_head *leafbuf = new_leaf(btree);
 	if (IS_ERR(rootbuf) || IS_ERR(leafbuf))
 		goto eek;
-	trace("root at %Lx\n", (L)bufindex(rootbuf));
-	trace("leaf at %Lx\n", (L)bufindex(leafbuf));
+	trace("root at %Lx", (L)bufindex(rootbuf));
+	trace("leaf at %Lx", (L)bufindex(leafbuf));
 	struct bnode *rootnode = bufdata(rootbuf);
 	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
 	rootnode->count = to_be_u32(1);
