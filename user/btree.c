@@ -195,14 +195,14 @@ int main(int argc, char *argv[])
 	assert(!probe(&btree, 0, cursor));
 	for (int i = 0; i < sb->entries_per_node - 1; i++) {
 		struct buffer_head *buffer = new_leaf(&btree);
-		assert(buffer);
+		assert(!IS_ERR(buffer));
 		btree_insert_leaf(cursor, 100 + i, buffer);
 	}
 	release_cursor(cursor);
 	/* insert key=1 after key=0 */
 	assert(!probe(&btree, 0, cursor));
 	struct buffer_head *buffer = new_leaf(&btree);
-	assert(buffer);
+	assert(!IS_ERR(buffer));
 	btree_insert_leaf(cursor, 1, buffer);
 	/* probe same key with cursor2 */
 	struct cursor *cursor2 = alloc_cursor(&btree, 0);

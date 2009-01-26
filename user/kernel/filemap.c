@@ -226,8 +226,8 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		if (dleaf_free(btree, leaf) < 16) {
 			mark_buffer_dirty(cursor_leafbuf(cursor));
 			struct buffer_head *newbuf = new_leaf(btree);
-			if (!newbuf) {
-				segs = -ENOMEM;
+			if (IS_ERR(newbuf)) {
+				segs = PTR_ERR(newbuf);
 				goto out_create;
 			}
 			/*
@@ -264,8 +264,8 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 			assert(dleaf_groups(tail) >= 1);
 			/* Tail does not fit, add it as a new btree leaf */
 			struct buffer_head *newbuf = new_leaf(btree);
-			if (!newbuf) {
-				segs = -ENOMEM;
+			if (IS_ERR(newbuf)) {
+				segs = PTR_ERR(newbuf);
 				goto out_create;
 			}
 			memcpy(bufdata(newbuf), tail, sb->blocksize);
