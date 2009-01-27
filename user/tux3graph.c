@@ -104,7 +104,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | magic %.4s, 0x%02x, 0x%02x, 0x%02x, 0x%02x"
 		" | birthdate %llu | flags 0x%016llx"
 		" | <iroot0> iroot 0x%016llx (depth %u, block %llu)"
-		" | aroot %llu | blockbits %u (size %u) | volblocks %llu"
+		" | blockbits %u (size %u) | volblocks %llu"
 		" | freeblocks %llu | nextalloc %llu"
 		" | freeatom %u | atomgen %u }\"\n"
 		"shape = record\n"
@@ -117,7 +117,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(L)from_be_u64(txsb->birthdate),
 		(L)from_be_u64(txsb->flags), (L)from_be_u64(txsb->iroot),
 		itable_btree(sb)->root.depth, (L)itable_btree(sb)->root.block,
-		(L)from_be_u64(txsb->aroot), sb->blockbits, sb->blocksize,
+		sb->blockbits, sb->blocksize,
 		(L)from_be_u64(txsb->volblocks),
 		(L)from_be_u64(txsb->freeblocks),
 		(L)from_be_u64(txsb->nextalloc),

@@ -236,7 +236,7 @@ struct disksuper
 	be_u64 birthdate;	/* Volume creation date */
 	be_u64 flags;		/* Need to assign some flags */
 	be_u64 iroot;		/* Root of the inode table btree */
-	be_u64 aroot;		/* The atime table is a file now, delete on next format rev */
+	be_u64 unused;		/* The atime table is a file now, delete on next format rev */
 	be_u16 blockbits;	/* Shift to get volume block size */
 	be_u16 unused1;		/* Throw away on next format rev */
 	be_u32 unused2;		/* Throw away on next format rev */
