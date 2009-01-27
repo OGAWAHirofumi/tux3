@@ -1,0 +1,7 @@
+config TUX3
+	tristate "Tux3 Versioning Filesystem"
+	help
+	  To compile this filesystem as a module, choose M here: the module will
+	  be called tux3.
+
+	  If unsure, see you again in six months.
