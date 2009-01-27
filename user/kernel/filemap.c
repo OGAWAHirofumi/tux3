@@ -162,7 +162,10 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 
 	if (!create)
 		goto out_release;
-
+	if ((err = cursor_redirect(cursor))) {
+		segs = err;
+		goto out_release;
+	}
 	struct dleaf *tail = NULL;
 	tuxkey_t tailkey = 0; // probably can just use limit instead
 

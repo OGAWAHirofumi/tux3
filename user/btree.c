@@ -144,7 +144,7 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	struct btree *btree = cursor->btree;
 	if (probe(btree, key, cursor))
 		error("probe for %Lx failed", (L)key);
-	struct uentry *entry = tree_expand(btree, key, 1, cursor);
+	struct uentry *entry = tree_expand(cursor, key, 1);
 	*entry = (struct uentry){ .key = key, .val = key + 0x100 };
 	mark_buffer_dirty(cursor_leafbuf(cursor));
 	cursor_redirect(cursor);

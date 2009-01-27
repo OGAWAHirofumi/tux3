@@ -327,13 +327,16 @@ static void level_redirect_brelse(struct cursor *cursor, int level, struct buffe
 
 int cursor_redirect(struct cursor *cursor)
 {
+#ifndef ATOMIC
+	return 0;
+#endif
 	struct btree *btree = cursor->btree;
 	unsigned level = btree->root.depth;
 	struct sb *sb = btree->sb;
 	while (1) {
 		struct buffer_head *buffer = cursor->path[level].buffer;
-//		if (buffer_dirty(buffer))
-//			return 0;
+		if (buffer_dirty(buffer))
+			return 0;
 
 		struct buffer_head *clone = new_block(btree);
 		if (IS_ERR(clone))
@@ -682,8 +685,12 @@ int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
 	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
-void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor)
+void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 {
+	struct btree *btree = cursor->btree;
+	int err = cursor_redirect(cursor);
+	if (err)
+		return NULL; // ERR_PTR me!!!
 	for (int i = 0; i < 2; i++) {
 		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);

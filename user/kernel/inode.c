@@ -142,7 +142,7 @@ out:
 static int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
-	void *base = tree_expand(itable_btree(tux_sb(inode->i_sb)), tux_inode(inode)->inum, size, cursor);
+	void *base = tree_expand(cursor, tux_inode(inode)->inum, size);
 	if (!base)
 		return -ENOMEM; // ERR_PTR me!!!
 	void *attr = encode_attrs(inode, base, size);
@@ -262,6 +262,8 @@ static int purge_inum(struct sb *sb, inum_t inum)
 
 	int err = -ENOENT;
 	if (!(err = probe(itable, inum, cursor))) {
+		if ((err = cursor_redirect(cursor)))
+			return err;
 		/* FIXME: truncate the bnode and leaf if empty. */
 		struct buffer_head *ileafbuf = cursor_leafbuf(cursor);
 		struct ileaf *ileaf = to_ileaf(bufdata(ileafbuf));
