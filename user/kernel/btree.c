@@ -317,6 +317,14 @@ void show_tree(struct btree *btree)
 	show_tree_range(btree, 0, -1);
 }
 
+static void level_redirect_brelse(struct cursor *cursor, int level, struct buffer_head *clone)
+{
+	struct buffer_head *buffer = cursor->path[level].buffer;
+	unsigned offset = (void *)cursor->path[level].next - bufdata(buffer);
+	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
+	level_replace_brelse(cursor, level, clone, bufdata(clone) + offset);
+}
+
 int cursor_redirect(struct cursor *cursor)
 {
 	struct btree *btree = cursor->btree;
@@ -331,10 +339,8 @@ int cursor_redirect(struct cursor *cursor)
 		if (IS_ERR(clone))
 			return PTR_ERR(clone);
 		block_t oldblock = bufindex(buffer), newblock = bufindex(clone);
-		trace("redirect block %Lx to %Lx", oldblock, newblock);
-		memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
-		unsigned offset = (void *)cursor->path[level].next - bufdata(buffer);
-		level_replace_brelse(cursor, level, clone, bufdata(clone) + offset);
+		trace("redirect block %Lx to %Lx", (L)oldblock, (L)newblock);
+		level_redirect_brelse(cursor, level, clone);
 		log_redirect(sb, oldblock, newblock);
 		defer_free(&sb->defree, oldblock, 1);
 
