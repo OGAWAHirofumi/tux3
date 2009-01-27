@@ -333,9 +333,8 @@ int cursor_redirect(struct cursor *cursor)
 		block_t oldblock = bufindex(buffer), newblock = bufindex(clone);
 		trace("redirect block %Lx to %Lx", oldblock, newblock);
 		memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
-		cursor->path[level].buffer = clone;
-		cursor->path[level].next += bufdata(clone) - bufdata(buffer);
-		brelse(buffer);
+		unsigned offset = (void *)cursor->path[level].next - bufdata(buffer);
+		level_replace_brelse(cursor, level, clone, bufdata(clone) + offset);
 		log_redirect(sb, oldblock, newblock);
 		defer_free(&sb->defree, oldblock, 1);
 
