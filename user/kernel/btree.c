@@ -349,15 +349,10 @@ int cursor_redirect(struct cursor *cursor)
 
 		if (!level--) {
 			trace("redirect root");
-			if (btree != itable_btree(sb)) {
-				assert(oldblock == btree->root.block);
-				btree->root.block = newblock;
-				log_droot(sb, newblock, oldblock, tux_inode(btree_inode(btree))->inum);
-				return 0;
-			}
-
-			assert(oldblock == from_be_u64(sb->super.iroot));
-			log_iroot(sb, newblock, oldblock);
+			assert(oldblock == btree->root.block);
+			btree->root.block = newblock;
+			if (btree == itable_btree(sb))
+				log_iroot(sb, newblock, oldblock);
 			return 0;
 		}
 
