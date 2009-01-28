@@ -90,6 +90,8 @@ int make_tux3(struct sb *sb)
 	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
 	for (int i = 0; i < reserve; i++) {
 		block_t block = balloc_from_range(sb, i, 1, 1);
+		if (block == -1)
+			goto eek;
 		trace("reserve %Lx", (L)block); // error ???
 	}
 
