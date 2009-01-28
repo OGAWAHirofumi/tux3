@@ -49,7 +49,8 @@ superdeps	= $(inodedeps) kernel/commit.c super.c kernel/super.c
 xattrdeps	= kernel/balloc.c $(xattrcommondeps)
 
 all: $(binaries)
-tests: buffertest balloctest committest dleaftest ileaftest btreetest dirtest iattrtest xattrtest filemaptest inodetest
+tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
+	test_btree test_dir test_iattr test_xattr test_filemap test_inode
 
 # standalone and library
 buffer.o: $(tuxdeps) $(bufferdeps)
@@ -92,37 +93,37 @@ endif
 $(testbin):
 	$(CC) $(CFLAGS) $^ -o $@
 
-buffertest: buffer
+test_buffer: buffer
 	$(VG) ./buffer
 
-balloctest: balloc
+test_balloc: balloc
 	$(VG) ./balloc
 
-dleaftest: dleaf
+test_dleaf: dleaf
 	$(VG) ./dleaf
 
-ileaftest: ileaf
+test_ileaf: ileaf
 	$(VG) ./ileaf
 
-btreetest: btree
+test_btree: btree
 	$(VG) ./btree foodev
 
-dirtest: dir
+test_dir: dir
 	$(VG) ./dir
 
-iattrtest: iattr
+test_iattr: iattr
 	$(VG) ./iattr
 
-xattrtest: xattr
+test_xattr: xattr
 	$(VG) ./xattr foodev
 
-filemaptest: filemap
+test_filemap: filemap
 	$(VG) ./filemap foodev
 
-inodetest: inode
+test_inode: inode
 	$(VG) ./inode foodev
 
-committest: commit
+test_commit: commit
 	$(VG) ./commit foodev
 
 tux3: vfs.o tux3.o

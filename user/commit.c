@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 		show_buffers_state(BUFFER_DIRTY + 2);
 		show_buffers_state(BUFFER_DIRTY + 3);
 	}
-	if (1) {
+	if (0) {
 		for (int i = 0; i < 2; i++) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];
