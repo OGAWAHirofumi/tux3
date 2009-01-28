@@ -245,8 +245,9 @@ eek:
 	return -EIO; /* stupid, it might have been NOMEM */
 }
 
-int advance(struct btree *btree, struct cursor *cursor)
+int advance(struct cursor *cursor)
 {
+	struct btree *btree = cursor->btree;
 	int depth = btree->root.depth, level = depth;
 	struct buffer_head *buffer;
 	do {
@@ -308,7 +309,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 		//tuxkey_t *next = pnext_key(cursor, btree->depth);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
-	} while (--count && advance(btree, cursor));
+	} while (--count && advance(cursor));
 	free_cursor(cursor);
 }
 
