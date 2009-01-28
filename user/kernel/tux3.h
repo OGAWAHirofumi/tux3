@@ -752,9 +752,10 @@ tuxkey_t next_key(struct cursor *cursor, int depth);
 int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline);
 int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);
 int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key);
-void *tree_expand(struct btree *btree, tuxkey_t key, unsigned newsize, struct cursor *cursor);
+void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 void show_tree(struct btree *btree);
+int cursor_redirect(struct cursor *cursor);
 
 /* dir.c */
 int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode);
