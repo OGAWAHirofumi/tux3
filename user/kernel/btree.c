@@ -217,8 +217,9 @@ void free_cursor(struct cursor *cursor)
 	free(cursor);
 }
 
-int probe(struct btree *btree, tuxkey_t key, struct cursor *cursor)
+int probe(struct cursor *cursor, tuxkey_t key)
 {
+	struct btree *btree = cursor->btree;
 	unsigned i, depth = btree->root.depth;
 	struct buffer_head *buffer = vol_bread(btree->sb, btree->root.block);
 	if (!buffer)
@@ -300,7 +301,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 	struct cursor *cursor = alloc_cursor(btree, 0);
 	if (!cursor)
 		error("out of memory");
-	if (probe(btree, start, cursor))
+	if (probe(cursor, start))
 		error("tell me why!!!");
 	struct buffer_head *buffer;
 	do {
@@ -439,7 +440,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	memset(prev, 0, sizeof(*prev) * depth);
 
 	down_write(&btree->lock);
-	probe(btree, info->resume, cursor);
+	probe(cursor, info->resume);
 	leafbuf = level_pop(cursor);
 
 	/* leaf walk */

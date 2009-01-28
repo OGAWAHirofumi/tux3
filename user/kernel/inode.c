@@ -109,7 +109,7 @@ static int open_inode(struct inode *inode)
 	if (!cursor)
 		return -ENOMEM;
 	down_read(&cursor->btree->lock);
-	if ((err = probe(itable, tux_inode(inode)->inum, cursor)))
+	if ((err = probe(cursor, tux_inode(inode)->inum)))
 		goto out;
 	unsigned size;
 	void *attrs = ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
@@ -184,7 +184,7 @@ static int make_inode(struct inode *inode, inum_t goal)
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
-	if ((err = probe(itable, goal, cursor)))
+	if ((err = probe(cursor, goal)))
 		goto out;
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 
@@ -235,7 +235,7 @@ static int save_inode(struct inode *inode)
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
-	if ((err = probe(itable, tux_inode(inode)->inum, cursor)))
+	if ((err = probe(cursor, tux_inode(inode)->inum)))
 		goto out;
 	/* paranoia check */
 	unsigned size;
@@ -261,7 +261,7 @@ static int purge_inum(struct sb *sb, inum_t inum)
 		return -ENOMEM;
 
 	int err = -ENOENT;
-	if (!(err = probe(itable, inum, cursor))) {
+	if (!(err = probe(cursor, inum))) {
 		if ((err = cursor_redirect(cursor)))
 			return err;
 		/* FIXME: truncate the bnode and leaf if empty. */

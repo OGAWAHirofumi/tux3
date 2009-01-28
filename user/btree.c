@@ -141,8 +141,7 @@ int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned
 
 static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 {
-	struct btree *btree = cursor->btree;
-	if (probe(btree, key, cursor))
+	if (probe(cursor, key))
 		error("probe for %Lx failed", (L)key);
 	struct uentry *entry = tree_expand(cursor, key, 1);
 	*entry = (struct uentry){ .key = key, .val = key + 0x100 };
@@ -152,7 +151,7 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	release_cursor(cursor);
 
 	/* probe added key: buffer should be same */
-	if (probe(btree, key, cursor))
+	if (probe(cursor, key))
 		error("probe for %Lx failed", (L)key);
 	assert(block == bufindex(cursor_leafbuf(cursor)));
 	release_cursor(cursor);
@@ -200,7 +199,7 @@ int main(int argc, char *argv[])
 
 	/* insert_node test */
 	cursor = alloc_cursor(&btree, 1); /* +1 for new depth */
-	assert(!probe(&btree, 0, cursor));
+	assert(!probe(cursor, 0));
 	for (int i = 0; i < sb->entries_per_node - 1; i++) {
 		struct buffer_head *buffer = new_leaf(&btree);
 		assert(!IS_ERR(buffer));
@@ -208,13 +207,13 @@ int main(int argc, char *argv[])
 	}
 	release_cursor(cursor);
 	/* insert key=1 after key=0 */
-	assert(!probe(&btree, 0, cursor));
+	assert(!probe(cursor, 0));
 	struct buffer_head *buffer = new_leaf(&btree);
 	assert(!IS_ERR(buffer));
 	btree_insert_leaf(cursor, 1, buffer);
 	/* probe same key with cursor2 */
 	struct cursor *cursor2 = alloc_cursor(&btree, 0);
-	assert(!probe(&btree, 1, cursor2));
+	assert(!probe(cursor2, 1));
 	for (int i = 0; i < cursor->len; i++) {
 		assert(cursor->path[i].buffer == cursor2->path[i].buffer);
 		assert(cursor->path[i].next == cursor2->path[i].next);

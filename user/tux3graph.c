@@ -219,7 +219,7 @@ static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t dr
 	if (!cursor)
 		error("out of memory");
 
-	if (probe(btree, 0, cursor))
+	if (probe(cursor, 0))
 		error("tell me why!!!");
 
 	draw_cursor(gi, btree, cursor);

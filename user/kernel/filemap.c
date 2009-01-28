@@ -113,7 +113,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 	int err;
 
-	if ((err = probe(btree, start, cursor))) {
+	if ((err = probe(cursor, start))) {
 		segs = err;
 		goto out_unlock;
 	}
