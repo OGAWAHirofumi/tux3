@@ -666,9 +666,10 @@ int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *l
 	return insert_leaf(cursor, key, leafbuf, 0);
 }
 
-int btree_leaf_split(struct btree *btree, struct cursor *cursor, tuxkey_t key)
+int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 {
 	trace("split leaf");
+	struct btree *btree = cursor->btree;
 	struct buffer_head *newbuf = new_leaf(btree);
 	if (IS_ERR(newbuf)) {
 		/* the rule: release cursor at point of error */
@@ -696,7 +697,7 @@ void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 		if (space)
 			return space;
 		assert(!i);
-		int err = btree_leaf_split(btree, cursor, key);
+		int err = btree_leaf_split(cursor, key);
 		if (err) {
 			warn("insert_node failed (%d)", err);
 			break;
