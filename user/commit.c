@@ -124,33 +124,32 @@ int bitmap_io(struct buffer_head *buffer, int write)
 	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
 }
 
+int errio(struct buffer_head *buffer, int write)
+{
+	return -EINVAL;
+}
+
 int main(int argc, char *argv[])
 {
-	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU) };
-	struct sb *sb = &(struct sb){ INIT_SB(dev), .volblocks = 100 };
-	ftruncate(dev->fd, 1 << 24);
-	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->bitmap = rapid_open_inode(sb, bitmap_io, 0);
-	sb->logmap = rapid_open_inode(sb, filemap_extent_io, 0);
+	if (argc < 2)
+		error("usage: %s <volname>", argv[0]);
+	int fd;
+	assert(fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU));
+	u64 volsize = 1 << 24;
+	assert(!ftruncate(fd, volsize));
+	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 20, 0);
-	assert(!new_btree(&sb->bitmap->btree, sb, &dtree_ops));
-
+	struct sb *sb = &(struct sb){
+		INIT_SB(dev),
+		.max_inodes_per_block = 64,
+		.entries_per_node = 20,
+		.volblocks = volsize >> dev->bits,
+	};
+	sb->volmap = rapid_open_inode(sb, NULL, 0);
+	sb->logmap = rapid_open_inode(sb, errio, 0);
+	assert(!make_tux3(sb));
+	sb->bitmap->map->io = bitmap_io;
 	if (0) {
-		for (int block = 0; block < 10; block++) {
-			struct buffer_head *buffer = blockget(mapping(sb->bitmap), block);
-			memset(bufdata(buffer), 0, sb->blocksize);
-			set_buffer_clean(buffer);
-		}
-	
-		log_alloc(sb, 9, 6, 1);
-		log_alloc(sb, 0x99, 3, 0);
-		log_update(sb, 0xbabe, 0xd00d, 0x666);
-		//hexdump(sb->logbuf->data, 0x40);
-		log_finish(sb);
-		replay(sb);
-	}
-
-	if (1) {
 		for (int i = 0; i < 21; i++) {
 			change_begin(sb);
 			block_t block;
@@ -164,6 +163,18 @@ int main(int argc, char *argv[])
 		show_buffers_state(BUFFER_DIRTY + 1);
 		show_buffers_state(BUFFER_DIRTY + 2);
 		show_buffers_state(BUFFER_DIRTY + 3);
+	}
+	if (1) {
+		for (int i = 0; i < 2; i++) {
+			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
+			char name[100];
+			snprintf(name, sizeof(name), "file%i", i);
+			tuxcreate(sb->rootdir, name, strlen(name), &iattr);
+		}
+		assert(!tuxsync(sb->rootdir));
+		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
+		assert(!save_sb(sb));
+		assert(!flush_buffers(sb->volmap->map));
 	}
 	exit(0);
 }
