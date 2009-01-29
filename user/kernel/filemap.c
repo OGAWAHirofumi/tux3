@@ -162,27 +162,16 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 
 	if (!create)
 		goto out_release;
-	if ((err = cursor_redirect(cursor))) {
-		segs = err;
-		goto out_release;
-	}
-	struct dleaf *tail = NULL;
-	tuxkey_t tailkey = 0; // probably can just use limit instead
-
-	if (!dwalk_end(walk)) {
-		tail = malloc(sb->blocksize); // error???
-		dleaf_init(btree, tail);
-		tailkey = dwalk_index(walk);
-		dwalk_copy(walk, tail);
-	}
 
 	/* Save blocks before change map[] for below or above. */
 	block_t below_block, above_block;
 	below_block = map[0].block - below;
 	above_block = map[segs - 1].block + map[segs - 1].count;
 	if (create == 2) {
+		/* Change the map[] to redirect this region as one extent */
 		count = 0;
 		for (int i = 0; i < segs; i++) {
+			/* Logging overwrited extents as free */
 			if (map[i].state != SEG_HOLE)
 				log_alloc(sb, map[i].block, map[i].count, 0);
 			count += map[i].count;
@@ -211,7 +200,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				 * we failed to store.
 				 */
 				segs = err;
-				goto out_create;
+				goto out_release;
 			}
 			trace("fill in %Lx/%i ", (L)block, count);
 			map[i] = (struct seg){
@@ -221,6 +210,20 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				.state = create == 2 ? 0 : SEG_NEW,
 			};
 		}
+	}
+
+	/* Start to reflect the map[] changes to the data btree */
+	if ((err = cursor_redirect(cursor))) {
+		segs = err;
+		goto out_release;
+	}
+	struct dleaf *tail = NULL;
+	tuxkey_t tailkey = 0; // probably can just use limit instead
+	if (!dwalk_end(walk)) {
+		tail = malloc(sb->blocksize); // error???
+		dleaf_init(btree, tail);
+		tailkey = dwalk_index(walk);
+		dwalk_copy(walk, tail);
 	}
 	/* Go back to region start and pack in new segs */
 	dwalk_chop(&headwalk);
