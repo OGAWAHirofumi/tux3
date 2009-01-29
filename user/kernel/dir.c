@@ -148,6 +148,7 @@ loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t in
 	buffer = blockget(mapping(dir), block = blocks);
 	entry = bufdata(buffer);
 	memset(entry, 0, blocksize);
+	name_len = 0;
 	rec_len = blocksize;
 	*entry = (tux_dirent){ .rec_len = tux_rec_len_to_disk(blocksize) };
 	*size += blocksize;
