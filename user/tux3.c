@@ -80,7 +80,6 @@ int main(int argc, const char *argv[])
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
-	init_btree(itable_btree(sb), sb, (struct root){}, &itable_ops);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (poptPeekArg(popt))
