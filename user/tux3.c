@@ -128,31 +128,25 @@ int main(int argc, const char *argv[])
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 		//tuxseek(file, (1LL << 60) - 12);
-#if 1
+
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			goto eek;
-		if (S_ISCHR(stat.st_mode)) {
-			printf("No text to write\n");
-			return 1;
-		}
-#endif
 		if (seekarg) {
 			u64 seek = strtoull(seekarg, NULL, 0);
 			printf("seek to %Li\n", (L)seek);
 			tuxseek(file, seek);
 		}
-		char text[2 << 16];
-		unsigned len;
-
-#if 0
-		memcpy(text, "hello", 5);
-		len = 5;
-#else
-		while ((len = read(0, text, sizeof(text))))
-#endif
+		char text[1 << 16];
+		while (1) {
+			int len = read(0, text, sizeof(text));
+			if (len < 0)
+				goto eek;
+			if (!len)
+				break;
 			if ((errno = -tuxwrite(file, text, len)) > 0)
 				goto eek;
+		}
 		if ((errno = -tuxsync(inode)))
 			goto eek;
 		if ((errno = -sync_super(sb)))
