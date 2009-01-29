@@ -697,7 +697,7 @@ void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 		if (space)
 			return space;
 		assert(!i);
-		int err = btree_leaf_split(cursor, key);
+		err = btree_leaf_split(cursor, key);
 		if (err) {
 			warn("insert_node failed (%d)", err);
 			break;
