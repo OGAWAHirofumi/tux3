@@ -168,16 +168,17 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 	}
 }
 
-static void draw_cursor(struct graph_info *gi, struct btree *btree, struct cursor *cursor)
+static void draw_cursor(struct graph_info *gi, struct cursor *cursor)
 {
+	struct btree *btree = cursor->btree;
 	int level;
 	for (level = 0; level < btree->root.depth; level++)
 		draw_bnode(gi, btree->root.depth, level, cursor->path[level].buffer);
 }
 
-static int draw_advance(struct graph_info *gi, struct btree *btree,
-			struct cursor *cursor)
+static int draw_advance(struct graph_info *gi, struct cursor *cursor)
 {
+	struct btree *btree = cursor->btree;
 	int depth = btree->root.depth, level = depth;
 	struct buffer_head *buffer;
 	do {
@@ -222,12 +223,12 @@ static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t dr
 	if (probe(cursor, 0))
 		error("tell me why!!!");
 
-	draw_cursor(gi, btree, cursor);
+	draw_cursor(gi, cursor);
 
 	do {
 		buffer = cursor_leafbuf(cursor);
 		draw_leaf(gi, btree, buffer);
-	} while (draw_advance(gi, btree, cursor));
+	} while (draw_advance(gi, cursor));
 
 	free_cursor(cursor);
 
