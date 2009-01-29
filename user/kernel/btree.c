@@ -666,7 +666,7 @@ int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *l
 	return insert_leaf(cursor, key, leafbuf, 0);
 }
 
-int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
+static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 {
 	trace("split leaf");
 	struct btree *btree = cursor->btree;
