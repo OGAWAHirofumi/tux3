@@ -173,7 +173,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		for (int i = 0; i < segs; i++) {
 			/* Logging overwrited extents as free */
 			if (map[i].state != SEG_HOLE)
-				log_alloc(sb, map[i].block, map[i].count, 0);
+				log_bfree(sb, map[i].block, map[i].count);
 			count += map[i].count;
 		}
 		segs = 1;

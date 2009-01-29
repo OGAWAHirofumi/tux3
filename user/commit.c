@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
 			change_begin(sb);
 			block_t block;
 			assert(!balloc(sb, 1, &block));
-			log_alloc(sb, block, 1, 1);
+			log_balloc(sb, block, 1);
 			change_end(sb);
 		}
 		log_finish(sb);

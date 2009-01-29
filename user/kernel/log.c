@@ -41,12 +41,22 @@ void log_end(struct sb *sb, void *pos)
 	mutex_unlock(&sb->loglock);
 }
 
-void log_alloc(struct sb *sb, block_t block, unsigned count, unsigned alloc)
+static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
 {
 	unsigned char *data = log_begin(sb, 8);
-	*data++ = alloc ? LOG_ALLOC : LOG_FREE;
+	*data++ = intent;
 	*data++ = count;
 	log_end(sb, encode48(data, block));
+}
+
+void log_balloc(struct sb *sb, block_t block, unsigned count)
+{
+	log_extent(sb, LOG_ALLOC, block, count);
+}
+
+void log_bfree(struct sb *sb, block_t block, unsigned count)
+{
+	log_extent(sb, LOG_FREE, block, count);
 }
 
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
