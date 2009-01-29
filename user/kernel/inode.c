@@ -143,8 +143,8 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
 	void *base = tree_expand(cursor, tux_inode(inode)->inum, size);
-	if (!base)
-		return -ENOMEM; // ERR_PTR me!!!
+	if (IS_ERR(base))
+		return PTR_ERR(base);
 	void *attr = encode_attrs(inode, base, size);
 	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
