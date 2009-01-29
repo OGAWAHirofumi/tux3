@@ -501,6 +501,12 @@ int dev_blockio(struct buffer_head *buffer, int write)
 	return err;
 }
 
+int dev_errio(struct buffer_head *buffer, int write)
+{
+	assert(0);
+	return -EIO;
+}
+
 map_t *new_map(struct dev *dev, blockio_t *io)
 {
 	map_t *map = malloc(sizeof(*map)); // error???

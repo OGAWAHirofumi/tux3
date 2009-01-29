@@ -103,6 +103,7 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return buffer->state >= BUFFER_DIRTY;
 }
 
+int dev_errio(struct buffer_head *buffer, int write);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
 #endif

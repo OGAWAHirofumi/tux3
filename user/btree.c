@@ -158,17 +158,12 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	release_cursor(cursor);
 }
 
-int errio(struct buffer_head *buffer, int write)
-{
-	return -EINVAL;
-}
-
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	struct sb *sb = &(struct sb){ INIT_SB(dev), };
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, errio, 0);
+	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	init_buffers(dev, 1 << 20, 0);
 	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
 	printf("entries_per_node = %i\n", sb->entries_per_node);

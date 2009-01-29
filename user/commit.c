@@ -125,11 +125,6 @@ int bitmap_io(struct buffer_head *buffer, int write)
 	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
 }
 
-int errio(struct buffer_head *buffer, int write)
-{
-	return -EINVAL;
-}
-
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -147,7 +142,7 @@ int main(int argc, char *argv[])
 		.volblocks = volsize >> dev->bits,
 	};
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, errio, 0);
+	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	assert(!make_tux3(sb));
 	sb->bitmap->map->io = bitmap_io;
 	if (0) {
