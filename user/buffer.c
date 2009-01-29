@@ -488,7 +488,7 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 
 int dev_blockio(struct buffer_head *buffer, int write)
 {
-	warn("read [%Lx]", (L)buffer->index);
+	trace_on("read [%Lx]", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	int err;
