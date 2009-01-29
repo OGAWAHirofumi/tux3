@@ -8,11 +8,12 @@
  * the right to distribute those changes under any license.
  */
 
-#ifndef trace
 #define trace trace_off
-#endif
 
 #include "inode.c"
+
+#undef trace
+#define trace trace_on
 
 void replay(struct sb *sb)
 {
@@ -169,7 +170,7 @@ int main(int argc, char *argv[])
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];
 			snprintf(name, sizeof(name), "file%i", i);
-			tuxcreate(sb->rootdir, name, strlen(name), &iattr);
+			free_inode(tuxcreate(sb->rootdir, name, strlen(name), &iattr));
 		}
 		assert(!tuxsync(sb->rootdir));
 		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
