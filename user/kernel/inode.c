@@ -451,7 +451,6 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 		inode->i_op = &tux_dir_iops;
 		inode->i_fop = &tux_dir_fops;
 		inode->i_mapping->a_ops = &tux_blk_aops;
-//		mapping_set_gfp_mask(inode->i_mapping, GFP_USER_PAGECACHE);
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	case S_IFLNK:
@@ -461,7 +460,6 @@ static void tux_setup_inode(struct inode *inode, dev_t rdev)
 	case 0:
 	{
 		inum_t inum = tux_inode(inode)->inum;
-//		gfp_t gfp_mask = GFP_USER_PAGECACHE;
 		gfp_t gfp_mask = GFP_USER;
 
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
