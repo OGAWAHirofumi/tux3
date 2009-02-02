@@ -215,6 +215,20 @@ error:
 	return NULL; // err ???
 }
 
+int tux_delete_inode(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	int err;
+	assert(inode->i_nlink == 0);
+	if ((err = tuxtruncate(inode, 0)))
+		return err;
+	/* FIXME: we have to free dtree-root, atable entry, etc too */
+	if ((err = purge_inum(sb, tux_inode(inode)->inum)))
+		return err;
+	free_inode(inode);
+	return 0;
+}
+
 int tuxunlink(struct inode *dir, const char *name, int len)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
@@ -233,17 +247,13 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	}
 	if ((err = open_inode(inode)))
 		goto error_open;
-	err = tuxtruncate(inode, 0);
-	//inode->i_ctime = dir->i_ctime;
-	//inode->i_nlink--;
-	free_inode(inode);
-	if (err)
-		goto error_iget;
-	/* FIXME: free btree root */
-	if ((err = purge_inum(sb, inum)))
-		goto error_iget;
 	if ((err = tux_delete_entry(buffer, entry)))
-		goto error;
+		goto error_open;
+	inode->i_ctime = dir->i_ctime;
+	inode->i_nlink--;
+	/* FIXME: this should be done by tuxsync() or sync_super()? */
+	if ((err = tux_delete_inode(inode)))
+		goto error_open;
 	return 0;
 
 error_open:
