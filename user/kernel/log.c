@@ -147,7 +147,9 @@ int defer_free(struct stash *defree, block_t block, unsigned count)
 	return stash_value(defree, ((u64)count << 48) + block);
 }
 
-int retire_frees(struct sb *sb, struct stash *defree)
+typedef int (*retire_actor_t)(struct sb *sb, u64 val);
+
+int unstash(struct sb *sb, struct stash *defree, retire_actor_t actor)
 {
 	struct flink_head *head = &defree->head;
 	struct page *page;
@@ -160,7 +162,7 @@ int retire_frees(struct sb *sb, struct stash *defree)
 		if (top == defree->top)
 			top = defree->pos;
 		for (; vec < top; vec++)
-			if ((err = bfree(sb, *vec & ~(-1ULL << 48), *vec >> 48)))
+			if ((err = actor(sb, *vec)))
 				return err;
 		if (flink_is_last(head))
 			break;

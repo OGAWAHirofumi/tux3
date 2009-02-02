@@ -299,7 +299,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 	return buffer;
 }
 
-int blockdirty(struct buffer_head *buffer, unsigned newdelta)
+int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *forked)
 {
 	unsigned oldstate = buffer->state;
 	assert(oldstate < BUFFER_STATES);
@@ -316,7 +316,7 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		buffer->data = clone->data;
 		clone->data = data;
 		clone->index = buffer->index;
-		set_buffer_state(clone, oldstate);
+		set_buffer_state_list(clone, oldstate, forked);
 		brelse(clone);
 	}
 	set_buffer_state_list(buffer, BUFFER_DIRTY + newdelta, &buffer->map->dirty);
@@ -488,7 +488,7 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 
 int dev_blockio(struct buffer_head *buffer, int write)
 {
-	trace_on("read [%Lx]", (L)buffer->index);
+	trace_on("%s [%Lx]", write ? "write" : "read", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	int err;

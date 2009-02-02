@@ -303,7 +303,8 @@ struct sb {
 	struct inode *rootdir;	/* root directory special file */
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */
-	unsigned delta;		/* delta commit counter */
+	unsigned delta;		/* delta commit cycle */
+	unsigned flush;		/* log flush cycle */
 	struct rw_semaphore delta_lock; /* delta transition exclusive */
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
@@ -314,13 +315,18 @@ struct sb {
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 	loff_t dictsize;	/* Atom dictionary size */
-	struct inode *logmap;	/* Prototype log block cache */
+	struct inode *logmap;	/* Log block cache */
+	block_t prevlog;	/* Previous log block physical address */
 	unsigned logbase;	/* Index of oldest log block in log map */
+	unsigned logthis;	/* Index of first log block in delta */
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 	struct stash defree;	/* defer extent frees until affer commit */
+	struct stash deflush;	/* defer extent frees until affer log flush */
+	struct list_head pinned; /* dirty metadata not flushed per delta */
+	struct list_head commit; /* dirty metadata flushed per delta */
 	struct list_head dirty_inodes; /* dirty inodes list */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */

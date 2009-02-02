@@ -57,7 +57,7 @@ unsigned buffer_hash(block_t block);
 struct buffer_head *peekblk(map_t *map, block_t block);
 struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
-int blockdirty(struct buffer_head *buffer, unsigned newdelta);
+int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *forked);
 int flush_buffers(map_t *map);
 int flush_state(unsigned state);
 void evict_buffers(map_t *map);

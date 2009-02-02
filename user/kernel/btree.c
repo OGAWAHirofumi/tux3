@@ -349,6 +349,9 @@ int cursor_redirect(struct cursor *cursor)
 		log_redirect(sb, oldblock, newblock);
 		defer_free(&sb->defree, oldblock, 1);
 
+		if (level < btree->root.depth)
+			list_move_tail(&clone->link, &sb->pinned);
+
 		if (!level--) {
 			trace("redirect root");
 			assert(oldblock == btree->root.block);

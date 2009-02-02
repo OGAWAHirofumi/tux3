@@ -58,10 +58,18 @@ void replay(struct sb *sb)
 	}
 }
 
+/* Delta commit and log flush */
+
 static int need_delta(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 10);
+}
+
+static int need_flush(struct sb *sb)
+{
+	static unsigned crudehack;
+	return !(++crudehack % 3);
 }
 
 int write_bitmap(struct buffer_head *buffer)
@@ -75,14 +83,38 @@ int write_bitmap(struct buffer_head *buffer)
 	if (buffer->state - BUFFER_DIRTY == (sb->delta & (BUFFER_DIRTY_STATES - 1)))
 		return -EAGAIN;
 	trace("write bitmap %Lx", (L)buffer->index);
-	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block)))
+	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
 		set_buffer_clean(buffer);
 	return 0;
 }
 
-static int stage_delta(struct sb *sb)
+int move_deferred(struct sb *sb, u64 val)
 {
-	assert(sb->dev->bits >= 8 && sb->dev->fd);
+	return stash_value(&sb->defree, val);
+}
+
+int retire_bfree(struct sb *sb, u64 val)
+{
+	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
+}
+
+static int flush_log(struct sb *sb)
+{
+	/*
+	 * Flush a snapshot of the allocation map to disk.  Physical blocks for
+	 * the bitmaps and new or redirected bitmap btree nodes may be allocated
+	 * during the flush.  Any bitmap blocks that are (re)dirtied by these
+	 * allocations will be written out in the next flush cycle.  A redirtied
+	 * bitmap block is replaced in cache by a clone, which is then modified.
+	 * The original goes onto a list of forked blocks to be written out
+	 * separately.
+	 */
+
+	/* further block allocations belong to the next cycle */
+	sb->flush++;
+
+	/* map dirty bitmap blocks to disk and write out */
+
 	struct buffer_head *buffer, *safe;
 	struct list_head *head = &mapping(sb->bitmap)->dirty;
 	list_for_each_entry_safe(buffer, safe, head, link) {
@@ -90,12 +122,71 @@ static int stage_delta(struct sb *sb)
 		if (err != -EAGAIN)
 			return err;
 	}
+
+	/* add pinned metadata to delta list */
+	/* forked bitmap blocks from blockdirty, redirected btree nodes from cursor_redirect */
+	list_splice_tail(&sb->pinned, &sb->commit);
+
+	/* move deferred frees for rollup to delta deferred free list */
+	unstash(sb, &sb->deflush, move_deferred);
+
+	/* empty the log */
+	sb->logbase = sb->lognext;
+
+	return 0;
+}
+
+static int stage_delta(struct sb *sb)
+{
+	if (need_flush(sb)) {
+		int err = flush_log(sb);
+		if (err)
+			return err;
+	}
+
+	/* flush forked bitmap blocks, btree node and leaf blocks */
+
+	while (!list_empty(&sb->commit)) {
+		struct buffer_head *buffer = container_of(sb->commit.next, struct buffer_head, link);
+		// mapping, index set but not hashed in mapping
+		buffer->map->io(buffer, 1);
+		brelse(buffer);
+	}
+
+	sb->delta++;
+
+	/* allocate and write log blocks */
+
+	log_finish(sb);
+	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
+		block_t block;
+		int err = balloc(sb, 1, &block);
+		if (err)
+			return err;
+		struct buffer_head *buffer = blockget(mapping(sb->logmap), index);
+		if (!buffer) {
+			bfree(sb, block, 1);
+			return -ENOMEM;
+		};
+		struct logblock *log = bufdata(buffer);
+		log->prevlog = to_be_u64(sb->prevlog);
+		if ((err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, block << sb->blockbits))) {
+			brelse(buffer);
+			bfree(sb, block, 1);
+			return err;
+		}
+		defer_free(&sb->deflush, bufindex(buffer), 1);
+		brelse(buffer);
+		sb->prevlog = block;
+	}
+	sb->logthis = sb->lognext;
 	return 0;
 }
 
 static int commit_delta(struct sb *sb)
 {
-	return flush_state(BUFFER_DIRTY + ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
+	// write commit block pointer to superblock
+	return unstash(sb, &sb->defree, retire_bfree);;
 }
 
 void change_begin(struct sb *sb)
@@ -110,7 +201,7 @@ void change_end(struct sb *sb)
 		up_read(&sb->delta_lock);
 		down_write(&sb->delta_lock);
 		if (sb->delta == delta) {
-			trace("commit delta %u", sb->delta);
+			trace(">>> commit delta %u", sb->delta);
 			++sb->delta;
 			stage_delta(sb);
 			commit_delta(sb);
@@ -143,6 +234,8 @@ int main(int argc, char *argv[])
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	assert(!make_tux3(sb));
 	sb->bitmap->map->io = bitmap_io;
+	INIT_LIST_HEAD(&sb->commit);
+	INIT_LIST_HEAD(&sb->pinned);
 	if (0) {
 		for (int i = 0; i < 21; i++) {
 			change_begin(sb);
@@ -159,11 +252,14 @@ int main(int argc, char *argv[])
 		show_buffers_state(BUFFER_DIRTY + 3);
 	}
 	if (1) {
-		for (int i = 0; i < 2; i++) {
+		log_begin(sb, 1);
+		for (int i = 0; i < 11; i++) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];
 			snprintf(name, sizeof(name), "file%i", i);
+			change_begin(sb);
 			free_inode(tuxcreate(sb->rootdir, name, strlen(name), &iattr));
+			change_end(sb);
 		}
 		assert(!tuxsync(sb->rootdir));
 		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
