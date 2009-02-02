@@ -237,25 +237,7 @@ int main(int argc, const char *argv[])
 
 	if (!strcmp(command, "delete")) {
 		printf("---- delete file ----\n");
-		struct buffer_head *buffer;
-		tux_dirent *entry = tux_find_entry(sb->rootdir, filename, strlen(filename), &buffer);
-		if (IS_ERR(entry)) {
-			errno = -PTR_ERR(entry);
-			goto eek;
-		}
-		inum_t inum = from_be_u64(entry->inum);
-		struct inode *inode = iget(sb, inum);
-		if ((errno = -open_inode(inode))) {
-			free_inode(inode);
-			goto eek;
-		}
-		errno = -tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1);
-		free_inode(inode);
-		if (errno)
-			goto eek;
-		if ((errno = -purge_inum(sb, inum)))
-			goto eek;
-		if ((errno = -tux_delete_entry(buffer, entry)))
+		if ((errno = -tuxunlink(sb->rootdir, filename, strlen(filename))))
 			goto eek;
 		tux_dump_entries(blockread(sb->rootdir->map, 0));
 		if ((errno = -sync_super(sb)))
