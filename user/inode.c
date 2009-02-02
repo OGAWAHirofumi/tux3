@@ -73,6 +73,10 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			return 0;
 		len = inode->i_size - pos;
 	}
+
+	if (write)
+		inode->i_mtime = inode->i_ctime = gettime();
+
 	unsigned bbits = tux_sb(inode->i_sb)->blockbits;
 	unsigned bsize = tux_sb(inode->i_sb)->blocksize;
 	unsigned bmask = tux_sb(inode->i_sb)->blockmask;
