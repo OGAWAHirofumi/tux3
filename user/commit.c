@@ -135,12 +135,10 @@ int main(int argc, char *argv[])
 	assert(!ftruncate(fd, volsize));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = &(struct sb){
-		INIT_SB(dev),
+	struct sb *sb = rapid_sb(dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.volblocks = volsize >> dev->bits,
-	};
+		.volblocks = volsize >> dev->bits);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	assert(!make_tux3(sb));

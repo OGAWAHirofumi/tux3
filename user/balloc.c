@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 		free(bitmap);
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
-	struct sb *sb = &(struct sb){ INIT_SB(dev), .super = { .volblocks = to_be_u64(150) }, };
+	struct sb *sb = rapid_sb(dev, .super = { .volblocks = to_be_u64(150) });
 	struct inode *bitmap = rapid_open_inode(sb, NULL, 0);
 	sb->freeblocks = from_be_u64(sb->super.volblocks);
 	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero

@@ -30,21 +30,18 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRWXU) };
 	ftruncate(dev->fd, 1 << 24);
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = &(struct sb){
-		INIT_SB(dev),
+	struct sb *sb = rapid_sb(dev,
 		.version = 0,
 		.atomref_base = 1 << 10,
 		.unatom_base = 1 << 11,
-		.atomgen = 1,
-	};
-	struct inode *inode = &(struct inode){
-		INIT_INODE(sb, S_IFDIR | 0x666),
+		.atomgen = 1);
+	struct inode *inode = rapid_open_inode(sb, NULL, S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
 		.i_ctime = spectime(0xdec0debeadULL),
-		.i_mtime = spectime(0xbadfaced00dULL) };
-	inode->map = new_map(dev, NULL);
-	inode->map->inode = inode;
+		.i_mtime = spectime(0xbadfaced00dULL));
+	inode->btree = (struct btree){
+		.root = { .block = 0xcaba1f00dULL, .depth = 3 }
+	};
 	sb->atable = inode;
 
 	for (int i = 0; i < 2; i++) {

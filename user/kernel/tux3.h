@@ -321,6 +321,7 @@ struct sb {
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 	struct stash defree;	/* defer extent frees until affer commit */
+	struct list_head dirty_inodes; /* dirty inodes list */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
@@ -350,6 +351,7 @@ typedef struct {
 	inum_t inum;		/* Inode number.  Fixme: also in generic inode */
 	unsigned present;	/* Attributes decoded from or to be encoded to inode table */
 	struct xcache *xcache;	/* Extended attribute cache */
+	struct list_head dirty; /* link for dirty inodes */
 	struct inode vfs_inode;	/* Generic kernel inode */
 } tuxnode_t;
 
@@ -396,6 +398,7 @@ typedef struct inode {
 	inum_t inum;
 	unsigned present;
 	struct xcache *xcache;
+	struct list_head dirty;
 	struct sb *i_sb;
 	map_t *map;
 	loff_t i_size;

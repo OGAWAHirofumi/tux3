@@ -744,7 +744,7 @@ int main(int argc, const char *argv[])
 	};
 	init_buffers(dev, 1 << 20, 1);
 
-	struct sb *sb = &(struct sb){ INIT_SB(dev), };
+	struct sb *sb = rapid_sb(dev);
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)

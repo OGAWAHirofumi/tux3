@@ -161,7 +161,7 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
-	struct sb *sb = &(struct sb){ INIT_SB(dev), };
+	struct sb *sb = rapid_sb(dev);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	init_buffers(dev, 1 << 20, 0);

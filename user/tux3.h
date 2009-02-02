@@ -178,35 +178,54 @@ struct tux_iattr {
 void change_begin(struct sb *sb);
 void change_end(struct sb *sb);
 
-#define INIT_INODE(sb, mode)				\
+#define INIT_INODE(inode, sb, mode)			\
 	.i_sb = sb,					\
 	.i_mode = mode,					\
 	.i_mutex = __MUTEX_INITIALIZER,			\
 	.i_version = 1,					\
-	.i_nlink = 1
+	.i_nlink = 1,					\
+	.dirty = LIST_HEAD_INIT((inode).dirty)
 
-#define rapid_open_inode(sb, io, mode)	({		\
-	struct inode *__inode = &(struct inode){	\
-		INIT_INODE(sb, mode),			\
-		.btree = {				\
-			.lock = __RWSEM_INITIALIZER,	\
-		},					\
-	};						\
-	__inode->map = new_map((sb)->dev, io);		\
-	assert(__inode->map);				\
-	__inode->map->inode = __inode;			\
-	__inode;					\
-})
+#define INIT_SB(sb, dev)					\
+	.dev = dev,						\
+	.blockbits = (dev)->bits,				\
+	.blocksize = 1 << (dev)->bits,				\
+	.blockmask = ((1 << (dev)->bits) - 1),			\
+	.delta_lock = __RWSEM_INITIALIZER,			\
+	.loglock = __MUTEX_INITIALIZER,				\
+	.dirty_inodes = LIST_HEAD_INIT((sb).dirty_inodes)
 
-#define INIT_SB(dev)					\
-	.dev = dev,					\
-	.blockbits = (dev)->bits,			\
-	.blocksize = 1 << (dev)->bits,			\
-	.blockmask = ((1 << (dev)->bits) - 1),		\
-	.delta_lock = __RWSEM_INITIALIZER,		\
-	.loglock = __MUTEX_INITIALIZER
+#define rapid_open_inode(sb, io, mode, init_defs...) ({		\
+	struct inode *__inode = &(struct inode){};		\
+	*__inode = (struct inode){				\
+		INIT_INODE(*__inode, sb, mode),			\
+		.btree = {					\
+			.lock = __RWSEM_INITIALIZER,		\
+		},						\
+		init_defs					\
+	};							\
+	__inode->map = new_map((sb)->dev, io);			\
+	assert(__inode->map);					\
+	__inode->map->inode = __inode;				\
+	__inode;						\
+	})
+
+#define rapid_sb(dev, init_defs...) ({				\
+	struct sb *__sb = &(struct sb){};			\
+	*__sb = (struct sb){					\
+		INIT_SB(*__sb, dev),				\
+		init_defs					\
+	};							\
+	__sb;							\
+	});
 
 enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
+
+static inline void mark_inode_dirty(struct inode *inode)
+{
+	if (list_empty(&inode->dirty))
+		list_add_tail(&inode->dirty, &inode->i_sb->dirty_inodes);
+}
 
 #endif

@@ -21,14 +21,16 @@
 int main(int argc, char *argv[])
 {
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	struct sb *sb = &(struct sb){ .version = 0, .blocksize = 1 << 9, };
-	struct inode *inode = &(struct inode){
-		INIT_INODE(sb, 0x666),
+	struct dev *dev = &(struct dev){ .bits = 9 };
+	struct sb *sb = rapid_sb(dev, .version = 0);
+	struct inode *inode = rapid_open_inode(sb, NULL, 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.btree = { .root = { .block = 0xcaba1f00dULL, .depth = 3 } },
 		.i_size = 0x123456789ULL,
 		.i_ctime = spectime(0xdec0debeadULL),
-		.i_mtime = spectime(0xbadfaced00dULL) };
+		.i_mtime = spectime(0xbadfaced00dULL));
+	inode->btree = (struct btree){
+		.root = { .block = 0xcaba1f00dULL, .depth = 3 }
+	};
 
 	char attrs[1000] = { };
 	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);

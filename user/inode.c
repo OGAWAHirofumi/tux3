@@ -21,7 +21,7 @@ struct inode *new_inode(struct sb *sb)
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto error;
-	*inode = (struct inode){ INIT_INODE(sb, 0), };
+	*inode = (struct inode){ INIT_INODE(*inode, sb, 0), };
 	inode->map = new_map(sb->dev, NULL);
 	if (!inode->map)
 		goto error_map;
@@ -274,7 +274,15 @@ int tuxsync(struct inode *inode)
 	int err;
 	if ((err = tuxflush(inode)))
 		return err;
+#if 0
+	if (!list_empty(&inode->dirty)) {
+		list_del_init(&inode->dirty);
+		return save_inode(inode);
+	}
+	return 0;
+#else
 	return save_inode(inode);
+#endif
 }
 
 void tuxclose(struct inode *inode)
@@ -302,12 +310,10 @@ int main(int argc, char *argv[])
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = &(struct sb){
-		INIT_SB(dev),
+	struct sb *sb = rapid_sb(dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.volblocks = size >> dev->bits,
-	};
+		.volblocks = size >> dev->bits);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, NULL, 0);
 

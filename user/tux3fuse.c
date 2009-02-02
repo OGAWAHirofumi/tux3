@@ -367,7 +367,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	*dev = (struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1<<20, 1);
 	sb = malloc(sizeof(*sb));
-	*sb = (struct sb){ INIT_SB(dev), };
+	*sb = (struct sb){ INIT_SB(*sb, dev), };
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;

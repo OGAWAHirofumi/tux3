@@ -12,7 +12,9 @@ static struct kmem_cache *tux_inode_cachep;
 
 static void tux3_inode_init_once(void *mem)
 {
-	inode_init_once(&((tuxnode_t *)mem)->vfs_inode);
+	tuxnode_t *tuxi = mem;
+	INIT_LIST_HEAD(&tuxi->dirty);
+	inode_init_once(&tuxi->vfs_inode);
 }
 
 static int __init tux3_init_inodecache(void)
@@ -39,6 +41,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	tuxi->btree = (struct btree){ };
 	tuxi->present = 0;
 	tuxi->xcache = NULL;
+	BUG_ON(!list_empty(&tuxi->dirty));
 
 	/* uninitialized stuff by alloc_inode() */
 	tuxi->vfs_inode.i_version = 1;
@@ -157,6 +160,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_time_gran = 1;
 
 	mutex_init(&sbi->loglock);
+	INIT_LIST_HEAD(&sbi->dirty_inodes);
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);

@@ -70,13 +70,11 @@ int main(int argc, const char *argv[])
 	struct dev *dev = &(struct dev){ fd, .bits = blockbits };
 	init_buffers(dev, 1 << 20, 1);
 
-	struct sb *sb = &(struct sb){
-		INIT_SB(dev),
+	struct sb *sb = rapid_sb(dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.volblocks = volsize >> dev->bits,
-		.freeblocks = volsize >> dev->bits,
-	};
+		.freeblocks = volsize >> dev->bits);
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;

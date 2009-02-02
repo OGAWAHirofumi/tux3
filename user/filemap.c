@@ -175,12 +175,10 @@ int main(int argc, char *argv[])
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
-	struct sb *sb = &(struct sb){
-		INIT_SB(dev),
+	struct sb *sb = rapid_sb(dev,
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
-		.volblocks = size >> dev->bits,
-	};
+		.volblocks = size >> dev->bits);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, NULL, 0);
 	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
