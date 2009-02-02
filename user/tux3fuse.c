@@ -427,7 +427,7 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	}
 	if (to_set & FUSE_SET_ATTR_SIZE) {
 		printf("Setting size\n");
-		inode->i_size = attr->st_size;
+		tuxtruncate(inode, attr->st_size);
 	}
 	if (to_set & FUSE_SET_ATTR_ATIME) {
 		printf("Setting atime to %Lu\n", (L)attr->st_atime);

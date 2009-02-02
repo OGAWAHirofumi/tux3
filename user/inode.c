@@ -121,6 +121,51 @@ void tuxseek(struct file *file, loff_t pos)
 	file->f_pos = pos;
 }
 
+/*
+ * Truncate partial block, otherwise, if uses expands size with
+ * truncate(), it will show existent old data.
+ */
+static int truncate_partial_block(struct inode *inode, loff_t size)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	if (!(size & sb->blockmask))
+		return 0;
+	block_t index = size >> sb->blockbits;
+	unsigned offset = size & sb->blockmask;
+	struct buffer_head *buffer = blockread(mapping(inode), index);
+	if (!buffer)
+		return -EIO;
+	memset(bufdata(buffer) + offset, 0, inode->i_sb->blocksize - offset);
+	brelse_dirty(buffer);
+	return 0;
+}
+
+int tuxtruncate(struct inode *inode, loff_t size)
+{
+	/* FIXME: expanding size is not tested */
+	struct sb *sb = tux_sb(inode->i_sb);
+	block_t index = (size + sb->blockmask) >> sb->blockbits;
+	int is_expand;
+	int err = 0;
+
+	if (inode->i_size == size)
+		goto out;
+	if (inode->i_size > size)
+		is_expand = 1;
+	else
+		is_expand = 0;
+
+	inode->i_size = size;
+	if (!is_expand) {
+		truncate_partial_block(inode, size);
+		/* FIXME: invalidate the truncated (dirty) buffers */
+		err = tree_chop(&inode->btree, &(struct delete_info){ .key = index }, 0);
+	}
+	inode->i_mtime = inode->i_ctime = gettime();
+out:
+	return err;
+}
+
 struct inode *tuxopen(struct inode *dir, const char *name, int len)
 {
 	struct buffer_head *buffer;
@@ -184,7 +229,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	}
 	if ((err = open_inode(inode)))
 		goto error_open;
-	err = tree_chop(&inode->btree, &(struct delete_info){ .key = 0 }, -1);
+	err = tuxtruncate(inode, 0);
 	//inode->i_ctime = dir->i_ctime;
 	//inode->i_nlink--;
 	free_inode(inode);
