@@ -5,10 +5,6 @@
 
 #include "tux3.h"
 
-#ifndef trace
-#define trace trace_off
-#endif
-
 int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent)
 {
 	u64 iroot_val = from_be_u64(super->iroot);

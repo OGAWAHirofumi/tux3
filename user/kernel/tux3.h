@@ -8,6 +8,7 @@
 #include <linux/time.h>
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
+#include <linux/bio.h>
 #include <linux/mutex.h>
 
 typedef loff_t block_t;
@@ -853,6 +854,9 @@ int retire_frees(struct sb *sb, struct stash *defree);
 void destroy_defree(struct stash *defree);
 
 /* commit.c */
+int vecio(int rw, struct block_device *dev, sector_t sector,
+	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec);
+int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec);
 int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent);
 void pack_sb(struct sb *sb, struct disksuper *super);
 
@@ -876,7 +880,7 @@ static inline void brelse_dirty(struct buffer_head *buffer)
 	brelse(buffer);
 }
 
-static inline int blockdirty(struct buffer_head *buffer, unsigned newdelta)
+static inline int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *forked)
 {
 	mark_buffer_dirty(buffer);
 	return 0;
