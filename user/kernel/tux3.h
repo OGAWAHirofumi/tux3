@@ -247,6 +247,7 @@ struct disksuper
 	be_u32 freeatom;	/* Beginning of persistent free atom list in atable */
 	be_u32 atomgen;		/* Next atom number if there are no free atoms */
 	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
+	be_u64 logchain;	/* Most recent delta commit block pointer */
 };
 
 struct root {
