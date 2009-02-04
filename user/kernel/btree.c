@@ -349,8 +349,10 @@ int cursor_redirect(struct cursor *cursor)
 		log_redirect(sb, oldblock, newblock);
 		defer_free(&sb->defree, oldblock, 1);
 
+#ifdef ATOMIC
 		if (level < btree->root.depth)
 			list_move_tail(&clone->link, &sb->pinned);
+#endif
 
 		if (!level--) {
 			trace("redirect root");
