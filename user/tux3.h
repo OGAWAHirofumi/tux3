@@ -228,4 +228,6 @@ static inline void mark_inode_dirty(struct inode *inode)
 		list_add_tail(&inode->dirty, &inode->i_sb->dirty_inodes);
 }
 
+enum rw { READ, WRITE };
+
 #endif

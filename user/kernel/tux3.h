@@ -403,6 +403,11 @@ static inline void free(void *ptr)
 {
 	kfree(ptr);
 }
+
+static inline struct block_device *sb_dev(struct sb *sb)
+{
+	return sb->vfs_sb->s_bdev;
+}
 #else
 typedef struct inode {
 	struct btree btree;
@@ -449,6 +454,11 @@ static inline struct inode *btree_inode(struct btree *btree)
 static inline map_t *mapping(struct inode *inode)
 {
 	return inode->map;
+}
+
+static inline struct dev *sb_dev(struct sb *sb)
+{
+	return sb->dev;
 }
 #endif /* !__KERNEL__ */
 
@@ -859,8 +869,10 @@ int vecio(int rw, struct block_device *dev, sector_t sector,
 	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec);
 int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec);
 int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned len);
-int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent);
+int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot);
 void pack_sb(struct sb *sb, struct disksuper *super);
+int tux_load_sb(struct sb *sb);
+int tux_save_sb(struct sb *sb);
 
 /* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);

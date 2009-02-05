@@ -14,6 +14,11 @@
 #define trace trace_on
 #endif
 
+int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
+{
+	return ioabs(dev->fd, data, len, rw, offset);
+}
+
 #include "kernel/commit.c"
 
 int load_sb(struct sb *sb)
@@ -23,7 +28,7 @@ int load_sb(struct sb *sb)
 	int err = diskread(sb->dev->fd, super, sizeof(*super), SB_LOC);
 	if (err)
 		return err;
-	err = unpack_sb(sb, super, &iroot, 0);
+	err = unpack_sb(sb, super, &iroot);
 	if (err)
 		return err;
 	init_btree(itable_btree(sb), sb, iroot, &itable_ops);

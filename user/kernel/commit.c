@@ -5,17 +5,15 @@
 
 #include "tux3.h"
 
-int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent)
+#ifndef trace
+#define trace trace_on
+#endif
+
+int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot)
 {
 	u64 iroot_val = from_be_u64(super->iroot);
-	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic))) {
-		if (!silent)
-			printf("invalid superblock [%Lx]\n",
-			       (L)from_be_u64(*(be_u64 *)super->magic));
+	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic)))
 		return -EINVAL;
-	}
-
-//	sb->rootbuf;
 	sb->blockbits = from_be_u16(super->blockbits);
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
@@ -48,3 +46,29 @@ void pack_sb(struct sb *sb, struct disksuper *super)
 	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
 	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
 }
+
+int tux_load_sb(struct sb *sb)
+{
+	struct root iroot;
+	int err = devio(READ, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
+	if (err)
+		return err;
+	err = unpack_sb(sb, &sb->super, &iroot);
+	if (err)
+		return err;
+	trace("depth %Lu, block %Lu", (L)iroot.depth, (L)iroot.block);
+	trace("blocksize %u, blockbits %u, blockmask %08x",
+	       sb->blocksize, sb->blockbits, sb->blockmask);
+	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
+	       sb->volblocks, sb->freeblocks, sb->nextalloc);
+	trace("freeatom %u, atomgen %u", sb->freeatom, sb->atomgen);
+	init_btree(itable_btree(sb), sb, iroot, &itable_ops);
+	return 0;
+}
+
+int tux_save_sb(struct sb *sb)
+{
+	pack_sb(sb, &sb->super);
+	return devio(WRITE, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
+}
+

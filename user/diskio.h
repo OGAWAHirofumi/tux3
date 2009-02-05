@@ -1,6 +1,7 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
+int ioabs(int fd, void *data, size_t count, int out, off_t offset);
 int diskread(int fd, void *data, size_t count, off_t offset);
 int diskwrite(int fd, void *data, size_t count, off_t offset);
 int streamread(int fd, void *data, size_t count);

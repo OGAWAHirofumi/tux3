@@ -59,40 +59,9 @@ static void tux3_destroy_inode(struct inode *inode)
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 
-int sb_io(struct sb *sb, int io)
-{
-	return devio(io, sb->vfs_sb->s_bdev, SB_LOC, &sb->super, SB_LEN);
-}
-
-static int tux_load_sb(struct super_block *sb, int silent)
-{
-	struct sb *sbi = tux_sb(sb);
-	struct root iroot;
-	int err = sb_io(sbi, READ);
-	if (err)
-		goto eek;
-	err = unpack_sb(sbi, &sbi->super, &iroot, silent);
-	if (err)
-		goto eek;
-	trace("depth %Lu, block %Lu", (L)iroot.depth, (L)iroot.block);
-	trace("blocksize %u, blockbits %u, blockmask %08x",
-	       sbi->blocksize, sbi->blockbits, sbi->blockmask);
-	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
-	       sbi->volblocks, sbi->freeblocks, sbi->nextalloc);
-	trace("freeatom %u, atomgen %u", sbi->freeatom, sbi->atomgen);
-	init_btree(itable_btree(sbi), sbi, iroot, &itable_ops);
-	return 0;
-eek:
-	if (!silent)
-		printk(KERN_ERR "TUX3: unable to read superblock\n");
-	return err;
-}
-
 static void tux3_write_super(struct super_block *sb)
 {
-	struct sb *sbi = tux_sb(sb);
-	pack_sb(tux_sb(sb), &sbi->super);
-	if (sb_io(sbi, WRITE)) {
+	if (tux_save_sb(tux_sb(sb))) {
 		printk(KERN_ERR "TUX3: unable to write superblock\n");
 		return;
 	}
@@ -176,9 +145,16 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	}
 
-	err = tux_load_sb(sb, silent);
-	if (err)
+	if ((err = tux_load_sb(tux_sb(sb)))) {
+		if (!silent) {
+			if (err == -EINVAL)
+				warn("invalid superblock [%Lx]",
+					(L)from_be_u64(*(be_u64 *)sbi->super.magic));
+			else
+				warn("Unable to read superblock");
+		}
 		goto error;
+	}
 
 	if (sbi->blocksize != blocksize) {
 		if (!sb_set_blocksize(sb, sbi->blocksize)) {

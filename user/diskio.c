@@ -7,7 +7,7 @@
 #include "trace.h"
 #include "diskio.h"
 
-static int ioabs(int fd, void *data, size_t count, int out, off_t offset)
+int ioabs(int fd, void *data, size_t count, int out, off_t offset)
 {
 	while (count) {
 		ssize_t ret;
