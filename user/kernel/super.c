@@ -8,6 +8,8 @@
 #include <linux/statfs.h>
 #include "tux3.h"
 
+#define trace trace_on
+
 static struct kmem_cache *tux_inode_cachep;
 
 static void tux3_inode_init_once(void *mem)
@@ -71,23 +73,22 @@ static int tux_load_sb(struct super_block *sb, int silent)
 	struct sb *sbi = tux_sb(sb);
 	struct root iroot;
 	int err = sb_io(sbi, READ);
-
-	if (err) {
-		if (!silent)
-			printk(KERN_ERR "TUX3: unable to read superblock\n");
-		return err;
-	}
-
+	if (err)
+		goto eek;
 	err = unpack_sb(sbi, &sbi->super, &iroot, silent);
-	printk("%s: depth %Lu, block %Lu\n",
-	       __func__, (L)iroot.depth, (L)iroot.block);
-	printk("%s: blocksize %u, blockbits %u, blockmask %08x\n",
-	       __func__, sbi->blocksize, sbi->blockbits, sbi->blockmask);
-	printk("%s: volblocks %Lu, freeblocks %Lu, nextalloc %Lu\n",
-	       __func__, sbi->volblocks, sbi->freeblocks, sbi->nextalloc);
-	printk("%s: freeatom %u, atomgen %u\n",
-	       __func__, sbi->freeatom, sbi->atomgen);
+	if (err)
+		goto eek;
+	trace("depth %Lu, block %Lu", (L)iroot.depth, (L)iroot.block);
+	trace("blocksize %u, blockbits %u, blockmask %08x",
+	       sbi->blocksize, sbi->blockbits, sbi->blockmask);
+	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
+	       sbi->volblocks, sbi->freeblocks, sbi->nextalloc);
+	trace("freeatom %u, atomgen %u", sbi->freeatom, sbi->atomgen);
 	init_btree(itable_btree(sbi), sbi, iroot, &itable_ops);
+	return 0;
+eek:
+	if (!silent)
+		printk(KERN_ERR "TUX3: unable to read superblock\n");
 	return err;
 }
 
@@ -96,7 +97,7 @@ static void tux3_write_super(struct super_block *sb)
 	struct sb *sbi = tux_sb(sb);
 	pack_sb(tux_sb(sb), &sbi->super);
 	if (sb_io(sbi, WRITE)) {
-		printk(KERN_ERR "TUX3: unable to read superblock\n");
+		printk(KERN_ERR "TUX3: unable to write superblock\n");
 		return;
 	}
 	sb->s_dirt = 0;
