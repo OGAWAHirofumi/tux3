@@ -32,12 +32,20 @@ static void biosync_endio(struct bio *bio, int err)
 	wake_up(&sync->wait);
 }
 
-int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec)
+int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec)
 {
 	struct biosync sync = { .wait = __WAIT_QUEUE_HEAD_INITIALIZER(sync.wait) };
-	if (!(sync.err = vecio(rw, dev, sector, biosync_endio, &sync, vecs, vec)))
+	if (!(sync.err = vecio(rw, dev, offset, biosync_endio, &sync, vecs, vec)))
 		wait_event(sync.wait, sync.done);
 	return sync.err;
+}
+
+int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned len)
+{
+	return syncio(rw, dev, offset, 1, &(struct bio_vec){
+		.bv_page = virt_to_page(data),
+		.bv_offset = offset_in_page(data),
+		.bv_len = len });
 }
 
 void hexdump(void *data, unsigned size)

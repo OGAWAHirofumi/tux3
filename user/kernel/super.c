@@ -61,11 +61,7 @@ static void tux3_destroy_inode(struct inode *inode)
 
 int sb_io(struct sb *sb, int io)
 {
-	void *p = &sb->super;
-	return syncio(io, sb->vfs_sb->s_bdev, SB_LOC, 1, &(struct bio_vec){
-		.bv_page = virt_to_page(p),
-		.bv_offset = offset_in_page(p),
-		.bv_len = SB_LEN });
+	return devio(io, sb->vfs_sb->s_bdev, SB_LOC, &sb->super, SB_LEN);
 }
 
 static int tux_load_sb(struct super_block *sb, int silent)

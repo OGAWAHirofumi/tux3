@@ -858,6 +858,7 @@ void destroy_defree(struct stash *defree);
 int vecio(int rw, struct block_device *dev, sector_t sector,
 	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec);
 int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec);
+int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned len);
 int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot, int silent);
 void pack_sb(struct sb *sb, struct disksuper *super);
 
