@@ -301,6 +301,7 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 struct sb {
 	struct disksuper super;
 	char pad[SB_LEN - sizeof(struct disksuper)];
+	struct btree itable;	/* Inode table btree */
 	struct inode *volmap;	/* Volume metadata cache (like blockdev).
 				 * Note, ->btree is the btree for itable. */
 	struct inode *bitmap;	/* allocation bitmap special file */
@@ -453,7 +454,7 @@ static inline map_t *mapping(struct inode *inode)
 
 static inline struct btree *itable_btree(struct sb *sb)
 {
-	return &tux_inode(sb->volmap)->btree;
+	return &sb->itable;
 }
 
 #define TUX_LINK_MAX 64		/* just for debug for now */
