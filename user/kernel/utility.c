@@ -3,14 +3,14 @@
 #include <linux/kernel.h>
 #include <linux/bio.h>
 
-int vecio(int rw, struct block_device *dev, sector_t sector,
+int vecio(int rw, struct block_device *dev, loff_t offset,
 	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec)
 {
 	struct bio *bio = bio_alloc(GFP_KERNEL, vecs);
 	if (!bio)
 		return -ENOMEM;
 	bio->bi_bdev = dev;
-	bio->bi_sector = sector;
+	bio->bi_sector = offset >> 9;
 	bio->bi_end_io = endio;
 	bio->bi_private = data;
 	while (vecs--) {

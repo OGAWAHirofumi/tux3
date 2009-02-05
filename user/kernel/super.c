@@ -57,25 +57,28 @@ static void tux3_destroy_inode(struct inode *inode)
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 
+int sb_io(struct sb *sb, int io)
+{
+	void *p = &sb->super;
+	return syncio(io, sb->vfs_sb->s_bdev, SB_LOC, 1, &(struct bio_vec){
+		.bv_page = virt_to_page(p),
+		.bv_offset = offset_in_page(p),
+		.bv_len = SB_LEN });
+}
+
 static int tux_load_sb(struct super_block *sb, int silent)
 {
 	struct sb *sbi = tux_sb(sb);
 	struct root iroot;
-	struct buffer_head *bh;
-	int err;
+	int err = sb_io(sbi, READ);
 
-	BUG_ON(SB_LOC < sb->s_blocksize);
-	bh = sb_bread(sb, SB_LOC >> sb->s_blocksize_bits);
-	if (!bh) {
+	if (err) {
 		if (!silent)
 			printk(KERN_ERR "TUX3: unable to read superblock\n");
-		return -EIO;
+		return err;
 	}
-	err = unpack_sb(sbi, bufdata(bh), &iroot, silent);
-	/* FIXME: this is needed? */
-	memcpy(&sbi->super, bufdata(bh), sizeof(sbi->super));
-	brelse(bh);
 
+	err = unpack_sb(sbi, &sbi->super, &iroot, silent);
 	printk("%s: depth %Lu, block %Lu\n",
 	       __func__, (L)iroot.depth, (L)iroot.block);
 	printk("%s: blocksize %u, blockbits %u, blockmask %08x\n",
@@ -90,16 +93,12 @@ static int tux_load_sb(struct super_block *sb, int silent)
 
 static void tux3_write_super(struct super_block *sb)
 {
-	struct buffer_head *bh;
-
-	BUG_ON(SB_LOC < sb->s_blocksize);
-	bh = vol_bread(tux_sb(sb), SB_LOC >> sb->s_blocksize_bits);
-	if (!bh) {
+	struct sb *sbi = tux_sb(sb);
+	pack_sb(tux_sb(sb), &sbi->super);
+	if (sb_io(sbi, WRITE)) {
 		printk(KERN_ERR "TUX3: unable to read superblock\n");
 		return;
 	}
-	pack_sb(tux_sb(sb), bufdata(bh));
-	brelse_dirty(bh);
 	sb->s_dirt = 0;
 }
 
