@@ -175,7 +175,7 @@ static int stage_delta(struct sb *sb)
 			bfree(sb, block, 1);
 			return err;
 		}
-		defer_free(&sb->deflush, bufindex(buffer), 1);
+		defer_free(&sb->deflush, block, 1);
 		brelse(buffer);
 		sb->prevlog = block;
 	}
