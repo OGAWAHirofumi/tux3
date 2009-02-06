@@ -15,7 +15,7 @@ int load_sb(struct sb *sb)
 	int err = devio(READ, sb_dev(sb), SB_LOC, super, SB_LEN);
 	if (err)
 		return err;
-	if (memcmp(sb->super.magic, (char[])SB_MAGIC, sizeof(sb->super.magic)))
+	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic)))
 		return -EINVAL;
 	sb->blockbits = from_be_u16(super->blockbits);
 	sb->blocksize = 1 << sb->blockbits;
