@@ -745,9 +745,8 @@ static inline block_t bufindex(struct buffer_head *buffer)
 	 */
 	struct inode *inode = buffer_inode(buffer);
 	struct page *page = buffer->b_page;
-	unsigned offset = (void *)buffer->b_data - page_address(page);
 	assert(inode == tux_sb(inode->i_sb)->volmap);
-	return (page_offset(page) + offset) >> inode->i_blkbits;
+	return (page_offset(page) + bh_offset(buffer)) >> inode->i_blkbits;
 }
 
 static inline int bufcount(struct buffer_head *buffer)
