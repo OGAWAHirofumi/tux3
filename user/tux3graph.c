@@ -723,7 +723,7 @@ int main(int argc, char *argv[])
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	struct dev *dev = &(struct dev){ .fd = fd };
 	struct sb *sb = rapid_sb(dev);
-	if ((errno = -tux_load_sb(sb)))
+	if ((errno = -load_sb(sb)))
 		goto eek;
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 1);
@@ -731,7 +731,7 @@ int main(int argc, char *argv[])
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
-	if ((errno = -tux_load_itable(sb)))
+	if ((errno = -load_itable(sb)))
 		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto eek;

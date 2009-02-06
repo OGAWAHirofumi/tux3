@@ -40,7 +40,7 @@ static void pack_sb(struct sb *sb, struct disksuper *super)
 	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
 }
 
-int tux_load_sb(struct sb *sb)
+int load_sb(struct sb *sb)
 {
 	int err = devio(READ, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
 	if (err)
@@ -56,13 +56,13 @@ int tux_load_sb(struct sb *sb)
 	return 0;
 }
 
-int tux_save_sb(struct sb *sb)
+int save_sb(struct sb *sb)
 {
 	pack_sb(sb, &sb->super);
 	return devio(WRITE, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
 }
 
-int tux_load_itable(struct sb *sb)
+int load_itable(struct sb *sb)
 {
 	u64 iroot_val = from_be_u64(sb->super.iroot);
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);

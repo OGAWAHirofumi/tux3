@@ -61,7 +61,7 @@ static void tux3_destroy_inode(struct inode *inode)
 
 static void tux3_write_super(struct super_block *sb)
 {
-	if (tux_save_sb(tux_sb(sb))) {
+	if (save_sb(tux_sb(sb))) {
 		printk(KERN_ERR "TUX3: unable to write superblock\n");
 		return;
 	}
@@ -145,7 +145,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	}
 
-	if ((err = tux_load_sb(tux_sb(sb)))) {
+	if ((err = load_sb(tux_sb(sb)))) {
 		if (!silent) {
 			if (err == -EINVAL)
 				warn("invalid superblock [%Lx]",
@@ -170,7 +170,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	insert_inode_hash(sbi->volmap);
 
-	err = tux_load_itable(sbi);
+	err = load_itable(sbi);
 	if (err)
 		goto error_bitmap;
 

@@ -364,7 +364,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	*dev = (struct dev){ .fd = fd };
 	sb = malloc(sizeof(*sb));
 	*sb = (struct sb){ INIT_SB(*sb, dev), };
-	if ((errno = -tux_load_sb(sb)))
+	if ((errno = -load_sb(sb)))
 		goto eek;
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 1);
@@ -372,7 +372,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
-	if ((errno = -tux_load_itable(sb)))
+	if ((errno = -load_itable(sb)))
 		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto nomem;

@@ -37,7 +37,7 @@ int sync_super(struct sb *sb)
 	if ((err = flush_buffers(sb->volmap->map)))
 		return err;
 	printf("sync super\n");
-	if ((err = tux_save_sb(sb)))
+	if ((err = save_sb(sb)))
 		return err;
 	return 0;
 }

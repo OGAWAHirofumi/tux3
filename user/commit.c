@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
 		}
 		assert(!tuxsync(sb->rootdir));
 		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
-		assert(!tux_save_sb(sb));
+		assert(!save_sb(sb));
 		assert(!flush_buffers(sb->volmap->map));
 	}
 	exit(0);
