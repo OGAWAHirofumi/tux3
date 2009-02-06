@@ -716,7 +716,9 @@ int main(int argc, char *argv[])
 
 	/* open volume, create superblock */
 	volname = argv[optind++];
-	fd_t fd = open(volname, O_RDWR, S_IRWXU);
+	int fd = open(volname, O_RDWR, S_IRWXU);
+	if (fd < 0)
+		goto eek;
 
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	struct dev *dev = &(struct dev){ .fd = fd };

@@ -98,7 +98,9 @@ int main(int argc, char *argv[])
 	/* open volume, create superblock */
 	const char *command = argv[optind++];
 	const char *volname = argv[optind++];
-	fd_t fd = open(volname, O_RDWR, S_IRWXU);
+	int fd = open(volname, O_RDWR, S_IRWXU);
+	if (fd < 0)
+		goto eek;
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (optind != argc)
