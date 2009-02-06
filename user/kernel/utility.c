@@ -6,37 +6,37 @@
 int vecio(int rw, struct block_device *dev, loff_t offset,
 	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec)
 {
-	struct bio *bio = bio_alloc(GFP_KERNEL, vecs);
+	BUG_ON(vecs > bio_get_nr_vecs(dev));
+	struct bio *bio = bio_alloc(GFP_NOIO, vecs);
 	if (!bio)
 		return -ENOMEM;
 	bio->bi_bdev = dev;
 	bio->bi_sector = offset >> 9;
 	bio->bi_end_io = endio;
 	bio->bi_private = data;
-	while (vecs--) {
-		bio->bi_io_vec[bio->bi_vcnt] = *vec++;
-		bio->bi_size += bio->bi_io_vec[bio->bi_vcnt++].bv_len;
-	}
+	bio->bi_vcnt = vecs;
+	memcpy(bio->bi_io_vec, vec, sizeof(*vec) * vecs);
+	while (vecs--)
+		bio->bi_size += bio->bi_io_vec[vecs].bv_len;
 	submit_bio(rw, bio);
 	return 0;
 }
 
-struct biosync { wait_queue_head_t wait; int done, err; };
+struct biosync { struct completion completion; int err; };
 
 static void biosync_endio(struct bio *bio, int err)
 {
 	struct biosync *sync = bio->bi_private;
 	bio_put(bio);
 	sync->err = err;
-	sync->done = 1;
-	wake_up(&sync->wait);
+	complete(&sync->completion);
 }
 
 int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec)
 {
-	struct biosync sync = { .wait = __WAIT_QUEUE_HEAD_INITIALIZER(sync.wait) };
+	struct biosync sync = { .completion = COMPLETION_INITIALIZER_ONSTACK(sync.completion) };
 	if (!(sync.err = vecio(rw, dev, offset, biosync_endio, &sync, vecs, vec)))
-		wait_event(sync.wait, sync.done);
+		wait_for_completion(&sync.completion);
 	return sync.err;
 }
 
