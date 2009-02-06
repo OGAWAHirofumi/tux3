@@ -98,6 +98,24 @@ static inline void list_splice_tail(struct list_head *list, struct list_head *he
 		__list_splice(list, head->prev, head);
 }
 
+static inline void list_splice_init(struct list_head *list,
+				    struct list_head *head)
+{
+	if (!list_empty(list)) {
+		__list_splice(list, head, head->next);
+		INIT_LIST_HEAD(list);
+	}
+}
+
+static inline void list_splice_tail_init(struct list_head *list,
+					 struct list_head *head)
+{
+	if (!list_empty(list)) {
+		__list_splice(list, head->prev, head);
+		INIT_LIST_HEAD(list);
+	}
+}
+
 #define container_of(ptr, type, member) ({ \
 	const typeof( ((type *)0)->member ) *__mptr = (ptr); \
 	(type *)( (char *)__mptr - offsetof(type,member) );})

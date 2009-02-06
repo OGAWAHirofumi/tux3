@@ -125,7 +125,7 @@ static int flush_log(struct sb *sb)
 
 	/* add pinned metadata to delta list */
 	/* forked bitmap blocks from blockdirty, redirected btree nodes from cursor_redirect */
-	list_splice_tail(&sb->pinned, &sb->commit);
+	list_splice_tail_init(&sb->pinned, &sb->commit);
 
 	/* move deferred frees for rollup to delta deferred free list */
 	unstash(sb, &sb->deflush, move_deferred);
