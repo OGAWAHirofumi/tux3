@@ -24,14 +24,12 @@ int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
 int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
-	struct root iroot;
 	int err = diskread(sb->dev->fd, super, sizeof(*super), SB_LOC);
 	if (err)
 		return err;
-	err = unpack_sb(sb, super, &iroot);
+	err = unpack_sb(sb, super);
 	if (err)
 		return err;
-	init_btree(itable_btree(sb), sb, iroot, &itable_ops);
 	return 0;
 }
 

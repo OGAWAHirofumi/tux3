@@ -731,6 +731,8 @@ int main(int argc, char *argv[])
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
+	if ((errno = -tux_load_itable(sb)))
+		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto eek;
 	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))

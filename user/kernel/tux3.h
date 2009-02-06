@@ -870,10 +870,11 @@ int vecio(int rw, struct block_device *dev, sector_t sector,
 	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec);
 int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec);
 int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned len);
-int unpack_sb(struct sb *sb, struct disksuper *super, struct root *iroot);
+int unpack_sb(struct sb *sb, struct disksuper *super);
 void pack_sb(struct sb *sb, struct disksuper *super);
 int tux_load_sb(struct sb *sb);
 int tux_save_sb(struct sb *sb);
+int tux_load_itable(struct sb *sb);
 
 /* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);

@@ -372,6 +372,8 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
+	if ((errno = -tux_load_itable(sb)))
+		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto nomem;
 	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))
