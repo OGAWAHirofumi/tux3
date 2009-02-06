@@ -16,16 +16,6 @@
 void change_begin(struct sb *sb) { }
 void change_end(struct sb *sb) { }
 
-static int fls(uint32_t v)
-{
-	uint32_t mask;
-	int bit = 0;
-	for (bit = 32, mask = 1 << 31; bit; mask >>= 1, bit--)
-		if ((v & mask))
-			break;
-	return bit;
-}
-
 static const char *dtree_names[] = {
 	[TUX_BITMAP_INO]	= "bitmap",
 	[TUX_VTABLE_INO]	= "vtable",
@@ -700,13 +690,11 @@ static void usage(void)
 int main(int argc, char *argv[])
 {
 	static struct option long_options[] = {
-		{ "blocksize", required_argument, 0, 'b' },
 		{ "verbose", no_argument, &verbose, 'v' },
 		{ "help", no_argument, 0, 'h' },
 		{ 0, 0, 0, 0 }
 	};
 	const char *volname = NULL;
-	unsigned blocksize = 0;
 	int ret = 0;
 
 	while (1) {
@@ -715,9 +703,6 @@ int main(int argc, char *argv[])
 		if (c == -1)
 			break;
 		switch (c) {
-		case 'b':
-			blocksize = strtoul(optarg, NULL, 0);
-			break;
 		case 'v':
 			break;
 		case 'h':
@@ -732,30 +717,17 @@ int main(int argc, char *argv[])
 	/* open volume, create superblock */
 	volname = argv[optind++];
 	fd_t fd = open(volname, O_RDWR, S_IRWXU);
-	u64 volsize = 0;
-	if (fdsize64(fd, &volsize))
-		error("fdsize64 failed for '%s' (%s)",
-		      volname, strerror(errno));
 
-	int blockbits = 12;
-	if (blocksize) {
-		blockbits = fls(blocksize) - 1;
-		if (1 << blockbits != blocksize)
-			error("blocksize must be a power of two");
-	}
-
-	struct dev *dev = &(struct dev){
-		.fd	= fd,
-		.bits	= blockbits
-	};
-	init_buffers(dev, 1 << 20, 1);
-
+	/* dev->bits is still unknown. Note, some structure can't use yet. */
+	struct dev *dev = &(struct dev){ .fd = fd };
 	struct sb *sb = rapid_sb(dev);
+	if ((errno = -load_sb(sb)))
+		goto eek;
+	dev->bits = sb->blockbits;
+	init_buffers(dev, 1 << 20, 1);
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
-		goto eek;
-	if ((errno = -load_sb(sb)))
 		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto eek;

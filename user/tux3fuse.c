@@ -51,7 +51,6 @@
 void change_begin(struct sb *sb) { }
 void change_end(struct sb *sb) { }
 
-static u64 volsize;
 static struct sb *sb;
 static struct dev *dev;
 
@@ -360,18 +359,18 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	if ((fd = open(volname, O_RDWR, S_IRWXU)) < 0)
 		error("volume %s not found", volname);
 
-	volsize = 0;
-	if (fdsize64(fd, &volsize))
-		error("fdsize64 failed for '%s' (%s) %i", volname, strerror(errno), fd);
 	dev = malloc(sizeof(*dev));
-	*dev = (struct dev){ .fd = fd, .bits = 12 };
-	init_buffers(dev, 1<<20, 1);
+	/* dev->bits is still unknown. Note, some structure can't use yet. */
+	*dev = (struct dev){ .fd = fd };
 	sb = malloc(sizeof(*sb));
 	*sb = (struct sb){ INIT_SB(*sb, dev), };
+	if ((errno = -load_sb(sb)))
+		goto eek;
+	dev->bits = sb->blockbits;
+	init_buffers(dev, 1 << 20, 1);
+
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
-		goto eek;
-	if ((errno = -load_sb(sb)))
 		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto nomem;

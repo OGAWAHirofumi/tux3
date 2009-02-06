@@ -31,6 +31,38 @@ static void usage(void)
 	exit(1);
 }
 
+static int mkfs(int fd, const char *volname, unsigned blocksize)
+{
+	u64 volsize = 0;
+	if (fdsize64(fd, &volsize))
+		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
+	int blockbits = 12;
+	if (blocksize) {
+		blockbits = fls(blocksize) - 1;
+		if (1 << blockbits != blocksize)
+			error("blocksize must be a power of two");
+	}
+	struct dev *dev = &(struct dev){ .fd = fd, .bits = blockbits };
+	init_buffers(dev, 1 << 20, 1);
+
+	struct sb *sb = rapid_sb(dev,
+		.max_inodes_per_block = 64,
+		.entries_per_node = 20,
+		.volblocks = volsize >> dev->bits,
+		.freeblocks = volsize >> dev->bits);
+	sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
+
+	sb->volmap = tux_new_volmap(sb);
+	if (!sb->volmap)
+		return -ENOMEM;
+
+	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
+	int err = make_tux3(sb);
+	if (!err)
+		show_tree_range(itable_btree(sb), 0, -1);
+	return err;
+}
+
 int main(int argc, char *argv[])
 {
 	char *seekarg = NULL;
@@ -67,40 +99,25 @@ int main(int argc, char *argv[])
 	const char *command = argv[optind++];
 	const char *volname = argv[optind++];
 	fd_t fd = open(volname, O_RDWR, S_IRWXU);
-	u64 volsize = 0;
-	if (fdsize64(fd, &volsize))
-		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
-
-	int blockbits = 12;
-	if (blocksize) {
-		blockbits = fls(blocksize) - 1;
-		if (1 << blockbits != blocksize)
-			error("blocksize must be a power of two");
-	}
-
-	struct dev *dev = &(struct dev){ fd, .bits = blockbits };
-	init_buffers(dev, 1 << 20, 1);
-
-	struct sb *sb = rapid_sb(dev,
-		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
-		.volblocks = volsize >> dev->bits,
-		.freeblocks = volsize >> dev->bits);
-	sb->volmap = tux_new_volmap(sb);
-	if (!sb->volmap)
-		goto eek;
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (optind != argc)
 			goto usage;
-		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
-		printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
-		if ((errno = -make_tux3(sb)))
+		if ((errno = -mkfs(fd, volname, blocksize)))
 			goto eek;
-		show_tree_range(itable_btree(sb), 0, -1);
 		return 0;
 	}
+
+	/* dev->bits is still unknown. Note, some structure can't use yet. */
+	struct dev *dev = &(struct dev){ .fd = fd };
+	struct sb *sb = rapid_sb(dev);
 	if ((errno = -load_sb(sb)))
+		goto eek;
+	dev->bits = sb->blockbits;
+	init_buffers(dev, 1 << 20, 1);
+
+	sb->volmap = tux_new_volmap(sb);
+	if (!sb->volmap)
 		goto eek;
 	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
 		goto eek;
