@@ -11,7 +11,7 @@
  */
 
 #include "inode.c"
-#include <popt.h>
+#include <getopt.h>
 
 void change_begin(struct sb *sb) { }
 void change_end(struct sb *sb) { }
@@ -691,40 +691,46 @@ static void merge_tmpfiles(struct graph_info *gi)
 	}
 }
 
-int main(int argc, const char *argv[])
+static void usage(void)
 {
-	poptContext popt;
-	char *seekarg = NULL;
-	unsigned blocksize = 0;
-	struct poptOption options[] = {
-		{ "seek", 's', POPT_ARG_STRING, &seekarg, 0,
-		  "seek offset", "<offset>" },
-		{ "blocksize", 'b', POPT_ARG_INT, &blocksize, 0,
-		  "filesystem blocksize", "<size>" },
-		{ "verbose", 'v', POPT_ARG_NONE, &verbose, 0,
-		  "verbose", NULL },
-		POPT_AUTOHELP
-		POPT_TABLEEND,
+	printf("tux3  [-h|--help] [-v|--verbose] [-b|--blocksize=<size>] <volume>\n");
+	exit(1);
+}
+
+int main(int argc, char *argv[])
+{
+	static struct option long_options[] = {
+		{ "blocksize", required_argument, 0, 'b' },
+		{ "verbose", no_argument, &verbose, 'v' },
+		{ "help", no_argument, 0, 'h' },
+		{ 0, 0, 0, 0 }
 	};
 	const char *volname = NULL;
+	unsigned blocksize = 0;
 	int ret = 0;
 
-	popt = poptGetContext(NULL, argc, argv, options, 0);
-	poptSetOtherOptionHelp(popt, "<volume>");
-	if (argc < 2)
-		goto usage;
+	while (1) {
+		int c, optindex = 0;
+		c = getopt_long(argc, argv, "b:vh", long_options, &optindex);
+		if (c == -1)
+			break;
+		switch (c) {
+		case 'b':
+			blocksize = strtoul(optarg, NULL, 0);
+			break;
+		case 'v':
+			break;
+		case 'h':
+		default:
+			goto usage;
+		}
+	}
 
-	int c;
-	while ((c = poptGetNextOpt(popt)) >= 0)
-		;
-	if (c < -1)
-		goto badopt;
+	if (argc - optind < 1)
+		goto usage;
 
 	/* open volume, create superblock */
-	volname = poptGetArg(popt);
-	if (!volname)
-		goto usage;
-
+	volname = argv[optind++];
 	fd_t fd = open(volname, O_RDWR, S_IRWXU);
 	u64 volsize = 0;
 	if (fdsize64(fd, &volsize))
@@ -796,12 +802,6 @@ int main(int argc, const char *argv[])
 	free_inode(sb->volmap);
 
 out:
-#if 0 /* older version of popt doesn't return malloc memory */
-	/* damn, popt doesn't free str returned by poptGetArg() */
-	if (volname)
-		free((char *)volname);
-#endif
-	poptFreeContext(popt);
 	return ret;
 
 eek:
@@ -809,12 +809,7 @@ eek:
 	ret = 1;
 	goto out;
 usage:
-	poptPrintUsage(popt, stderr, 0);
-	ret = 1;
-	goto out;
-badopt:
-	fprintf(stderr, "%s: %s\n", poptBadOption(popt, POPT_BADOPTION_NOALIAS),
-		poptStrerror(c));
+	usage();
 	ret = 1;
 	goto out;
 }

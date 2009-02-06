@@ -20,7 +20,8 @@ VG=valgrind --error-exitcode=200 --leak-check=full
 TESTDIR = .
 
 testbin = buffer balloc dleaf ileaf iattr xattr btree dir filemap inode commit
-binaries = $(testbin) tux3 tux3fuse tux3graph
+tux3bin = tux3 tux3graph
+binaries = $(testbin) $(tux3bin) tux3fuse
 
 ifeq ($(shell pkg-config fuse && echo found), found)
 	binaries += tux3fuse
@@ -83,6 +84,8 @@ xattr: vfs.o xattr.o
 inode: vfs.o inode.o
 filemap: vfs.o filemap.o
 commit: vfs.o commit.o
+tux3: vfs.o tux3.o
+tux3graph: vfs.o tux3graph.o
 
 .c.o:
 	$(CC) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
@@ -90,7 +93,7 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) -Dbuild_$(<:.c=) $(CHECKFLAGS) -c $<
 endif
 
-$(testbin):
+$(testbin) $(tux3bin):
 	$(CC) $(CFLAGS) $^ -o $@
 
 test_buffer: buffer
@@ -126,17 +129,11 @@ test_inode: inode
 test_commit: commit
 	$(VG) ./commit foodev
 
-tux3: vfs.o tux3.o
-	$(CC) $(CFLAGS) vfs.o tux3.o -lpopt -otux3
-
 tux3fuse: vfs.o tux3fuse.o
 	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
-
-tux3graph: vfs.o tux3graph.o
-	$(CC) $(CFLAGS) vfs.o tux3graph.o -lpopt -o $@
 
 makefs mkfs: tux3
 	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M

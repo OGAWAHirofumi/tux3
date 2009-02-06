@@ -9,7 +9,7 @@
  */
 
 #include "inode.c"
-#include <popt.h>
+#include <getopt.h>
 
 void change_begin(struct sb *sb) { }
 void change_end(struct sb *sb) { }
@@ -24,37 +24,48 @@ int fls(uint32_t v)
 	return bit;
 }
 
-void usage(poptContext optCon, int exitcode, char *error, char *addl) {
-	poptPrintUsage(optCon, stderr, 0);
-	if (error) fprintf(stderr, "%s: %s\n", error, addl);
-	exit(exitcode);
+static void usage(void)
+{
+	printf("tux3 [-s|--seek=<offset>] [-b|--blocksize=<size>] [-h|--help]\n"
+	       "     <command> <volume> [<file>]\n");
+	exit(1);
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *argv[])
 {
-	char opts[1001]; // overflow???
-	poptContext popt;
 	char *seekarg = NULL;
 	unsigned blocksize = 0;
-	struct poptOption options[] = {
-		{ "seek", 's', POPT_ARG_STRING, &seekarg, 0, "seek offset", "<offset>" },
-		{ "blocksize", 'b', POPT_ARG_INT, &blocksize, 0, "filesystem blocksize", "<size>" },
-		POPT_AUTOHELP
-		{ NULL, 0, 0, NULL, 0 }};
+	static struct option long_options[] = {
+		{ "seek", required_argument, 0, 's' },
+		{ "blocksize", required_argument, 0, 'b' },
+		{ "help", no_argument, 0, 'h' },
+		{ 0, 0, 0, 0 }
+	};
 
-	popt = poptGetContext(NULL, argc, argv, options, 0);
-	poptSetOtherOptionHelp(popt, "<command> <volume> [<file>]");
-	if (argc < 3)
+	while (1) {
+		int c, optindex = 0;
+		c = getopt_long(argc, argv, "s:b:h", long_options, &optindex);
+		if (c == -1)
+			break;
+		switch (c) {
+		case 's':
+			seekarg = optarg;
+			break;
+		case 'b':
+			blocksize = strtoul(optarg, NULL, 0);
+			break;
+		case 'h':
+		default:
+			goto usage;
+		}
+	}
+
+	if (argc - optind < 2)
 		goto usage;
-	int nopts = 0, c;
-	while ((c = poptGetNextOpt(popt)) >= 0)
-		if (memchr("", c, 0))
-			opts[nopts++] = c;
-	if (c < -1)
-		goto badopt;
+
 	/* open volume, create superblock */
-	const char *command = poptGetArg(popt);
-	const char *volname = poptGetArg(popt);
+	const char *command = argv[optind++];
+	const char *volname = argv[optind++];
 	fd_t fd = open(volname, O_RDWR, S_IRWXU);
 	u64 volsize = 0;
 	if (fdsize64(fd, &volsize))
@@ -80,7 +91,7 @@ int main(int argc, const char *argv[])
 		goto eek;
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
-		if (poptPeekArg(popt))
+		if (optind != argc)
 			goto usage;
 		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
 		printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
@@ -105,9 +116,10 @@ int main(int argc, const char *argv[])
 		goto eek;
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
-	char *filename = (void *)poptGetArg(popt);
-	if (!filename)
+
+	if (argc - optind < 1)
 		goto usage;
+	char *filename = argv[optind++];
 
 	if (!strcmp(command, "write")) {
 		printf("---- open file ----\n");
@@ -124,13 +136,12 @@ int main(int argc, const char *argv[])
 		tux_dump_entries(blockget(sb->rootdir->map, 0));
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
-		//tuxseek(file, (1LL << 60) - 12);
 
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			goto eek;
 		if (seekarg) {
-			u64 seek = strtoull(seekarg, NULL, 0);
+			loff_t seek = strtoull(seekarg, NULL, 0);
 			printf("seek to %Li\n", (L)seek);
 			tuxseek(file, seek);
 		}
@@ -164,9 +175,8 @@ int main(int argc, const char *argv[])
 		}
 		struct file *file = &(struct file){ .f_inode = inode };
 		char buf[100] = { };
-		//tuxseek(file, (1LL << 60) - 12);
 		if (seekarg) {
-			u64 seek = strtoull(seekarg, NULL, 0);
+			loff_t seek = strtoull(seekarg, NULL, 0);
 			printf("seek to %Li\n", (L)seek);
 			tuxseek(file, seek);
 		}
@@ -185,9 +195,9 @@ int main(int argc, const char *argv[])
 			errno = ENOENT;
 			goto eek;
 		}
-		char *name = (void *)poptGetArg(popt);
-		if (!name)
+		if (argc - optind < 1)
 			goto usage;
+		char *name = argv[optind++];
 		if (!strcmp(command, "get")) {
 			printf("read xattr %.*s\n", (int)strlen(name), name);
 			int size = get_xattr(inode, name, strlen(name), NULL, 0);
@@ -249,7 +259,7 @@ int main(int argc, const char *argv[])
 			errno = ENOENT;
 			goto eek;
 		}
-		u64 seek = 0;
+		loff_t seek = 0;
 		if (seekarg)
 			seek = strtoull(seekarg, NULL, 0);
 		printf("---- new size %Lu ----\n", (L)seek);
@@ -263,16 +273,12 @@ int main(int argc, const char *argv[])
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->volmap->map);
-	poptFreeContext(popt);
 	exit(0);
 	return 0;
 eek:
 	fprintf(stderr, "%s!\n", strerror(errno));
 	exit(1);
 usage:
-	poptPrintUsage(popt, stderr, 0);
-	exit(1);
-badopt:
-	fprintf(stderr, "%s: %s\n", poptBadOption(popt, POPT_BADOPTION_NOALIAS), poptStrerror(c));
+	usage();
 	exit(1);
 }
