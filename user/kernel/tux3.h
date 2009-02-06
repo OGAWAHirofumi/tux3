@@ -221,7 +221,7 @@ static inline void flink_last_del(struct flink_head *head)
 #define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
 #define MAX_EXTENT (1 << 6)
 #define SB_LOC (1 << 12)
-#define SB_LEN (1 << 12)
+#define SB_LEN (1 << 12)	/* this is maximum blocksize */
 
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
@@ -299,8 +299,10 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 /* Tux3-specific sb is a handle for the entire volume state */
 
 struct sb {
-	struct disksuper super;
-	char pad[SB_LEN - sizeof(struct disksuper)];
+	union {
+		struct disksuper super;
+		char thisbig[SB_LEN];
+	};
 	struct btree itable;	/* Inode table btree */
 	struct inode *volmap;	/* Volume metadata cache (like blockdev).
 				 * Note, ->btree is the btree for itable. */

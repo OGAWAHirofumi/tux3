@@ -49,10 +49,10 @@ int main(int argc, char *argv[])
 		free(bitmap);
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
-	struct sb *sb = rapid_sb(dev, .super = { .volblocks = to_be_u64(150) });
+	struct sb *sb = rapid_sb(dev, .volblocks = 150);
 	struct inode *bitmap = rapid_open_inode(sb, NULL, 0);
-	sb->freeblocks = from_be_u64(sb->super.volblocks);
-	sb->nextalloc = from_be_u64(sb->super.volblocks); // this should wrap around to zero
+	sb->freeblocks = sb->volblocks;
+	sb->nextalloc = sb->volblocks; // this should wrap around to zero
 	sb->bitmap = bitmap;
 
 	init_buffers(dev, 1 << 20, 0);
@@ -83,10 +83,10 @@ int main(int argc, char *argv[])
 	hexdump(bufdata(blockget(bitmap->map, 1)), dumpsize);
 	hexdump(bufdata(blockget(bitmap->map, 2)), dumpsize);
 
-	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
-	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, from_be_u64(sb->super.volblocks)), (L)sb->freeblocks);
+	bitmap_dump(bitmap, 0, sb->volblocks);
+	printf("%Li used, %Li free\n", (L)count_range(bitmap, 0, sb->volblocks), (L)sb->freeblocks);
 	bfree(sb, 0x7e, 1);
 	bfree(sb, 0x80, 1);
-	bitmap_dump(bitmap, 0, from_be_u64(sb->super.volblocks));
+	bitmap_dump(bitmap, 0, sb->volblocks);
 	exit(0);
 }

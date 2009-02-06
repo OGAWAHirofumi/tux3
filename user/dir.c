@@ -80,7 +80,7 @@ int filldir(void *entry, char *name, unsigned namelen, loff_t offset, unsigned i
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	struct sb *sb = rapid_sb(dev, .super = { .volblocks = to_be_u64(150) });
+	struct sb *sb = rapid_sb(dev, .volblocks = 150);
 	struct inode *dir = rapid_open_inode(sb, NULL, S_IFDIR);
 	init_buffers(dev, 1 << 20, 0);
 	struct buffer_head *buffer;
