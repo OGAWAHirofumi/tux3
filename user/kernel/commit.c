@@ -9,8 +9,14 @@
 #define trace trace_on
 #endif
 
-static void unpack_sb(struct sb *sb, struct disksuper *super)
+int load_sb(struct sb *sb)
 {
+	struct disksuper *super = &sb->super;
+	int err = devio(READ, sb_dev(sb), SB_LOC, super, SB_LEN);
+	if (err)
+		return err;
+	if (memcmp(sb->super.magic, (char[])SB_MAGIC, sizeof(sb->super.magic)))
+		return -EINVAL;
 	sb->blockbits = from_be_u16(super->blockbits);
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
@@ -26,28 +32,6 @@ static void unpack_sb(struct sb *sb, struct disksuper *super)
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
 	sb->dictsize = from_be_u64(super->dictsize);
-}
-
-static void pack_sb(struct sb *sb, struct disksuper *super)
-{
-	super->blockbits = to_be_u16(sb->blockbits);
-	super->volblocks = to_be_u64(sb->volblocks);
-	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
-	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
-	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
-	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
-	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
-	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
-}
-
-int load_sb(struct sb *sb)
-{
-	int err = devio(READ, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
-	if (err)
-		return err;
-	if (memcmp(sb->super.magic, (char[])SB_MAGIC, sizeof(sb->super.magic)))
-		return -EINVAL;
-	unpack_sb(sb, &sb->super);
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
 	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
@@ -58,8 +42,16 @@ int load_sb(struct sb *sb)
 
 int save_sb(struct sb *sb)
 {
-	pack_sb(sb, &sb->super);
-	return devio(WRITE, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
+	struct disksuper *super = &sb->super;
+	super->blockbits = to_be_u16(sb->blockbits);
+	super->volblocks = to_be_u64(sb->volblocks);
+	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
+	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
+	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
+	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
+	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
+	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
+	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
 }
 
 int load_itable(struct sb *sb)
