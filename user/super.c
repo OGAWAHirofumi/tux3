@@ -21,25 +21,6 @@ int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
 
 #include "kernel/commit.c"
 
-int load_sb(struct sb *sb)
-{
-	struct disksuper *super = &sb->super;
-	int err = diskread(sb->dev->fd, super, sizeof(*super), SB_LOC);
-	if (err)
-		return err;
-	err = unpack_sb(sb, super);
-	if (err)
-		return err;
-	return 0;
-}
-
-int save_sb(struct sb *sb)
-{
-	struct disksuper *super = &sb->super;
-	pack_sb(sb, super);
-	return diskwrite(sb->dev->fd, super, sizeof(*super), SB_LOC);
-}
-
 int sync_super(struct sb *sb)
 {
 	int err;
@@ -56,7 +37,7 @@ int sync_super(struct sb *sb)
 	if ((err = flush_buffers(sb->volmap->map)))
 		return err;
 	printf("sync super\n");
-	if ((err = save_sb(sb)))
+	if ((err = tux_save_sb(sb)))
 		return err;
 	return 0;
 }

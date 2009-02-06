@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	struct dev *dev = &(struct dev){ .fd = fd };
 	struct sb *sb = rapid_sb(dev);
-	if ((errno = -load_sb(sb)))
+	if ((errno = -tux_load_sb(sb)))
 		goto eek;
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 1);

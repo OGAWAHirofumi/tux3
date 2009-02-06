@@ -9,10 +9,8 @@
 #define trace trace_on
 #endif
 
-int unpack_sb(struct sb *sb, struct disksuper *super)
+static void unpack_sb(struct sb *sb, struct disksuper *super)
 {
-	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic)))
-		return -EINVAL;
 	sb->blockbits = from_be_u16(super->blockbits);
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
@@ -28,11 +26,9 @@ int unpack_sb(struct sb *sb, struct disksuper *super)
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
 	sb->dictsize = from_be_u64(super->dictsize);
-
-	return 0;
 }
 
-void pack_sb(struct sb *sb, struct disksuper *super)
+static void pack_sb(struct sb *sb, struct disksuper *super)
 {
 	super->blockbits = to_be_u16(sb->blockbits);
 	super->volblocks = to_be_u64(sb->volblocks);
@@ -49,13 +45,13 @@ int tux_load_sb(struct sb *sb)
 	int err = devio(READ, sb_dev(sb), SB_LOC, &sb->super, SB_LEN);
 	if (err)
 		return err;
-	err = unpack_sb(sb, &sb->super);
-	if (err)
-		return err;
+	if (memcmp(sb->super.magic, (char[])SB_MAGIC, sizeof(sb->super.magic)))
+		return -EINVAL;
+	unpack_sb(sb, &sb->super);
 	trace("blocksize %u, blockbits %u, blockmask %08x",
-	       sb->blocksize, sb->blockbits, sb->blockmask);
+	      sb->blocksize, sb->blockbits, sb->blockmask);
 	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
-	       sb->volblocks, sb->freeblocks, sb->nextalloc);
+	      (L)sb->volblocks, (L)sb->freeblocks, (L)sb->nextalloc);
 	trace("freeatom %u, atomgen %u", sb->freeatom, sb->atomgen);
 	return 0;
 }
