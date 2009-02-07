@@ -323,7 +323,7 @@ struct sb {
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 	loff_t dictsize;	/* Atom dictionary size */
 	struct inode *logmap;	/* Log block cache */
-	block_t prevlog;	/* Previous log block physical address */
+	block_t logchain;	/* Previous log block physical address */
 	unsigned logbase;	/* Index of oldest log block in log map */
 	unsigned logthis;	/* Index of first log block in delta */
 	unsigned lognext;	/* Index of next log block in log map */
@@ -344,7 +344,7 @@ struct sb {
 
 /* logging  */
 
-struct logblock { be_u16 magic, bytes; be_u64 prevlog; unsigned char data[]; };
+struct logblock { be_u16 magic, bytes; be_u64 logchain; unsigned char data[]; };
 enum { LOG_ALLOC, LOG_FREE, LOG_UPDATE, LOG_DROOT, LOG_IROOT, LOG_REDIRECT };
 struct commit_entry { be_u64 previous; };
 

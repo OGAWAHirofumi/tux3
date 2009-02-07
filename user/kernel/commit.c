@@ -51,6 +51,7 @@ int save_sb(struct sb *sb)
 	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
 	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
 	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
+	super->logchain = to_be_u64(sb->logchain);
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
 }
 

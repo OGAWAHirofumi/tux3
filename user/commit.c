@@ -169,7 +169,7 @@ static int stage_delta(struct sb *sb)
 			return -ENOMEM;
 		}
 		struct logblock *log = bufdata(buffer);
-		log->prevlog = to_be_u64(sb->prevlog);
+		log->logchain = to_be_u64(sb->logchain);
 		if ((err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, block << sb->blockbits))) {
 			brelse(buffer);
 			bfree(sb, block, 1);
@@ -177,7 +177,7 @@ static int stage_delta(struct sb *sb)
 		}
 		defer_free(&sb->deflush, block, 1);
 		brelse(buffer);
-		sb->prevlog = block;
+		sb->logchain = block;
 	}
 	sb->logthis = sb->lognext;
 	return 0;
@@ -185,7 +185,9 @@ static int stage_delta(struct sb *sb)
 
 static int commit_delta(struct sb *sb)
 {
-	// write commit block pointer to superblock
+	int err = save_sb(sb);
+	if (err)
+		return err;
 	return unstash(sb, &sb->defree, retire_bfree);
 }
 
