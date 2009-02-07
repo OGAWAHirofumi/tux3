@@ -22,21 +22,21 @@ int vecio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct
 	return 0;
 }
 
-struct biosync { struct completion completion; int err; };
+struct biosync { struct completion done; int err; };
 
 static void biosync_endio(struct bio *bio, int err)
 {
 	struct biosync *sync = bio->bi_private;
 	bio_put(bio);
 	sync->err = err;
-	complete(&sync->completion);
+	complete(&sync->done);
 }
 
 int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec)
 {
-	struct biosync sync = { .completion = COMPLETION_INITIALIZER_ONSTACK(sync.completion) };
+	struct biosync sync = { .done = COMPLETION_INITIALIZER_ONSTACK(sync.done) };
 	if (!(sync.err = vecio(rw, dev, offset, vecs, vec, biosync_endio, &sync)))
-		wait_for_completion(&sync.completion);
+		wait_for_completion(&sync.done);
 	return sync.err;
 }
 
