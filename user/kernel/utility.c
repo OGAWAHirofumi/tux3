@@ -3,8 +3,8 @@
 #include <linux/kernel.h>
 #include <linux/bio.h>
 
-int vecio(int rw, struct block_device *dev, loff_t offset,
-	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec)
+int vecio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec,
+	bio_end_io_t endio, void *info)
 {
 	BUG_ON(vecs > bio_get_nr_vecs(dev));
 	struct bio *bio = bio_alloc(GFP_NOIO, vecs);
@@ -13,7 +13,7 @@ int vecio(int rw, struct block_device *dev, loff_t offset,
 	bio->bi_bdev = dev;
 	bio->bi_sector = offset >> 9;
 	bio->bi_end_io = endio;
-	bio->bi_private = data;
+	bio->bi_private = info;
 	bio->bi_vcnt = vecs;
 	memcpy(bio->bi_io_vec, vec, sizeof(*vec) * vecs);
 	while (vecs--)
@@ -35,7 +35,7 @@ static void biosync_endio(struct bio *bio, int err)
 int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec)
 {
 	struct biosync sync = { .completion = COMPLETION_INITIALIZER_ONSTACK(sync.completion) };
-	if (!(sync.err = vecio(rw, dev, offset, biosync_endio, &sync, vecs, vec)))
+	if (!(sync.err = vecio(rw, dev, offset, vecs, vec, biosync_endio, &sync)))
 		wait_for_completion(&sync.completion);
 	return sync.err;
 }
