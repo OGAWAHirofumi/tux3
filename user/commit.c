@@ -15,21 +15,37 @@
 #undef trace
 #define trace trace_on
 
-void replay(struct sb *sb)
+int blockio(int rw, struct buffer_head *buffer, block_t block)
 {
-	//char *why = "something broke";
-	// To do:
-	// load commit blocks into map1
-	// load log blocks into map2
-	// scan for all fullfills
-	// walk through block:
-	//   if promise bread parent, apply
-	//   if alloc update bitmap
-	unsigned logblocks = sb->lognext, code;
-	for (sb->lognext = 0; sb->lognext < logblocks;) {
+	struct sb *sb = tux_sb(buffer->map->inode->i_sb);
+	return devio(rw, sb_dev(sb), block << sb->blockbits, buffer->data, sb->blocksize);
+}
+
+int replay(struct sb *sb)
+{
+	block_t logchain = sb->logchain;
+	unsigned logcount = from_be_u32(sb->super.logcount);
+	trace("load %u logblocks", logcount);
+	for (int i = logcount; i-- > 0;) {
+		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
+		if (!buffer)
+			return -ENOMEM;
+		int err = blockio(0, buffer, logchain);
+		if (err) {
+			brelse(buffer);
+			return err;
+		}
+		struct logblock *log = bufdata(buffer);
+		trace("log magic %x", from_be_u16(log->magic));
+		logchain = from_be_u64(log->logchain);
+		brelse(buffer);
+	}
+
+	for (sb->lognext = 0; sb->lognext < logcount;) {
 		log_next(sb);
 		struct logblock *log = bufdata(sb->logbuf);
 		unsigned char *data = sb->logpos;
+		unsigned code;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
 			case LOG_ALLOC:
@@ -56,6 +72,7 @@ void replay(struct sb *sb)
 			}
 		}
 	}
+	return 0;
 }
 
 /* Delta commit and log flush */
@@ -157,7 +174,8 @@ static int stage_delta(struct sb *sb)
 
 	/* allocate and write log blocks */
 
-	log_finish(sb);
+	if (sb->logbuf)
+		log_finish(sb);
 	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
 		block_t block;
 		int err = balloc(sb, 1, &block);
@@ -169,8 +187,9 @@ static int stage_delta(struct sb *sb)
 			return -ENOMEM;
 		}
 		struct logblock *log = bufdata(buffer);
+		log->magic = to_be_u16(0x10ad);
 		log->logchain = to_be_u64(sb->logchain);
-		if ((err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, block << sb->blockbits))) {
+		if ((err = devio(WRITE, sb_dev(sb), block << sb->blockbits, buffer->data, sb->blocksize))) {
 			brelse(buffer);
 			bfree(sb, block, 1);
 			return err;
@@ -185,6 +204,8 @@ static int stage_delta(struct sb *sb)
 
 static int commit_delta(struct sb *sb)
 {
+	trace("commit %i logblocks", sb->lognext - sb->logbase);
+	sb->super.logcount = to_be_u32(sb->lognext - sb->logbase);
 	int err = save_sb(sb);
 	if (err)
 		return err;
@@ -238,23 +259,8 @@ int main(int argc, char *argv[])
 	sb->bitmap->map->io = bitmap_io;
 	INIT_LIST_HEAD(&sb->commit);
 	INIT_LIST_HEAD(&sb->pinned);
-	if (0) {
-		for (int i = 0; i < 21; i++) {
-			change_begin(sb);
-			block_t block;
-			assert(!balloc(sb, 1, &block));
-			log_balloc(sb, block, 1);
-			change_end(sb);
-		}
-		log_finish(sb);
-		replay(sb);
-		show_buffers_state(BUFFER_DIRTY + 0);
-		show_buffers_state(BUFFER_DIRTY + 1);
-		show_buffers_state(BUFFER_DIRTY + 2);
-		show_buffers_state(BUFFER_DIRTY + 3);
-	}
 	if (1) {
-		log_begin(sb, 1);
+		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
 		for (int i = 0; i < 11; i++) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];
@@ -264,9 +270,13 @@ int main(int argc, char *argv[])
 			change_end(sb);
 		}
 		assert(!tuxsync(sb->rootdir));
-		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
 		assert(!save_sb(sb));
 		assert(!flush_buffers(sb->volmap->map));
+		//show_buffers(sb->volmap->map);
+		evict_buffers(sb->volmap->map);
+		//show_buffers(sb->volmap->map);
+		evict_buffers(mapping(sb->logmap));
+		replay(sb);
 	}
 	exit(0);
 }

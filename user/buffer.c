@@ -167,7 +167,7 @@ static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
 void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
-	assert(buffer_clean(buffer) || buffer_empty(buffer));
+	//assert(buffer_clean(buffer) || buffer_empty(buffer));
         if (!remove_buffer_hash(buffer))
 		warn("buffer not in hash");
 	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */

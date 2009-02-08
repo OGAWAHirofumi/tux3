@@ -241,7 +241,6 @@ struct disksuper
 	be_u64 unused;		/* The atime table is a file now, delete on next format rev */
 	be_u16 blockbits;	/* Shift to get volume block size */
 	be_u16 unused1;		/* Throw away on next format rev */
-	be_u32 unused2;		/* Throw away on next format rev */
 	be_u64 volblocks;	/* Volume size */
 	/* The rest should be moved to a "metablock" that is updated frequently */
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
@@ -250,6 +249,7 @@ struct disksuper
 	be_u32 atomgen;		/* Next atom number if there are no free atoms */
 	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
 	be_u64 logchain;	/* Most recent delta commit block pointer */
+	be_u32 logcount;	/* Count of log blocks in the current log chain */
 };
 
 struct root {
