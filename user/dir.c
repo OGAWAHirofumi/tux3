@@ -39,7 +39,6 @@
  */
 
 #include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
-#include "hexdump.c"
 
 #ifndef trace
 #define trace trace_off

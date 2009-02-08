@@ -9,7 +9,6 @@
  */
 
 #include "tux3.h"
-#include "hexdump.c"
 
 #ifndef trace
 #define trace trace_off

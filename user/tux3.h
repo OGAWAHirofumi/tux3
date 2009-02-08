@@ -19,6 +19,9 @@
 #include "trace.h"
 #include "lockdebug.h"
 
+void stacktrace(void);
+void hexdump(void *data, unsigned size);
+
 #ifdef __CHECKER__
 #define __force		__attribute__((force))
 #define __bitwise__	__attribute__((bitwise))
