@@ -21,8 +21,8 @@ int load_sb(struct sb *sb)
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
 	/* FIXME: those should be initialized based on blocksize. */
-	sb->entries_per_node = 20;
-	sb->max_inodes_per_block = 64;
+	sb->entries_per_node = (sb->blocksize - sizeof(struct bnode)) / sizeof(struct index_entry);
+	sb->max_inodes_per_block = sb->blocksize / 64;
 //	sb->version;
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));

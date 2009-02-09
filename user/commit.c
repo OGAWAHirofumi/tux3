@@ -36,12 +36,17 @@ int replay(struct sb *sb)
 			return err;
 		}
 		struct logblock *log = bufdata(buffer);
-		trace("log magic %x", from_be_u16(log->magic));
+		if (from_be_u16(log->magic) != 0x10ad) {
+			warn("bad log magic %x", from_be_u16(log->magic));
+			brelse(buffer);
+			return -EINVAL;
+		}
 		logchain = from_be_u64(log->logchain);
 		brelse(buffer);
 	}
 
 	for (sb->lognext = 0; sb->lognext < logcount;) {
+		trace("log block %i", sb->lognext);
 		log_next(sb);
 		struct logblock *log = bufdata(sb->logbuf);
 		unsigned char *data = log->data;
@@ -175,9 +180,10 @@ static int stage_delta(struct sb *sb)
 
 	while (!list_empty(&sb->commit)) {
 		struct buffer_head *buffer = container_of(sb->commit.next, struct buffer_head, link);
+		trace(">>> flush buffer %Lx:%Lx", tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
 		// mapping, index set but not hashed in mapping
 		buffer->map->io(buffer, 1);
-		brelse(buffer);
+		evict_buffer(buffer);
 	}
 
 	sb->delta++;
@@ -257,12 +263,11 @@ int main(int argc, char *argv[])
 	assert(fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU));
 	u64 volsize = 1 << 24;
 	assert(!ftruncate(fd, volsize));
-	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
+	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = rapid_sb(dev,
-		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
-		.volblocks = volsize >> dev->bits);
+	struct sb *sb = rapid_sb(dev, .volblocks = volsize >> dev->bits);
+	sb->max_inodes_per_block = sb->blocksize / 64;
+	sb->entries_per_node = (sb->blocksize - sizeof(struct bnode)) / sizeof(struct index_entry);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	assert(!make_tux3(sb));
@@ -271,7 +276,7 @@ int main(int argc, char *argv[])
 	INIT_LIST_HEAD(&sb->pinned);
 	if (1) {
 		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
-		for (int i = 0; i < 11; i++) {
+		for (int i = 0; i < 29; i++) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];
 			snprintf(name, sizeof(name), "file%i", i);
@@ -281,7 +286,6 @@ int main(int argc, char *argv[])
 		}
 		assert(!save_sb(sb));
 		//assert(!flush_buffers(sb->volmap->map));
-		//show_buffers(sb->volmap->map);
 		evict_buffers(sb->volmap->map);
 		//show_buffers(sb->volmap->map);
 		evict_buffers(mapping(sb->logmap));

@@ -153,23 +153,12 @@ unsigned buffer_hash(block_t block)
 	return (((block >> 32) ^ (block_t)block) * 978317583) % BUFFER_BUCKETS;
 }
 
-static struct buffer_head *remove_buffer_hash(struct buffer_head *buffer)
-{
-//	assert(!hlist_unhashed(&buffer->hashlink));  /* buffer not in hash */
-#ifdef BUFFER_PARANOIA_DEBUG
-	hlist_del_init(&buffer->hashlink);
-#else
-	hlist_del(&buffer->hashlink);
-#endif
-	return buffer;
-}
-
 void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
-	//assert(buffer_clean(buffer) || buffer_empty(buffer));
-        if (!remove_buffer_hash(buffer))
-		warn("buffer not in hash");
+	assert(!buffer->count);
+        if (!hlist_unhashed(&buffer->hashlink))
+		hlist_del_init(&buffer->hashlink);
 	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
 #ifdef BUFFER_PARANOIA_DEBUG
 	list_del_init(&buffer->lru);
