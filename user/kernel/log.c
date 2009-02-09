@@ -70,6 +70,7 @@ void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
 
 void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key)
 {
+return;
 	unsigned char *data = log_begin(sb, 19);
 	*data++ = LOG_IROOT;
 	data = encode48(data, newroot);
@@ -79,6 +80,7 @@ void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key)
 
 void log_iroot(struct sb *sb, block_t newroot, block_t oldroot)
 {
+return;
 	unsigned char *data = log_begin(sb, 19);
 	*data++ = LOG_IROOT;
 	data = encode48(data, newroot);
@@ -87,6 +89,7 @@ void log_iroot(struct sb *sb, block_t newroot, block_t oldroot)
 
 void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 {
+return;
 	unsigned char *data = log_begin(sb, 19);
 	*data++ = LOG_REDIRECT;
 	data = encode48(data, newblock);

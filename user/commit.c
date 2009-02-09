@@ -44,7 +44,7 @@ int replay(struct sb *sb)
 	for (sb->lognext = 0; sb->lognext < logcount;) {
 		log_next(sb);
 		struct logblock *log = bufdata(sb->logbuf);
-		unsigned char *data = sb->logpos;
+		unsigned char *data = log->data;
 		unsigned code;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
@@ -55,7 +55,8 @@ int replay(struct sb *sb)
 				unsigned count = *data++;
 				data = decode48(data, &block);
 				trace("%s bits 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", (L)block, count);
-				update_bitmap(sb, block, count, code == LOG_ALLOC);
+				int err = update_bitmap(sb, block, count, code == LOG_ALLOC);
+				warn(">>> bitmap err = %i", err);
 				break;
 			}
 			case LOG_UPDATE:
@@ -67,10 +68,17 @@ int replay(struct sb *sb)
 				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", (L)child, (L)parent, (L)key);
 				break;
 			}
+			case LOG_DROOT:
+			case LOG_IROOT:
+			case LOG_REDIRECT:
 			default:
-				break; //goto eek;
+				goto unknown;
 			}
 		}
+		continue;
+unknown:
+		warn("unrecognized log code 0x%x, 0x%x", code, LOG_UPDATE);
+		return -EINVAL;
 	}
 	return 0;
 }
@@ -160,6 +168,8 @@ static int stage_delta(struct sb *sb)
 		if (err)
 			return err;
 	}
+
+	assert(!tuxsync(sb->rootdir));
 
 	/* flush forked bitmap blocks, btree node and leaf blocks */
 
@@ -269,9 +279,8 @@ int main(int argc, char *argv[])
 			free_inode(tuxcreate(sb->rootdir, name, strlen(name), &iattr));
 			change_end(sb);
 		}
-		assert(!tuxsync(sb->rootdir));
 		assert(!save_sb(sb));
-		assert(!flush_buffers(sb->volmap->map));
+		//assert(!flush_buffers(sb->volmap->map));
 		//show_buffers(sb->volmap->map);
 		evict_buffers(sb->volmap->map);
 		//show_buffers(sb->volmap->map);
