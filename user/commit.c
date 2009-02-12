@@ -179,8 +179,8 @@ static int stage_delta(struct sb *sb)
 	/* flush forked bitmap blocks, btree node and leaf blocks */
 
 	while (!list_empty(&sb->commit)) {
-		struct buffer_head *buffer = container_of(sb->commit.next, struct buffer_head, link);
-		trace(">>> flush buffer %Lx:%Lx", tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
+		struct buffer_head *buffer = list_entry(sb->commit.next, struct buffer_head, link);
+		trace(">>> flush buffer %Lx:%Lx", (L)tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
 		// mapping, index set but not hashed in mapping
 		buffer->map->io(buffer, 1);
 		evict_buffer(buffer);
