@@ -102,6 +102,17 @@ static int need_flush(struct sb *sb)
 	return !(++crudehack % 3);
 }
 
+static void clean_buffer(struct buffer_head *buffer)
+{
+	/* Is this forked buffer? */
+	if (hlist_unhashed(&buffer->hashlink)) {
+		set_buffer_clean(buffer);
+		brelse(buffer);
+		evict_buffer(buffer);
+	} else
+		set_buffer_clean(buffer);
+}
+
 int write_bitmap(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer->map->inode->i_sb);
@@ -110,11 +121,10 @@ int write_bitmap(struct buffer_head *buffer)
 	if (err < 0)
 		return err;
 	assert(err == 1);
-	if (buffer->state - BUFFER_DIRTY == (sb->delta & (BUFFER_DIRTY_STATES - 1)))
-		return -EAGAIN;
+	assert(buffer->state - BUFFER_DIRTY == ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
 	trace("write bitmap %Lx", (L)buffer->index);
 	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
-		set_buffer_clean(buffer);
+		clean_buffer(buffer);
 	return 0;
 }
 
@@ -134,27 +144,31 @@ static int flush_log(struct sb *sb)
 	 * Flush a snapshot of the allocation map to disk.  Physical blocks for
 	 * the bitmaps and new or redirected bitmap btree nodes may be allocated
 	 * during the flush.  Any bitmap blocks that are (re)dirtied by these
-	 * allocations will be written out in the next flush cycle.  A redirtied
-	 * bitmap block is replaced in cache by a clone, which is then modified.
-	 * The original goes onto a list of forked blocks to be written out
-	 * separately.
+	 * allocations will be written out in the next flush cycle.
 	 */
 
 	/* further block allocations belong to the next cycle */
 	sb->flush++;
 
-	/* map dirty bitmap blocks to disk and write out */
+	/*
+	 * sb->flush was incremented, so block fork may occur from here,
+	 * so before block fork was occured, cleans map->dirty list.
+	 * [If we have two lists per map for dirty, we may not need this.]
+	 */
+	LIST_HEAD(io_buffers);
+	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
 
+	/* map dirty bitmap blocks to disk and write out */
 	struct buffer_head *buffer, *safe;
-	struct list_head *head = &mapping(sb->bitmap)->dirty;
-	list_for_each_entry_safe(buffer, safe, head, link) {
+	list_for_each_entry_safe(buffer, safe, &io_buffers, link) {
 		int err = write_bitmap(buffer);
-		if (err != -EAGAIN)
+		if (err)
 			return err;
 	}
+	assert(list_empty(&io_buffers));
 
 	/* add pinned metadata to delta list */
-	/* forked bitmap blocks from blockdirty, redirected btree nodes from cursor_redirect */
+	/* redirected btree nodes from cursor_redirect */
 	list_splice_tail_init(&sb->pinned, &sb->commit);
 
 	/* move deferred frees for rollup to delta deferred free list */
@@ -176,7 +190,7 @@ static int stage_delta(struct sb *sb)
 
 	assert(!tuxsync(sb->rootdir));
 
-	/* flush forked bitmap blocks, btree node and leaf blocks */
+	/* btree node and leaf blocks */
 
 	while (!list_empty(&sb->commit)) {
 		struct buffer_head *buffer = list_entry(sb->commit.next, struct buffer_head, link);
