@@ -225,6 +225,7 @@ have_buffer:
 	set_buffer_empty(buffer);
 	buffer->map = map;
 	buffer->count++;
+	buffer_count++;
 	return buffer;
 }
 
@@ -271,7 +272,6 @@ struct buffer_head *blockget(map_t *map, block_t block)
 	buffer->index = block;
 	hlist_add_head(&buffer->hashlink, bucket);
 	list_add_tail(&buffer->lru, &lru_buffers);
-	buffer_count++;
 	return buffer;
 }
 
