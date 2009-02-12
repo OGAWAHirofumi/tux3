@@ -153,13 +153,23 @@ unsigned buffer_hash(block_t block)
 	return (((block >> 32) ^ (block_t)block) * 978317583) % BUFFER_BUCKETS;
 }
 
+void insert_buffer_hash(struct buffer_head *buffer)
+{
+	struct hlist_head *bucket = buffer->map->hash + buffer_hash(buffer->index);
+	hlist_add_head(&buffer->hashlink, bucket);
+}
+
+void remove_buffer_hash(struct buffer_head *buffer)
+{
+	hlist_del_init(&buffer->hashlink);
+}
+
 void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
 	assert(buffer_clean(buffer) || buffer_empty(buffer));
 	assert(!buffer->count);
-        if (!hlist_unhashed(&buffer->hashlink))
-		hlist_del_init(&buffer->hashlink);
+	remove_buffer_hash(buffer);
 	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
 #ifdef BUFFER_PARANOIA_DEBUG
 	list_del_init(&buffer->lru);
@@ -270,7 +280,7 @@ struct buffer_head *blockget(map_t *map, block_t block)
 	if (IS_ERR(buffer = new_buffer(map)))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
-	hlist_add_head(&buffer->hashlink, bucket);
+	insert_buffer_hash(buffer);
 	list_add_tail(&buffer->lru, &lru_buffers);
 	return buffer;
 }
@@ -289,28 +299,36 @@ struct buffer_head *blockread(map_t *map, block_t block)
 	return buffer;
 }
 
-int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *forked)
+struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
 	unsigned oldstate = buffer->state;
 	assert(oldstate < BUFFER_STATES);
 	newdelta &= BUFFER_DIRTY_STATES - 1;
 	if (oldstate >= BUFFER_DIRTY) {
 		if (oldstate - BUFFER_DIRTY == newdelta)
-			return 0;
+			return buffer;
 		trace_on("---- fork buffer %p ----", buffer);
 		struct buffer_head *clone = new_buffer(buffer->map);
 		if (IS_ERR(clone))
-			return PTR_ERR(clone);
+			return clone;
+		/* Create the cloned buffer */
 		memcpy(bufdata(clone), bufdata(buffer), bufsize(buffer));
-		void *data = buffer->data;
-		buffer->data = clone->data;
-		clone->data = data;
 		clone->index = buffer->index;
-		set_buffer_state_list(clone, oldstate, forked);
-		brelse(clone);
+		/* Replace the buffer by cloned buffer. */
+		list_del_init(&buffer->lru);
+		remove_buffer_hash(buffer);
+		insert_buffer_hash(clone);
+		list_add_tail(&clone->lru, &lru_buffers);
+		/*
+		 * FIXME: The refcount of buffer is not dropped here,
+		 * the refcount may not be needed actually. Because
+		 * this buffer was removed from lru list. Well, so,
+		 * the backend has to free this buffer (brelse(buffer))
+		 */
+		buffer = clone;
 	}
 	set_buffer_state_list(buffer, BUFFER_DIRTY + newdelta, &buffer->map->dirty);
-	return 0;
+	return buffer;
 }
 
 /* !!! only used for testing */
