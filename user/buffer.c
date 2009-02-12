@@ -156,6 +156,7 @@ unsigned buffer_hash(block_t block)
 void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
+	assert(buffer_clean(buffer) || buffer_empty(buffer));
 	assert(!buffer->count);
         if (!hlist_unhashed(&buffer->hashlink))
 		hlist_del_init(&buffer->hashlink);
@@ -313,7 +314,7 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *
 }
 
 /* !!! only used for testing */
-void evict_buffers(map_t *map)
+void invalidate_buffers(map_t *map)
 {
 	unsigned i;
 	for (i = 0; i < BUFFER_BUCKETS; i++) {
@@ -321,8 +322,11 @@ void evict_buffers(map_t *map)
 		struct buffer_head *buffer;
 		struct hlist_node *node, *n;
 		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
-			if (!buffer->count)
+			if (!buffer->count) {
+				if (!buffer_clean(buffer))
+					set_buffer_clean(buffer);
 				evict_buffer(buffer);
+			}
 		}
 	}
 }

@@ -286,9 +286,9 @@ int main(int argc, char *argv[])
 		}
 		assert(!save_sb(sb));
 		//assert(!flush_buffers(sb->volmap->map));
-		evict_buffers(sb->volmap->map);
+		invalidate_buffers(sb->volmap->map);
 		//show_buffers(sb->volmap->map);
-		evict_buffers(mapping(sb->logmap));
+		invalidate_buffers(mapping(sb->logmap));
 		replay(sb);
 	}
 	exit(0);

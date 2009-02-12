@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
 		segs = d_map_region(inode, 10, 20, map, 10, 2);
 		segs = d_map_region(inode, 80, 10, map, 10, 2);
 		segs = d_map_region(inode, 0, 200, map, 10, 0);
-		evict_buffers(inode->map);
+		invalidate_buffers(inode->map);
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 	brelse_dirty(blockread(mapping(inode), 0x1));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	evict_buffers(mapping(inode));
+	invalidate_buffers(mapping(inode));
 	filemap_extent_io(blockget(mapping(inode), 1), 0);
 	exit(0);
 #endif
