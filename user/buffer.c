@@ -298,8 +298,8 @@ int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *
 			return 0;
 		trace_on("---- fork buffer %p ----", buffer);
 		struct buffer_head *clone = new_buffer(buffer->map);
-		if (IS_ERR(buffer))
-			return PTR_ERR(buffer);
+		if (IS_ERR(clone))
+			return PTR_ERR(clone);
 		memcpy(bufdata(clone), bufdata(buffer), bufsize(buffer));
 		void *data = buffer->data;
 		buffer->data = clone->data;
