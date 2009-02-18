@@ -303,11 +303,15 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 	unsigned merge_gcount = 0, rest_gcount = 0;
 	int can_merge_group = 0;
 
+	/* Source is empty, so we do nothing */
 	if (dleaf_groups(from) == 0)
 		return;
 
+	/* Destination is empty, so we just copy */
 	if (dleaf_groups(leaf) == 0) {
-		memcpy(leaf, from, btree->sb->blocksize);
+		unsigned used = from_be_u16(from->used);
+		memcpy(leaf, from, from_be_u16(from->free));
+		memcpy((void *)leaf + used, (void *)from + used, btree->sb->blocksize - used);
 		return;
 	}
 
