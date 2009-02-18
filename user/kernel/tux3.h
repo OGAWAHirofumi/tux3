@@ -762,6 +762,7 @@ static inline int buffer_clean(struct buffer_head *buffer)
 }
 
 /* btree.c */
+unsigned calc_entries_per_node(unsigned blocksize);
 struct buffer_head *cursor_leafbuf(struct cursor *cursor);
 void release_cursor(struct cursor *cursor);
 struct cursor *alloc_cursor(struct btree *btree, int);

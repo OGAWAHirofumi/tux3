@@ -29,6 +29,11 @@ struct bnode
  * (Not done yet.)
  */
 
+unsigned calc_entries_per_node(unsigned blocksize)
+{
+	return (blocksize - sizeof(struct bnode)) / sizeof(struct index_entry);
+}
+
 static inline unsigned bcount(struct bnode *node)
 {
 	return from_be_u32(node->count);
