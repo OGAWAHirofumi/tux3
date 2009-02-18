@@ -397,13 +397,15 @@ static struct buffer_head *get_buffer(struct address_space *mapping,
 	struct page *page;
 
 	page = find_get_page(mapping, index);
-	if (page && PageUptodate(page)) {
-		spin_lock(&mapping->private_lock);
-		if (page_has_buffers(page)) {
-			bh = find_get_buffer(page, offset);
-			assert(buffer_uptodate(bh));
+	if (page) {
+		if (PageUptodate(page)) {
+			spin_lock(&mapping->private_lock);
+			if (page_has_buffers(page)) {
+				bh = find_get_buffer(page, offset);
+				assert(buffer_uptodate(bh));
+			}
+			spin_unlock(&mapping->private_lock);
 		}
-		spin_unlock(&mapping->private_lock);
 		page_cache_release(page);
 	}
 	return bh;
