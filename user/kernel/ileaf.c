@@ -78,6 +78,9 @@ static unsigned ileaf_free(struct btree *btree, vleaf *leaf)
 
 static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 {
+	if (!tux3_trace)
+		return;
+
 	struct sb *sb = btree->sb;
 	struct ileaf *leaf = vleaf;
 	inum_t inum = ibase(leaf);

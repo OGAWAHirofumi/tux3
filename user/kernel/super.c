@@ -10,6 +10,10 @@
 
 #define trace trace_on
 
+/* FIXME: this should be mount option? */
+int tux3_trace;
+module_param(tux3_trace, bool, 0644);
+
 static struct kmem_cache *tux_inode_cachep;
 
 static void tux3_inode_init_once(void *mem)

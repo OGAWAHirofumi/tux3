@@ -1,6 +1,12 @@
 #ifndef TRACE_H
 #define TRACE_H
 
+#ifdef __KERNEL__
+extern int tux3_trace;
+#else
+#define tux3_trace	1
+#endif
+
 #define logline(caller, fmt, args...)	do {	\
 	printf("%s: ", caller);			\
 	printf(fmt , ##args);			\
@@ -11,7 +17,10 @@
 #define assert(expr) do { if (!(expr)) error("Failed assertion \"%s\"", #expr); } while (0)
 #define warn(fmt, args...) do { logline(__func__, fmt , ##args); } while (0)
 #define trace_off(...) do {} while (0)
-#define trace_on(fmt, args...) warn(fmt , ##args)
+#define trace_on(fmt, args...) do {		\
+	if (tux3_trace)				\
+		warn(fmt , ##args);		\
+} while (0)
 
 /*
  * FIXME: this may want to change behavior by mount option.

@@ -105,6 +105,9 @@ static inline tuxkey_t get_index(struct group *group, struct entry *entry)
 
 void dleaf_dump(struct btree *btree, vleaf *vleaf)
 {
+	if (!tux3_trace)
+		return;
+
 	unsigned blocksize = btree->sb->blocksize;
 	struct dleaf *leaf = vleaf;
 	struct group *gdict = (void *)leaf + blocksize, *gbase = --gdict - dleaf_groups(leaf);
