@@ -469,7 +469,7 @@ static inline struct btree *itable_btree(struct sb *sb)
 	return &sb->itable;
 }
 
-#define TUX_LINK_MAX 64		/* just for debug for now */
+#define TUX_LINK_MAX (1 << 15) /* arbitrary limit, increase it */
 
 #define TUX_NAME_LEN 255
 
