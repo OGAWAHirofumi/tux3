@@ -185,7 +185,7 @@ void change_end(struct sb *sb);
 	.i_mutex = __MUTEX_INITIALIZER,			\
 	.i_version = 1,					\
 	.i_nlink = 1,					\
-	.dirty = LIST_HEAD_INIT((inode).dirty)
+	.list = LIST_HEAD_INIT((inode).list)
 
 #define INIT_SB(sb, dev)					\
 	.dev = dev,						\
@@ -225,8 +225,8 @@ typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offse
 
 static inline void mark_inode_dirty(struct inode *inode)
 {
-	if (list_empty(&inode->dirty))
-		list_add_tail(&inode->dirty, &inode->i_sb->dirty_inodes);
+	if (list_empty(&inode->list))
+		list_add_tail(&inode->list, &inode->i_sb->dirty_inodes);
 }
 
 enum rw { READ, WRITE };
