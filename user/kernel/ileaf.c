@@ -54,7 +54,7 @@ static void ileaf_btree_init(struct btree *btree)
 
 static int ileaf_init(struct btree *btree, vleaf *leaf)
 {
-	printf("initialize inode leaf %p\n", leaf);
+	trace("initialize inode leaf %p", leaf);
 	*(struct ileaf *)leaf = (struct ileaf){ to_be_u16(0x90de) };
 	return 0;
 }
@@ -118,7 +118,7 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 	assert(inum < ibase(leaf) + btree->entries_per_leaf);
 	unsigned at = inum - ibase(leaf), size = 0;
 	void *attrs = NULL;
-	trace("lookup inode 0x%Lx, %Lx + %x\n", (L)inum, (L)ibase(leaf), at);
+	trace("lookup inode 0x%Lx, %Lx + %x", (L)inum, (L)ibase(leaf), at);
 	if (at < icount(leaf)) {
 		be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 		unsigned offset = atdict(dict, at);
@@ -172,7 +172,7 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vle
 	be_u16 *dict = from + btree->sb->blocksize, *destdict = into + btree->sb->blocksize;
 
 #ifdef SPLIT_AT_INUM
-	printf("split at inum 0x%Lx\n", (L)inum);
+	trace("split at inum 0x%Lx", (L)inum);
 	assert(inum >= ibase(leaf));
 	unsigned at = inum - ibase(leaf) < icount(leaf) ? inum - ibase(leaf) : icount(leaf);
 #else
@@ -188,8 +188,8 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vle
 #endif
 	/* should trim leading empty inodes on copy */
 	unsigned split = atdict(dict, at), free = from_be_u16(*(dict - icount(leaf)));
-	printf("split at %x of %x\n", at, icount(leaf));
-	printf("copy out %x bytes at %x\n", free - split, split);
+	trace("split at %x of %x", at, icount(leaf));
+	trace("copy out %x bytes at %x", free - split, split);
 	assert(free >= split);
 	memcpy(dest->table, leaf->table + split, free - split);
 	dest->count = to_be_u16(icount(leaf) - at);
@@ -217,7 +217,7 @@ void ileaf_merge(struct btree *btree, struct ileaf *leaf, struct ileaf *from)
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	be_u16 *fromdict = (void *)from + btree->sb->blocksize;
 	unsigned at = icount(leaf), free = atdict(dict, at), size = atdict(fromdict, icount(from));
-	printf("copy in %i bytes\n", size);
+	trace("copy in %i bytes", size);
 	memcpy(leaf->table + free, from->table, size);
 	leaf->count = to_be_u16(from_be_u16(leaf->count) + icount(from));
 	veccopy(dict - icount(leaf), fromdict - icount(from), icount(from));
@@ -247,7 +247,7 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsig
 	assert(icount(leaf));
 	unsigned itop = from_be_u16(*(dict - icount(leaf)));
 	void *attrs = leaf->table + offset;
-	trace("resize inum 0x%Lx at 0x%x from %x to %x\n", (L)inum, offset, size, newsize);
+	trace("resize inum 0x%Lx at 0x%x from %x to %x", (L)inum, offset, size, newsize);
 
 	assert(itop >= offset + size);
 	memmove(attrs + newsize, attrs + size, itop - offset - size);
@@ -260,7 +260,7 @@ inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 {
 	assert(goal >= ibase(leaf));
 	goal -= ibase(leaf);
-	//printf("find empty inode starting at %Lx, base %Lx\n", (L)goal, (L)ibase(leaf));
+	//trace("find empty inode starting at %Lx, base %Lx\n", (L)goal, (L)ibase(leaf));
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	unsigned i, offset = goal && goal < icount(leaf) ? from_be_u16(*(dict - goal)) : 0;
 	for (i = goal; i < icount(leaf); i++) {
@@ -280,7 +280,7 @@ int ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 	unsigned at = inum - ibase(leaf);
 	unsigned offset = atdict(dict, at);
 	unsigned size = from_be_u16(*(dict - at - 1)) - offset;
-	printf("delete inode %Lx from %p[%x/%x]\n", (L)inum, leaf, at, size);
+	trace("delete inode %Lx from %p[%x/%x]", (L)inum, leaf, at, size);
 	if (!size)
 		return -ENOENT;
 	unsigned free = from_be_u16(*(dict - icount(leaf))), tail = free - offset - size;

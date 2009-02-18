@@ -125,7 +125,8 @@ static int open_inode(struct inode *inode)
 	if (xsize && !(tux_inode(inode)->xcache = new_xcache(xsize)))
 		goto release;
 	decode_attrs(inode, attrs, size); // error???
-	dump_attrs(inode);
+	if (tux3_trace)
+		dump_attrs(inode);
 	if (tux_inode(inode)->xcache)
 		xcache_dump(inode);
 	check_present(inode);
