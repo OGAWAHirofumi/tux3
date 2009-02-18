@@ -303,7 +303,6 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 	unsigned merge_gcount = 0, rest_gcount = 0;
 	int can_merge_group = 0;
 
-	assert(dleaf_groups(leaf) >= 1);
 	if (dleaf_groups(from) == 0)
 		return;
 
