@@ -895,10 +895,10 @@ static inline void brelse_dirty(struct buffer_head *buffer)
 	brelse(buffer);
 }
 
-static inline int blockdirty(struct buffer_head *buffer, unsigned newdelta, struct list_head *forked)
+static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
 	mark_buffer_dirty(buffer);
-	return 0;
+	return buffer;
 }
 
 static inline void change_begin(struct sb *sb) { }
