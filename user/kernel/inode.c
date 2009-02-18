@@ -261,18 +261,20 @@ static int purge_inum(struct sb *sb, inum_t inum)
 	if (!cursor)
 		return -ENOMEM;
 
-	int err = -ENOENT;
+	int err;
+	down_write(&cursor->btree->lock);
 	if (!(err = probe(cursor, inum))) {
-		if ((err = cursor_redirect(cursor)))
-			return err;
-		/* FIXME: truncate the bnode and leaf if empty. */
-		struct buffer_head *ileafbuf = cursor_leafbuf(cursor);
-		struct ileaf *ileaf = to_ileaf(bufdata(ileafbuf));
-		err = ileaf_purge(itable, inum, ileaf);
-		if (!err)
+		if (!(err = cursor_redirect(cursor))) {
+			/* FIXME: truncate the bnode and leaf if empty. */
+			struct buffer_head *ileafbuf = cursor_leafbuf(cursor);
+			struct ileaf *ileaf = to_ileaf(bufdata(ileafbuf));
+			err = ileaf_purge(itable, inum, ileaf);
+			assert(!err);
 			mark_buffer_dirty(ileafbuf);
+		}
 		release_cursor(cursor);
 	}
+	up_write(&cursor->btree->lock);
 	free_cursor(cursor);
 	return err;
 }
