@@ -18,6 +18,9 @@ typedef loff_t block_t;
 #define die(code) BUG_ON(1)
 
 #include "trace.h"
+#ifndef trace
+#define trace trace_on
+#endif
 #endif
 
 typedef long long L; // widen for printf on 64 bit systems
