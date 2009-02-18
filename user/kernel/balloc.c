@@ -108,7 +108,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 	block_t tail = (count + 7) >> 3, total = 0;
 
 	for (unsigned block = start >> mapshift; block < blocks; block++) {
-		//printf("count block %x/%x\n", block, blocks);
+		//trace("count block %x/%x\n", block, blocks);
 		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
@@ -261,7 +261,7 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 		goto found;
 	return -ENOSPC;
 found:
-	printf("balloc extent -> [%Lx/%x]\n", (L)*block, blocks);
+	trace("balloc extent -> [%Lx/%x]\n", (L)*block, blocks);
 	return 0;
 }
 
@@ -273,7 +273,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), mapblock);
-	printf("free <- [%Lx]\n", (L)start);
+	trace("free <- [%Lx]\n", (L)start);
 	if (!buffer)
 		goto eek;
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);

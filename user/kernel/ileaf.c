@@ -118,7 +118,7 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 	assert(inum < ibase(leaf) + btree->entries_per_leaf);
 	unsigned at = inum - ibase(leaf), size = 0;
 	void *attrs = NULL;
-	printf("lookup inode 0x%Lx, %Lx + %x\n", (L)inum, (L)ibase(leaf), at);
+	trace("lookup inode 0x%Lx, %Lx + %x\n", (L)inum, (L)ibase(leaf), at);
 	if (at < icount(leaf)) {
 		be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 		unsigned offset = atdict(dict, at);
@@ -247,7 +247,7 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsig
 	assert(icount(leaf));
 	unsigned itop = from_be_u16(*(dict - icount(leaf)));
 	void *attrs = leaf->table + offset;
-	printf("resize inum 0x%Lx at 0x%x from %x to %x\n", (L)inum, offset, size, newsize);
+	trace("resize inum 0x%Lx at 0x%x from %x to %x\n", (L)inum, offset, size, newsize);
 
 	assert(itop >= offset + size);
 	memmove(attrs + newsize, attrs + size, itop - offset - size);
