@@ -307,6 +307,11 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 	if (dleaf_groups(from) == 0)
 		return;
 
+	if (dleaf_groups(leaf) == 0) {
+		memcpy(leaf, from, btree->sb->blocksize);
+		return;
+	}
+
 	/* Try to merge group, and prepare to adjust */
 	if (group_keyhi(gstop) == group_keyhi(group2) &&
 	    group_count(gstop) < MAX_GROUP_ENTRIES) {
