@@ -25,7 +25,7 @@ static void tux3_inode_init_once(void *mem)
 
 static int __init tux3_init_inodecache(void)
 {
-	tux_inode_cachep = kmem_cache_create("tux_inode_cache",
+	tux_inode_cachep = kmem_cache_create("tux3_inode_cache",
 		sizeof(tuxnode_t), 0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
 		tux3_inode_init_once);
 	if (tux_inode_cachep == NULL)
@@ -166,7 +166,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 			goto error;
 		}
 	}
-	printk("%s: s_blocksize %lu\n", __func__, sb->s_blocksize);
+	warn("s_blocksize %lu", sb->s_blocksize);
 
 	err = -ENOMEM;
 	sbi->volmap = tux_new_volmap(tux_sb(sb));
