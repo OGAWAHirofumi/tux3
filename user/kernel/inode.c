@@ -187,15 +187,14 @@ static int make_inode(struct inode *inode, inum_t goal)
 	down_write(&cursor->btree->lock);
 	if ((err = probe(cursor, goal)))
 		goto out;
-	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 
 	/* FIXME: inum allocation should check min and max */
 	trace("create inode 0x%Lx", (L)goal);
 	assert(!tux_inode(inode)->btree.root.depth);
 	assert(goal < next_key(cursor, depth));
 	while (1) {
-		trace_off("find empty inode in [%Lx] base %Lx", (L)bufindex(leafbuf), (L)ibase(leaf));
-		goal = find_empty_inode(itable, bufdata(leafbuf), goal);
+		trace_off("find empty inode in [%Lx] base %Lx", (L)bufindex(cursor_leafbuf(cursor)), (L)ibase(leaf));
+		goal = find_empty_inode(itable, bufdata(cursor_leafbuf(cursor)), goal);
 		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)next_key(cursor, depth));
 		if (goal < next_key(cursor, depth))
 			break;
@@ -266,11 +265,10 @@ static int purge_inum(struct sb *sb, inum_t inum)
 	if (!(err = probe(cursor, inum))) {
 		if (!(err = cursor_redirect(cursor))) {
 			/* FIXME: truncate the bnode and leaf if empty. */
-			struct buffer_head *ileafbuf = cursor_leafbuf(cursor);
-			struct ileaf *ileaf = to_ileaf(bufdata(ileafbuf));
+			struct ileaf *ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
 			err = ileaf_purge(itable, inum, ileaf);
 			assert(!err);
-			mark_buffer_dirty(ileafbuf);
+			mark_buffer_dirty(cursor_leafbuf(cursor));
 		}
 		release_cursor(cursor);
 	}
