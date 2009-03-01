@@ -32,7 +32,6 @@ int main(int argc, char *argv[])
 	};
 
 	char attrs[1000] = { };
-	printf("%i attributes starting from %i\n", MAX_ATTRS - MIN_ATTR, MIN_ATTR);
 	printf("need %i attr bytes\n", encode_asize(abits));
 	printf("decode %ti attr bytes\n", sizeof(attrs));
 	decode_attrs(inode, attrs, sizeof(attrs));

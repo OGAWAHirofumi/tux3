@@ -45,9 +45,8 @@ void free_inode(struct inode *inode)
 
 #include "kernel/inode.c"
 
-static void tux_setup_inode(struct inode *inode, dev_t rdev)
+static void tux_setup_inode(struct inode *inode)
 {
-	inode->i_rdev = rdev;
 	if (inode->inum != TUX_VOLMAP_INO)
 		inode->map->io = filemap_extent_io;
 }

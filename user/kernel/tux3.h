@@ -208,7 +208,7 @@ static inline void flink_last_del(struct flink_head *head)
 /* Tux3 disk format */
 
 #define SB_MAGIC_SIZE 8
-#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x08, 0x12, 0x12 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x09, 0x02, 0x18 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
@@ -216,6 +216,7 @@ static inline void flink_last_del(struct flink_head *head)
  * 2008-08-06: Beginning of time
  * 2008-09-06: Actual checking starts
  * 2008-12-12: Atom dictionary size in disksuper instead of atable->i_size
+ * 2008-02-28: Attributes renumbered, rdev added
  */
 
 #define MAX_INODES_BITS 48
@@ -241,9 +242,7 @@ struct disksuper
 	be_u64 birthdate;	/* Volume creation date */
 	be_u64 flags;		/* Need to assign some flags */
 	be_u64 iroot;		/* Root of the inode table btree */
-	be_u64 unused;		/* The atime table is a file now, delete on next format rev */
 	be_u16 blockbits;	/* Shift to get volume block size */
-	be_u16 unused1;		/* Throw away on next format rev */
 	be_u64 volblocks;	/* Volume size */
 	/* The rest should be moved to a "metablock" that is updated frequently */
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
@@ -646,26 +645,39 @@ int bfree(struct sb *sb, block_t start, unsigned blocks);
 int update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
 
 enum atkind {
-	MIN_ATTR = 6,
-	MODE_OWNER_ATTR = 6,
-	DATA_BTREE_ATTR = 7,
-	CTIME_SIZE_ATTR = 8,
-	LINK_COUNT_ATTR = 9,
-	MTIME_ATTR = 10,
-	IDATA_ATTR = 11,
-	XATTR_ATTR = 12,
+	/* Fixed size attrs */
+	RDEV_ATTR	= 0,
+	MODE_OWNER_ATTR	= 1,
+	DATA_BTREE_ATTR	= 2,
+	CTIME_SIZE_ATTR	= 3,
+	LINK_COUNT_ATTR	= 4,
+	MTIME_ATTR	= 5,
+	/* i_blocks	= 6 */
+	/* i_generation	= 7 */
+	/* i_version	= 8 */
+	/* i_flag	= 9 */
+	RESERVED1_ATTR	= 10,
+	VAR_ATTRS,
+	/* Variable size (extended) attrs */
+	IDATA_ATTR	= 11,
+	XATTR_ATTR	= 12,
+	/* acl		= 13 */
+	/* allocation hint = 14 */
+	RESERVED2_ATTR	= 15,
 	MAX_ATTRS,
-	VAR_ATTRS = IDATA_ATTR
 };
 
 enum atbit {
-	MODE_OWNER_BIT = 1 << MODE_OWNER_ATTR,
-	CTIME_SIZE_BIT = 1 << CTIME_SIZE_ATTR,
-	DATA_BTREE_BIT = 1 << DATA_BTREE_ATTR,
-	LINK_COUNT_BIT = 1 << LINK_COUNT_ATTR,
-	MTIME_BIT = 1 << MTIME_ATTR,
-	IDATA_BIT = 1 << IDATA_ATTR,
-	XATTR_BIT = 1 << XATTR_ATTR,
+	/* Fixed size attrs */
+	RDEV_BIT	= 1 << RDEV_ATTR,
+	MODE_OWNER_BIT	= 1 << MODE_OWNER_ATTR,
+	CTIME_SIZE_BIT	= 1 << CTIME_SIZE_ATTR,
+	DATA_BTREE_BIT	= 1 << DATA_BTREE_ATTR,
+	LINK_COUNT_BIT	= 1 << LINK_COUNT_ATTR,
+	MTIME_BIT	= 1 << MTIME_ATTR,
+	/* Variable size (extended) attrs */
+	IDATA_BIT	= 1 << IDATA_ATTR,
+	XATTR_BIT	= 1 << XATTR_ATTR,
 };
 
 extern unsigned atsize[MAX_ATTRS];

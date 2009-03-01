@@ -63,8 +63,8 @@ static int tux3_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t 
 	struct inode *inode;
 	int err;
 
-//	if (!huge_valid_dev(rdev))
-//		return -EINVAL;
+	if (!huge_valid_dev(rdev))
+		return -EINVAL;
 
 	change_begin(tux_sb(dir->i_sb));
 	inode = tux_create_inode(dir, mode, rdev);
