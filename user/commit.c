@@ -8,10 +8,11 @@
  * the right to distribute those changes under any license.
  */
 
+#include "tux3.h"
+#include "diskio.h"
+
 #define trace trace_off
-
 #include "inode.c"
-
 #undef trace
 #define trace trace_on
 
@@ -19,6 +20,11 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 {
 	struct sb *sb = tux_sb(buffer->map->inode->i_sb);
 	return devio(rw, sb_dev(sb), block << sb->blockbits, buffer->data, sb->blocksize);
+}
+
+int bitmap_io(struct buffer_head *buffer, int write)
+{
+	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
 }
 
 int replay(struct sb *sb)
@@ -86,187 +92,6 @@ unknown:
 		return -EINVAL;
 	}
 	return 0;
-}
-
-/* Delta commit and log flush */
-
-static int need_delta(struct sb *sb)
-{
-	static unsigned crudehack;
-	return !(++crudehack % 10);
-}
-
-static int need_flush(struct sb *sb)
-{
-	static unsigned crudehack;
-	return !(++crudehack % 3);
-}
-
-static void clean_buffer(struct buffer_head *buffer)
-{
-	/* Is this forked buffer? */
-	if (hlist_unhashed(&buffer->hashlink)) {
-		set_buffer_clean(buffer);
-		brelse(buffer);
-		evict_buffer(buffer);
-	} else
-		set_buffer_clean(buffer);
-}
-
-int write_bitmap(struct buffer_head *buffer)
-{
-	struct sb *sb = tux_sb(buffer->map->inode->i_sb);
-	struct seg seg;
-	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1, 2);
-	if (err < 0)
-		return err;
-	assert(err == 1);
-	assert(buffer->state - BUFFER_DIRTY == ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
-	trace("write bitmap %Lx", (L)buffer->index);
-	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
-		clean_buffer(buffer);
-	return 0;
-}
-
-int move_deferred(struct sb *sb, u64 val)
-{
-	return stash_value(&sb->defree, val);
-}
-
-int retire_bfree(struct sb *sb, u64 val)
-{
-	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
-}
-
-static int flush_log(struct sb *sb)
-{
-	/*
-	 * Flush a snapshot of the allocation map to disk.  Physical blocks for
-	 * the bitmaps and new or redirected bitmap btree nodes may be allocated
-	 * during the flush.  Any bitmap blocks that are (re)dirtied by these
-	 * allocations will be written out in the next flush cycle.
-	 */
-
-	/* further block allocations belong to the next cycle */
-	sb->flush++;
-
-	/*
-	 * sb->flush was incremented, so block fork may occur from here,
-	 * so before block fork was occured, cleans map->dirty list.
-	 * [If we have two lists per map for dirty, we may not need this.]
-	 */
-	LIST_HEAD(io_buffers);
-	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
-
-	/* map dirty bitmap blocks to disk and write out */
-	struct buffer_head *buffer, *safe;
-	list_for_each_entry_safe(buffer, safe, &io_buffers, link) {
-		int err = write_bitmap(buffer);
-		if (err)
-			return err;
-	}
-	assert(list_empty(&io_buffers));
-
-	/* add pinned metadata to delta list */
-	/* redirected btree nodes from cursor_redirect */
-	list_splice_tail_init(&sb->pinned, &sb->commit);
-
-	/* move deferred frees for rollup to delta deferred free list */
-	unstash(sb, &sb->deflush, move_deferred);
-
-	/* empty the log */
-	sb->logbase = sb->lognext;
-
-	return 0;
-}
-
-static int stage_delta(struct sb *sb)
-{
-	if (need_flush(sb)) {
-		int err = flush_log(sb);
-		if (err)
-			return err;
-	}
-
-	assert(!tuxsync(sb->rootdir));
-
-	/* btree node and leaf blocks */
-
-	while (!list_empty(&sb->commit)) {
-		struct buffer_head *buffer = list_entry(sb->commit.next, struct buffer_head, link);
-		trace(">>> flush buffer %Lx:%Lx", (L)tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
-		// mapping, index set but not hashed in mapping
-		buffer->map->io(buffer, 1);
-		evict_buffer(buffer);
-	}
-
-	sb->delta++;
-
-	/* allocate and write log blocks */
-
-	if (sb->logbuf)
-		log_finish(sb);
-	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
-		block_t block;
-		int err = balloc(sb, 1, &block);
-		if (err)
-			return err;
-		struct buffer_head *buffer = blockget(mapping(sb->logmap), index);
-		if (!buffer) {
-			bfree(sb, block, 1);
-			return -ENOMEM;
-		}
-		struct logblock *log = bufdata(buffer);
-		log->magic = to_be_u16(0x10ad);
-		log->logchain = to_be_u64(sb->logchain);
-		if ((err = devio(WRITE, sb_dev(sb), block << sb->blockbits, buffer->data, sb->blocksize))) {
-			brelse(buffer);
-			bfree(sb, block, 1);
-			return err;
-		}
-		defer_free(&sb->deflush, block, 1);
-		brelse(buffer);
-		sb->logchain = block;
-	}
-	sb->logthis = sb->lognext;
-	return 0;
-}
-
-static int commit_delta(struct sb *sb)
-{
-	trace("commit %i logblocks", sb->lognext - sb->logbase);
-	sb->super.logcount = to_be_u32(sb->lognext - sb->logbase);
-	int err = save_sb(sb);
-	if (err)
-		return err;
-	return unstash(sb, &sb->defree, retire_bfree);
-}
-
-void change_begin(struct sb *sb)
-{
-	down_read(&sb->delta_lock);
-}
-
-void change_end(struct sb *sb)
-{
-	if (need_delta(sb)) {
-		unsigned delta = sb->delta;
-		up_read(&sb->delta_lock);
-		down_write(&sb->delta_lock);
-		if (sb->delta == delta) {
-			trace(">>> commit delta %u", sb->delta);
-			++sb->delta;
-			stage_delta(sb);
-			commit_delta(sb);
-		}
-		up_write(&sb->delta_lock);
-	} else
-		up_read(&sb->delta_lock);
-}
-
-int bitmap_io(struct buffer_head *buffer, int write)
-{
-	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
 }
 
 int main(int argc, char *argv[])

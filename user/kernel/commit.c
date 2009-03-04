@@ -61,3 +61,181 @@ int load_itable(struct sb *sb)
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
 	return 0;
 }
+
+/* Delta transition */
+
+static int need_delta(struct sb *sb)
+{
+	static unsigned crudehack;
+	return !(++crudehack % 10);
+}
+
+static int need_flush(struct sb *sb)
+{
+	static unsigned crudehack;
+	return !(++crudehack % 3);
+}
+
+static void clean_buffer(struct buffer_head *buffer)
+{
+#ifdef __KERNEL__
+	set_buffer_uptodate(buffer);
+#else
+	/* Is this forked buffer? */
+	if (hlist_unhashed(&buffer->hashlink)) {
+		set_buffer_clean(buffer);
+		brelse(buffer);
+		evict_buffer(buffer);
+	} else
+		set_buffer_clean(buffer);
+#endif
+}
+
+int move_deferred(struct sb *sb, u64 val)
+{
+	return stash_value(&sb->defree, val);
+}
+
+static int flush_log(struct sb *sb)
+{
+	/*
+	 * Flush a snapshot of the allocation map to disk.  Physical blocks for
+	 * the bitmaps and new or redirected bitmap btree nodes may be allocated
+	 * during the flush.  Any bitmap blocks that are (re)dirtied by these
+	 * allocations will be written out in the next flush cycle.
+	 */
+
+	/* further block allocations belong to the next cycle */
+	sb->flush++;
+
+	/*
+	 * sb->flush was incremented, so block fork may occur from here,
+	 * so before block fork was occured, cleans map->dirty list.
+	 * [If we have two lists per map for dirty, we may not need this.]
+	 */
+	LIST_HEAD(io_buffers);
+#ifndef __KERNEL__
+	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
+
+	/* map dirty bitmap blocks to disk and write out */
+	struct buffer_head *buffer, *safe;
+	list_for_each_entry_safe(buffer, safe, &io_buffers, link) {
+		int err = write_bitmap(buffer);
+		if (err)
+			return err;
+	}
+#endif
+	assert(list_empty(&io_buffers));
+
+	/* add pinned metadata to delta list */
+	/* redirected btree nodes from cursor_redirect */
+	list_splice_tail_init(&sb->pinned, &sb->commit);
+
+	/* move deferred frees for rollup to delta deferred free list */
+	unstash(sb, &sb->deflush, move_deferred);
+
+	/* empty the log */
+	sb->logbase = sb->lognext;
+
+	return 0;
+}
+
+static int stage_delta(struct sb *sb)
+{
+	if (need_flush(sb)) {
+		int err = flush_log(sb);
+		if (err)
+			return err;
+	}
+
+#ifndef __KERNEL__
+//	assert(!tuxsync(sb->rootdir));
+	/* btree node and leaf blocks */
+
+	while (!list_empty(&sb->commit)) {
+		struct buffer_head *buffer = list_entry(sb->commit.next, struct buffer_head, link);
+		trace(">>> flush buffer %Lx:%Lx", (L)tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
+		// mapping, index set but not hashed in mapping
+		buffer->map->io(buffer, 1);
+		evict_buffer(buffer);
+	}
+#endif
+
+	sb->delta++;
+
+	/* allocate and write log blocks */
+
+	if (sb->logbuf)
+		log_finish(sb);
+	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
+		block_t block;
+		int err = balloc(sb, 1, &block);
+		if (err)
+			return err;
+		struct buffer_head *buffer = blockget(mapping(sb->logmap), index);
+		if (!buffer) {
+			bfree(sb, block, 1);
+			return -ENOMEM;
+		}
+		struct logblock *log = bufdata(buffer);
+		log->magic = to_be_u16(0x10ad);
+		log->logchain = to_be_u64(sb->logchain);
+		if ((err = devio(WRITE, sb_dev(sb), block << sb->blockbits, bufdata(buffer), sb->blocksize))) {
+			brelse(buffer);
+			bfree(sb, block, 1);
+			return err;
+		}
+		defer_free(&sb->deflush, block, 1);
+		brelse(buffer);
+		sb->logchain = block;
+	}
+	sb->logthis = sb->lognext;
+	return 0;
+}
+
+int retire_bfree(struct sb *sb, u64 val)
+{
+	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
+}
+
+static int commit_delta(struct sb *sb)
+{
+	trace("commit %i logblocks", sb->lognext - sb->logbase);
+	sb->super.logcount = to_be_u32(sb->lognext - sb->logbase);
+	int err = save_sb(sb);
+	if (err)
+		return err;
+	return unstash(sb, &sb->defree, retire_bfree);
+}
+
+int change_begin(struct sb *sb)
+{
+#ifndef __KERNEL__
+	down_read(&sb->delta_lock);
+#endif
+	return 0;
+}
+
+int change_end(struct sb *sb)
+{
+#ifndef __KERNEL__
+	if (need_delta(sb)) {
+		unsigned delta = sb->delta;
+		up_read(&sb->delta_lock);
+		down_write(&sb->delta_lock);
+		if (sb->delta == delta) {
+			trace(">>> commit delta %u", sb->delta);
+			++sb->delta;
+			stage_delta(sb);
+			commit_delta(sb);
+		}
+		up_write(&sb->delta_lock);
+	} else
+		up_read(&sb->delta_lock);
+#endif
+	return 0;
+}
+
+#ifdef __KERNEL__
+static void *useme[] = { clean_buffer, need_delta, stage_delta, commit_delta, useme };
+#endif

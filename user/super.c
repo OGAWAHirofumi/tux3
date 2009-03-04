@@ -14,13 +14,6 @@
 #define trace trace_on
 #endif
 
-int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
-{
-	return ioabs(dev->fd, data, len, rw, offset);
-}
-
-#include "kernel/commit.c"
-
 int sync_super(struct sb *sb)
 {
 	int err;

@@ -11,9 +11,6 @@
 #include "inode.c"
 #include <getopt.h>
 
-void change_begin(struct sb *sb) { }
-void change_end(struct sb *sb) { }
-
 int fls(uint32_t v)
 {
 	uint32_t mask;

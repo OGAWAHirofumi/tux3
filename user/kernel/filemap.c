@@ -625,4 +625,21 @@ const struct address_space_operations tux_vol_aops = {
 	.sync_page	= block_sync_page,
 	.write_begin	= tux3_vol_write_begin,
 };
+
+int write_bitmap(struct buffer_head *buffer)
+{
+#if 0
+	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+	struct seg seg;
+	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1, 2);
+	if (err < 0)
+		return err;
+	assert(err == 1);
+	assert(buffer->state - BUFFER_DIRTY == ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
+	trace("write bitmap %Lx", (L)buffer->index);
+	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
+		clean_buffer(buffer);
+#endif
+	return 0;
+}
 #endif /* __KERNEL__ */

@@ -723,6 +723,8 @@ struct delete_info {
 	int create;
 };
 
+typedef int (*unstash_t)(struct sb *sb, u64 val);
+
 #ifdef __KERNEL__
 static inline struct timespec gettime(void)
 {
@@ -874,21 +876,30 @@ unsigned encode_xsize(struct inode *inode);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
+void log_finish(struct sb *sb);
 void log_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);
 void log_iroot(struct sb *sb, block_t newroot, block_t oldroot);
+
+int stash_value(struct stash *stash, u64 value);
+int unstash(struct sb *sb, struct stash *defree, unstash_t actor);
 int defer_free(struct stash *defree, block_t block, unsigned count);
 int retire_frees(struct sb *sb, struct stash *defree);
 void destroy_defree(struct stash *defree);
 
-/* commit.c */
+/* utility.c */
 int vecio(int rw, struct block_device *dev, sector_t sector,
 	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec);
 int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec);
 int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned len);
+
+/* commit.c */
+
 int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
 int load_itable(struct sb *sb);
+int change_begin(struct sb *sb);
+int change_end(struct sb *sb);
 
 /* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
@@ -915,9 +926,6 @@ static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigne
 	mark_buffer_dirty(buffer);
 	return buffer;
 }
-
-static inline void change_begin(struct sb *sb) { }
-static inline void change_end(struct sb *sb) { }
 
 #endif /* __KERNEL__ */
 

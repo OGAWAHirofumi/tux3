@@ -15,6 +15,13 @@
 #include "kernel/balloc.c"
 #include "kernel/filemap.c"
 
+int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
+{
+	return ioabs(dev->fd, data, len, rw, offset);
+}
+
+#include "kernel/commit.c"
+
 /*
  * Extrapolate from single buffer flush or blockread to opportunistic exent IO
  *
@@ -112,9 +119,6 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 }
 
 #ifdef build_filemap
-void change_begin(struct sb *sb) { }
-void change_end(struct sb *sb) { }
-
 static void check_created_seg(struct seg *seg)
 {
 	assert(seg->block > 0);
@@ -386,3 +390,18 @@ int main(int argc, char *argv[])
 	exit(0);
 }
 #endif
+
+int write_bitmap(struct buffer_head *buffer)
+{
+	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+	struct seg seg;
+	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1, 2);
+	if (err < 0)
+		return err;
+	assert(err == 1);
+	assert(buffer->state - BUFFER_DIRTY == ((sb->delta - 1) & (BUFFER_DIRTY_STATES - 1)));
+	trace("write bitmap %Lx", (L)buffer->index);
+	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
+		clean_buffer(buffer);
+	return 0;
+}

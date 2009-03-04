@@ -48,9 +48,6 @@
 #undef trace
 #define trace trace_on
 
-void change_begin(struct sb *sb) { }
-void change_end(struct sb *sb) { }
-
 static struct sb *sb;
 static struct dev *dev;
 

@@ -21,8 +21,8 @@
 #include "kernel/xattr.c"
 #include "kernel/ileaf.c"
 
-void change_begin(struct sb *sb) { }
-void change_end(struct sb *sb) { }
+int change_begin(struct sb *sb) { return 0; }
+int change_end(struct sb *sb) { return 0; }
 
 struct ileaf *ileaf_create(struct btree *btree)
 {

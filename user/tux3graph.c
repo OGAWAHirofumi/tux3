@@ -13,9 +13,6 @@
 #include "inode.c"
 #include <getopt.h>
 
-void change_begin(struct sb *sb) { }
-void change_end(struct sb *sb) { }
-
 static const char *dtree_names[] = {
 	[TUX_BITMAP_INO]	= "bitmap",
 	[TUX_VTABLE_INO]	= "vtable",

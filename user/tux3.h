@@ -212,9 +212,6 @@ static inline dev_t huge_decode_dev(u64 dev)
 
 #define mark_btree_dirty(x) do {} while (0)
 
-void change_begin(struct sb *sb);
-void change_end(struct sb *sb);
-
 #define INIT_INODE(inode, sb, mode)			\
 	.i_sb = sb,					\
 	.i_mode = mode,					\
@@ -266,5 +263,9 @@ static inline void mark_inode_dirty(struct inode *inode)
 }
 
 enum rw { READ, WRITE };
+
+int change_begin(struct sb *sb);
+int change_end(struct sb *sb);
+int write_bitmap(struct buffer_head *buffer);
 
 #endif

@@ -150,9 +150,7 @@ int defer_free(struct stash *defree, block_t block, unsigned count)
 	return stash_value(defree, ((u64)count << 48) + block);
 }
 
-typedef int (*retire_actor_t)(struct sb *sb, u64 val);
-
-int unstash(struct sb *sb, struct stash *defree, retire_actor_t actor)
+int unstash(struct sb *sb, struct stash *defree, unstash_t actor)
 {
 	struct flink_head *head = &defree->head;
 	struct page *page;
