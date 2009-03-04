@@ -208,7 +208,7 @@ static inline void flink_last_del(struct flink_head *head)
 /* Tux3 disk format */
 
 #define SB_MAGIC_SIZE 8
-#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x09, 0x02, 0x18 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x09, 0x02, 0x28 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
