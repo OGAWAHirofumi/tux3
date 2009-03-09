@@ -70,7 +70,8 @@ static struct inode *open_fuse_ino(fuse_ino_t ino)
 static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	trace("tux3_lookup(%Lx, '%s')", (L)parent, name);
-	struct inode *inode = tuxopen(sb->rootdir, name, strlen(name));
+	struct inode *parent_ino = open_fuse_ino(parent);
+	struct inode *inode = tuxopen(parent_ino, name, strlen(name));
 
 	if (inode) {
 		struct fuse_entry_param ep = {
@@ -163,9 +164,10 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	mode_t mode, struct fuse_file_info *fi)
 {
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
-
+	struct inode *parent_ino;
+	parent_ino = open_fuse_ino(parent);
 	trace("tux3_create(%Lx, '%s', uid = %u, gid = %u, mode = %o)", (L)parent, name, ctx->uid, ctx->gid, mode);
-	struct inode *inode = tuxcreate(sb->rootdir, name, strlen(name),
+	struct inode *inode = tuxcreate(parent_ino, name, strlen(name),
 		&(struct tux_iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
 	if (inode) {
 		struct fuse_entry_param fep = {
@@ -186,6 +188,10 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			.attr_timeout = 0.0,
 			.entry_timeout = 0.0,
 		};
+		tuxsync(inode);
+		if(parent_ino->inum != TUX_ROOTDIR_INO)
+			tuxsync(parent_ino);
+		
 
 		fi->fh = (uint64_t)(unsigned long)inode;
 		fuse_reply_create(req, &fep, fi);
@@ -196,8 +202,45 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	struct inode *parent_ino;
+	parent_ino = open_fuse_ino(parent);
+
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+
+	mode = mode | S_IFDIR; /*  Should not be required */
+	trace("tux3_mkdir(%Lx, '%s', uid = %u, gid = %u, mode = %o)", (L)parent, name, ctx->uid, ctx->gid, mode);
+	struct inode *inode = tuxcreate(parent_ino, name, strlen(name),
+		&(struct tux_iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
+
+	if (inode) {
+		struct fuse_entry_param fep = {
+			.attr = {
+				.st_ino   = inode->inum,
+				.st_mode  = inode->i_mode,
+				.st_ctim = inode->i_ctime,
+				.st_mtim = inode->i_mtime,
+				.st_atim = inode->i_atime,
+				.st_size  = inode->i_size,
+				.st_uid   = inode->i_uid,
+				.st_gid   = inode->i_gid,
+				.st_nlink = inode->i_nlink,
+			},
+
+			.ino = inode->inum,
+			.generation = 1,
+			.attr_timeout = 0.0,
+			.entry_timeout = 0.0,
+		};
+
+		tuxclose(inode);
+		if(parent_ino->inum != TUX_ROOTDIR_INO)
+			tuxsync(parent_ino);
+
+		sync_super(inode->i_sb);
+
+		fuse_reply_entry(req, &fep);
+	} else 
+		fuse_reply_err(req, ENOMEM);
 }
 
 static void tux3_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
