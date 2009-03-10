@@ -8,7 +8,11 @@
 #include <stdarg.h>
 
 //#define die(code) exit(code)
-#define die(code) asm("int3")
+#define die(code)	asm("int3")
+#define assert(expr)	do {					\
+	if (!(expr))						\
+		error("Failed assert(%s)", #expr);		\
+} while (0)
 
 #include "kernel/trace.h"
 

@@ -3,6 +3,7 @@
 
 #ifdef __KERNEL__
 extern int tux3_trace;
+#define assert(expr)	BUG_ON(!(expr))
 #else
 #define tux3_trace	1
 #endif
@@ -14,7 +15,6 @@ extern int tux3_trace;
 } while (0)
 
 #define error(fmt, args...) ({ warn(fmt "!" , ##args); die(99); 1; })
-#define assert(expr) do { if (!(expr)) error("Failed assert(%s)", #expr); } while (0)
 #define warn(fmt, args...) do { logline(__func__, fmt , ##args); } while (0)
 #define trace_off(...) do {} while (0)
 #define trace_on(fmt, args...) do {		\
