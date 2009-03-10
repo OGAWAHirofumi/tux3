@@ -476,15 +476,9 @@ static inline be_u16 *ileaf_dict(struct btree *btree, struct ileaf *ileaf)
 	return (void *)ileaf + btree->sb->blocksize;
 }
 
-static inline u16 __ileaf_atdict(be_u16 *dict, int at)
-{
-	assert(at > 0);
-	return from_be_u16(*(dict - at));
-}
-
 static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 {
-	int size = __ileaf_atdict(dict, at + 1) - atdict(dict, at);
+	int size = __atdict(dict, at + 1) - atdict(dict, at);
 	assert(size >= 0);
 	return size;
 }
