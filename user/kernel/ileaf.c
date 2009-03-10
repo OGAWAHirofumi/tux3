@@ -187,7 +187,7 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vle
 	}
 #endif
 	/* should trim leading empty inodes on copy */
-	unsigned split = atdict(dict, at), free = from_be_u16(*(dict - icount(leaf)));
+	unsigned split = atdict(dict, at), free = atdict(dict, icount(leaf));
 	trace("split at %x of %x", at, icount(leaf));
 	trace("copy out %x bytes at %x", free - split, split);
 	assert(free >= split);
