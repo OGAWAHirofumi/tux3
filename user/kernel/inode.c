@@ -18,7 +18,8 @@ static int check_present(struct inode *inode)
 {
 	tuxnode_t *tuxnode = tux_inode(inode);
 	switch (inode->i_mode & S_IFMT) {
-	default:
+	case S_IFSOCK:
+	case S_IFIFO:
 		assert(tuxnode->present & MODE_OWNER_BIT);
 		assert(!(tuxnode->present & RDEV_BIT));
 		break;
@@ -42,13 +43,17 @@ static int check_present(struct inode *inode)
 		assert(tuxnode->present & DATA_BTREE_BIT);
 		assert(!(tuxnode->present & RDEV_BIT));
 		break;
-	case 0:
+	case 0: /* internal inode */
 		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
 			assert(tuxnode->present == 0);
 		else {
 			assert(tuxnode->present & DATA_BTREE_BIT);
 			assert(!(tuxnode->present & RDEV_BIT));
 		}
+		break;
+	default:
+		error("Unknown mode: inum %Lx, mode %07o",
+		      (L)tuxnode->inum, inode->i_mode);
 		break;
 	}
 	return 0;
@@ -450,7 +455,10 @@ static void tux_setup_inode(struct inode *inode)
 //	inode->i_flags = 0;
 
 	switch (inode->i_mode & S_IFMT) {
-	default:
+	case S_IFSOCK:
+	case S_IFIFO:
+	case S_IFBLK:
+	case S_IFCHR:
 		inode->i_op = &tux_special_iops;
 		init_special_inode(inode, inode->i_mode, inode->i_rdev);
 		break;
@@ -469,7 +477,7 @@ static void tux_setup_inode(struct inode *inode)
 		inode->i_op = &tux_symlink_iops;
 		inode->i_mapping->a_ops = &tux_aops;
 		break;
-	case 0:
+	case 0: /* internal inode */
 	{
 		inum_t inum = tux_inode(inode)->inum;
 		gfp_t gfp_mask = GFP_USER;
@@ -495,6 +503,10 @@ static void tux_setup_inode(struct inode *inode)
 		mapping_set_gfp_mask(inode->i_mapping, gfp_mask);
 		break;
 	}
+	default:
+		error("Unknown mode: inum %Lx, mode %07o",
+		      (L)tux_inode(inode)->inum, inode->i_mode);
+		break;
 	}
 }
 
