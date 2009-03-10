@@ -146,6 +146,7 @@ out:
 static int store_attrs(struct inode *inode, struct cursor *cursor)
 {
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
+	assert(size);
 	void *base = tree_expand(cursor, tux_inode(inode)->inum, size);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
