@@ -227,15 +227,14 @@ void ileaf_merge(struct btree *btree, struct ileaf *leaf, struct ileaf *from)
 
 static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsigned newsize)
 {
-	assert(ileaf_sniff(btree, base));
 	struct ileaf *leaf = base;
+	assert(ileaf_sniff(btree, leaf));
 	assert(inum >= ibase(leaf));
-	be_u16 *dict = base + btree->sb->blocksize;
-
-	unsigned at = inum - ibase(leaf);
-	if (at >= btree->entries_per_leaf)
+	if (inum - ibase(leaf) >= btree->entries_per_leaf)
 		return NULL;
 
+	be_u16 *dict = base + btree->sb->blocksize;
+	unsigned at = inum - ibase(leaf);
 	unsigned extend_empty = at < icount(leaf) ? 0 : at - icount(leaf) + 1;
 	unsigned offset = at && icount(leaf) ? from_be_u16(*(dict - min(at, icount(leaf)))) : 0;
 	unsigned size = at < icount(leaf) ? from_be_u16(*(dict - at - 1)) - offset : 0;
