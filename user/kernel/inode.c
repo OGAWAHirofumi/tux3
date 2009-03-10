@@ -70,6 +70,7 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 	struct inode *inode = new_inode(dir->i_sb);
 	if (!inode)
 		return NULL;
+	assert(!tux_inode(inode)->present);
 
 	inode->i_mode = iattr->mode;
 	inode->i_uid = iattr->uid;
@@ -80,13 +81,19 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 	} else
 		inode->i_gid = iattr->gid;
 	inode->i_mtime = inode->i_ctime = inode->i_atime = gettime();
-	if (S_ISDIR(inode->i_mode))
-		inode->i_nlink++;
-	tux_set_inum(inode, TUX_INVALID_INO);
-	tux_inode(inode)->present = CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
-	/* FIXME: should present always if chrdev/blkdev? */
-	if (rdev)
+	switch (inode->i_mode & S_IFMT) {
+	case S_IFBLK:
+	case S_IFCHR:
+		/* vfs, trying to be helpful, will rewrite the field */
+		inode->i_rdev = rdev;
 		tux_inode(inode)->present |= RDEV_BIT;
+		break;
+	case S_IFDIR:
+		inode->i_nlink++;
+		break;
+	}
+	tux_inode(inode)->present |= CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
+	tux_set_inum(inode, TUX_INVALID_INO);
 	tux_setup_inode(inode);
 	return inode;
 }
