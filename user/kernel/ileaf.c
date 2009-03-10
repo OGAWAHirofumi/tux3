@@ -174,7 +174,7 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vle
 #ifdef SPLIT_AT_INUM
 	trace("split at inum 0x%Lx", (L)inum);
 	assert(inum >= ibase(leaf));
-	unsigned at = inum - ibase(leaf) < icount(leaf) ? inum - ibase(leaf) : icount(leaf);
+	unsigned at = min_t(tuxkey_t, inum - ibase(leaf), icount(leaf));
 #else
 	/* binsearch inum starting nearest middle of block */
 	unsigned at = 1, hi = icount(leaf);
@@ -237,7 +237,7 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsig
 		return NULL;
 
 	unsigned extend_empty = at < icount(leaf) ? 0 : at - icount(leaf) + 1;
-	unsigned offset = at && icount(leaf) ? from_be_u16(*(dict - (at < icount(leaf) ? at : icount(leaf)))) : 0;
+	unsigned offset = at && icount(leaf) ? from_be_u16(*(dict - min(at, icount(leaf)))) : 0;
 	unsigned size = at < icount(leaf) ? from_be_u16(*(dict - at - 1)) - offset : 0;
 	int more = newsize - size;
 	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))

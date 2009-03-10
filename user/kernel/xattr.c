@@ -330,7 +330,7 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data, u
 	if (!xcache || xcache->size + more > xcache->maxsize) {
 		unsigned oldsize = xcache ? xcache->size : sizeof(struct xcache);
 		unsigned maxsize = xcache ? xcache->maxsize : (1 << 7);
-		unsigned newsize = oldsize + (more < maxsize ? maxsize : more);
+		unsigned newsize = oldsize + max(more, maxsize);
 		struct xcache *newcache = new_xcache(newsize);
 		if (!newcache)
 			return -ENOMEM;

@@ -255,7 +255,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 			revalidate = 0;
 		}
 		unsigned size = dir->i_size - (block << blockbits);
-		tux_dirent *limit = base + (size > blocksize ? blocksize : size) - TUX_REC_LEN(1);
+		tux_dirent *limit = base + min(size, blocksize) - TUX_REC_LEN(1);
 		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				brelse(buffer);
