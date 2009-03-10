@@ -450,7 +450,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	memset(prev, 0, sizeof(*prev) * depth);
 
 	down_write(&btree->lock);
-	probe(cursor, info->resume);
+	probe(cursor, info->key);	/* FIXME: info->resume? */
 	leafbuf = level_pop(cursor);
 
 	/* leaf walk */
