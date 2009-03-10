@@ -269,8 +269,7 @@ static int purge_inum(struct sb *sb, inum_t inum)
 		if (!(err = cursor_redirect(cursor))) {
 			/* FIXME: truncate the bnode and leaf if empty. */
 			struct ileaf *ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
-			err = ileaf_purge(itable, inum, ileaf);
-			assert(!err);
+			ileaf_purge(itable, inum, ileaf);
 			mark_buffer_dirty(cursor_leafbuf(cursor));
 		}
 		release_cursor(cursor);

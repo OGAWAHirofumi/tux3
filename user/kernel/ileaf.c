@@ -272,24 +272,22 @@ inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 	return i + ibase(leaf);
 }
 
-int ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
+void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 {
-	if (inum < ibase(leaf) || inum - ibase(leaf) >= btree->entries_per_leaf)
-		return -EINVAL;
+	assert(inum >= ibase(leaf));
+	assert(inum - ibase(leaf) < btree->entries_per_leaf);
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
 	unsigned at = inum - ibase(leaf);
 	unsigned offset = atdict(dict, at);
 	unsigned size = from_be_u16(*(dict - at - 1)) - offset;
 	trace("delete inode %Lx from %p[%x/%x]", (L)inum, leaf, at, size);
-	if (!size)
-		return -ENOENT;
+	assert(size);
 	unsigned free = from_be_u16(*(dict - icount(leaf))), tail = free - offset - size;
 	assert(offset + size + tail <= free);
 	memmove(leaf->table + offset, leaf->table + offset + size, tail);
 	for (int i = at + 1; i <= icount(leaf); i++)
 		add_idict(dict - i, -size);
 	ileaf_trim(btree, leaf);
-	return 0;
 }
 
 struct btree_ops itable_ops = {
