@@ -332,6 +332,7 @@ void tux3_delete_inode(struct inode *inode)
 	if (inode->i_blocks)
 		tux3_truncate(inode);
 	/* FIXME: we have to free dtree-root, atable entry, etc too */
+	free_btree(&tux_inode(inode)->btree);
 
 	/* clear_inode() before freeing this ino. */
 	clear_inode(inode);

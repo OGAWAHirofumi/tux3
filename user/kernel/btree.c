@@ -756,8 +756,19 @@ error:
 	return PTR_ERR(rootbuf);
 }
 
-/* userland only */
-void free_btree(struct btree *btree)
+/* FIXME: right? */
+int free_btree(struct btree *btree)
 {
-	// write me
+	assert(btree->root.depth == 1);
+	struct sb *sb = btree->sb;
+	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
+	if (!rootbuf)
+		return -EIO;
+	struct bnode *rootnode = bufdata(rootbuf);
+	assert(bcount(rootnode) == 1);
+	/* FIXME: error check */
+	(btree->ops->bfree)(sb, from_be_u64(rootnode->entries[0].block), 1);
+	(btree->ops->bfree)(sb, bufindex(rootbuf), 1);
+	brelse(rootbuf);
+	return 0;
 }
