@@ -259,17 +259,20 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsig
 inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 {
 	assert(goal >= ibase(leaf));
-	goal -= ibase(leaf);
-	//trace("find empty inode starting at %Lx, base %Lx\n", (L)goal, (L)ibase(leaf));
-	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
-	unsigned i, offset = goal && goal < icount(leaf) ? from_be_u16(*(dict - goal)) : 0;
-	for (i = goal; i < icount(leaf); i++) {
-		unsigned limit = from_be_u16(*(dict - i - 1));
-		if (offset == limit)
-			break;
-		offset = limit;
+	if (goal - ibase(leaf) >= btree->entries_per_leaf)
+		return goal;
+	unsigned at = goal - ibase(leaf);
+	if (at < icount(leaf)) {
+		be_u16 *dict = (void *)leaf + btree->sb->blocksize;
+		unsigned offset = atdict(dict, at);
+		for (; at < icount(leaf); at++) {
+			unsigned limit = from_be_u16(*(dict - at - 1));
+			if (offset == limit)
+				break;
+			offset = limit;
+		}
 	}
-	return i + ibase(leaf);
+	return ibase(leaf) + at;
 }
 
 void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
