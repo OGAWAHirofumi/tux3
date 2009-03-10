@@ -151,12 +151,9 @@ int tuxtruncate(struct inode *inode, loff_t size)
 	int is_expand;
 	int err = 0;
 
-	if (inode->i_size == size)
+	if (size == inode->i_size)
 		goto out;
-	if (inode->i_size > size)
-		is_expand = 1;
-	else
-		is_expand = 0;
+	is_expand = size > inode->i_size;
 
 	inode->i_size = size;
 	if (!is_expand) {
