@@ -208,7 +208,7 @@ static inline void flink_last_del(struct flink_head *head)
 /* Tux3 disk format */
 
 #define SB_MAGIC_SIZE 8
-#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x09, 0x02, 0x28 } /* date of latest incompatible sb format */
+#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x09, 0x03, 0x10 } /* date of latest incompatible sb format */
 /*
  * disk format revision history
  * !!! always update this for every incompatible change !!!
@@ -217,6 +217,7 @@ static inline void flink_last_del(struct flink_head *head)
  * 2008-09-06: Actual checking starts
  * 2008-12-12: Atom dictionary size in disksuper instead of atable->i_size
  * 2009-02-28: Attributes renumbered, rdev added
+ * 2009-03-10: Alignment fix of disksuper
  */
 
 #define MAX_INODES_BITS 48
@@ -243,6 +244,7 @@ struct disksuper
 	be_u64 flags;		/* Need to assign some flags */
 	be_u64 iroot;		/* Root of the inode table btree */
 	be_u16 blockbits;	/* Shift to get volume block size */
+	be_u16 unused[3];	/* Padding for alignment */
 	be_u64 volblocks;	/* Volume size */
 	/* The rest should be moved to a "metablock" that is updated frequently */
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
