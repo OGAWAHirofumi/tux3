@@ -157,10 +157,12 @@ eek:
 static void ileaf_trim(struct btree *btree, struct ileaf *leaf)
 {
 	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
-	while (icount(leaf) > 1 && *(dict - icount(leaf)) == *(dict - icount(leaf) + 1))
-		leaf->count = to_be_u16(from_be_u16(leaf->count) - 1);
-	if (icount(leaf) == 1 && !*(dict - 1))
-		leaf->count = 0;
+	unsigned count = icount(leaf);
+	while (count > 1 && *(dict - count) == *(dict - count + 1))
+		count--;
+	if (count == 1 && !*(dict - 1))
+		count = 0;
+	leaf->count = to_be_u16(count);
 }
 
 #define SPLIT_AT_INUM
