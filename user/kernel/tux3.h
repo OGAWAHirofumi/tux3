@@ -216,7 +216,7 @@ static inline void flink_last_del(struct flink_head *head)
  * 2008-08-06: Beginning of time
  * 2008-09-06: Actual checking starts
  * 2008-12-12: Atom dictionary size in disksuper instead of atable->i_size
- * 2008-02-28: Attributes renumbered, rdev added
+ * 2009-02-28: Attributes renumbered, rdev added
  */
 
 #define MAX_INODES_BITS 48
