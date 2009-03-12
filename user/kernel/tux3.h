@@ -35,6 +35,8 @@ typedef u32 millisecond_t;
 typedef u64 inum_t;
 typedef u64 tuxkey_t;
 
+#include "magic.h"
+
 #ifdef __KERNEL__
 /* Endian support */
 typedef __be16	be_u16;
@@ -206,19 +208,6 @@ static inline void flink_last_del(struct flink_head *head)
 
 /* Tux3 disk format */
 
-#define SB_MAGIC_SIZE 8
-#define SB_MAGIC { 't', 'u', 'x', '3', 0xdd, 0x09, 0x03, 0x10 } /* date of latest incompatible sb format */
-/*
- * disk format revision history
- * !!! always update this for every incompatible change !!!
- *
- * 2008-08-06: Beginning of time
- * 2008-09-06: Actual checking starts
- * 2008-12-12: Atom dictionary size in disksuper instead of atable->i_size
- * 2009-02-28: Attributes renumbered, rdev added
- * 2009-03-10: Alignment fix of disksuper
- */
-
 #define MAX_INODES_BITS 48
 #define MAX_BLOCKS_BITS 48
 #define MAX_FILESIZE_BITS 60
@@ -238,7 +227,7 @@ static inline void flink_last_del(struct flink_head *head)
 struct disksuper
 {
 	/* Update magic on any incompatible format change */
-	char magic[SB_MAGIC_SIZE];
+	char magic[TUX3_MAGIC_SIZE];
 	be_u64 birthdate;	/* Volume creation date */
 	be_u64 flags;		/* Need to assign some flags */
 	be_u64 iroot;		/* Root of the inode table btree */

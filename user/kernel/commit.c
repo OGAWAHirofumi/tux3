@@ -16,7 +16,7 @@ int load_sb(struct sb *sb)
 
 	if (err)
 		return err;
-	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic)))
+	if (memcmp(super->magic, (char[])TUX3_MAGIC, sizeof(super->magic)))
 		return -EINVAL;
 	sb->blockbits = from_be_u16(super->blockbits);
 	sb->blocksize = 1 << sb->blockbits;

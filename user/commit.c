@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 	assert(!make_tux3(sb));
 	sb->bitmap->map->io = bitmap_io;
 	if (1) {
-		sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
+		sb->super = (struct disksuper){ .magic = TUX3_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
 		for (int i = 0; i < 29; i++) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];

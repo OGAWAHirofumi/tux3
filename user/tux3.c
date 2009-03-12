@@ -47,7 +47,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 		.entries_per_node = 20,
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits);
-	sb->super = (struct disksuper){ .magic = SB_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
+	sb->super = (struct disksuper){ .magic = TUX3_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
