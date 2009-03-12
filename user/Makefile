@@ -30,7 +30,7 @@ endif
 tuxdeps		= Makefile trace.h kernel/trace.h
 diskiodeps	= diskio.c diskio.h
 bufferdeps	= buffer.c buffer.h diskio.h err.h list.h
-vfsdeps		= $(bufferdeps) $(diskiodeps) vfs.c
+utilitydeps	= $(bufferdeps) $(diskiodeps) utility.c
 basedeps	= $(tuxdeps) err.h list.h buffer.h diskio.h tux3.h \
 	kernel/tux3.h hexdump.c lockdebug.h
 ballocdeps	= kernel/balloc.c
@@ -56,7 +56,7 @@ tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
 # standalone and library
 buffer.o: $(tuxdeps) $(bufferdeps)
 diskio.o: $(tuxdeps) $(diskiodeps)
-vfs.o: $(tuxdeps) $(vfsdeps)
+utility.o: $(tuxdeps) $(utilitydeps)
 # standalone
 balloc.o: $(basedeps) $(ballocdeps)
 btree.o: $(basedeps) $(btreedeps)
@@ -74,18 +74,18 @@ tux3fuse.o:$(basedeps) $(superdeps)
 tux3graph.o:$(basedeps) $(superdeps)
 
 buffer: buffer.o diskio.o
-dleaf: vfs.o dleaf.o
-balloc: vfs.o balloc.o
-ileaf: vfs.o ileaf.o
-btree: vfs.o btree.o
-dir: vfs.o dir.o
-iattr: vfs.o iattr.o
-xattr: vfs.o xattr.o
-inode: vfs.o inode.o
-filemap: vfs.o filemap.o
-commit: vfs.o commit.o
-tux3: vfs.o tux3.o
-tux3graph: vfs.o tux3graph.o
+dleaf: utility.o dleaf.o
+balloc: utility.o balloc.o
+ileaf: utility.o ileaf.o
+btree: utility.o btree.o
+dir: utility.o dir.o
+iattr: utility.o iattr.o
+xattr: utility.o xattr.o
+inode: utility.o inode.o
+filemap: utility.o filemap.o
+commit: utility.o commit.o
+tux3: utility.o tux3.o
+tux3graph: utility.o tux3graph.o
 
 .c.o:
 	$(CC) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
@@ -129,8 +129,8 @@ test_inode: inode
 test_commit: commit
 	$(VG) ./commit foodev
 
-tux3fuse: vfs.o tux3fuse.o
-	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) vfs.o tux3fuse.c -lfuse -otux3fuse
+tux3fuse: utility.o tux3fuse.o
+	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) utility.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif

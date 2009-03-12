@@ -346,6 +346,14 @@ struct sb {
 #endif
 };
 
+/* Bitmap range operations */
+
+void set_bits(uint8_t *bitmap, unsigned start, unsigned count);
+void clear_bits(uint8_t *bitmap, unsigned start, unsigned count);
+int all_set(uint8_t *bitmap, unsigned start, unsigned count);
+int all_clear(uint8_t *bitmap, unsigned start, unsigned count);
+int bytebits(uint8_t c);
+
 /* logging  */
 
 struct logblock { be_u16 magic, bytes; be_u64 logchain; unsigned char data[]; };
