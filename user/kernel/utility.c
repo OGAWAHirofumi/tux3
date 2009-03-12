@@ -141,9 +141,5 @@ int all_clear(uint8_t *bitmap, unsigned start, unsigned count) // untested
 
 int bytebits(uint8_t c)
 {
-	unsigned count = 0;
-
-	for (; c; c >>= 1)
-		count += c & 1;
-	return count;
+	return hweight8(c);
 }
