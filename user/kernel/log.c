@@ -18,7 +18,7 @@ void log_finish(struct sb *sb)
 	assert(sb->logtop >= sb->logpos);
 	log->bytes = to_be_u16(sb->logpos - log->data);
 	memset(sb->logpos, 0, sb->logtop - sb->logpos);
-	brelse(sb->logbuf);
+	blockput(sb->logbuf);
 	sb->logbuf = NULL;
 }
 

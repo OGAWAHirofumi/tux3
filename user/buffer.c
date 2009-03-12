@@ -132,7 +132,7 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return buffer;
 }
 
-void brelse(struct buffer_head *buffer)
+void blockput(struct buffer_head *buffer)
 {
 	assert(buffer != NULL);
 	buftrace("Release buffer %Lx, count = %i, state = %i", (L)buffer->index, buffer->count, buffer->state);
@@ -141,11 +141,11 @@ void brelse(struct buffer_head *buffer)
 		buftrace("Free buffer %Lx", (L)buffer->index);
 }
 
-void brelse_dirty(struct buffer_head *buffer)
+void blockput_dirty(struct buffer_head *buffer)
 {
 	buftrace("Release dirty buffer %Lx", (L)buffer->index);
 	mark_buffer_dirty(buffer);
-	brelse(buffer);
+	blockput(buffer);
 }
 
 unsigned buffer_hash(block_t block)
@@ -292,7 +292,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 		buftrace("read buffer %Lx, state %i", (L)buffer->index, buffer->state);
 		int err = buffer->map->io(buffer, 0);
 		if (err) {
-			brelse(buffer);
+			blockput(buffer);
 			return NULL; // ERR_PTR me!!!
 		}
 	}
@@ -323,7 +323,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		 * FIXME: The refcount of buffer is not dropped here,
 		 * the refcount may not be needed actually. Because
 		 * this buffer was removed from lru list. Well, so,
-		 * the backend has to free this buffer (brelse(buffer))
+		 * the backend has to free this buffer (blockput(buffer))
 		 */
 		buffer = clone;
 	}

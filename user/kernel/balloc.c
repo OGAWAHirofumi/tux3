@@ -18,6 +18,7 @@
 /* For lockdep: random value bigger than max of inode_i_mutex_lock_class */
 #define I_MUTEX_BITMAP	7
 
+#ifndef __KERNEL__
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
 	assert(!(start & 7));
@@ -44,14 +45,13 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes;
 		while (p < top)
 			total += ones[*p++];
-		brelse(buffer);
+		blockput(buffer);
 		tail -= bytes;
 		offset = 0;
 	}
 	return total;
 }
 
-/* userland only */
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
 	block_t limit = start + count;
@@ -99,7 +99,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 			}
 		}
 		active += !!any;
-		brelse(buffer);
+		blockput(buffer);
 		tail -= bytes;
 		offset = 0;
 		if (begin >= 0)
@@ -110,6 +110,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	printf("(%i active)\n", active);
 	return -1;
 }
+#endif
 
 static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
 {
@@ -160,7 +161,7 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 				// FIXME: error check of buffer
 				set_bits(bufdata(buffer), found & mapmask, run);
 				mark_buffer_dirty(buffer);
-				brelse(buffer);
+				blockput(buffer);
 				sb->nextalloc = found + run;
 				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
@@ -170,7 +171,7 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 		}
 final_partial_byte:
 		mutex_unlock(&sb->bitmap->i_mutex);
-		brelse(buffer);
+		blockput(buffer);
 		tail -= bytes;
 		offset = 0;
 	}
@@ -212,7 +213,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	// FIXME: error check of buffer
 	clear_bits(bufdata(buffer), start, blocks);
 	mark_buffer_dirty(buffer);
-	brelse(buffer);
+	blockput(buffer);
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
 	mutex_unlock(&sb->bitmap->i_mutex);
@@ -220,7 +221,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 eeek:
 	why = "blocks already free";
 	mutex_unlock(&sb->bitmap->i_mutex);
-	brelse(buffer);
+	blockput(buffer);
 eek:
 	warn("extent 0x%Lx %s!\n", (L)start, why);
 	return -1; // error???
@@ -234,11 +235,11 @@ int update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
 	if (!buffer)
 		return -ENOMEM;
 	if (!(set ? all_clear : all_set)(bufdata(buffer), start & mask, count)) {
-		brelse(buffer);
+		blockput(buffer);
 		return -EINVAL;
 	}
 	(set ? set_bits : clear_bits)(bufdata(buffer), start & mask, count);
 	sb->freeblocks += set ? count : -count;
-	brelse_dirty(buffer);
+	blockput_dirty(buffer);
 	return 0;
 }

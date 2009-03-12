@@ -40,17 +40,17 @@ int replay(struct sb *sb)
 			return -ENOMEM;
 		int err = blockio(0, buffer, logchain);
 		if (err) {
-			brelse(buffer);
+			blockput(buffer);
 			return err;
 		}
 		struct logblock *log = bufdata(buffer);
 		if (from_be_u16(log->magic) != 0x10ad) {
 			warn("bad log magic %x", from_be_u16(log->magic));
-			brelse(buffer);
+			blockput(buffer);
 			return -EINVAL;
 		}
 		logchain = from_be_u64(log->logchain);
-		brelse(buffer);
+		blockput(buffer);
 	}
 
 	for (sb->lognext = 0; sb->lognext < logcount;) {

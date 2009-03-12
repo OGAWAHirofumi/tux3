@@ -65,7 +65,7 @@ void tux_dump_entries(struct buffer_head *buffer)
 			       entry->type);
 		entry = next_entry(entry);
 	}
-	brelse(buffer);
+	blockput(buffer);
 	printf("\n");
 }
 

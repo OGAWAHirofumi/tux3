@@ -49,7 +49,7 @@ void guess_region(struct buffer_head *buffer, block_t *start, unsigned *count, i
 					break;
 			} else {
 				unsigned stop = write ? !buffer_dirty(nextbuf) : !buffer_empty(nextbuf);
-				brelse(nextbuf);
+				blockput(nextbuf);
 				if (stop)
 					break;
 			}
@@ -111,7 +111,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 				else
 					err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
 			}
-			brelse(set_buffer_clean(buffer)); // leave empty if error ???
+			blockput(set_buffer_clean(buffer)); // leave empty if error ???
 		}
 		index += map[i].count;
 	}
@@ -132,7 +132,7 @@ static void add_maps(struct inode *inode, block_t index, struct seg map[], int s
 		for (unsigned j = 0; j < map[i].count; j++) {
 			buffer = blockget(inode->map, index + j);
 			*(block_t *)buffer->data = map[i].block + j;
-			brelse(buffer);
+			blockput(buffer);
 		}
 		index += map[i].count;
 	}
@@ -149,7 +149,7 @@ static void check_maps(struct inode *inode, block_t index, struct seg map[], int
 			else {
 				block_t block = *(block_t *)buffer->data;
 				assert(block == map[i].block + j);
-				brelse(buffer);
+				blockput(buffer);
 			}
 		}
 		index += map[i].count;
@@ -336,9 +336,9 @@ int main(int argc, char *argv[])
 #if 1
 	assert(balloc_from_range(sb, 0x10, 1, 1) >= 0);
 	sb->nextalloc = 0xf;
-	brelse_dirty(blockread(mapping(inode), 0x0));
+	blockput_dirty(blockread(mapping(inode), 0x0));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	brelse_dirty(blockread(mapping(inode), 0x1));
+	blockput_dirty(blockread(mapping(inode), 0x1));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 	invalidate_buffers(mapping(inode));
 	filemap_extent_io(blockget(mapping(inode), 1), 0);
@@ -352,37 +352,37 @@ int main(int argc, char *argv[])
 
 #if 0
 	for (int i = 0; i < 20; i++) {
-		brelse_dirty(blockget(mapping(inode), i));
+		blockput_dirty(blockget(mapping(inode), i));
 		printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 	}
 	return 0;
 #endif
 
 #if 1
-	brelse_dirty(blockget(mapping(inode), 5));
-	brelse_dirty(blockget(mapping(inode), 6));
+	blockput_dirty(blockget(mapping(inode), 5));
+	blockput_dirty(blockget(mapping(inode), 6));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 
-	brelse_dirty(blockget(mapping(inode), 6));
-	brelse_dirty(blockget(mapping(inode), 7));
+	blockput_dirty(blockget(mapping(inode), 6));
+	blockput_dirty(blockget(mapping(inode), 7));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 
 	exit(0);
 #endif
 
-	brelse_dirty(blockget(mapping(inode), 0));
-	brelse_dirty(blockget(mapping(inode), 1));
-	brelse_dirty(blockget(mapping(inode), 2));
-	brelse_dirty(blockget(mapping(inode), 3));
+	blockput_dirty(blockget(mapping(inode), 0));
+	blockput_dirty(blockget(mapping(inode), 1));
+	blockput_dirty(blockget(mapping(inode), 2));
+	blockput_dirty(blockget(mapping(inode), 3));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 
-	brelse_dirty(blockget(mapping(inode), 0));
-	brelse_dirty(blockget(mapping(inode), 1));
-	brelse_dirty(blockget(mapping(inode), 2));
-	brelse_dirty(blockget(mapping(inode), 3));
-	brelse_dirty(blockget(mapping(inode), 4));
-	brelse_dirty(blockget(mapping(inode), 5));
-	brelse_dirty(blockget(mapping(inode), 6));
+	blockput_dirty(blockget(mapping(inode), 0));
+	blockput_dirty(blockget(mapping(inode), 1));
+	blockput_dirty(blockget(mapping(inode), 2));
+	blockput_dirty(blockget(mapping(inode), 3));
+	blockput_dirty(blockget(mapping(inode), 4));
+	blockput_dirty(blockget(mapping(inode), 5));
+// 	blockput_dirty(blockget(mapping(inode), 6));
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 
 	//show_buffers(mapping(inode));

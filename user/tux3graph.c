@@ -169,7 +169,7 @@ static int draw_advance(struct graph_info *gi, struct cursor *cursor)
 	int depth = btree->root.depth, level = depth;
 	struct buffer_head *buffer;
 	do {
-		level_pop_brelse(cursor);
+		level_pop_blockput(cursor);
 		if (!level)
 			return 0;
 		level--;

@@ -112,7 +112,7 @@ int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum,
 
 	entry->inum = to_be_u64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
-	brelse_dirty(buffer);
+	blockput_dirty(buffer);
 	dir->i_mtime = dir->i_ctime = gettime();
 	mark_inode_dirty(dir);
 	return 0;
@@ -134,7 +134,7 @@ loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t in
 		tux_dirent *limit = bufdata(buffer) + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
-				brelse(buffer);
+				blockput(buffer);
 				tux_error(dir->i_sb, "zero-length directory entry");
 				return -EIO;
 			}
@@ -146,7 +146,7 @@ loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t in
 				goto create;
 			entry = (tux_dirent *)((char *)entry + rec_len);
 		}
-		brelse(buffer);
+		blockput(buffer);
 	}
 	buffer = blockget(mapping(dir), block = blocks);
 	entry = bufdata(buffer);
@@ -188,7 +188,7 @@ tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct
 		tux_dirent *limit = (void *)entry + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
-				brelse(buffer);
+				blockput(buffer);
 				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				err = -EIO;
 				goto error;
@@ -199,7 +199,7 @@ tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct
 			}
 			entry = next_entry(entry);
 		}
-		brelse(buffer);
+		blockput(buffer);
 	}
 error:
 	*result = NULL;		/* for debug */
@@ -263,7 +263,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 		tux_dirent *limit = base + min(size, blocksize) - TUX_REC_LEN(1);
 		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
-				brelse(buffer);
+				blockput(buffer);
 				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return -EIO;
 			}
@@ -274,13 +274,13 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 					(block << blockbits) | ((void *)entry - base),
 					from_be_u64(entry->inum), type);
 				if (lame) {
-					brelse(buffer);
+					blockput(buffer);
 					return 0;
 				}
 			}
 			file->f_pos += tux_rec_len_from_disk(entry->rec_len);
 		}
-		brelse(buffer);
+		blockput(buffer);
 		offset = 0;
 	}
 	return 0;
@@ -293,7 +293,7 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
-			brelse(buffer);
+			blockput(buffer);
 			tux_error(dir->i_sb, "zero-length directory entry");
 			return -EIO;
 		}
@@ -306,7 +306,7 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	memset(entry->name, 0, entry->name_len);
 	entry->name_len = entry->type = 0;
 	entry->inum = 0;
-	brelse_dirty(buffer);
+	blockput_dirty(buffer);
 	dir->i_ctime = dir->i_mtime = gettime();
 	mark_inode_dirty(dir);
 	return 0;
@@ -328,7 +328,7 @@ int tux_dir_is_empty(struct inode *dir)
 		tux_dirent *limit = bufdata(buffer) + blocksize - TUX_REC_LEN(1);
 		for (; entry <= limit; entry = next_entry(entry)) {
 			if (!entry->rec_len) {
-				brelse(buffer);
+				blockput(buffer);
 				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
 				return -EIO;
 			}
@@ -344,10 +344,10 @@ int tux_dir_is_empty(struct inode *dir)
 			} else if (entry->name[1] != '.')
 				goto not_empty;
 		}
-		brelse(buffer);
+		blockput(buffer);
 	}
 	return 0;
 not_empty:
-	brelse(buffer);
+	blockput(buffer);
 	return -ENOTEMPTY;
 }

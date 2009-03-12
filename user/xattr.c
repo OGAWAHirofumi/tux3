@@ -47,7 +47,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 2; i++) {
 		struct buffer_head *buffer = blockget(mapping(inode), tux_sb(inode->i_sb)->atomref_base + i);
 		memset(bufdata(buffer), 0, sb->blocksize);
-		brelse_dirty(buffer);
+		blockput_dirty(buffer);
 	}
 
 	if (1) {
@@ -118,11 +118,11 @@ int main(int argc, char *argv[])
 		unsigned atom = i, offset;
 		struct buffer_head *buffer = blockread_unatom(inode, atom, &offset);
 		loff_t where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-		brelse_dirty(buffer);
+		blockput_dirty(buffer);
 		buffer = blockread(mapping(inode), where >> sb->blockbits);
 		printf("atom %.3Lx at dirent %.4Lx, ", (L)atom, (L)where);
 		hexdump(bufdata(buffer) + (where & sb->blockmask), 16);
-		brelse(buffer);
+		blockput(buffer);
 	}
 	warn("---- atom recycle ----");
 	set_xattr(inode, "hello", 5, NULL, 0, 0);

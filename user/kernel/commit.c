@@ -87,7 +87,7 @@ static void clean_buffer(struct buffer_head *buffer)
 	/* Is this forked buffer? */
 	if (hlist_unhashed(&buffer->hashlink)) {
 		set_buffer_clean(buffer);
-		brelse(buffer);
+		blockput(buffer);
 		evict_buffer(buffer);
 	} else
 		set_buffer_clean(buffer);
@@ -184,12 +184,12 @@ static int stage_delta(struct sb *sb)
 		log->magic = to_be_u16(0x10ad);
 		log->logchain = to_be_u64(sb->logchain);
 		if ((err = devio(WRITE, sb_dev(sb), block << sb->blockbits, bufdata(buffer), sb->blocksize))) {
-			brelse(buffer);
+			blockput(buffer);
 			bfree(sb, block, 1);
 			return err;
 		}
 		defer_free(&sb->deflush, block, 1);
-		brelse(buffer);
+		blockput(buffer);
 		sb->logchain = block;
 	}
 	sb->logthis = sb->lognext;

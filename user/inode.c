@@ -97,7 +97,7 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 			memcpy(data, bufdata(buffer) + from, some);
 		trace_off("transfer %u bytes, block 0x%Lx, buffer %p", some, (L)bufindex(buffer), buffer);
 		//hexdump(bufdata(buffer) + from, some);
-		brelse(buffer);
+		blockput(buffer);
 		tail -= some;
 		data += some;
 		pos += some;
@@ -139,7 +139,7 @@ static int truncate_partial_block(struct inode *inode, loff_t size)
 	if (!buffer)
 		return -EIO;
 	memset(bufdata(buffer) + offset, 0, inode->i_sb->blocksize - offset);
-	brelse_dirty(buffer);
+	blockput_dirty(buffer);
 	return 0;
 }
 
@@ -173,7 +173,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	if (IS_ERR(entry))
 		return NULL; // ERR_PTR me!!!
 	inum_t inum = from_be_u64(entry->inum);
-	brelse(buffer);
+	blockput(buffer);
 	struct inode *inode = iget(dir->i_sb, inum);
 	return open_inode(inode) ? NULL : inode;
 }
@@ -183,7 +183,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
 	if (!IS_ERR(entry)) {
-		brelse(buffer);
+		blockput(buffer);
 		return NULL; // should allow create of a file that already exists!!!
 	}
 	if (PTR_ERR(entry) != -ENOENT)
@@ -256,7 +256,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 error_open:
 	free_inode(inode);
 error_iget:
-	brelse(buffer);
+	blockput(buffer);
 error:
 	return err;
 }

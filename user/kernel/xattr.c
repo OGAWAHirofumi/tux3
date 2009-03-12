@@ -62,7 +62,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 	if (!buffer)
 		return -ENOMEM;
 	u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-	brelse(buffer);
+	blockput(buffer);
 	buffer = blockread(mapping(atable), where >> sb->blockbits);
 	if (!buffer)
 		return -ENOMEM;
@@ -74,12 +74,12 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 	unsigned len = entry->name_len;
 	if (size) {
 		if (len > size) {
-			brelse(buffer);
+			blockput(buffer);
 			return -ERANGE;
 		}
 		memcpy(name, entry->name, len);
 	}
-	brelse(buffer);
+	blockput(buffer);
 	return len;
 }
 
@@ -108,8 +108,8 @@ void dump_atoms(struct inode *atable)
 				goto eek;
 			printf("%.*s = %x\n", len, name, atom);
 		}
-		brelse(lobuf);
-		brelse(hibuf);
+		blockput(lobuf);
+		blockput(hibuf);
 	}
 	return;
 eek:
@@ -133,7 +133,7 @@ void show_freeatoms(struct sb *sb)
 		if ((next >> 48) != 0xdead)
 			goto eek;
 		atom = next & ~(-1LL << 48);
-		brelse(buffer);
+		blockput(buffer);
 	}
 	return;
 eek:
@@ -152,7 +152,7 @@ static atom_t get_freeatom(struct inode *atable)
 	if (!buffer)
 		goto eek;
 	u64 next = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-	brelse(buffer);
+	blockput(buffer);
 	if ((next >> 48) != 0xdead)
 		goto eek;
 	sb->freeatom = next & ~(-1LL << 48);
@@ -176,7 +176,7 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
 	((be_u16 *)bufdata(buffer))[offset] = to_be_u16(low);
 	if (!low || (low & (-1 << 16))) {
-		brelse_dirty(buffer);
+		blockput_dirty(buffer);
 		if (!(buffer = blockread(mapping(atable), block + 1)))
 			return -EIO;
 		int high = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + (low >> 16);
@@ -184,14 +184,14 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 		((be_u16 *)bufdata(buffer))[offset] = to_be_u16(high);
 		kill = !(low | high);
 	}
-	brelse_dirty(buffer);
+	blockput_dirty(buffer);
 	if (kill) {
 		warn("delete atom %Lx", (L) atom);
 		buffer = blockread_unatom(atable, atom, &offset);
 		if (!buffer)
 			return -1; // better set a flag that unatom broke or something!!!
 		u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-		brelse(buffer);
+		blockput(buffer);
 		((be_u64 *)bufdata(buffer))[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
 		sb->freeatom = atom;
 		buffer = blockread(mapping(atable), where >> sb->blockbits);
@@ -200,7 +200,7 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 			tux_delete_entry(buffer, entry);
 		else {
 			warn("atom entry not found");
-			brelse(buffer);
+			blockput(buffer);
 		}
 	}
 	return 0;
@@ -218,7 +218,7 @@ static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
 	if (IS_ERR(entry))
 		return -1; /* FIXME: return correct errno */
 	atom_t atom = entry_atom(entry);
-	brelse(buffer);
+	blockput(buffer);
 	return atom;
 }
 
@@ -239,7 +239,7 @@ static atom_t make_atom(struct inode *atable, const char *name, unsigned len)
 	if (!buffer)
 		return -1; // better set a flag that unatom broke or something!!!
 	((be_u64 *)bufdata(buffer))[offset] = to_be_u64(where);
-	brelse_dirty(buffer);
+	blockput_dirty(buffer);
 
 	return atom;
 }

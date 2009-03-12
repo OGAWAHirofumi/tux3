@@ -916,6 +916,11 @@ int change_end(struct sb *sb);
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 
+static inline void blockput(struct buffer_head *buffer)
+{
+	put_bh(buffer);
+}
+
 static inline int buffer_empty(struct buffer_head *buffer)
 {
 	return 1;
@@ -926,10 +931,10 @@ static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return buffer;
 }
 
-static inline void brelse_dirty(struct buffer_head *buffer)
+static inline void blockput_dirty(struct buffer_head *buffer)
 {
 	mark_buffer_dirty(buffer);
-	brelse(buffer);
+	blockput(buffer);
 }
 
 static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)

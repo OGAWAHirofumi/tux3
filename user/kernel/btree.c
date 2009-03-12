@@ -108,7 +108,7 @@ static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
 	cursor->path[0].next = next;
 }
 
-static void level_replace_brelse(struct cursor *cursor, int level, struct buffer_head *buffer, struct index_entry *next)
+static void level_replace_blockput(struct cursor *cursor, int level, struct buffer_head *buffer, struct index_entry *next)
 {
 #ifdef CURSOR_DEBUG
 	assert(buffer);
@@ -116,7 +116,7 @@ static void level_replace_brelse(struct cursor *cursor, int level, struct buffer
 	assert(cursor->path[level].buffer != FREE_BUFFER);
 	assert(cursor->path[level].next != FREE_NEXT);
 #endif
-	brelse(cursor->path[level].buffer);
+	blockput(cursor->path[level].buffer);
 	cursor->path[level].buffer = buffer;
 	cursor->path[level].next = next;
 }
@@ -149,9 +149,9 @@ static struct buffer_head *level_pop(struct cursor *cursor)
 	return buffer;
 }
 
-static void level_pop_brelse(struct cursor *cursor)
+static void level_pop_blockput(struct cursor *cursor)
 {
-	brelse(level_pop(cursor));
+	blockput(level_pop(cursor));
 }
 
 static inline int level_finished(struct cursor *cursor, int level)
@@ -165,7 +165,7 @@ static inline int level_finished(struct cursor *cursor, int level)
 void release_cursor(struct cursor *cursor)
 {
 	while (cursor->len)
-		level_pop_brelse(cursor);
+		level_pop_blockput(cursor);
 }
 
 /* unused */
@@ -266,7 +266,7 @@ int advance(struct cursor *cursor)
 	struct buffer_head *buffer;
 
 	do {
-		level_pop_brelse(cursor);
+		level_pop_blockput(cursor);
 		if (!level)
 			return 0;
 		level--;
@@ -335,13 +335,13 @@ void show_tree(struct btree *btree)
 	show_tree_range(btree, 0, -1);
 }
 
-static void level_redirect_brelse(struct cursor *cursor, int level, struct buffer_head *clone)
+static void level_redirect_blockput(struct cursor *cursor, int level, struct buffer_head *clone)
 {
 	struct buffer_head *buffer = cursor->path[level].buffer;
 	unsigned offset = (void *)cursor->path[level].next - bufdata(buffer);
 
 	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
-	level_replace_brelse(cursor, level, clone, bufdata(clone) + offset);
+	level_replace_blockput(cursor, level, clone, bufdata(clone) + offset);
 }
 
 int cursor_redirect(struct cursor *cursor)
@@ -363,7 +363,7 @@ int cursor_redirect(struct cursor *cursor)
 			return PTR_ERR(clone);
 		block_t oldblock = bufindex(buffer), newblock = bufindex(clone);
 		trace("redirect block %Lx to %Lx", (L)oldblock, (L)newblock);
-		level_redirect_brelse(cursor, level, clone);
+		level_redirect_blockput(cursor, level, clone);
 		log_redirect(sb, oldblock, newblock);
 		defer_free(&sb->defree, oldblock, 1);
 
@@ -434,18 +434,18 @@ static void merge_nodes(struct bnode *node, struct bnode *node2)
 	node->count = to_be_u32(bcount(node) + bcount(node2));
 }
 
-static void brelse_free(struct btree *btree, struct buffer_head *buffer)
+static void blockput_free(struct btree *btree, struct buffer_head *buffer)
 {
 	struct sb *sb = btree->sb;
 	block_t block = bufindex(buffer);
 
 	if (bufcount(buffer) != 1) {
 		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
-		brelse(buffer);
+		blockput(buffer);
 		assert(bufcount(buffer) == 0);
 		return;
 	}
-	brelse(buffer);
+	blockput(buffer);
 	(btree->ops->bfree)(sb, block, 1);
 	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
@@ -488,11 +488,11 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 				(ops->leaf_merge)(btree, that, this);
 				remove_index(cursor, level);
 				mark_buffer_dirty(leafprev);
-				brelse_free(btree, leafbuf);
+				blockput_free(btree, leafbuf);
 				//dirty_buffer_count_check(sb);
 				goto keep_prev_leaf;
 			}
-			brelse(leafprev);
+			blockput(leafprev);
 		}
 		leafprev = leafbuf;
 keep_prev_leaf:
@@ -519,11 +519,11 @@ keep_prev_leaf:
 					merge_nodes(that, this);
 					remove_index(cursor, level - 1);
 					mark_buffer_dirty(prev[level]);
-					brelse_free(btree, level_pop(cursor));
+					blockput_free(btree, level_pop(cursor));
 					//dirty_buffer_count_check(sb);
 					goto keep_prev_node;
 				}
-				brelse(prev[level]);
+				blockput(prev[level]);
 			}
 			prev[level] = level_pop(cursor);
 keep_prev_node:
@@ -537,7 +537,7 @@ keep_prev_node:
 				while (depth > 1 && bcount(bufdata(prev[0])) == 1) {
 					trace("drop btree level");
 					btree->root.block = bufindex(prev[1]);
-					brelse_free(btree, prev[0]);
+					blockput_free(btree, prev[0]);
 					//dirty_buffer_count_check(sb);
 					depth = --btree->root.depth;
 					mark_btree_dirty(btree);
@@ -573,13 +573,13 @@ keep_prev_node:
 	}
 
 error_leaf_chop:
-	brelse(leafbuf);
+	blockput(leafbuf);
 out:
 	if (leafprev)
-		brelse(leafprev);
+		blockput(leafprev);
 	for (int i = 0; i < btree->root.depth; i++) {
 		if (prev[i])
-			brelse(prev[i]);
+			blockput(prev[i]);
 	}
 	free(prev);
 	release_cursor(cursor);
@@ -610,9 +610,9 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	block_t childblock = bufindex(leafbuf);
 
 	if (keep)
-		brelse(leafbuf);
+		blockput(leafbuf);
 	else {
-		level_pop_brelse(cursor);
+		level_pop_blockput(cursor);
 		level_push(cursor, leafbuf, NULL);
 	}
 	while (depth--) {
@@ -648,7 +648,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			mark_buffer_dirty(parentbuf);
 			newnext = newnode->entries + (at->next - &parent->entries[half]);
 			get_bh(newbuf);
-			level_replace_brelse(cursor, depth, newbuf, newnext);
+			level_replace_blockput(cursor, depth, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else
@@ -659,7 +659,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		mark_buffer_dirty(parentbuf);
 		childkey = newkey;
 		childblock = bufindex(newbuf);
-		brelse(newbuf);
+		blockput(newbuf);
 	}
 	trace("add tree level");
 	struct buffer_head *newbuf = new_node(btree);
@@ -761,13 +761,13 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
 	rootnode->count = to_be_u32(1);
 	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
-	brelse_dirty(rootbuf);
-	brelse_dirty(leafbuf);
+	blockput_dirty(rootbuf);
+	blockput_dirty(leafbuf);
 	return 0;
 
 error_leafbuf:
 	(ops->bfree)(sb, bufindex(rootbuf), 1);
-	brelse(rootbuf);
+	blockput(rootbuf);
 	rootbuf = leafbuf;
 error:
 	return PTR_ERR(rootbuf);
@@ -787,6 +787,6 @@ int free_btree(struct btree *btree)
 	/* FIXME: error check */
 	(btree->ops->bfree)(sb, from_be_u64(rootnode->entries[0].block), 1);
 	(btree->ops->bfree)(sb, bufindex(rootbuf), 1);
-	brelse(rootbuf);
+	blockput(rootbuf);
 	return 0;
 }
