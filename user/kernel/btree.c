@@ -18,8 +18,8 @@
 struct bnode
 {
 	be_u32 count, unused;
-	struct index_entry { be_u64 key; be_u64 block; } PACKED entries[];
-} PACKED;
+	struct index_entry { be_u64 key; be_u64 block; } __packed entries[];
+} __packed;
 /*
  * Note that the first key of an index block is never accessed.  This is
  * because for a btree, there is always one more key than nodes in each

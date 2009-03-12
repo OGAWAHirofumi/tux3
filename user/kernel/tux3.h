@@ -25,7 +25,6 @@ typedef loff_t block_t;
 
 typedef long long L; // widen for printf on 64 bit systems
 
-#define PACKED __attribute__ ((packed))
 #define fieldtype(compound, field) typeof(((compound *)NULL)->field)
 #define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
@@ -254,7 +253,7 @@ struct disksuper
 	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
 	be_u64 logchain;	/* Most recent delta commit block pointer */
 	be_u32 logcount;	/* Count of log blocks in the current log chain */
-};
+} __packed;
 
 struct root {
 	unsigned depth; /* btree levels not including leaf level */

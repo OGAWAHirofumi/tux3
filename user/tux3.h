@@ -35,6 +35,8 @@ void hexdump(void *data, unsigned size);
 #define __bitwise
 #endif
 
+#define __packed __attribute__ ((packed))
+
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /*
