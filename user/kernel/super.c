@@ -19,6 +19,7 @@ static struct kmem_cache *tux_inode_cachep;
 static void tux3_inode_init_once(void *mem)
 {
 	tuxnode_t *tuxi = mem;
+
 	INIT_LIST_HEAD(&tuxi->list);
 	inode_init_once(&tuxi->vfs_inode);
 }
@@ -42,6 +43,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 {
 	static struct timespec epoch;
 	tuxnode_t *tuxi = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
+
 	if (!tuxi)
 		return NULL;
 	tuxi->btree = (struct btree){ };

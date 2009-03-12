@@ -19,6 +19,7 @@
 int blockio(int rw, struct buffer_head *buffer, block_t block)
 {
 	struct sb *sb = tux_sb(buffer->map->inode->i_sb);
+
 	return devio(rw, sb_dev(sb), block << sb->blockbits, buffer->data, sb->blocksize);
 }
 
@@ -31,6 +32,7 @@ int replay(struct sb *sb)
 {
 	block_t logchain = sb->logchain;
 	unsigned logcount = from_be_u32(sb->super.logcount);
+
 	trace("load %u logblocks", logcount);
 	for (int i = logcount; i-- > 0;) {
 		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
@@ -99,6 +101,7 @@ int main(int argc, char *argv[])
 	if (argc < 2)
 		error("usage: %s <volname>", argv[0]);
 	int fd;
+
 	assert(fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU));
 	u64 volsize = 1 << 24;
 	assert(!ftruncate(fd, volsize));

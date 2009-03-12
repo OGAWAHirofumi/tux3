@@ -44,6 +44,7 @@ void log_end(struct sb *sb, void *pos)
 static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
 {
 	unsigned char *data = log_begin(sb, 8);
+
 	*data++ = intent;
 	*data++ = count;
 	log_end(sb, encode48(data, block));
@@ -62,6 +63,7 @@ void log_bfree(struct sb *sb, block_t block, unsigned count)
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
 {
 	unsigned char *data = log_begin(sb, 19);
+
 	*data++ = LOG_UPDATE;
 	data = encode48(data, child);
 	data = encode48(data, parent);
@@ -72,6 +74,7 @@ void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key)
 {
 return;
 	unsigned char *data = log_begin(sb, 19);
+
 	*data++ = LOG_IROOT;
 	data = encode48(data, newroot);
 	data = encode48(data, oldroot);
@@ -82,6 +85,7 @@ void log_iroot(struct sb *sb, block_t newroot, block_t oldroot)
 {
 return;
 	unsigned char *data = log_begin(sb, 19);
+
 	*data++ = LOG_IROOT;
 	data = encode48(data, newroot);
 	log_end(sb, encode48(data, oldroot));
@@ -91,6 +95,7 @@ void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 {
 return;
 	unsigned char *data = log_begin(sb, 19);
+
 	*data++ = LOG_REDIRECT;
 	data = encode48(data, newblock);
 	log_end(sb, encode48(data, oldblock));
@@ -129,6 +134,7 @@ int stash_value(struct stash *stash, u64 value)
 void empty_stash(struct stash *stash)
 {
 	struct flink_head *head = &stash->head;
+
 	if (!flink_empty(head)) {
 		struct page *page;
 		while (1) {
@@ -154,6 +160,7 @@ int unstash(struct sb *sb, struct stash *defree, unstash_t actor)
 {
 	struct flink_head *head = &defree->head;
 	struct page *page;
+
 	if (flink_empty(head))
 		return 0;
 	while (1) {

@@ -41,6 +41,7 @@ static int __tux_add_dirent(struct inode *dir, struct dentry *dentry, struct ino
 static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
 	int err = __tux_add_dirent(dir, dentry, inode);
+
 	if (!err)
 		d_instantiate(dentry, inode);
 	return err;
@@ -55,6 +56,7 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 {
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+
 	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_entry(buffer, entry);
 }
 
@@ -146,6 +148,7 @@ out:
 static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
+
 	change_begin(tux_sb(inode->i_sb));
 	int err = tux_del_dirent(dir, dentry);
 	if (!err) {
@@ -159,9 +162,8 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	int err;
+	int err = tux_dir_is_empty(inode);
 
-	err = tux_dir_is_empty(inode);
 	if (!err) {
 		change_begin(tux_sb(inode->i_sb));
 		err = tux_del_dirent(dir, dentry);

@@ -13,6 +13,7 @@ int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 	int err = devio(READ, sb_dev(sb), SB_LOC, super, SB_LEN);
+
 	if (err)
 		return err;
 	if (memcmp(super->magic, (char[])SB_MAGIC, sizeof(super->magic)))
@@ -43,6 +44,7 @@ int load_sb(struct sb *sb)
 int save_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
+
 	super->blockbits = to_be_u16(sb->blockbits);
 	super->volblocks = to_be_u64(sb->volblocks);
 	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
@@ -58,6 +60,7 @@ int save_sb(struct sb *sb)
 int load_itable(struct sb *sb)
 {
 	u64 iroot_val = from_be_u64(sb->super.iroot);
+
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
 	return 0;
 }

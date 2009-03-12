@@ -24,6 +24,7 @@ static void set_bits(u8 *bitmap, unsigned start, unsigned count)
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
 	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
 	unsigned loff = start >> 3, roff = limit >> 3;
+
 	if (loff == roff) {
 		bitmap[loff] |= lmask & rmask;
 		return;
@@ -40,6 +41,7 @@ static void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
 	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
 	unsigned loff = start >> 3, roff = limit >> 3;
+
 	if (loff == roff) {
 		bitmap[loff] &= ~lmask | ~rmask;
 		return;
@@ -56,6 +58,7 @@ static int all_set(u8 *bitmap, unsigned start, unsigned count)
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
 	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
 	unsigned loff = start >> 3, roff = limit >> 3;
+
 	if (loff == roff) {
 		unsigned mask = lmask & rmask;
 		return (bitmap[loff] & mask) == mask;
@@ -73,6 +76,7 @@ static int all_clear(u8 *bitmap, unsigned start, unsigned count) // untested
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
 	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
 	unsigned loff = start >> 3, roff = limit >> 3;
+
 	if (loff == roff) {
 		unsigned mask = lmask & rmask;
 		return !(bitmap[loff] & mask);
@@ -87,6 +91,7 @@ static int all_clear(u8 *bitmap, unsigned start, unsigned count) // untested
 static int bytebits(unsigned char c)
 {
 	unsigned count = 0;
+
 	for (; c; c >>= 1)
 		count += c & 1;
 	return count;
@@ -198,6 +203,7 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 	unsigned offset = (start & mapmask) >> 3;
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
+
 	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
 		struct buffer_head *buffer = blockread(mapping(inode), mapblock);
@@ -255,6 +261,7 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 	assert(blocks > 0);
 	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks;
+
 	if ((*block = balloc_from_range(sb, goal, total - goal, blocks)) >= 0)
 		goto found;
 	if ((*block = balloc_from_range(sb, 0, goal, blocks)) >= 0)
@@ -273,6 +280,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapblock = start >> mapshift;
 	char *why = "could not read bitmap buffer";
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), mapblock);
+
 	trace("free <- [%Lx]", (L)start);
 	if (!buffer)
 		goto eek;
@@ -301,6 +309,7 @@ int update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
 {
 	unsigned shift = sb->blockbits + 3, mask = (1 << shift) - 1;
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), start >> shift);
+
 	if (!buffer)
 		return -ENOMEM;
 	if (!(set ? all_clear : all_set)(bufdata(buffer), start & mask, count)) {

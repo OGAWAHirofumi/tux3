@@ -17,6 +17,7 @@
 int sync_super(struct sb *sb)
 {
 	int err;
+
 	printf("sync rootdir\n");
 	if ((err = tuxsync(sb->rootdir)))
 		return err;
@@ -38,6 +39,7 @@ int sync_super(struct sb *sb)
 static int clear_other_magic(struct sb *sb)
 {
 	int err;
+
 	/* Clear first and last block to get rid of other magic */
 	for (int i = 0; i <= 1; i++) {
 		loff_t loc = (loff_t[2]){ 0, (sb->volblocks - 1) << sb->blockbits }[i];
@@ -53,8 +55,8 @@ static int clear_other_magic(struct sb *sb)
 int make_tux3(struct sb *sb)
 {
 	struct inode *dir = &(struct inode){ .i_sb = sb, .i_mode = S_IFDIR | 0755 };
-
 	int err = clear_other_magic(sb);
+
 	if (err)
 		return err;
 

@@ -48,6 +48,7 @@ static inline atom_t entry_atom(tux_dirent *entry)
 static struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
 {
 	unsigned shift = tux_sb(atable->i_sb)->blockbits - 3;
+
 	*offset = atom & ~(-1 << shift);
 	return blockread(mapping(atable), tux_sb(atable->i_sb)->unatom_base + (atom >> shift));
 }
@@ -57,6 +58,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 	unsigned offset;
 	struct sb *sb = tux_sb(atable->i_sb);
 	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
+
 	if (!buffer)
 		return -ENOMEM;
 	u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
@@ -86,6 +88,7 @@ void dump_atoms(struct inode *atable)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
 	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
+
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + 2 * j;
 		struct buffer_head *lobuf, *hibuf;
@@ -119,6 +122,7 @@ void show_freeatoms(struct sb *sb)
 {
 	struct inode *atable = sb->atable;
 	atom_t atom = sb->freeatom;
+
 	while (atom) {
 		warn("free atom: %Lx", (L)atom);
 		unsigned offset;
@@ -140,6 +144,7 @@ static atom_t get_freeatom(struct inode *atable)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
 	atom_t atom = sb->freeatom;
+
 	if (!atom)
 		return sb->atomgen++;
 	unsigned offset;
@@ -164,6 +169,7 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 	unsigned block = sb->atomref_base + 2 * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
 	struct buffer_head *buffer;
+
 	if (!(buffer = blockread(mapping(atable), block)))
 		return -EIO;
 	int low = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + use;
@@ -208,6 +214,7 @@ static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
 {
 	struct buffer_head *buffer;
 	tux_dirent *entry = _tux_find_entry(atable, name, len, &buffer, tux_sb(atable->i_sb)->dictsize);
+
 	if (IS_ERR(entry))
 		return -1; /* FIXME: return correct errno */
 	atom_t atom = entry_atom(entry);
@@ -218,6 +225,7 @@ static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
 static atom_t make_atom(struct inode *atable, const char *name, unsigned len)
 {
 	atom_t atom = find_atom(atable, name, len);
+
 	if (atom != -1)
 		return atom;
 	atom = get_freeatom(atable);
@@ -245,6 +253,7 @@ int xcache_dump(struct inode *inode)
 	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
+
 	while (xattr < limit) {
 		if (xattr->size > tux_sb(inode->i_sb)->blocksize)
 			goto bail;
@@ -285,6 +294,7 @@ struct xcache *new_xcache(unsigned maxsize)
 {
 	warn("realloc xcache to %i", maxsize);
 	struct xcache *xcache = malloc(maxsize);
+
 	if (!xcache)
 		return NULL;
 	*xcache = (struct xcache){ .size = sizeof(struct xcache), .maxsize = maxsize };
@@ -316,6 +326,7 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data, u
 	int use = 0;
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache_lookup(xcache, atom);
+
 	if (IS_ERR(xattr)) {
 		if (PTR_ERR(xattr) != -ENOATTR || (flags & XATTR_REPLACE))
 			return PTR_ERR(xattr);
@@ -356,6 +367,7 @@ int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, u
 {
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
 	int ret;
+
 	mutex_lock(&atable->i_mutex);
 	atom_t atom = find_atom(atable, name, len);
 	if (atom == -1) {
@@ -376,6 +388,7 @@ out:
 int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags)
 {
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
+
 	mutex_lock(&atable->i_mutex);
 	change_begin(tux_sb(inode->i_sb));
 	atom_t atom = make_atom(atable, name, len);
@@ -390,6 +403,7 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 {
 	int err = 0;
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
+
 	mutex_lock(&atable->i_mutex);
 	change_begin(tux_sb(inode->i_sb));
 	atom_t atom = find_atom(atable, name, len);
@@ -421,6 +435,7 @@ int xattr_list(struct inode *inode, char *text, size_t size)
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
 	char *base = text, *top = text + size;
+
 	while (xattr < limit) {
 		atom_t atom = xattr->atom;
 		if (size) {
@@ -453,6 +468,7 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
 	struct xattr *xtop = xcache_limit(tux_inode(inode)->xcache);
 	void *limit = attrs + size - 3;
+
 	while (xattr < xtop) {
 		if (attrs >= limit)
 			break;
@@ -473,6 +489,7 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 	struct sb *sb = tux_sb(inode->i_sb);
 	unsigned total = 0, bytes;
 	void *limit = attrs + size;
+
 	while (attrs < limit - 1) {
 		unsigned head, kind;
 		attrs = decode16(attrs, &head);
@@ -499,6 +516,7 @@ unsigned encode_xsize(struct inode *inode)
 	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
 	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
 	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
+
 	while (xattr < limit) {
 		size += 2 + xatsize + xattr->size;
 		xattr = xcache_next(xattr);

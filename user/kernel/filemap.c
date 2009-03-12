@@ -315,6 +315,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
 	struct btree *btree = &tux_inode(inode)->btree;
+
 	if (!btree->root.depth) {
 		assert(create && sb->logmap == inode);
 		return 0;
@@ -384,6 +385,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 static struct buffer_head *find_get_buffer(struct page *page, int offset)
 {
 	struct buffer_head *bh = page_buffers(page);
+
 	while (offset--)
 		bh = bh->b_this_page;
 	get_bh(bh);
@@ -521,6 +523,7 @@ static int tux3_writepage(struct page *page, struct writeback_control *wbc)
 	struct sb *sb = tux_sb(page->mapping->host->i_sb);
 	change_begin(sb);
 	int err = block_write_full_page(page, tux3_get_block, wbc);
+
 	change_end(sb);
 	return err;
 }
@@ -538,6 +541,7 @@ static ssize_t tux3_direct_IO(int rw, struct kiocb *iocb,
 {
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
+
 	return blockdev_direct_IO(rw, iocb, inode, inode->i_sb->s_bdev, iov,
 				  offset, nr_segs, tux3_get_block, NULL);
 }

@@ -42,6 +42,7 @@ static inline unsigned bcount(struct bnode *node)
 static struct buffer_head *new_block(struct btree *btree)
 {
 	block_t block;
+
 	int err = btree->ops->balloc(btree->sb, 1, &block);
 	if (err)
 		return ERR_PTR(err);
@@ -57,6 +58,7 @@ static struct buffer_head *new_block(struct btree *btree)
 struct buffer_head *new_leaf(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
+
 	if (!IS_ERR(buffer)) {
 		memset(bufdata(buffer), 0, bufsize(buffer));
 		(btree->ops->leaf_init)(btree, bufdata(buffer));
@@ -67,6 +69,7 @@ struct buffer_head *new_leaf(struct btree *btree)
 static struct buffer_head *new_node(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
+
 	if (!IS_ERR(buffer))
 		memset(bufdata(buffer), 0, bufsize(buffer));
 	return buffer;
@@ -133,6 +136,7 @@ void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_
 static struct buffer_head *level_pop(struct cursor *cursor)
 {
 	struct buffer_head *buffer;
+
 #ifdef CURSOR_DEBUG
 	assert(cursor->len > 0);
 #endif
@@ -153,6 +157,7 @@ static void level_pop_brelse(struct cursor *cursor)
 static inline int level_finished(struct cursor *cursor, int level)
 {
 	struct bnode *node = cursor_node(cursor, level);
+
 	return cursor->path[level].next == node->entries + bcount(node);
 }
 // also write level_beginning!!!
@@ -178,6 +183,7 @@ static void cursor_check(struct cursor *cursor)
 		return;
 	tuxkey_t key = 0;
 	block_t block = cursor->btree->root.block;
+
 	for (int i = 0; i < cursor->len; i++) {
 		assert(bufindex(cursor->path[i].buffer) == block);
 		if (!cursor->path[i].next)
@@ -200,6 +206,7 @@ struct cursor *alloc_cursor(struct btree *btree, int extra)
 {
 	int maxlevel = btree->root.depth + 1 + extra;
 	struct cursor *cursor = malloc(alloc_cursor_size(maxlevel));
+
 	if (cursor) {
 		cursor->btree = btree;
 		cursor->len = 0;
@@ -227,6 +234,7 @@ int probe(struct cursor *cursor, tuxkey_t key)
 	struct btree *btree = cursor->btree;
 	unsigned i, depth = btree->root.depth;
 	struct buffer_head *buffer = vol_bread(btree->sb, btree->root.block);
+
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = bufdata(buffer);
@@ -256,6 +264,7 @@ int advance(struct cursor *cursor)
 	struct btree *btree = cursor->btree;
 	int depth = btree->root.depth, level = depth;
 	struct buffer_head *buffer;
+
 	do {
 		level_pop_brelse(cursor);
 		if (!level)
@@ -296,6 +305,7 @@ static be_u64 *next_keyp(struct cursor *cursor, int depth)
 tuxkey_t next_key(struct cursor *cursor, int depth)
 {
 	be_u64 *keyp = next_keyp(cursor, depth);
+
 	return keyp ? from_be_u64(*keyp) : -1;
 }
 // also write this_key!!!
@@ -304,6 +314,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
 	struct cursor *cursor = alloc_cursor(btree, 0);
+
 	if (!cursor)
 		error("out of memory");
 	if (probe(cursor, start))
@@ -328,6 +339,7 @@ static void level_redirect_brelse(struct cursor *cursor, int level, struct buffe
 {
 	struct buffer_head *buffer = cursor->path[level].buffer;
 	unsigned offset = (void *)cursor->path[level].next - bufdata(buffer);
+
 	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
 	level_replace_brelse(cursor, level, clone, bufdata(clone) + offset);
 }
@@ -340,6 +352,7 @@ int cursor_redirect(struct cursor *cursor)
 	struct btree *btree = cursor->btree;
 	unsigned level = btree->root.depth;
 	struct sb *sb = btree->sb;
+
 	while (1) {
 		struct buffer_head *buffer = cursor->path[level].buffer;
 		if (buffer_dirty(buffer))
@@ -425,6 +438,7 @@ static void brelse_free(struct btree *btree, struct buffer_head *buffer)
 {
 	struct sb *sb = btree->sb;
 	block_t block = bufindex(buffer);
+
 	if (bufcount(buffer) != 1) {
 		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
 		brelse(buffer);
@@ -594,6 +608,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	struct btree *btree = cursor->btree;
 	int err, depth = btree->root.depth;
 	block_t childblock = bufindex(leafbuf);
+
 	if (keep)
 		brelse(leafbuf);
 	else {
@@ -681,6 +696,7 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 	trace("split leaf");
 	struct btree *btree = cursor->btree;
 	struct buffer_head *newbuf = new_leaf(btree);
+
 	if (IS_ERR(newbuf)) {
 		/* the rule: release cursor at point of error */
 		release_cursor(cursor);
@@ -699,6 +715,7 @@ void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 {
 	struct btree *btree = cursor->btree;
 	int err = cursor_redirect(cursor);
+
 	if (err)
 		goto error;
 	for (int i = 0; i < 2; i++) {
@@ -762,6 +779,7 @@ int free_btree(struct btree *btree)
 	assert(btree->root.depth == 1);
 	struct sb *sb = btree->sb;
 	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
+
 	if (!rootbuf)
 		return -EIO;
 	struct bnode *rootnode = bufdata(rootbuf);

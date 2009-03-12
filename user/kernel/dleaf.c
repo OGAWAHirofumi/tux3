@@ -147,6 +147,7 @@ static int dleaf_free2(struct dleaf *leaf, unsigned blocksize)
 	struct group *gdict = (void *)leaf + blocksize, *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gstop, *entry = edict;
 	struct diskextent *extents = leaf->table;
+
 	for (struct group *group = gdict; group-- > gstop;)
 		extents += entry_limit(entry -= group_count(group));
 	return (void *)entry - (void *)extents;
@@ -286,6 +287,7 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vlea
 	unsigned entries = edict - ebase;
 	unsigned groups2 = dleaf_split_at(from, into, edict - entries / 2, blocksize);
 	struct group *gdict2 = (void *)leaf2 + blocksize;
+
 	return get_index(gdict2 - 1, (struct entry *)(gdict2 - groups2) - 1);
 }
 
@@ -481,7 +483,6 @@ static void dwalk_check(struct dwalk *walk)
 /* Set the cursor to next extent */
 int dwalk_next(struct dwalk *walk)
 {
-	trace(" ");
 	/* last extent of this dleaf, or empty dleaf */
 	if (dwalk_end(walk))
 		return 0;
@@ -504,11 +505,11 @@ int dwalk_next(struct dwalk *walk)
 /* Back to the previous extent. (i.e. rewind the previous dwalk_next()) */
 int dwalk_back(struct dwalk *walk)
 {
-	trace(" ");
 	/* first extent of this dleaf, or empty dleaf */
 	if (dwalk_first(walk))
 		return 0;
 	struct diskextent *entry_exbase;
+
 	if (walk->entry + 1 == walk->estop + group_count(walk->group))
 		entry_exbase = walk->exbase;
 	else
@@ -685,8 +686,8 @@ void dwalk_chop(struct dwalk *walk)
 	trace(" ");
 	if (dwalk_end(walk))
 		return;
-
 	struct dleaf *leaf = walk->leaf;
+
 	if (dwalk_first(walk)) {
 		unsigned blocksize = (void *)walk->gdict - (void *)leaf;
 		set_dleaf_groups(leaf, 0);

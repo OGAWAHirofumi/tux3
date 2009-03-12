@@ -17,6 +17,7 @@
 static int check_present(struct inode *inode)
 {
 	tuxnode_t *tuxnode = tux_inode(inode);
+
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFSOCK:
 	case S_IFIFO:
@@ -73,6 +74,7 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 			    dev_t rdev)
 {
 	struct inode *inode = new_inode(dir->i_sb);
+
 	if (!inode)
 		return NULL;
 	assert(!tux_inode(inode)->present);
@@ -106,9 +108,9 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 struct inode *tux_new_volmap(struct sb *sb)
 {
 	struct inode *inode = new_inode(vfs_sb(sb));
+
 	if (!inode)
 		return NULL;
-
 	inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
 	tux_set_inum(inode, TUX_VOLMAP_INO);
 	tux_setup_inode(inode);
@@ -121,6 +123,7 @@ static int open_inode(struct inode *inode)
 	struct btree *itable = itable_btree(sb);
 	int err;
 	struct cursor *cursor = alloc_cursor(itable, 0);
+
 	if (!cursor)
 		return -ENOMEM;
 	down_read(&cursor->btree->lock);
@@ -160,6 +163,7 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
 	assert(size);
 	void *base = tree_expand(cursor, tux_inode(inode)->inum, size);
+
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 	void *attr = encode_attrs(inode, base, size);
@@ -198,6 +202,7 @@ static int make_inode(struct inode *inode, inum_t goal)
 	struct btree *itable = itable_btree(sb);
 	int err = -ENOENT, depth = itable->root.depth;
 	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for now depth */
+
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
@@ -248,6 +253,7 @@ static int save_inode(struct inode *inode)
 	struct btree *itable = itable_btree(sb);
 	int err;
 	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for new depth */
+
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
@@ -372,6 +378,7 @@ int tux3_write_inode(struct inode *inode, int do_sync)
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 {
 	struct inode *inode = dentry->d_inode;
+
 	generic_fillattr(inode, stat);
 	stat->ino = tux_inode(inode)->inum;
 	return 0;
@@ -518,6 +525,7 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 		.mode	= mode,
 	};
 	struct inode *inode = tux_new_inode(dir, &iattr, rdev);
+
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 	int err = make_inode(inode, tux_sb(dir->i_sb)->nextalloc);

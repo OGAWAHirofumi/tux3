@@ -48,6 +48,7 @@
 static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
 {
 	unsigned len = from_be_u16(dlen);
+
 	if (len == TUX_MAX_REC_LEN)
 		return 1 << 16;
 	return len;
@@ -108,6 +109,7 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode)
 {
 	struct inode *dir = buffer_inode(buffer);
+
 	entry->inum = to_be_u64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	brelse_dirty(buffer);
@@ -123,6 +125,7 @@ loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t in
 	unsigned reclen = TUX_REC_LEN(len), rec_len, name_len, offset;
 	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
 	unsigned blocks = *size >> blockbits, block;
+
 	for (block = 0; block < blocks; block++) {
 		buffer = blockread(mapping(dir), block);
 		if (!buffer)
@@ -174,6 +177,7 @@ tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
 	unsigned blocks = size >> tux_sb(dir->i_sb)->blockbits, block;
 	int err = -ENOENT;
+
 	for (block = 0; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
 		if (!buffer) {
@@ -237,6 +241,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 	unsigned blockmask = blocksize - 1;
 	unsigned blocks = dir->i_size >> blockbits;
 	unsigned offset = pos & blockmask;
+
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
 		if (!buffer)
@@ -285,6 +290,7 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 {
 	struct inode *dir = buffer_inode(buffer);
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
+
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
 			brelse(buffer);

@@ -33,6 +33,7 @@ unsigned atsize[MAX_ATTRS] = {
 unsigned encode_asize(unsigned bits)
 {
 	unsigned need = 0;
+
 	for (int kind = 0; kind < VAR_ATTRS; kind++)
 		if ((bits & (1 << kind)))
 			need += atsize[kind] + 2;
@@ -44,6 +45,7 @@ int attr_check(void *attrs, unsigned size)
 {
 	void *limit = attrs + size;
 	unsigned head;
+
 	while (attrs < limit - 1)
 	{
 		attrs = decode16(attrs, &head);
@@ -61,6 +63,7 @@ void dump_attrs(struct inode *inode)
 {
 	//printf("present = %x\n", inode->present);
 	tuxnode_t *tuxnode = tux_inode(inode);
+
 	for (int kind = 0; kind < MAX_ATTRS; kind++) {
 		if (!(tux_inode(inode)->present & (1 << kind)))
 			continue;
@@ -99,6 +102,7 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 	trace_off("encode %u attr bytes", size);
 	tuxnode_t *tuxnode = tux_inode(inode);
 	void *limit = attrs + size - 3;
+
 	for (int kind = 0; kind < VAR_ATTRS; kind++) {
 		if (!(tuxnode->present & (1 << kind)))
 			continue;
@@ -141,6 +145,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	void *limit = attrs + size;
 	u64 v64;
 	u32 v32;
+
 	while (attrs < limit - 1) {
 		unsigned head;
 		attrs = decode16(attrs, &head);
