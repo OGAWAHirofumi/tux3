@@ -10,6 +10,7 @@
 #include <linux/buffer_head.h>
 #include <linux/bio.h>
 #include <linux/mutex.h>
+#include <linux/magic.h>
 
 typedef loff_t block_t;
 
@@ -34,8 +35,6 @@ typedef u64 fixed32; /* Tux3 time values */
 typedef u32 millisecond_t;
 typedef u64 inum_t;
 typedef u64 tuxkey_t;
-
-#include "magic.h"
 
 #ifdef __KERNEL__
 /* Endian support */
@@ -208,6 +207,20 @@ static inline void flink_last_del(struct flink_head *head)
 
 /* Tux3 disk format */
 
+#define TUX3_MAGIC "tux3" "\xdd\x09\x03\x10"
+/*
+ * TUX3_LABEL includes the date of the last incompatible disk format change
+ * NOTE: Always update this history for each incompatible change!
+ *
+ * Disk Format Revision History
+ *
+ * 2008-08-06: Beginning of time
+ * 2008-09-06: Actual checking starts
+ * 2008-12-12: Atom dictionary size in disksuper instead of atable->i_size
+ * 2009-02-28: Attributes renumbered, rdev added
+ * 2009-03-10: Alignment fix of disksuper
+ */
+
 #define MAX_INODES_BITS 48
 #define MAX_BLOCKS_BITS 48
 #define MAX_FILESIZE_BITS 60
@@ -227,7 +240,7 @@ static inline void flink_last_del(struct flink_head *head)
 struct disksuper
 {
 	/* Update magic on any incompatible format change */
-	char magic[TUX3_MAGIC_SIZE];
+	char magic[8];		/* Contains TUX3_LABEL magic string */
 	be_u64 birthdate;	/* Volume creation date */
 	be_u64 flags;		/* Need to assign some flags */
 	be_u64 iroot;		/* Root of the inode table btree */
