@@ -48,25 +48,6 @@ int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned 
 		.bv_len = len });
 }
 
-void hexdump(void *data, unsigned size)
-{
-	while (size) {
-		unsigned char *p;
-		int w = 16, n = size < w? size: w, pad = w - n;
-		printk("%p:  ", data);
-		for (p = data; p < (unsigned char *)data + n;)
-			printk("%02hx ", *p++);
-		printk("%*.s  \"", pad*3, "");
-		for (p = data; p < (unsigned char *)data + n;) {
-			int c = *p++;
-			printk("%c", c < ' ' || c > 127 ? '.' : c);
-		}
-		printk("\"\n");
-		data += w;
-		size -= n;
-	}
-}
-
 /* Bitmap operations... try to use linux/lib/bitmap.c */
 
 void set_bits(uint8_t *bitmap, unsigned start, unsigned count)
@@ -142,4 +123,9 @@ int all_clear(uint8_t *bitmap, unsigned start, unsigned count) // untested
 int bytebits(uint8_t c)
 {
 	return hweight8(c);
+}
+
+void hexdump(void *data, unsigned size)
+{
+	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_ADDRESS, 16, 1, data, size, 1);
 }
