@@ -5,6 +5,65 @@
 
 #include "tux3.h"
 
+/*
+ * Log cache scheme
+ *
+ *  - The purpose of the log is to reconstruct pinned metadata that has become
+ *    dirty since the last log flush, in case of shutdown without log flush.
+ *
+ *  - Log blocks are cached in the page cache mapping of an internal inode,
+ *    sb->logmap.  The inode itself is not used, just the mapping, so with a
+ *    some work we could create/destroy the mapping by itself without the inode.
+ *
+ *  - Log blocks are indexed logically in sb->logmap, starting from zero at
+ *    mount time and incrementing for each new log block and possibly wrapping
+ *    back to zero if the filesystem is mounted long enough.
+ *
+ *  - There is no direct mapping from the log block cache to physical disk,
+ *    instead there is a reverse chain starting from sb->logchain.  Log blocks
+ *    are read only at replay on mount and written only at delta transition.
+ *
+ *  - sb->logbase: Logical index of the oldest log block in flush cycle
+ *  - sb->logthis: Logical index of the oldest log block in delta cycle
+ *  - sb->lognext: Logmap index of next log block
+ *  - sb->logpos/logtop: Pointer/limit to write next log entry
+ *  - sb->logbuf: Cached log block referenced by logpos/logtop
+ *
+ *  - Log blocks older than the last committed delta are not actually needed
+ *    in normal operation, just at replay, so sb->logbase might not actually
+ *    be needed.
+ *
+ *  - At delta staging, physical addresses are assigned for log blocks from
+ *    logthis to lognext, reverse chain pointers are set in the log blocks, and
+ *    all log blocks for the delta are submitted for writeout.
+ *
+ *  - At delta commit, count of log blocks from logthis to lognext is recorded
+ *    in superblock (later, metablock) which are the log blocks for the current
+ *    flush cycle.
+ *
+ *  - On delta completion, if log was flushed in current delta then log blocks
+ *    are freed for reuse.  Log blocks to be freed are recorded in sb->deflush,
+ *    which is appended to sb->defree, the per-delta deferred free list at log
+ *    flush time.
+ *
+ *  - On replay, sb->logcount log blocks for current flush cycle are loaded in
+ *    reverse order into logmap, using the log block reverse chain pointers.
+ *
+ * Log block format
+ *
+ *  - Each log block has a header and one or more variable sized entries,
+ *    serially encoded.
+ *
+ *  - Format and handling of log block entries is similar to inode attributes.
+ *
+ *  - Log block header records size of log block payload in ->bytes.
+ *
+ *  - Each log block entry has a one byte type code implying its length.
+ *
+ *  - Integer fields are big endian, byte aligned.
+ *
+ */
+
 void log_next(struct sb *sb)
 {
 	sb->logbuf = blockget(mapping(sb->logmap), sb->lognext++);
