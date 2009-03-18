@@ -84,7 +84,7 @@ void log_finish(struct sb *sb)
 void *log_begin(struct sb *sb, unsigned bytes)
 {
 	mutex_lock(&sb->loglock);
-	if (1 || sb->logpos + bytes > sb->logtop) {
+	if (sb->logpos + bytes > sb->logtop) {
 		if (sb->logbuf)
 			log_finish(sb);
 		log_next(sb);
