@@ -162,6 +162,11 @@ return;
 
 /* Stash infrastructure (struct stash must be initialized by zero clear) */
 
+/*
+ * Stash utility - store an arbitrary number of u64 values in a linked queue
+ * of pages.
+ */
+
 static inline struct link *page_link(struct page *page)
 {
 	return (void *)&page->private;
@@ -208,16 +213,9 @@ void empty_stash(struct stash *stash)
 	}
 }
 
-/* Deferred free list */
-
-int defer_free(struct stash *defree, block_t block, unsigned count)
+int unstash(struct sb *sb, struct stash *stash, unstash_t actor)
 {
-	return stash_value(defree, ((u64)count << 48) + block);
-}
-
-int unstash(struct sb *sb, struct stash *defree, unstash_t actor)
-{
-	struct flink_head *head = &defree->head;
+	struct flink_head *head = &stash->head;
 	struct page *page;
 
 	if (flink_empty(head))
@@ -226,8 +224,8 @@ int unstash(struct sb *sb, struct stash *defree, unstash_t actor)
 		int err;
 		page = flink_next_entry(head, struct page, private);
 		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
-		if (top == defree->top)
-			top = defree->pos;
+		if (top == stash->top)
+			top = stash->pos;
 		for (; vec < top; vec++)
 			if ((err = actor(sb, *vec)))
 				return err;
@@ -236,8 +234,15 @@ int unstash(struct sb *sb, struct stash *defree, unstash_t actor)
 		flink_del_next(head);
 		__free_page(page);
 	}
-	defree->pos = page_address(page);
+	stash->pos = page_address(page);
 	return 0;
+}
+
+/* Deferred free list */
+
+int defer_free(struct stash *defree, block_t block, unsigned count)
+{
+	return stash_value(defree, ((u64)count << 48) + block);
 }
 
 void destroy_defree(struct stash *defree)
