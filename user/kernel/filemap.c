@@ -646,4 +646,17 @@ int write_bitmap(struct buffer_head *buffer)
 #endif
 	return 0;
 }
+
+int bitmap_io(struct buffer_head *buffer, int write)
+{
+#ifdef __KERNEL__
+	if (write)
+		clear_buffer_dirty(buffer);
+	else
+		set_buffer_uptodate(buffer);
+	return 0;
+#else
+	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
+#endif
+}
 #endif /* __KERNEL__ */

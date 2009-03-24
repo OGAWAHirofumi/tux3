@@ -885,10 +885,11 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
 
 /* log.c */
+void log_next(struct sb *sb);
+void log_finish(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
-void log_finish(struct sb *sb);
 void log_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);
 void log_iroot(struct sb *sb, block_t newroot, block_t oldroot);
