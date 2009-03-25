@@ -70,9 +70,11 @@ int replay(struct sb *sb)
 				goto unknown;
 			}
 		}
+		log_drop(sb);
 		continue;
 unknown:
 		warn("unrecognized log code 0x%x, 0x%x", code, LOG_UPDATE);
+		log_drop(sb);
 		return -EINVAL;
 	}
 	return 0;

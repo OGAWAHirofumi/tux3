@@ -71,14 +71,19 @@ void log_next(struct sb *sb)
 	sb->logtop = bufdata(sb->logbuf) + sb->blocksize;
 }
 
+void log_drop(struct sb *sb)
+{
+	blockput(sb->logbuf);
+	sb->logbuf = NULL;
+}
+
 void log_finish(struct sb *sb)
 {
 	struct logblock *log = bufdata(sb->logbuf);
 	assert(sb->logtop >= sb->logpos);
 	log->bytes = to_be_u16(sb->logpos - log->data);
 	memset(sb->logpos, 0, sb->logtop - sb->logpos);
-	blockput(sb->logbuf);
-	sb->logbuf = NULL;
+	log_drop(sb);
 }
 
 void *log_begin(struct sb *sb, unsigned bytes)
