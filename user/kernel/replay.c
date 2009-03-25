@@ -10,6 +10,15 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 	return devio(rw, sb_dev(sb), block << sb->blockbits, bufdata(buffer), sb->blocksize);
 }
 
+static unsigned logsize[LOG_TYPES] = {
+	[LOG_ALLOC] = 8,
+	[LOG_FREE] = 8,
+	[LOG_UPDATE] = 19,
+	[LOG_DROOT] = 19,
+	[LOG_IROOT] = 19,
+	[LOG_REDIRECT] = 19,
+};
+
 int replay(struct sb *sb)
 {
 	block_t logchain = sb->logchain;
@@ -35,12 +44,42 @@ int replay(struct sb *sb)
 		blockput(buffer);
 	}
 
+	unsigned code;
 	for (sb->lognext = 0; sb->lognext < logcount;) {
 		trace("log block %i", sb->lognext);
 		log_next(sb);
 		struct logblock *log = bufdata(sb->logbuf);
 		unsigned char *data = log->data;
-		unsigned code;
+		while (data < log->data + from_be_u16(log->bytes)) {
+			switch (code = *data++) {
+			case LOG_UPDATE:
+			{
+				u64 child, parent, key;
+				data = decode48(data, &child);
+				data = decode48(data, &parent);
+				data = decode48(data, &key);
+				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", (L)child, (L)parent, (L)key);
+				break;
+			}
+			case LOG_ALLOC:
+			case LOG_FREE:
+				data += logsize[code] - 1;
+				break;
+			case LOG_DROOT:
+			case LOG_IROOT:
+			case LOG_REDIRECT:
+			default:
+				goto unknown;
+			}
+		}
+		log_drop(sb);
+	}
+
+	for (sb->lognext = 0; sb->lognext < logcount;) {
+		trace("log block %i", sb->lognext);
+		log_next(sb);
+		struct logblock *log = bufdata(sb->logbuf);
+		unsigned char *data = log->data;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
 			case LOG_ALLOC:
@@ -55,27 +94,21 @@ int replay(struct sb *sb)
 				break;
 			}
 			case LOG_UPDATE:
-			{
-				u64 child, parent, key;
-				data = decode48(data, &child);
-				data = decode48(data, &parent);
-				data = decode48(data, &key);
-				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", (L)child, (L)parent, (L)key);
-				break;
-			}
 			case LOG_DROOT:
 			case LOG_IROOT:
 			case LOG_REDIRECT:
+				data += logsize[code] - 1;
+				break;
 			default:
 				goto unknown;
 			}
 		}
 		log_drop(sb);
-		continue;
-unknown:
-		warn("unrecognized log code 0x%x, 0x%x", code, LOG_UPDATE);
-		log_drop(sb);
-		return -EINVAL;
 	}
+
 	return 0;
+unknown:
+	warn("unrecognized log code 0x%x, 0x%x", code, LOG_UPDATE);
+	log_drop(sb);
+	return -EINVAL;
 }
