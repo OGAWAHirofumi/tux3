@@ -14,8 +14,6 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_ALLOC] = 8,
 	[LOG_FREE] = 8,
 	[LOG_UPDATE] = 19,
-	[LOG_DROOT] = 19,
-	[LOG_IROOT] = 19,
 	[LOG_REDIRECT] = 19,
 };
 
@@ -65,8 +63,6 @@ int replay(struct sb *sb)
 			case LOG_FREE:
 				data += logsize[code] - 1;
 				break;
-			case LOG_DROOT:
-			case LOG_IROOT:
 			case LOG_REDIRECT:
 			default:
 				goto unknown;
@@ -94,8 +90,6 @@ int replay(struct sb *sb)
 				break;
 			}
 			case LOG_UPDATE:
-			case LOG_DROOT:
-			case LOG_IROOT:
 			case LOG_REDIRECT:
 				data += logsize[code] - 1;
 				break;

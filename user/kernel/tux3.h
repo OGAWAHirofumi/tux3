@@ -362,8 +362,6 @@ struct logblock { be_u16 magic, bytes; be_u64 logchain; unsigned char data[]; };
 enum {	LOG_ALLOC = 0x33,
 	LOG_FREE,
 	LOG_UPDATE,
-	LOG_DROOT,
-	LOG_IROOT,
 	LOG_REDIRECT,
 	LOG_TYPES };
 
