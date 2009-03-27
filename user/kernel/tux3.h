@@ -378,7 +378,7 @@ enum {	LOG_ALLOC = 0x33,
 
 typedef struct {
 	struct btree btree;
-	inum_t inum;		/* Inode number.  Fixme: also in generic inode */
+	inum_t inum;		/* Inode number */
 	unsigned present;	/* Attributes decoded from or to be encoded to inode table */
 	struct xcache *xcache;	/* Extended attribute cache */
 	struct list_head list;	/* link for dirty inodes */
