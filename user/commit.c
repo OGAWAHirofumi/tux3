@@ -39,12 +39,10 @@ int main(int argc, char *argv[])
 	sb->entries_per_node = (sb->blocksize - sizeof(struct bnode)) / sizeof(struct index_entry);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
-	INIT_LIST_HEAD(&sb->commit);
-	INIT_LIST_HEAD(&sb->pinned);
 	assert(!make_tux3(sb));
 	sb->bitmap->map->io = bitmap_io;
 	if (1) {
-		sb->super = (struct disksuper){ .magic = TUX3_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
+		sb->super = (struct disksuper){ .magic = TUX3_MAGIC, .volblocks = to_be_u64(sb->volblocks) };
 		for (int i = 0; i < 29; i++) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 			char name[100];

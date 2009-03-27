@@ -151,6 +151,8 @@ static int stage_delta(struct sb *sb)
 			return err;
 	}
 
+	sb->delta++;
+
 #ifndef __KERNEL__
 //	assert(!tuxsync(sb->rootdir));
 	/* btree node and leaf blocks */
@@ -163,8 +165,6 @@ static int stage_delta(struct sb *sb)
 		evict_buffer(buffer);
 	}
 #endif
-
-	sb->delta++;
 
 	/* allocate and write log blocks */
 
@@ -228,7 +228,6 @@ int change_end(struct sb *sb)
 		down_write(&sb->delta_lock);
 		if (sb->delta == delta) {
 			trace(">>> commit delta %u", sb->delta);
-			++sb->delta;
 			stage_delta(sb);
 			commit_delta(sb);
 		}
