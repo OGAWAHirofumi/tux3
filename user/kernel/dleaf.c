@@ -76,7 +76,7 @@ static void dleaf_btree_init(struct btree *btree)
 int dleaf_init(struct btree *btree, vleaf *leaf)
 {
 	*to_dleaf(leaf) = (struct dleaf){
-		.magic = to_be_u16(0x1eaf),
+		.magic = to_be_u16(TUX3_MAGIC_DLEAF),
 		.free = to_be_u16(sizeof(struct dleaf)),
 		.used = to_be_u16(btree->sb->blocksize) };
 	return 0;
@@ -84,7 +84,7 @@ int dleaf_init(struct btree *btree, vleaf *leaf)
 
 static int dleaf_sniff(struct btree *btree, vleaf *leaf)
 {
-	return from_be_u16(to_dleaf(leaf)->magic) == 0x1eaf;
+	return to_dleaf(leaf)->magic == to_be_u16(TUX3_MAGIC_DLEAF);
 }
 
 unsigned dleaf_free(struct btree *btree, vleaf *leaf)

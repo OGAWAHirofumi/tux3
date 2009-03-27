@@ -33,7 +33,7 @@ int replay(struct sb *sb)
 			return err;
 		}
 		struct logblock *log = bufdata(buffer);
-		if (from_be_u16(log->magic) != 0x10ad) {
+		if (log->magic != to_be_u16(TUX3_MAGIC_LOG)) {
 			warn("bad log magic %x", from_be_u16(log->magic));
 			blockput(buffer);
 			return -EINVAL;

@@ -61,13 +61,13 @@ static void ileaf_btree_init(struct btree *btree)
 static int ileaf_init(struct btree *btree, vleaf *leaf)
 {
 	trace("initialize inode leaf %p", leaf);
-	*(struct ileaf *)leaf = (struct ileaf){ to_be_u16(0x90de) };
+	*(struct ileaf *)leaf = (struct ileaf){ to_be_u16(TUX3_MAGIC_ILEAF) };
 	return 0;
 }
 
 static int ileaf_sniff(struct btree *btree, vleaf *leaf)
 {
-	return ((struct ileaf *)leaf)->magic == to_be_u16(0x90de);
+	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
 }
 
 static unsigned ileaf_need(struct btree *btree, vleaf *vleaf)
@@ -152,7 +152,7 @@ int ileaf_check(struct btree *btree, struct ileaf *leaf)
 	char *why;
 
 	why = "not an inode table leaf";
-	if (leaf->magic != to_be_u16(0x90de))
+	if (leaf->magic != to_be_u16(TUX3_MAGIC_ILEAF))
 		goto eek;
 	why = "dict out of order";
 	if (!isinorder(btree, leaf))

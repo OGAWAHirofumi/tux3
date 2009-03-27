@@ -181,7 +181,7 @@ static int stage_delta(struct sb *sb)
 			return -ENOMEM;
 		}
 		struct logblock *log = bufdata(buffer);
-		log->magic = to_be_u16(0x10ad);
+		assert(log->magic == to_be_u16(TUX3_MAGIC_LOG));
 		log->logchain = to_be_u64(sb->logchain);
 		if ((err = devio(WRITE, sb_dev(sb), block << sb->blockbits, bufdata(buffer), sb->blocksize))) {
 			blockput(buffer);

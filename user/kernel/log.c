@@ -94,7 +94,7 @@ void *log_begin(struct sb *sb, unsigned bytes)
 			log_finish(sb);
 		log_next(sb);
 		*(struct logblock *)bufdata(sb->logbuf) = (struct logblock){
-			.magic = to_be_u16(0xc0de) };
+			.magic = to_be_u16(TUX3_MAGIC_LOG) };
 	}
 	return sb->logpos;
 }

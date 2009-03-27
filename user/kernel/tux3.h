@@ -207,7 +207,7 @@ static inline void flink_last_del(struct flink_head *head)
 
 /* Tux3 disk format */
 
-#define TUX3_MAGIC "tux3" "\xdd\x09\x03\x10"
+#define TUX3_MAGIC		"tux3" "\xdd\x09\x03\x10"
 /*
  * TUX3_LABEL includes the date of the last incompatible disk format change
  * NOTE: Always update this history for each incompatible change!
@@ -220,6 +220,10 @@ static inline void flink_last_del(struct flink_head *head)
  * 2009-02-28: Attributes renumbered, rdev added
  * 2009-03-10: Alignment fix of disksuper
  */
+
+#define TUX3_MAGIC_LOG		0x10ad
+#define TUX3_MAGIC_DLEAF	0x1eaf
+#define TUX3_MAGIC_ILEAF	0x90de
 
 #define MAX_INODES_BITS 48
 #define MAX_BLOCKS_BITS 48
