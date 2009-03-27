@@ -168,8 +168,7 @@ static int stage_delta(struct sb *sb)
 
 	/* allocate and write log blocks */
 
-	if (sb->logbuf)
-		log_finish(sb);
+	log_finish(sb);
 	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
 		block_t block;
 		int err = balloc(sb, 1, &block);

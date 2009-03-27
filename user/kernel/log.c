@@ -79,19 +79,20 @@ void log_drop(struct sb *sb)
 
 void log_finish(struct sb *sb)
 {
-	struct logblock *log = bufdata(sb->logbuf);
-	assert(sb->logtop >= sb->logpos);
-	log->bytes = to_be_u16(sb->logpos - log->data);
-	memset(sb->logpos, 0, sb->logtop - sb->logpos);
-	log_drop(sb);
+	if (sb->logbuf) {
+		struct logblock *log = bufdata(sb->logbuf);
+		assert(sb->logtop >= sb->logpos);
+		log->bytes = to_be_u16(sb->logpos - log->data);
+		memset(sb->logpos, 0, sb->logtop - sb->logpos);
+		log_drop(sb);
+	}
 }
 
 void *log_begin(struct sb *sb, unsigned bytes)
 {
 	mutex_lock(&sb->loglock);
 	if (sb->logpos + bytes > sb->logtop) {
-		if (sb->logbuf)
-			log_finish(sb);
+		log_finish(sb);
 		log_next(sb);
 		*(struct logblock *)bufdata(sb->logbuf) = (struct logblock){
 			.magic = to_be_u16(TUX3_MAGIC_LOG) };
@@ -107,6 +108,7 @@ void log_end(struct sb *sb, void *pos)
 
 static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
 {
+	assert(count < 256);	/* FIXME: extent max is 64 for now */
 	unsigned char *data = log_begin(sb, 8);
 
 	*data++ = intent;

@@ -361,13 +361,21 @@ int bytebits(uint8_t c);
 
 /* logging  */
 
-struct logblock { be_u16 magic, bytes; be_u64 logchain; unsigned char data[]; };
+struct logblock {
+	be_u16 magic;		/* Magic number */
+	be_u16 bytes;		/* Total data bytes on this block */
+	u32 unused;		/* padding */
+	be_u64 logchain;	/* Block number to previous logblock */
+	unsigned char data[];	/* Log data */
+};
 
-enum {	LOG_ALLOC = 0x33,
+enum {
+	LOG_ALLOC = 0x33,
 	LOG_FREE,
 	LOG_UPDATE,
 	LOG_REDIRECT,
-	LOG_TYPES };
+	LOG_TYPES
+};
 
 #ifdef __KERNEL__
 /*
