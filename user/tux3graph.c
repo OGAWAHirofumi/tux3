@@ -93,7 +93,8 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | <iroot0> iroot 0x%016llx (depth %u, block %llu)"
 		" | blockbits %u (size %u) | volblocks %llu"
 		" | freeblocks %llu | nextalloc %llu"
-		" | freeatom %u | atomgen %u }\"\n"
+		" | freeatom %u | atomgen %u"
+		" | <logchain_%llu> logchain %llu | logcount %u }\"\n"
 		"shape = record\n"
 		"];\n"
 		"}\n\n",
@@ -108,10 +109,98 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(L)from_be_u64(txsb->volblocks),
 		(L)from_be_u64(txsb->freeblocks),
 		(L)from_be_u64(txsb->nextalloc),
-		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen));
+		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen),
+		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain),
+		from_be_u32(txsb->logcount));
 
 	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
 		gi->bname, (L)itable_btree(sb)->root.block);
+	fprintf(gi->f, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
+		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain));
+}
+
+static void draw_log(struct graph_info *gi, struct sb *sb,
+		     struct buffer_head *buffer)
+{
+	struct logblock *log = bufdata(buffer);
+	unsigned char *data = log->data;
+
+	fprintf(gi->f,
+		"logchain_%llu [\n"
+		"label = \"{ <logchain_%llu> [log] (blocknr %llu)"
+		" | <f0> magic 0x%04x, bytes %u, logchain %llu",
+		(L)buffer->index, (L)buffer->index, (L)buffer->index,
+		from_be_u16(log->magic), from_be_u16(log->bytes),
+		(L)from_be_u64(log->logchain));
+
+	while (data < log->data + from_be_u16(log->bytes)) {
+		unsigned char code = *data++;
+		switch (code) {
+		case LOG_BALLOC:
+		case LOG_BFREE:
+		case LOG_BFREE_ON_FLUSH: {
+			unsigned count = *data++;
+			u64 block;
+			char *name;
+			data = decode48(data, &block);
+			if (code == LOG_BALLOC)
+				name = "LOG_BALLOC";
+			else if (code == LOG_BFREE)
+				name = "LOG_BFREE";
+			else
+				name = "LOG_BFREE_ON_FLUSH";
+			fprintf(gi->f,
+				" | [%s] block %llu, count %u ",
+				name, (L)block, count);
+			break;
+		}
+		case LOG_UPDATE:
+			assert(1);	/* not supported yet */
+			break;
+		case LOG_REDIRECT:
+			assert(1);	/* not supported yet */
+			break;
+		default:
+			assert(1);
+			break;
+		}
+	}
+	fprintf(gi->f,
+		"}\"\n"
+		"shape = record\n"
+		"];\n");
+}
+
+static void draw_logchain(struct graph_info *gi, struct sb *sb)
+{
+	struct buffer_head *buffer;
+	block_t nextchain;
+	unsigned logcount;
+
+	fprintf(gi->f,
+		"subgraph cluster_logchain {\n"
+		"label = \"logchain\"\n");
+
+	nextchain = from_be_u64(sb->super.logchain);
+	logcount = from_be_u32(sb->super.logcount);
+	while (logcount > 0) {
+		buffer = vol_bread(sb, nextchain);
+		assert(buffer);
+		struct logblock *log = bufdata(buffer);
+		assert(log->magic == to_be_u16(TUX3_MAGIC_LOG));
+		draw_log(gi, sb, buffer);
+		logcount--;
+		if (logcount) {
+			fprintf(gi->f,
+				"logchain_%llu:f0:e -> logchain_%llu:n;\n",
+				(L)nextchain, (L)from_be_u64(log->logchain));
+		}
+		nextchain = from_be_u64(log->logchain);
+		blockput(buffer);
+	}
+
+	fprintf(gi->f,
+		"}\n\n");
 }
 
 static void draw_bnode(struct graph_info *gi, int depth, int level,
@@ -757,6 +846,7 @@ int main(int argc, char *argv[])
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
 	};
 	draw_sb(&ginfo, sb);
+	draw_logchain(&ginfo, sb);
 	draw_tree(&ginfo, itable_btree(sb), draw_ileaf);
 	merge_tmpfiles(&ginfo);
 
