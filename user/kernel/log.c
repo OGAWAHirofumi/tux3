@@ -75,6 +75,7 @@ void log_drop(struct sb *sb)
 {
 	blockput(sb->logbuf);
 	sb->logbuf = NULL;
+	sb->logtop = sb->logpos = NULL;
 }
 
 void log_finish(struct sb *sb)
