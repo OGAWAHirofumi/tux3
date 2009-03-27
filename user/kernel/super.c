@@ -136,6 +136,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->vfs_sb = sb;
 	sb->s_fs_info = sbi;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
+	sb->s_magic = TUX3_SUPER_MAGIC;
 	sb->s_op = &tux3_super_ops;
 	sb->s_time_gran = 1;
 
@@ -160,7 +161,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		}
 		goto error;
 	}
-	sb->s_magic = from_be_u32(*(be_u32 *)&sbi->super.magic);
 
 	if (sbi->blocksize != blocksize) {
 		if (!sb_set_blocksize(sb, sbi->blocksize)) {
