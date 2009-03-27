@@ -370,8 +370,9 @@ struct logblock {
 };
 
 enum {
-	LOG_ALLOC = 0x33,
-	LOG_FREE,
+	LOG_BALLOC = 0x33,
+	LOG_BFREE,
+	LOG_BFREE_ON_FLUSH,
 	LOG_UPDATE,
 	LOG_REDIRECT,
 	LOG_TYPES
@@ -906,6 +907,7 @@ void log_drop(struct sb *sb);
 void log_finish(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
+void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count);
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
 void log_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);
@@ -913,9 +915,8 @@ void log_iroot(struct sb *sb, block_t newroot, block_t oldroot);
 
 int stash_value(struct stash *stash, u64 value);
 int unstash(struct sb *sb, struct stash *defree, unstash_t actor);
-int defer_free(struct stash *defree, block_t block, unsigned count);
-int retire_frees(struct sb *sb, struct stash *defree);
-void destroy_defree(struct stash *defree);
+int defer_bfree(struct stash *defree, block_t block, unsigned count);
+void destroy_defer_bfree(struct stash *defree);
 
 /* utility.c */
 int vecio(int rw, struct block_device *dev, sector_t sector,

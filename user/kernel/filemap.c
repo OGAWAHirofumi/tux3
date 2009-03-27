@@ -84,6 +84,19 @@ void show_segs(struct seg map[], unsigned segs)
 	printf("\n");
 }
 
+static int map_bfree(struct inode *inode, block_t block, unsigned count)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	if (inode == sb->bitmap) {
+		log_bfree_on_flush(sb, block, count);
+		defer_bfree(&sb->deflush, block, count);
+	} else {
+		log_bfree(sb, block, count);
+		defer_bfree(&sb->defree, block, count);
+	}
+	return 0;
+}
+
 static int map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -173,7 +186,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		for (int i = 0; i < segs; i++) {
 			/* Logging overwrited extents as free */
 			if (map[i].state != SEG_HOLE)
-				log_bfree(sb, map[i].block, map[i].count);
+				map_bfree(inode, map[i].block, map[i].count);
 			count += map[i].count;
 		}
 		segs = 1;

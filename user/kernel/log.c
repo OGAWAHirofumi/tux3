@@ -119,12 +119,17 @@ static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
 
 void log_balloc(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_ALLOC, block, count);
+	log_extent(sb, LOG_BALLOC, block, count);
 }
 
 void log_bfree(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_FREE, block, count);
+	log_extent(sb, LOG_BFREE, block, count);
+}
+
+void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count)
+{
+	log_extent(sb, LOG_BFREE_ON_FLUSH, block, count);
 }
 
 void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
@@ -182,7 +187,7 @@ int stash_value(struct stash *stash, u64 value)
 	return 0;
 }
 
-void empty_stash(struct stash *stash)
+static void empty_stash(struct stash *stash)
 {
 	struct flink_head *head = &stash->head;
 
@@ -225,14 +230,14 @@ int unstash(struct sb *sb, struct stash *stash, unstash_t actor)
 	return 0;
 }
 
-/* Deferred free list */
+/* Deferred free blocks list */
 
-int defer_free(struct stash *defree, block_t block, unsigned count)
+int defer_bfree(struct stash *defree, block_t block, unsigned count)
 {
 	return stash_value(defree, ((u64)count << 48) + block);
 }
 
-void destroy_defree(struct stash *defree)
+void destroy_defer_bfree(struct stash *defree)
 {
 	empty_stash(defree);
 }

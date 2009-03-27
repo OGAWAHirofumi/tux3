@@ -11,8 +11,8 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 }
 
 static unsigned logsize[LOG_TYPES] = {
-	[LOG_ALLOC] = 8,
-	[LOG_FREE] = 8,
+	[LOG_BALLOC] = 8,
+	[LOG_BFREE] = 8,
 	[LOG_UPDATE] = 19,
 	[LOG_REDIRECT] = 19,
 };
@@ -59,8 +59,9 @@ int replay(struct sb *sb)
 				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", (L)child, (L)parent, (L)key);
 				break;
 			}
-			case LOG_ALLOC:
-			case LOG_FREE:
+			case LOG_BALLOC:
+			case LOG_BFREE:
+			case LOG_BFREE_ON_FLUSH:
 				data += logsize[code] - 1;
 				break;
 			case LOG_REDIRECT:
@@ -78,14 +79,15 @@ int replay(struct sb *sb)
 		unsigned char *data = log->data;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
-			case LOG_ALLOC:
-			case LOG_FREE:
+			case LOG_BALLOC:
+			case LOG_BFREE:
+			case LOG_BFREE_ON_FLUSH:
 			{
 				u64 block;
 				unsigned count = *data++;
 				data = decode48(data, &block);
-				trace("%s bits 0x%Lx/%x", code == LOG_ALLOC ? "set" : "clear", (L)block, count);
-				int err = update_bitmap(sb, block, count, code == LOG_ALLOC);
+				trace("%s bits 0x%Lx/%x", code == LOG_BALLOC ? "set" : "clear", (L)block, count);
+				int err = update_bitmap(sb, block, count, code == LOG_BALLOC);
 				warn(">>> bitmap err = %i", err);
 				break;
 			}

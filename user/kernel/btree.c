@@ -365,7 +365,7 @@ int cursor_redirect(struct cursor *cursor)
 		trace("redirect block %Lx to %Lx", (L)oldblock, (L)newblock);
 		level_redirect_blockput(cursor, level, clone);
 		log_redirect(sb, oldblock, newblock);
-		defer_free(&sb->defree, oldblock, 1);
+		defer_bfree(&sb->defree, oldblock, 1);
 
 #ifdef ATOMIC
 		if (level < btree->root.depth)

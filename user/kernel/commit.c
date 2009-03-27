@@ -94,7 +94,7 @@ static void clean_buffer(struct buffer_head *buffer)
 #endif
 }
 
-int move_deferred(struct sb *sb, u64 val)
+static int move_deferred(struct sb *sb, u64 val)
 {
 	return stash_value(&sb->defree, val);
 }
@@ -187,7 +187,7 @@ static int stage_delta(struct sb *sb)
 			bfree(sb, block, 1);
 			return err;
 		}
-		defer_free(&sb->deflush, block, 1);
+		defer_bfree(&sb->deflush, block, 1);
 		blockput(buffer);
 		sb->logchain = block;
 	}
@@ -195,7 +195,7 @@ static int stage_delta(struct sb *sb)
 	return 0;
 }
 
-int retire_bfree(struct sb *sb, u64 val)
+static int retire_bfree(struct sb *sb, u64 val)
 {
 	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
 }
