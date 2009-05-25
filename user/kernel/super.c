@@ -8,6 +8,11 @@
 #include <linux/statfs.h>
 #include "tux3.h"
 
+/* This will go to include/linux/magic.h */
+#ifndef TUX3_SUPER_MAGIC
+#define TUX3_SUPER_MAGIC	0x74757833
+#endif
+
 #define trace trace_on
 
 /* FIXME: this should be mount option? */
