@@ -50,13 +50,13 @@ dirdeps		= dir.c kernel/dir.c
 dleafdeps	= balloc-dummy.c kernel/dleaf.c
 filemapdeps	= $(dirdeps) kernel/log.c kernel/xattr.c kernel/dleaf.c \
 	kernel/btree.c kernel/iattr.c kernel/ileaf.c kernel/balloc.c \
-	filemap.c kernel/filemap.c
+	filemap.c kernel/filemap.c kernel/commit.c
 iattrdeps	= btree-dummy.c kernel/iattr.c
 xattrcommondeps	= $(dirdeps) btree-dummy.c kernel/iattr.c \
 	kernel/xattr.c kernel/ileaf.c
 ileafdeps	= balloc-dummy.c $(xattrcommondeps)
 inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c
-superdeps	= $(inodedeps) kernel/commit.c super.c kernel/super.c
+superdeps	= $(inodedeps) super.c kernel/super.c
 xattrdeps	= kernel/balloc.c $(xattrcommondeps)
 
 all: $(binaries)
