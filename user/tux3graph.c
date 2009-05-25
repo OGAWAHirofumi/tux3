@@ -746,7 +746,9 @@ static void merge_file(FILE *dst, FILE *src)
 	fd = fileno(src);
 	lseek(fd, 0, SEEK_SET);
 	while ((size = read(fd, buf, sizeof(buf))) > 0) {
-		fwrite(buf, size, 1, dst);
+		size_t n = fwrite(buf, size, 1, dst);
+		if (n != 1)
+			error("fwrite error: %s", strerror(errno));
 	}
 }
 
