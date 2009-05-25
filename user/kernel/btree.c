@@ -380,10 +380,7 @@ int cursor_redirect(struct cursor *cursor)
 			trace("redirect root");
 			assert(oldblock == btree->root.block);
 			btree->root.block = newblock;
-			if (btree == itable_btree(sb))
-				/*mark_sb_dirty(sb)*/;
-			else
-				mark_inode_dirty(btree_inode(btree));
+			mark_btree_dirty(btree);
 			return 0;
 		}
 
