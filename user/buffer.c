@@ -475,7 +475,7 @@ int preallocate_buffers(unsigned bufsize)
 
 data_allocation_failure:
 	warn("Error: %s unable to allocate space for buffer data", strerror(err));
-	free(buffers);
+	free(prealloc_heads);
 buffers_allocation_failure:
 	warn("Unable to pre-allocate buffers. Using on demand allocation for buffers");
 	return err;
