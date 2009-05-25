@@ -649,7 +649,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		parent->count = to_be_u32(half);
 
 		/* if the cursor is in the new node, use that as the parent */
-		if (at->next > parent->entries + half) {
+		int child_is_left = at->next <= parent->entries + half;
+		if (!child_is_left) {
 			struct index_entry *newnext;
 			mark_buffer_dirty(parentbuf);
 			newnext = newnode->entries + (at->next - &parent->entries[half]);
@@ -663,9 +664,17 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		if (!keep)
 			at->next++;
 		mark_buffer_dirty(parentbuf);
+
 		childkey = newkey;
 		childblock = bufindex(newbuf);
 		blockput(newbuf);
+
+		/*
+		 * if child is in left bnode, we should keep the
+		 * cursor position to child, not splited new bnode.
+		 */
+		if (child_is_left)
+			keep = 1;
 	}
 	trace("add tree level");
 	struct buffer_head *newbuf = new_node(btree);
