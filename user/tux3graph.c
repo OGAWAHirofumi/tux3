@@ -772,9 +772,9 @@ static void usage(void)
 int main(int argc, char *argv[])
 {
 	static struct option long_options[] = {
-		{ "verbose", no_argument, &verbose, 'v' },
-		{ "help", no_argument, 0, 'h' },
-		{ 0, 0, 0, 0 }
+		{ "verbose", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{ NULL, 0, NULL, 0 }
 	};
 	const char *volname = NULL;
 	int ret = 0;
@@ -786,6 +786,7 @@ int main(int argc, char *argv[])
 			break;
 		switch (c) {
 		case 'v':
+			verbose++;
 			break;
 		case 'h':
 		default:

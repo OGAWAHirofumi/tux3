@@ -65,10 +65,10 @@ int main(int argc, char *argv[])
 	char *seekarg = NULL;
 	unsigned blocksize = 0;
 	static struct option long_options[] = {
-		{ "seek", required_argument, 0, 's' },
-		{ "blocksize", required_argument, 0, 'b' },
-		{ "help", no_argument, 0, 'h' },
-		{ 0, 0, 0, 0 }
+		{ "seek", required_argument, NULL, 's' },
+		{ "blocksize", required_argument, NULL, 'b' },
+		{ "help", no_argument, NULL, 'h' },
+		{ NULL, 0, NULL, 0 }
 	};
 
 	while (1) {
