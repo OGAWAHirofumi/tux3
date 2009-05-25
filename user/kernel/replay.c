@@ -13,6 +13,7 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 static unsigned logsize[LOG_TYPES] = {
 	[LOG_BALLOC] = 8,
 	[LOG_BFREE] = 8,
+	[LOG_BFREE_ON_FLUSH] = 8,
 	[LOG_UPDATE] = 19,
 	[LOG_REDIRECT] = 19,
 };
