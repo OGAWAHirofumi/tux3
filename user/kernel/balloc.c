@@ -200,15 +200,18 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblock = start >> mapshift;
-	char *why = "could not read bitmap buffer";
-	struct buffer_head *buffer = blockread(mapping(sb->bitmap), mapblock);
+	struct buffer_head *buffer;
 
 	trace("free <- [%Lx]", (L)start);
-	if (!buffer)
-		goto eek;
+	buffer = blockread(mapping(sb->bitmap), mapblock);
+	if (!buffer) {
+		warn("could not read bitmap buffer: extent 0x%Lx\n", (L)start);
+		goto error;
+	}
+
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
-		goto eeek;
+		goto double_free;
 	buffer = blockdirty(buffer, sb->flush);
 	// FIXME: error check of buffer
 	clear_bits(bufdata(buffer), start, blocks);
@@ -217,14 +220,15 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
 	mutex_unlock(&sb->bitmap->i_mutex);
+
 	return 0;
-eeek:
-	why = "blocks already free";
+
+double_free:
+	error("double free: start 0x%Lx, blocks %x", (L)start, blocks);
 	mutex_unlock(&sb->bitmap->i_mutex);
 	blockput(buffer);
-eek:
-	warn("extent 0x%Lx %s!\n", (L)start, why);
-	return -1; // error???
+error:
+	return -EIO; // error???
 }
 
 int update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
