@@ -11,21 +11,31 @@ CFLAGS += -Wall -Wextra -Werror
 CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
 CFLAGS += $(UCFLAGS)
 
+LDFLAGS =
+
 CHECKER = sparse
 CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
 CHECKFLAGS += -Wno-decl -Wno-declaration-after-statement
 
 VG=valgrind --error-exitcode=200 --leak-check=full
+INSTALL = install
 
 TESTDIR = .
+OWNER = root
+GROUP = root
+
+DISTDIR =
+PREFIX = /usr/local
+SBINDIR = $(PREFIX)/sbin
+LIBEXECDIR = $(PREFIX)/libexec/tux3
+
+ifeq ($(shell pkg-config fuse && echo found), found)
+	fusebin = tux3fuse
+endif
 
 testbin = buffer balloc dleaf ileaf iattr xattr btree dir filemap inode commit
 tux3bin = tux3 tux3graph
-binaries = $(testbin) $(tux3bin) tux3fuse
-
-ifeq ($(shell pkg-config fuse && echo found), found)
-	binaries += tux3fuse
-endif
+binaries = $(testbin) $(tux3bin) $(fusebin)
 
 tuxdeps		= Makefile trace.h kernel/trace.h
 diskiodeps	= diskio.c diskio.h
@@ -52,6 +62,9 @@ xattrdeps	= kernel/balloc.c $(xattrcommondeps)
 all: $(binaries)
 tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
 	test_btree test_dir test_iattr test_xattr test_filemap test_inode
+
+bin: $(tux3bin) $(fusebin)
+testbin: $(testbin)
 
 # standalone and library
 buffer.o: $(tuxdeps) $(bufferdeps)
@@ -94,7 +107,7 @@ ifeq ($(CHECK),1)
 endif
 
 $(testbin) $(tux3bin):
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 test_buffer: buffer
 	$(VG) ./buffer
@@ -130,7 +143,7 @@ test_commit: commit
 	$(VG) ./commit foodev
 
 tux3fuse: utility.o tux3fuse.o
-	$(CC) $(CFLAGS) $$(pkg-config --cflags fuse) utility.o tux3fuse.c -lfuse -otux3fuse
+	$(CC) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) utility.o tux3fuse.c -lfuse -otux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
@@ -160,3 +173,13 @@ clean:
 
 distclean: clean
 	rm -f *.orig kernel/*.orig
+
+install: install-bin install-test
+
+install-bin:
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(SBINDIR)
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(tux3bin) $(fusebin) $(DISTDIR)$(SBINDIR)
+
+install-test: install-bin
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(LIBEXECDIR)
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(testbin) $(DISTDIR)$(LIBEXECDIR)
