@@ -376,7 +376,7 @@ int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, u
 	}
 	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom);
 	ret = xattr->size;
-	if (ret < size)
+	if (ret <= size)
 		memcpy(data, xattr->body, ret);
 	else if (size)
 		ret = -ERANGE;
