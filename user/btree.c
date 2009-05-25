@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	init_buffers(dev, 1 << 20, 0);
-	sb->entries_per_node = (sb->blocksize - offsetof(struct bnode, entries)) / sizeof(struct index_entry);
+	sb->entries_per_node = calc_entries_per_node(sb->blocksize),
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = { };
 	assert(!new_btree(&btree, sb, &ops));

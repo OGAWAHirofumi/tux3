@@ -44,7 +44,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 
 	struct sb *sb = rapid_sb(dev,
 		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
+		.entries_per_node = calc_entries_per_node(blocksize),
 		.volblocks = volsize >> dev->bits,
 		.freeblocks = volsize >> dev->bits);
 	sb->super = (struct disksuper){ .magic = TUX3_MAGIC, .volblocks = to_be_u64(sb->blockbits) };
