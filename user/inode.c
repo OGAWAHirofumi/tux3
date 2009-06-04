@@ -300,11 +300,6 @@ int write_inode(struct inode *inode)
 	return save_inode(inode);
 }
 
-int tuxsync(struct inode *inode)
-{
-	return sync_inode(inode);
-}
-
 void tuxclose(struct inode *inode)
 {
 	sync_inode(inode);

@@ -173,8 +173,6 @@ int main(int argc, char *argv[])
 			if ((errno = -tuxwrite(file, text, len)) > 0)
 				goto eek;
 		}
-		if ((errno = -tuxsync(inode)))
-			goto eek;
 		if ((errno = -sync_super(sb)))
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
@@ -244,7 +242,6 @@ int main(int argc, char *argv[])
 			printf("got %i bytes\n", len);
 			if ((errno = -set_xattr(inode, "foo", 3, "foobar", 6, 0)))
 				goto eek;
-			tuxsync(inode);
 			if ((errno = -sync_super(sb)))
 				goto eek;
 		}
@@ -283,7 +280,6 @@ int main(int argc, char *argv[])
 		printf("---- new size %Lu ----\n", (L)seek);
 		if ((errno = -tuxtruncate(inode, seek)))
 			goto eek;
-		tuxsync(inode);
 		if ((errno = -sync_super(sb)))
 			goto eek;
 	}

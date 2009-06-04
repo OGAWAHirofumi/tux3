@@ -188,10 +188,8 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			.attr_timeout = 0.0,
 			.entry_timeout = 0.0,
 		};
-		tuxsync(inode);
-		if(parent_ino->inum != TUX_ROOTDIR_INO)
-			tuxsync(parent_ino);
-		
+
+		sync_super(inode->i_sb);
 
 		fi->fh = (uint64_t)(unsigned long)inode;
 		fuse_reply_create(req, &fep, fi);
@@ -233,9 +231,6 @@ static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode
 		};
 
 		tuxclose(inode);
-		if(parent_ino->inum != TUX_ROOTDIR_INO)
-			tuxsync(parent_ino);
-
 		sync_super(inode->i_sb);
 
 		fuse_reply_entry(req, &fep);
@@ -263,7 +258,6 @@ static void tux3_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 		goto eek;
 	}
 
-	tuxsync(inode);
 	if ((errno = -sync_super(sb)))
 		goto eek;
 
@@ -482,7 +476,6 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	if (save_inode(inode))
 		printf("save_inode error\n");
 
-	tuxsync(inode);
 	sync_super(sb);
 
 	struct stat stbuf;
@@ -593,10 +586,9 @@ static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	}
 
 	int err = set_xattr(inode, name, strlen(name), value, size, flags);
-	if (!err) {
-		tuxsync(inode);
+	if (!err)
 		sync_super(sb);
-	}
+
 	fuse_reply_err(req, -err);
 
 	if (ino != FUSE_ROOT_ID)
