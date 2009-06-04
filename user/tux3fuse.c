@@ -93,7 +93,7 @@ static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 			.entry_timeout = 0.0,
 		};
 
-		tuxclose(inode);
+		iput(inode);
 
 		fuse_reply_entry(req, &ep);
 	} else {
@@ -230,7 +230,7 @@ static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode
 			.entry_timeout = 0.0,
 		};
 
-		tuxclose(inode);
+		iput(inode);
 		sync_super(inode->i_sb);
 
 		fuse_reply_entry(req, &fep);
@@ -315,7 +315,7 @@ static void tux3_releasedir(fuse_req_t req, fuse_ino_t ino,
 	trace("tux3_releasedir(%Lx)", (L)ino);
 	if (ino != FUSE_ROOT_ID) {
 		struct inode *inode = (struct inode *)(unsigned long)fi->fh;
-		tuxclose(inode);
+		iput(inode);
 	}
 	fuse_reply_err(req, 0); /* Success */
 }
@@ -484,7 +484,7 @@ static void tux3_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	dump_attrs(inode);
 
 	if (ino != FUSE_ROOT_ID)
-		tuxclose(inode);
+		iput(inode);
 
 	fuse_reply_attr(req, &stbuf, 0.0);
 }
@@ -559,7 +559,7 @@ static void tux3_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 	trace("release (%Lx)", (L)ino);
 	if (ino != FUSE_ROOT_ID) {
 		struct inode *inode = (struct inode *)(unsigned long)fi->fh;
-		tuxclose(inode);
+		iput(inode);
 		if ((errno = -sync_super(sb))) {
 			fuse_reply_err(req, errno);
 			return;
@@ -592,7 +592,7 @@ static void tux3_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	fuse_reply_err(req, -err);
 
 	if (ino != FUSE_ROOT_ID)
-		tuxclose(inode);
+		iput(inode);
 }
 
 static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t maxsize)
@@ -620,7 +620,7 @@ static void tux3_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size
 	free(data);
 out:
 	if (ino != FUSE_ROOT_ID)
-		tuxclose(inode);
+		iput(inode);
 }
 
 static void tux3_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)

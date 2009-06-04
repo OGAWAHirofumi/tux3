@@ -300,12 +300,6 @@ int write_inode(struct inode *inode)
 	return save_inode(inode);
 }
 
-void tuxclose(struct inode *inode)
-{
-	sync_inode(inode);
-	iput(inode);
-}
-
 #include "super.c"
 
 #ifdef build_inode
@@ -352,8 +346,8 @@ int main(int argc, char *argv[])
 #if 1
 	trace(">>> close file <<<");
 	set_xattr(inode, "foo", 5, "hello world!", 12, 0);
-	save_inode(inode);
-	tuxclose(inode);
+	sync_inode(inode);
+	iput(inode);
 	trace(">>> open file");
 	file = &(struct file){ .f_inode = tuxopen(sb->rootdir, "foo", 3) };
 	inode = file->f_inode;
