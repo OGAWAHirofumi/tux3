@@ -55,8 +55,14 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 
 	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
 	int err = make_tux3(sb);
-	if (!err)
+	if (!err) {
 		show_tree_range(itable_btree(sb), 0, -1);
+		iput(sb->vtable);
+		iput(sb->rootdir);
+		iput(sb->atable);
+		iput(sb->bitmap);
+		iput(sb->volmap);
+	}
 	return err;
 }
 
@@ -173,6 +179,7 @@ int main(int argc, char *argv[])
 			if ((errno = -tuxwrite(file, text, len)) > 0)
 				goto eek;
 		}
+		iput(inode);
 		if ((errno = -sync_super(sb)))
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
@@ -199,6 +206,7 @@ int main(int argc, char *argv[])
 		memset(buf, 0, sizeof(buf));
 		int got = tuxread(file, buf, sizeof(buf));
 		//printf("got %x bytes\n", got);
+		iput(inode);
 		if (got < 0)
 			return 1;
 		hexdump(buf, got);
@@ -245,6 +253,7 @@ int main(int argc, char *argv[])
 			if ((errno = -sync_super(sb)))
 				goto eek;
 		}
+		iput(inode);
 	}
 
 	if (!strcmp(command, "stat")) {
@@ -280,6 +289,7 @@ int main(int argc, char *argv[])
 		printf("---- new size %Lu ----\n", (L)seek);
 		if ((errno = -tuxtruncate(inode, seek)))
 			goto eek;
+		iput(inode);
 		if ((errno = -sync_super(sb)))
 			goto eek;
 	}
@@ -287,7 +297,11 @@ int main(int argc, char *argv[])
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->volmap->map);
-	exit(0);
+	iput(sb->rootdir);
+	iput(sb->atable);
+	iput(sb->bitmap);
+	iput(sb->volmap);
+
 	return 0;
 eek:
 	fprintf(stderr, "%s!\n", strerror(errno));
