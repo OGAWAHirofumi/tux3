@@ -237,6 +237,7 @@ static inline dev_t huge_decode_dev(u64 dev)
 	.i_mutex = __MUTEX_INITIALIZER,			\
 	.i_version = 1,					\
 	.i_nlink = 1,					\
+	.i_count = ATOMIC_INIT(1),			\
 	.list = LIST_HEAD_INIT((inode).list)
 
 #define INIT_SB(sb, dev)					\

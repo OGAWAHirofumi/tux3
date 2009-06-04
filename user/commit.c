@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 			char name[100];
 			snprintf(name, sizeof(name), "file%i", i);
 			change_begin(sb);
-			free_inode(tuxcreate(sb->rootdir, name, strlen(name), &iattr));
+			iput(tuxcreate(sb->rootdir, name, strlen(name), &iattr));
 			change_end(sb);
 		}
 		assert(!save_sb(sb));

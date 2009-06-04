@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
 			goto eek;
 		}
 		dump_attrs(inode);
-		free_inode(inode);
+		iput(inode);
 	}
 
 	if (!strcmp(command, "delete")) {

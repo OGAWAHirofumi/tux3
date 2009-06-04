@@ -612,7 +612,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			(L)inode->btree.root.block,
 			inode->btree.root.depth);
 
-		free_inode(inode);
+		iput(inode);
 	}
 	fprintf(gi->f,
 		" | .....");
@@ -693,7 +693,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 				drawn |= DRAWN_DTREE;
 				break;
 			}
-			free_inode(inode);
+			iput(inode);
 			continue;
 		}
 
@@ -730,7 +730,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 		};
 		draw_data(&ginfo_data, &inode->btree);
 
-		free_inode(inode);
+		iput(inode);
 	}
 }
 
@@ -856,10 +856,10 @@ int main(int argc, char *argv[])
 	fprintf(ginfo.f, "}\n");
 	fclose(ginfo.f);
 
-	free_inode(sb->bitmap);
-	free_inode(sb->rootdir);
-	free_inode(sb->atable);
-	free_inode(sb->volmap);
+	iput(sb->bitmap);
+	iput(sb->rootdir);
+	iput(sb->atable);
+	iput(sb->volmap);
 
 out:
 	return ret;

@@ -42,6 +42,9 @@ typedef struct {
 	int counter;
 } atomic_t;
 
+#define ATOMIC_INIT(i)	{ (i) }
+#define atomic_read(v)	((v)->counter)
+
 static inline void atomic_inc(atomic_t *v)
 {
 	v->counter++;
@@ -50,12 +53,20 @@ static inline void atomic_dec(atomic_t *v)
 {
 	v->counter--;
 }
-static inline int atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
+
+static inline int atomic_dec_and_test(atomic_t *v)
 {
 	assert(v->counter > 0);
-	if (!--v->counter)
-		spin_lock(lock);
-	return !v->counter;
+	return !--v->counter;
+}
+
+static inline int atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
+{
+	spin_lock(lock);
+	if (atomic_dec_and_test(v))
+		return 1;
+	spin_unlock(lock);
+	return 0;
 }
 
 struct rw_semaphore {

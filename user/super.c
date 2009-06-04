@@ -88,7 +88,7 @@ int make_tux3(struct sb *sb)
 eek:
 	if (err)
 		warn("eek, %s", strerror(-err));
-	free_inode(sb->bitmap);
+	iput(sb->bitmap);
 	sb->bitmap = NULL;
 	return err ? err : -ENOSPC; // just guess
 }

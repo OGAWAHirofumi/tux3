@@ -34,7 +34,7 @@ error:
 	return NULL;
 }
 
-void free_inode(struct inode *inode)
+static void free_inode(struct inode *inode)
 {
 	assert(list_empty(&inode->list));
 	assert(!inode->state);
@@ -51,6 +51,22 @@ static void tux_setup_inode(struct inode *inode)
 {
 	if (inode->inum != TUX_VOLMAP_INO)
 		inode->map->io = filemap_extent_io;
+}
+
+void iput(struct inode *inode)
+{
+	if (atomic_dec_and_test(&inode->i_count))
+		free_inode(inode);
+}
+
+void __iget(struct inode *inode)
+{
+	if (atomic_read(&inode->i_count)) {
+		atomic_inc(&inode->i_count);
+		return;
+	}
+	/* this shouldn't happen on userspace */
+	assert(atomic_read(&inode->i_count) > 0);
 }
 
 struct inode *iget(struct sb *sb, inum_t inum)
@@ -213,7 +229,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 
 	purge_inum(tux_sb(dir->i_sb), inode->inum); // test me!!!
 error:
-	free_inode(inode);
+	iput(inode);
 	inode = NULL;
 	return NULL; // err ???
 }
@@ -230,7 +246,7 @@ int tux_delete_inode(struct inode *inode)
 	if ((err = purge_inum(sb, tux_inode(inode)->inum)))
 		return err;
 	clear_inode(inode);
-	free_inode(inode);
+	iput(inode);
 	return 0;
 }
 
@@ -262,7 +278,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	return 0;
 
 error_open:
-	free_inode(inode);
+	iput(inode);
 error_iget:
 	blockput(buffer);
 error:
@@ -292,7 +308,7 @@ int tuxsync(struct inode *inode)
 void tuxclose(struct inode *inode)
 {
 	sync_inode(inode);
-	free_inode(inode);
+	iput(inode);
 }
 
 #include "super.c"

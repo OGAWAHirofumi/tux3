@@ -61,7 +61,7 @@ static struct inode *open_fuse_ino(fuse_ino_t ino)
 	if (inode) {
 		if (!open_inode(inode))
 			return inode;
-		free_inode(inode);
+		iput(inode);
 	}
 
 	return NULL;
