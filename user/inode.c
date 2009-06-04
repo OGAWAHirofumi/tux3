@@ -36,6 +36,8 @@ error:
 
 void free_inode(struct inode *inode)
 {
+	assert(list_empty(&inode->list));
+	assert(!inode->state);
 	assert(mapping(inode)); /* some inodes are not malloced */
 	free_map(mapping(inode)); // invalidate dirty buffers!!!
 	if (inode->xcache)

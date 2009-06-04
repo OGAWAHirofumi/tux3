@@ -63,6 +63,45 @@ int sync_inode(struct inode *inode)
 	return 0;
 }
 
+static int sync_inodes(struct sb *sb)
+{
+	struct inode *inode, *safe;
+	LIST_HEAD(dirty_inodes);
+	int err;
+
+	list_splice_init(&sb->dirty_inodes, &dirty_inodes);
+
+	list_for_each_entry_safe(inode, safe, &dirty_inodes, list) {
+		/*
+		 * FIXME: this is hack. those inodes is dirtied by
+		 * sync_inode() of other inodes, so it should be
+		 * flushed after other inodes.
+		 */
+		switch (inode->inum) {
+		case TUX_BITMAP_INO:
+		case TUX_VOLMAP_INO:
+			continue;
+		}
+
+		err = sync_inode(inode);
+		if (err)
+			goto error;
+	}
+	err = sync_inode(sb->bitmap);
+	if (err)
+		goto error;
+	err = sync_inode(sb->volmap);
+	if (err)
+		goto error;
+	assert(list_empty(&dirty_inodes));
+
+	return 0;
+
+error:
+	list_splice_init(&dirty_inodes, &sb->dirty_inodes);
+	return err;
+}
+
 /* dummy for not including super.c */
 int __weak save_sb(struct sb *sb)
 {
@@ -74,17 +113,8 @@ int sync_super(struct sb *sb)
 {
 	int err;
 
-	printf("sync rootdir\n");
-	if ((err = sync_inode(sb->rootdir)))
-		return err;
-	printf("sync atom table\n");
-	if ((err = sync_inode(sb->atable)))
-		return err;
-	printf("sync bitmap\n");
-	if ((err = sync_inode(sb->bitmap)))
-		return err;
-	printf("sync volmap\n");
-	if ((err = sync_inode(sb->volmap)))
+	printf("sync inodes\n");
+	if ((err = sync_inodes(sb)))
 		return err;
 	printf("sync super\n");
 	if ((err = save_sb(sb)))
