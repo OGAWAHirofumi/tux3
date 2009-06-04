@@ -684,12 +684,6 @@ struct tux_iattr {
 	unsigned mode, uid, gid;
 };
 
-static inline void mark_btree_dirty(struct btree *btree)
-{
-	if (btree != itable_btree(btree->sb))
-		mark_inode_dirty(btree_inode(btree));
-}
-
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
 	return buffer->b_page->mapping->host;
@@ -872,19 +866,24 @@ static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return buffer;
 }
 
+static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
+{
+	mark_buffer_dirty(buffer);
+	return buffer;
+}
+#endif /* !__KERNEL__ */
+
 static inline void blockput_dirty(struct buffer_head *buffer)
 {
 	mark_buffer_dirty(buffer);
 	blockput(buffer);
 }
 
-static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
+static inline void mark_btree_dirty(struct btree *btree)
 {
-	mark_buffer_dirty(buffer);
-	return buffer;
+	if (btree != itable_btree(btree->sb))
+		mark_inode_dirty(btree_inode(btree));
 }
-
-#endif /* __KERNEL__ */
 
 static inline struct buffer_head *vol_getblk(struct sb *sb, block_t block)
 {

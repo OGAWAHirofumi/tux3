@@ -150,7 +150,7 @@ static inline void *page_address(struct page *page)
 	return page->address;
 }
 
-struct page *alloc_pages(gfp_t gfp_mask, unsigned order)
+static inline struct page *alloc_pages(gfp_t gfp_mask, unsigned order)
 {
 	struct page *page = malloc(sizeof(*page));
 	void *data = malloc(PAGE_SIZE);
@@ -168,13 +168,14 @@ error:
 }
 #define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
 
-void __free_pages(struct page *page, unsigned order)
+static inline void __free_pages(struct page *page, unsigned order)
 {
 	free(page_address(page));
 	free(page);
 }
 #define __free_page(page) __free_pages((page), 0)
 
+#include "writeback.h"
 #include "kernel/tux3.h"
 
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
@@ -229,8 +230,6 @@ static inline dev_t huge_decode_dev(u64 dev)
 	return new_decode_dev(dev);
 }
 
-#define mark_btree_dirty(x) do {} while (0)
-
 #define INIT_INODE(inode, sb, mode)			\
 	.i_sb = sb,					\
 	.i_mode = mode,					\
@@ -276,12 +275,6 @@ static inline dev_t huge_decode_dev(u64 dev)
 
 enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
 typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
-
-static inline void mark_inode_dirty(struct inode *inode)
-{
-	if (list_empty(&inode->list))
-		list_add_tail(&inode->list, &inode->i_sb->dirty_inodes);
-}
 
 enum rw { READ, WRITE };
 

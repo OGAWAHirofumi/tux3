@@ -110,11 +110,9 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 	set_buffer_state_list(buffer, state, buffers + state);
 }
 
-struct buffer_head *mark_buffer_dirty(struct buffer_head *buffer)
+struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)
 {
-	buftrace("set_buffer_dirty %Lx state = %u", (L)buffer->index, buffer->state);
-	if (!buffer_dirty(buffer))
-		set_buffer_state_list(buffer, BUFFER_DIRTY, &buffer->map->dirty);
+	set_buffer_state_list(buffer, BUFFER_DIRTY, &buffer->map->dirty);
 	return buffer;
 }
 
@@ -139,13 +137,6 @@ void blockput(struct buffer_head *buffer)
 	assert(buffer->count);
 	if (!--buffer->count)
 		buftrace("Free buffer %Lx", (L)buffer->index);
-}
-
-void blockput_dirty(struct buffer_head *buffer)
-{
-	buftrace("Release dirty buffer %Lx", (L)buffer->index);
-	mark_buffer_dirty(buffer);
-	blockput(buffer);
 }
 
 unsigned buffer_hash(block_t block)
@@ -541,7 +532,7 @@ int main(int argc, char *argv[])
 	map_t *map = new_map(dev, NULL);
 	init_buffers(dev, 1 << 20, 0);
 	show_dirty_buffers(map);
-	mark_buffer_dirty(blockget(map, 1));
+	set_buffer_dirty(blockget(map, 1));
 	show_dirty_buffers(map);
 	printf("get %p\n", blockget(map, 0));
 	printf("get %p\n", blockget(map, 1));

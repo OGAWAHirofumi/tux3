@@ -57,7 +57,10 @@ xattrcommondeps	= $(dirdeps) btree-dummy.c kernel/iattr.c \
 ileafdeps	= balloc-dummy.c $(xattrcommondeps)
 inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c
 superdeps	= $(inodedeps) super.c kernel/super.c
+writebackdeps	= writeback.c
 xattrdeps	= kernel/balloc.c $(xattrcommondeps)
+
+common-objs	= utility.o writeback.o
 
 all: $(binaries)
 tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
@@ -80,6 +83,7 @@ filemap.o: $(basedeps) $(filemapdeps)
 iattr.o: $(basedeps) $(iattrdeps)
 ileaf.o: $(basedeps) $(ileafdeps)
 inode.o: $(basedeps) $(inodedeps)
+writeback.o: $(basedeps) $(writebackdeps)
 xattr.o:$(basedeps) $(xattrdeps)
 # programs
 tux3.o:$(basedeps) $(superdeps)
@@ -87,18 +91,18 @@ tux3fuse.o:$(basedeps) $(superdeps)
 tux3graph.o:$(basedeps) $(superdeps)
 
 buffer: buffer.o diskio.o
-dleaf: utility.o dleaf.o
-balloc: utility.o balloc.o
-ileaf: utility.o ileaf.o
-btree: utility.o btree.o
-dir: utility.o dir.o
-iattr: utility.o iattr.o
-xattr: utility.o xattr.o
-inode: utility.o inode.o
-filemap: utility.o filemap.o
-commit: utility.o commit.o
-tux3: utility.o tux3.o
-tux3graph: utility.o tux3graph.o
+dleaf: $(common-objs) dleaf.o
+balloc: $(common-objs) balloc.o
+ileaf: $(common-objs) ileaf.o
+btree: $(common-objs) btree.o
+dir: $(common-objs) dir.o
+iattr: $(common-objs) iattr.o
+xattr: $(common-objs) xattr.o
+inode: $(common-objs) inode.o
+filemap: $(common-objs) filemap.o
+commit: $(common-objs) commit.o
+tux3: $(common-objs) tux3.o
+tux3graph: $(common-objs) tux3graph.o
 
 .c.o:
 	$(CC) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
@@ -142,8 +146,8 @@ test_inode: inode
 test_commit: commit
 	$(VG) ./commit foodev
 
-tux3fuse: utility.o tux3fuse.o
-	$(CC) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) utility.o tux3fuse.c -lfuse -otux3fuse
+tux3fuse: $(common-objs) tux3fuse.o
+	$(CC) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) $(common-objs) tux3fuse.c -lfuse -o tux3fuse
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
