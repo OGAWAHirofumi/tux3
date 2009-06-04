@@ -6,18 +6,35 @@ struct buffer_head * __weak blockdirty(struct buffer_head *buffer, unsigned newd
 	return buffer;
 }
 
+/* dummy for not including inode.c */
+void __weak __iget(struct inode *inode)
+{
+}
+
+/* dummy for not including inode.c */
+void __weak iput(struct inode *inode)
+{
+	assert(0);
+}
+
 void clear_inode(struct inode *inode)
 {
+	int has_refcnt = !list_empty(&inode->list);
+
 	list_del_init(&inode->list);
 	inode->state = 0;
+	if (has_refcnt)
+		iput(inode);
 }
 
 void __mark_inode_dirty(struct inode *inode, unsigned flags)
 {
 	if ((inode->state & flags) != flags) {
 		inode->state |= flags;
-		if (list_empty(&inode->list))
+		if (list_empty(&inode->list)) {
+			__iget(inode);
 			list_add_tail(&inode->list, &inode->i_sb->dirty_inodes);
+		}
 	}
 }
 
@@ -44,6 +61,7 @@ int __weak write_inode(struct inode *inode)
 int sync_inode(struct inode *inode)
 {
 	unsigned dirty;
+	int has_refcnt = !list_empty(&inode->list);
 
 	/* To handle redirty, this clears before flushing */
 	dirty = inode->state;
@@ -60,6 +78,10 @@ int sync_inode(struct inode *inode)
 		if (err)
 			return err;
 	}
+
+	if (has_refcnt)
+		iput(inode);
+
 	return 0;
 }
 
