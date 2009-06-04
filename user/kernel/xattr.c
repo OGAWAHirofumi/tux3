@@ -368,9 +368,12 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data, u
 	tux_inode(inode)->xcache->size += more;
 	memcpy(xattr->body, data, (xattr->size = len));
 	xattr->atom = atom;
+	mark_inode_dirty(inode);
+
 	use++;
 	if (use)
 		use_atom(tux_sb(inode->i_sb)->atable, atom, use);
+
 	return 0;
 }
 
@@ -434,8 +437,10 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 		goto out;
 	}
 	int used = remove_old(xcache, xattr);
-	if (used)
+	if (used) {
+		mark_inode_dirty(inode);
 		use_atom(atable, atom, -used);
+	}
 out:
 	change_end(tux_sb(inode->i_sb));
 	mutex_unlock(&atable->i_mutex);

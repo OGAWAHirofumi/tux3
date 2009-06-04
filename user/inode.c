@@ -103,8 +103,11 @@ int tuxio(struct file *file, char *data, unsigned len, int write)
 		pos += some;
 	}
 	file->f_pos = pos;
-	if (write && inode->i_size < pos)
-		inode->i_size = pos;
+	if (write) {
+		if (inode->i_size < pos)
+			inode->i_size = pos;
+		mark_inode_dirty(inode);
+	}
 	return err ? err : len - tail;
 }
 
@@ -162,6 +165,7 @@ int tuxtruncate(struct inode *inode, loff_t size)
 		err = tree_chop(&inode->btree, &(struct delete_info){ .key = index }, 0);
 	}
 	inode->i_mtime = inode->i_ctime = gettime();
+	mark_inode_dirty(inode);
 out:
 	return err;
 }

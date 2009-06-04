@@ -113,6 +113,7 @@ int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum,
 	entry->inum = to_be_u64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	blockput_dirty(buffer);
+	/* FIXME: this should be only dir, not xattr */
 	dir->i_mtime = dir->i_ctime = gettime();
 	mark_inode_dirty(dir);
 	return 0;
@@ -307,6 +308,7 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	entry->name_len = entry->type = 0;
 	entry->inum = 0;
 	blockput_dirty(buffer);
+	/* FIXME: this should be only dir, not xattr */
 	dir->i_ctime = dir->i_mtime = gettime();
 	mark_inode_dirty(dir);
 	return 0;
