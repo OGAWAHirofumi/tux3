@@ -268,6 +268,13 @@ int write_inode(struct inode *inode)
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
 	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
 	       tux_inode(inode)->inum != TUX_INVALID_INO);
+	switch (tux_inode(inode)->inum) {
+	case TUX_BITMAP_INO:
+	case TUX_VTABLE_INO:
+	case TUX_ATABLE_INO:
+		/* FIXME: assert(only btree should be changed); */
+		break;
+	}
 	return save_inode(inode);
 }
 
