@@ -99,7 +99,7 @@ void show_buffers_state(unsigned state)
 	show_buffer_list(buffers + state);
 }
 
-static inline void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
+void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
 {
 	list_move_tail(&buffer->link, list);
 	buffer->state = state;
@@ -148,10 +148,12 @@ void insert_buffer_hash(struct buffer_head *buffer)
 {
 	struct hlist_head *bucket = buffer->map->hash + buffer_hash(buffer->index);
 	hlist_add_head(&buffer->hashlink, bucket);
+	list_add_tail(&buffer->lru, &lru_buffers);
 }
 
 void remove_buffer_hash(struct buffer_head *buffer)
 {
+	list_del_init(&buffer->lru);
 	hlist_del_init(&buffer->hashlink);
 }
 
@@ -162,11 +164,6 @@ void evict_buffer(struct buffer_head *buffer)
 	assert(!buffer->count);
 	remove_buffer_hash(buffer);
 	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
-#ifdef BUFFER_PARANOIA_DEBUG
-	list_del_init(&buffer->lru);
-#else
-	list_del(&buffer->lru);
-#endif
 	buffer_count--;
 }
 
@@ -272,7 +269,6 @@ struct buffer_head *blockget(map_t *map, block_t block)
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
 	insert_buffer_hash(buffer);
-	list_add_tail(&buffer->lru, &lru_buffers);
 	return buffer;
 }
 
@@ -287,38 +283,6 @@ struct buffer_head *blockread(map_t *map, block_t block)
 			return NULL; // ERR_PTR me!!!
 		}
 	}
-	return buffer;
-}
-
-struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
-{
-	unsigned oldstate = buffer->state;
-	assert(oldstate < BUFFER_STATES);
-	newdelta &= BUFFER_DIRTY_STATES - 1;
-	if (oldstate >= BUFFER_DIRTY) {
-		if (oldstate - BUFFER_DIRTY == newdelta)
-			return buffer;
-		trace_on("---- fork buffer %p ----", buffer);
-		struct buffer_head *clone = new_buffer(buffer->map);
-		if (IS_ERR(clone))
-			return clone;
-		/* Create the cloned buffer */
-		memcpy(bufdata(clone), bufdata(buffer), bufsize(buffer));
-		clone->index = buffer->index;
-		/* Replace the buffer by cloned buffer. */
-		list_del_init(&buffer->lru);
-		remove_buffer_hash(buffer);
-		insert_buffer_hash(clone);
-		list_add_tail(&clone->lru, &lru_buffers);
-		/*
-		 * FIXME: The refcount of buffer is not dropped here,
-		 * the refcount may not be needed actually. Because
-		 * this buffer was removed from lru list. Well, so,
-		 * the backend has to free this buffer (blockput(buffer))
-		 */
-		buffer = clone;
-	}
-	set_buffer_state_list(buffer, BUFFER_DIRTY + newdelta, &buffer->map->dirty);
 	return buffer;
 }
 

@@ -1,9 +1,10 @@
 #include "tux3.h"
 
-#define I_DIRTY_SYNC		1
-#define I_DIRTY_DATASYNC	2
-#define I_DIRTY_PAGES		4
-#define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
+/* dummy for not including commit.c */
+struct buffer_head * __weak blockdirty(struct buffer_head *buffer, unsigned newdelta)
+{
+	return buffer;
+}
 
 void clear_inode(struct inode *inode)
 {
@@ -11,7 +12,7 @@ void clear_inode(struct inode *inode)
 	inode->state = 0;
 }
 
-static void __mark_inode_dirty(struct inode *inode, unsigned flags)
+void __mark_inode_dirty(struct inode *inode, unsigned flags)
 {
 	if ((inode->state & flags) != flags) {
 		inode->state |= flags;

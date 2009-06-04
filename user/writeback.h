@@ -1,10 +1,17 @@
 #ifndef TUX3_WRITEBACK_H
 #define TUX3_WRITEBACK_H
 
+#define I_DIRTY_SYNC		1
+#define I_DIRTY_DATASYNC	2
+#define I_DIRTY_PAGES		4
+#define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
+
 struct sb;
 struct inode;
 
+struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 void clear_inode(struct inode *inode);
+void __mark_inode_dirty(struct inode *inode, unsigned flags);
 void mark_inode_dirty(struct inode *inode);
 void mark_buffer_dirty(struct buffer_head *buffer);
 int sync_inode(struct inode *inode);
