@@ -261,30 +261,22 @@ error:
 	return err;
 }
 
-int tuxflush(struct inode *inode)
+int write_inode(struct inode *inode)
 {
-	return flush_buffers(mapping(inode));
+	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
+	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
+	       tux_inode(inode)->inum != TUX_INVALID_INO);
+	return save_inode(inode);
 }
 
 int tuxsync(struct inode *inode)
 {
-	int err;
-	if ((err = tuxflush(inode)))
-		return err;
-#if 0
-	if (!list_empty(&inode->dirty)) {
-		list_del_init(&inode->dirty);
-		return save_inode(inode);
-	}
-	return 0;
-#else
-	return save_inode(inode);
-#endif
+	return sync_inode(inode);
 }
 
 void tuxclose(struct inode *inode)
 {
-	tuxsync(inode);
+	sync_inode(inode);
 	free_inode(inode);
 }
 
@@ -328,7 +320,7 @@ int main(int argc, char *argv[])
 	err = tuxwrite(file, "hello ", 6);
 	err = tuxwrite(file, "world!", 6);
 #if 0
-	tuxflush(sb->bitmap);
+	flush_buffers(mapping(sb->bitmap));
 	flush_buffers(sb->volmap->map);
 #endif
 #if 1

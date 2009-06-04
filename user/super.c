@@ -14,28 +14,6 @@
 #define trace trace_on
 #endif
 
-int sync_super(struct sb *sb)
-{
-	int err;
-
-	printf("sync rootdir\n");
-	if ((err = tuxsync(sb->rootdir)))
-		return err;
-	printf("sync atom table\n");
-	if ((err = tuxsync(sb->atable)))
-		return err;
-	printf("sync bitmap\n");
-	if ((err = tuxsync(sb->bitmap)))
-		return err;
-	printf("sync volmap\n");
-	if ((err = flush_buffers(sb->volmap->map)))
-		return err;
-	printf("sync super\n");
-	if ((err = save_sb(sb)))
-		return err;
-	return 0;
-}
-
 static int clear_other_magic(struct sb *sb)
 {
 	int err;
