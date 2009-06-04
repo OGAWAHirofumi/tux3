@@ -57,30 +57,38 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 {
 	unsigned offset;
 	struct sb *sb = tux_sb(atable->i_sb);
-	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
+	struct buffer_head *buffer;
+	int err = -ENOMEM;
 
+	buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
-		return -ENOMEM;
+		goto error;
 	u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
 	blockput(buffer);
 	buffer = blockread(mapping(atable), where >> sb->blockbits);
 	if (!buffer)
-		return -ENOMEM;
+		goto error;
 	tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 	if (entry_atom(entry) != atom) {
 		warn("atom %x reverse entry broken", atom);
-		return -EINVAL;
+		err = -EINVAL;
+		goto error_blockput;
 	}
 	unsigned len = entry->name_len;
 	if (size) {
 		if (len > size) {
-			blockput(buffer);
-			return -ERANGE;
+			err = -ERANGE;
+			goto error_blockput;
 		}
 		memcpy(name, entry->name, len);
 	}
 	blockput(buffer);
 	return len;
+
+error_blockput:
+	blockput(buffer);
+error:
+	return err;
 }
 
 /* userland only */
@@ -94,8 +102,10 @@ void dump_atoms(struct inode *atable)
 		struct buffer_head *lobuf, *hibuf;
 		if (!(lobuf = blockread(mapping(atable), block)))
 			goto eek;
-		if (!(hibuf = blockread(mapping(atable), block)))
+		if (!(hibuf = blockread(mapping(atable), block))) {
+			blockput(lobuf);
 			goto eek;
+		}
 		be_u16 *lorefs = bufdata(lobuf), *hirefs = bufdata(hibuf);
 		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
 			unsigned refs = (from_be_u16(hirefs[i]) << 16) + from_be_u16(lorefs[i]);
@@ -130,10 +140,10 @@ void show_freeatoms(struct sb *sb)
 		if (!buffer)
 			goto eek;
 		u64 next = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
+		blockput(buffer);
 		if ((next >> 48) != 0xdead)
 			goto eek;
 		atom = next & ~(-1LL << 48);
-		blockput(buffer);
 	}
 	return;
 eek:
@@ -175,24 +185,24 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 	int low = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + use;
 	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
 	((be_u16 *)bufdata(buffer))[offset] = to_be_u16(low);
+	blockput_dirty(buffer);
 	if (!low || (low & (-1 << 16))) {
-		blockput_dirty(buffer);
 		if (!(buffer = blockread(mapping(atable), block + 1)))
 			return -EIO;
 		int high = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + (low >> 16);
 		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
 		((be_u16 *)bufdata(buffer))[offset] = to_be_u16(high);
+		blockput_dirty(buffer);
 		kill = !(low | high);
 	}
-	blockput_dirty(buffer);
 	if (kill) {
 		warn("delete atom %Lx", (L) atom);
 		buffer = blockread_unatom(atable, atom, &offset);
 		if (!buffer)
 			return -1; // better set a flag that unatom broke or something!!!
 		u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-		blockput(buffer);
 		((be_u64 *)bufdata(buffer))[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
+		blockput_dirty(buffer);
 		sb->freeatom = atom;
 		buffer = blockread(mapping(atable), where >> sb->blockbits);
 		tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
@@ -333,6 +343,7 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data, u
 	} else {
 		if (flags & XATTR_CREATE)
 			return -EEXIST;
+		/* FIXME: if we can't insert new one, the xattr will lose */
 		use -= remove_old(xcache, xattr);
 	}
 
@@ -392,8 +403,13 @@ int set_xattr(struct inode *inode, const char *name, unsigned len, const void *d
 	mutex_lock(&atable->i_mutex);
 	change_begin(tux_sb(inode->i_sb));
 	atom_t atom = make_atom(atable, name, len);
-	int err = (atom == -1) ? -EINVAL :
-		xcache_update(inode, atom, data, size, flags);
+	int err = -EINVAL;
+	if (atom != -1) {
+		err = xcache_update(inode, atom, data, size, flags);
+		if (err) {
+			/* FIXME: maybe, recovery for make_atom */
+		}
+	}
 	change_end(tux_sb(inode->i_sb));
 	mutex_unlock(&atable->i_mutex);
 	return err;
