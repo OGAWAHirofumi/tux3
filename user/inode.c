@@ -69,11 +69,33 @@ void __iget(struct inode *inode)
 	assert(atomic_read(&inode->i_count) > 0);
 }
 
+static struct inode *find_dirty_inode(struct sb *sb, inum_t inum)
+{
+	struct inode *inode;
+	/* FIXME: should find all in-core inodes for reopen? */
+	list_for_each_entry(inode, &sb->dirty_inodes, list) {
+		if (inode->inum == inum) {
+			__iget(inode);
+			return inode;
+		}
+	}
+	return NULL;
+}
+
 struct inode *iget(struct sb *sb, inum_t inum)
 {
-	struct inode *inode = new_inode(sb);
-	if (inode)
+	struct inode *inode = find_dirty_inode(sb, inum);
+	if (!inode) {
+		inode = new_inode(sb);
+		if (!inode)
+			return ERR_PTR(-ENOMEM);
 		tux_set_inum(inode, inum);
+		int err = open_inode(inode);
+		if (err) {
+			iput(inode);
+			return ERR_PTR(err);
+		}
+	}
 	return inode;
 }
 
@@ -197,7 +219,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	inum_t inum = from_be_u64(entry->inum);
 	blockput(buffer);
 	struct inode *inode = iget(dir->i_sb, inum);
-	return open_inode(inode) ? NULL : inode;
+	return IS_ERR(inode) ? NULL : inode; // ERR_PTR me!!!
 }
 
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
@@ -262,12 +284,10 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	}
 	inum_t inum = from_be_u64(entry->inum);
 	struct inode *inode = iget(sb, inum);
-	if (!inode) {
-		err = -ENOMEM;
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
 		goto error_iget;
 	}
-	if ((err = open_inode(inode)))
-		goto error_open;
 	if ((err = tux_delete_entry(buffer, entry)))
 		goto error_open;
 	inode->i_ctime = dir->i_ctime;

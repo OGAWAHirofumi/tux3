@@ -58,13 +58,9 @@ static struct inode *open_fuse_ino(fuse_ino_t ino)
 		return sb->rootdir;
 
 	inode = iget(sb, ino);
-	if (inode) {
-		if (!open_inode(inode))
-			return inode;
-		iput(inode);
-	}
-
-	return NULL;
+	if (IS_ERR(inode))
+		return NULL;
+	return inode;
 }
 
 static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
@@ -408,21 +404,22 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 		goto eek;
 	if ((errno = -load_itable(sb)))
 		goto eek;
-	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
-		goto nomem;
-	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))
-		goto nomem;
-	if (!(sb->atable = iget(sb, TUX_ATABLE_INO)))
+	sb->bitmap = iget(sb, TUX_BITMAP_INO);
+	if (IS_ERR(sb->bitmap)) {
+		errno = PTR_ERR(sb->bitmap);
 		goto eek;
-	if ((errno = -open_inode(sb->bitmap)))
+	}
+	sb->rootdir = iget(sb, TUX_ROOTDIR_INO);
+	if (IS_ERR(sb->rootdir)) {
+		errno = PTR_ERR(sb->rootdir);
 		goto eek;
-	if ((errno = -open_inode(sb->rootdir)))
+	}
+	sb->atable = iget(sb, TUX_ATABLE_INO);
+	if (IS_ERR(sb->atable)) {
+		errno = PTR_ERR(sb->atable);
 		goto eek;
-	if ((errno = -open_inode(sb->atable)))
-		goto eek;
+	}
 	return;
-nomem:
-	errno = ENOMEM;
 eek:
 	warn("Eek! %s", strerror(errno));
 	exit(1);

@@ -600,10 +600,8 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 
 		inum_t inum = ibase(ileaf) + at;
 		struct inode *inode = iget(btree->sb, inum);
-		if (!inode)
-			error("out of memory");
-		if (open_inode(inode) < 0)
-			error("inode couldn't open: inum %Lu", (L)inum);
+		if (IS_ERR(inode))
+			error("inode couldn't get: inum %Lu", (L)inum);
 
 		fprintf(gi->f,
 			" | <a%d> attrs (ino %llu, size %u,"
@@ -655,10 +653,8 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 
 		inum_t inum = ibase(ileaf) + at;
 		struct inode *inode = iget(btree->sb, inum);
-		if (!inode)
-			error("out of memory");
-		if (open_inode(inode) < 0)
-			error("inode couldn't open: inum %Lu", (L)inum);
+		if (IS_ERR(inode))
+			error("inode couldn't get: inum %Lu", (L)inum);
 
 		char name[64];
 		if (inum < ARRAY_SIZE(dtree_names) && dtree_names[inum])
@@ -816,18 +812,21 @@ int main(int argc, char *argv[])
 		goto eek;
 	if ((errno = -load_itable(sb)))
 		goto eek;
-	if (!(sb->bitmap = iget(sb, TUX_BITMAP_INO)))
+	sb->bitmap = iget(sb, TUX_BITMAP_INO);
+	if (IS_ERR(sb->bitmap)) {
+		errno = PTR_ERR(sb->bitmap);
 		goto eek;
-	if (!(sb->rootdir = iget(sb, TUX_ROOTDIR_INO)))
+	}
+	sb->rootdir = iget(sb, TUX_ROOTDIR_INO);
+	if (IS_ERR(sb->rootdir)) {
+		errno = PTR_ERR(sb->rootdir);
 		goto eek;
-	if (!(sb->atable = iget(sb, TUX_ATABLE_INO)))
+	}
+	sb->atable = iget(sb, TUX_ATABLE_INO);
+	if (IS_ERR(sb->atable)) {
+		errno = PTR_ERR(sb->atable);
 		goto eek;
-	if ((errno = -open_inode(sb->bitmap)))
-		goto eek;
-	if ((errno = -open_inode(sb->rootdir)))
-		goto eek;
-	if ((errno = -open_inode(sb->atable)))
-		goto eek;
+	}
 
 	struct graph_info ginfo;
 	char filename[256];
