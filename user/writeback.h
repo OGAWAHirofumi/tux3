@@ -4,6 +4,7 @@
 struct sb;
 struct inode;
 
+void clear_inode(struct inode *inode);
 void mark_inode_dirty(struct inode *inode);
 void mark_buffer_dirty(struct buffer_head *buffer);
 int sync_inode(struct inode *inode);

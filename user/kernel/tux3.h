@@ -376,6 +376,7 @@ typedef struct inode {
 	struct mutex i_mutex;
 	dev_t i_rdev;
 	struct list_head list;	/* link for dirty inodes */
+	unsigned state;
 } tuxnode_t;
 
 struct file {

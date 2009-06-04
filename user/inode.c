@@ -204,6 +204,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 		goto error; // err ???
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
 		return inode;
+
 	purge_inum(tux_sb(dir->i_sb), inode->inum); // test me!!!
 error:
 	free_inode(inode);
@@ -222,6 +223,7 @@ int tux_delete_inode(struct inode *inode)
 	free_btree(&tux_inode(inode)->btree);
 	if ((err = purge_inum(sb, tux_inode(inode)->inum)))
 		return err;
+	clear_inode(inode);
 	free_inode(inode);
 	return 0;
 }
