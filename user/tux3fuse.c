@@ -313,7 +313,7 @@ static void tux3_releasedir(fuse_req_t req, fuse_ino_t ino,
 {
 	trace("tux3_releasedir(%Lx)", (L)ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
-	assert(inode->inum == ino);
+	assert(inode->inum == ino || (ino == FUSE_ROOT_ID && inode->inum == TUX_ROOTDIR_INO));
 	iput(inode);
 	fuse_reply_err(req, 0); /* Success */
 }
