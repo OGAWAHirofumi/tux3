@@ -366,6 +366,11 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 			/* for now, block_write_full_page() clear delay */
 //			clear_buffer_delay(bh_result);
 			bh_result->b_blocknr = seg.block;
+			/*
+			 * FIXME: do we need to unmap_underlying_metadata()
+			 * for sb->volmap? (at least, check buffer state?)
+			 * And if needed, is it enough?
+			 */
 			break;
 		}
 		set_buffer_new(bh_result);
