@@ -170,6 +170,7 @@ static void stash_init(struct stash *stash)
 	stash->pos = stash->top = NULL;
 }
 
+/* Add new entry (value) to stash */
 int stash_value(struct stash *stash, u64 value)
 {
 	if (stash->pos == stash->top) {
@@ -187,6 +188,7 @@ int stash_value(struct stash *stash, u64 value)
 	return 0;
 }
 
+/* Free all pages in stash to empty. */
 static void empty_stash(struct stash *stash)
 {
 	struct flink_head *head = &stash->head;
@@ -205,6 +207,10 @@ static void empty_stash(struct stash *stash)
 	}
 }
 
+/*
+ * Call actor() for each entries. And, prepare to add new entry to stash.
+ * (NOTE: after this, stash keeps one page for future stash_value().)
+ */
 int unstash(struct sb *sb, struct stash *stash, unstash_t actor)
 {
 	struct flink_head *head = &stash->head;
