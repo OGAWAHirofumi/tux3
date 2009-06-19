@@ -173,6 +173,39 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 	return 0;
 }
 
+/* Deferred ileaf update for inode number allocation */
+/* must hold itable->btree.lock */
+static int is_defer_alloc_inum(struct inode *inode)
+{
+	return !list_empty(&tux_inode(inode)->alloc_list);
+}
+
+/* must hold itable->btree.lock */
+static int find_defer_alloc_inum(struct sb *sb, inum_t inum)
+{
+	tuxnode_t *tuxnode;
+
+	list_for_each_entry(tuxnode, &sb->alloc_inodes, alloc_list) {
+		if (tuxnode->inum == inum)
+			return 1;
+	}
+	return 0;
+}
+
+/* must hold itable->btree.lock */
+static void add_defer_alloc_inum(struct inode *inode)
+{
+	/* FIXME: need to reserve space (ileaf/bnodes) for this inode? */
+	struct sb *sb = tux_sb(inode->i_sb);
+	list_add_tail(&tux_inode(inode)->alloc_list, &sb->alloc_inodes);
+}
+
+/* must hold itable->btree.lock */
+static void del_defer_alloc_inum(struct inode *inode)
+{
+	list_del_init(&tux_inode(inode)->alloc_list);
+}
+
 /*
  * Inode table expansion algorithm
  *
@@ -196,7 +229,7 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
  * we should only round down the split point, not the returned goal.)
  */
 
-static int make_inode(struct inode *inode, inum_t goal)
+static int alloc_inum(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
@@ -206,6 +239,7 @@ static int make_inode(struct inode *inode, inum_t goal)
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
+retry:
 	if ((err = probe(cursor, goal)))
 		goto out;
 
@@ -230,14 +264,23 @@ static int make_inode(struct inode *inode, inum_t goal)
 			goto release;
 		}
 	}
+	/* Is this inum already used by deferred inum allocation? */
+	if (find_defer_alloc_inum(sb, goal)) {
+		goal++;
+		while (find_defer_alloc_inum(sb, goal))
+			goal++;
+		release_cursor(cursor);
+		goto retry;
+	}
 
 	tux_set_inum(inode, goal);
+	add_defer_alloc_inum(inode);
 	/* FIXME: should use conditional inode->present. But,
 	 * btree->lock is needed to initialize. */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
 		init_btree(&tux_inode(inode)->btree, sb, (struct root){}, &dtree_ops);
-	if ((err = store_attrs(inode, cursor)))
-		goto out;
+	mark_inode_dirty(inode);
+
 release:
 	release_cursor(cursor);
 out:
@@ -264,14 +307,13 @@ static int save_inode(struct inode *inode)
 	if ((err = probe(cursor, inum)))
 		goto out;
 	/* paranoia check */
-	unsigned size;
-	if (!(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size))) {
-		err = -EINVAL;
-		goto release;
+	if (!is_defer_alloc_inum(inode)) {
+		unsigned size;
+		assert(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size));
 	}
 	if ((err = store_attrs(inode, cursor)))
 		goto out;
-release:
+	del_defer_alloc_inum(inode);
 	release_cursor(cursor);
 out:
 	up_write(&cursor->btree->lock);
@@ -532,7 +574,7 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
-	int err = make_inode(inode, tux_sb(dir->i_sb)->nextalloc);
+	int err = alloc_inum(inode, tux_sb(dir->i_sb)->nextalloc);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);

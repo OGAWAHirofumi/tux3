@@ -25,6 +25,7 @@ static void tux3_inode_init_once(void *mem)
 {
 	tuxnode_t *tuxi = mem;
 
+	INIT_LIST_HEAD(&tuxi->alloc_list);
 	inode_init_once(&tuxi->vfs_inode);
 }
 
@@ -65,6 +66,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 
 static void tux3_destroy_inode(struct inode *inode)
 {
+	BUG_ON(!list_empty(&tux_inode(inode)->alloc_list));
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 
@@ -91,6 +93,7 @@ static void tux3_put_super(struct super_block *sb)
 	iput(sbi->volmap);
 	iput(sbi->logmap);
 
+	BUG_ON(!list_empty(&sbi->alloc_inodes));
 	sb->s_fs_info = NULL;
 	kfree(sbi);
 }
@@ -145,6 +148,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_time_gran = 1;
 
 	mutex_init(&sbi->loglock);
+	INIT_LIST_HEAD(&sbi->alloc_inodes);
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);

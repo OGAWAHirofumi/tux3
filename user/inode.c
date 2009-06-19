@@ -36,6 +36,7 @@ error:
 
 static void free_inode(struct inode *inode)
 {
+	assert(list_empty(&inode->alloc_list));
 	assert(list_empty(&inode->list));
 	assert(!inode->state);
 	assert(mapping(inode)); /* some inodes are not malloced */
@@ -243,7 +244,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	struct inode *inode = tux_new_inode(dir, iattr, 0);
 	if (!inode)
 		return NULL; // err ???
-	int err = make_inode(inode, dir->i_sb->nextalloc);
+	int err = alloc_inum(inode, dir->i_sb->nextalloc);
 	if (err)
 		goto error; // err ???
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)

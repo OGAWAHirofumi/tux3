@@ -231,13 +231,14 @@ static inline dev_t huge_decode_dev(u64 dev)
 	return new_decode_dev(dev);
 }
 
-#define INIT_INODE(inode, sb, mode)			\
-	.i_sb = sb,					\
-	.i_mode = mode,					\
-	.i_mutex = __MUTEX_INITIALIZER,			\
-	.i_version = 1,					\
-	.i_nlink = 1,					\
-	.i_count = ATOMIC_INIT(1),			\
+#define INIT_INODE(inode, sb, mode)				\
+	.i_sb = sb,						\
+	.i_mode = mode,						\
+	.i_mutex = __MUTEX_INITIALIZER,				\
+	.i_version = 1,						\
+	.i_nlink = 1,						\
+	.i_count = ATOMIC_INIT(1),				\
+	.alloc_list = LIST_HEAD_INIT((inode).alloc_list),	\
 	.list = LIST_HEAD_INIT((inode).list)
 
 #define INIT_SB(sb, dev)					\
@@ -247,6 +248,7 @@ static inline dev_t huge_decode_dev(u64 dev)
 	.blockmask = ((1 << (dev)->bits) - 1),			\
 	.delta_lock = __RWSEM_INITIALIZER,			\
 	.loglock = __MUTEX_INITIALIZER,				\
+	.alloc_inodes = LIST_HEAD_INIT((sb).alloc_inodes),	\
 	.dirty_inodes = LIST_HEAD_INIT((sb).dirty_inodes),	\
 	.commit = LIST_HEAD_INIT((sb).commit),			\
 	.pinned = LIST_HEAD_INIT((sb).pinned)
