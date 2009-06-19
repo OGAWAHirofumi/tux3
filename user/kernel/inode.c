@@ -200,7 +200,7 @@ static void add_defer_alloc_inum(struct inode *inode)
 	list_add_tail(&tux_inode(inode)->alloc_list, &sb->alloc_inodes);
 }
 
-/* must hold itable->btree.lock */
+/* must hold itable->btree.lock. FIXME: spinlock is enough? */
 static void del_defer_alloc_inum(struct inode *inode)
 {
 	list_del_init(&tux_inode(inode)->alloc_list);
@@ -321,13 +321,27 @@ out:
 	return err;
 }
 
-static int purge_inum(struct sb *sb, inum_t inum)
+/*
+ * NOTE: clear_inode() for this inode is already done. This shouldn't
+ * use generic part of inode basically.
+ */
+static int purge_inum(struct inode *inode)
 {
-	struct btree *itable = itable_btree(sb);
+	struct btree *itable = itable_btree(tux_sb(inode->i_sb));
+
+	down_write(&itable->lock);	/* FIXME: spinlock is enough? */
+	if (is_defer_alloc_inum(inode)) {
+		del_defer_alloc_inum(inode);
+		up_write(&itable->lock);
+		return 0;
+	}
+	up_write(&itable->lock);
+
 	struct cursor *cursor = alloc_cursor(itable, 0);
 	if (!cursor)
 		return -ENOMEM;
 
+	inum_t inum = tux_inode(inode)->inum;
 	int err;
 	down_write(&cursor->btree->lock);
 	if (!(err = probe(cursor, inum))) {
@@ -383,7 +397,6 @@ static void tux3_truncate(struct inode *inode)
 void tux3_delete_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	inum_t inum = tux_inode(inode)->inum;
 
 	change_begin(sb);
 	truncate_inode_pages(&inode->i_data, 0);
@@ -400,7 +413,7 @@ void tux3_delete_inode(struct inode *inode)
 
 	/* clear_inode() before freeing this ino. */
 	clear_inode(inode);
-	purge_inum(sb, inum);
+	purge_inum(inode);
 	change_end(sb);
 }
 

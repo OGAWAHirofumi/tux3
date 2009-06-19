@@ -803,10 +803,12 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 /* FIXME: right? and this should be done by tree_chop()? */
 int free_empty_btree(struct btree *btree)
 {
+	if (!has_root(btree))
+		return 0;
+
 	assert(btree->root.depth == 1);
 	struct sb *sb = btree->sb;
 	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
-
 	if (!rootbuf)
 		return -EIO;
 	struct bnode *rootnode = bufdata(rootbuf);

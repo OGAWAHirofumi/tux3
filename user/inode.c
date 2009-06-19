@@ -250,7 +250,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
 		return inode;
 
-	purge_inum(tux_sb(dir->i_sb), inode->inum); // test me!!!
+	purge_inum(inode); // test me!!!
 error:
 	iput(inode);
 	inode = NULL;
@@ -259,14 +259,13 @@ error:
 
 int tux_delete_inode(struct inode *inode)
 {
-	struct sb *sb = tux_sb(inode->i_sb);
 	int err;
 	assert(inode->i_nlink == 0);
 	if ((err = tuxtruncate(inode, 0)))
 		return err;
 	/* FIXME: we have to free dtree-root, atable entry, etc too */
 	free_empty_btree(&tux_inode(inode)->btree);
-	if ((err = purge_inum(sb, tux_inode(inode)->inum)))
+	if ((err = purge_inum(inode)))
 		return err;
 	clear_inode(inode);
 	iput(inode);
