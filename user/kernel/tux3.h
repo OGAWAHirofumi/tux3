@@ -634,7 +634,7 @@ enum atbit {
 extern unsigned atsize[MAX_ATTRS];
 
 #ifndef ENOATTR
-#define ENOATTR ENOENT
+#define ENOATTR ENODATA
 #endif
 
 #ifndef XATTR_CREATE
