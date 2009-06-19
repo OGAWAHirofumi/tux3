@@ -388,6 +388,48 @@ int main(int argc, char *argv[])
 	show_buffers(sb->volmap->map);
 	bitmap_dump(sb->bitmap, 0, sb->volblocks);
 	show_tree_range(itable_btree(sb), 0, -1);
+
+	if (1) { /* try to allocate same inum */
+		struct tux_iattr *iattr = &(struct tux_iattr){};
+		struct inode *inode1 = tux_new_inode(sb->rootdir, iattr, 0);
+		struct inode *inode2 = tux_new_inode(sb->rootdir, iattr, 0);
+		struct inode *inode3 = tux_new_inode(sb->rootdir, iattr, 0);
+		struct inode *inode4 = tux_new_inode(sb->rootdir, iattr, 0);
+		assert(inode1 && inode2 && inode3 && inode4);
+		/* both is deferred allocation */
+		err = alloc_inum(inode1, 0x1000);
+		assert(!err);
+		err = alloc_inum(inode2, 0x1000);
+		assert(!err);
+		/* test inum allocation */
+		assert(inode1->inum != inode2->inum);
+		/* save first inode */
+		err = sync_inode(inode1);
+		assert(!err);
+		/* try to alloc same inum after save */
+		err = alloc_inum(inode3, 0x1000);
+		assert(!err);
+		/* try to alloc so far inum */
+		err = alloc_inum(inode4, 0x10000000);
+		assert(!err);
+		/* save inodes */
+		err = sync_inode(inode2);
+		assert(!err);
+		err = sync_inode(inode3);
+		assert(!err);
+		/* test inum allocation */
+		assert(inode1->inum == 0x1000);
+		assert(inode2->inum == 0x1001);
+		assert(inode3->inum == 0x1002);
+		assert(inode4->inum == 0x10000000);
+		iput(inode1);
+		iput(inode2);
+		iput(inode3);
+		/* delete deferred allocation inode */
+		inode4->i_nlink--;
+		tux_delete_inode(inode4);
+	}
+
 	exit(0);
 eek:
 	return error("Eek! %s", strerror(errno));
