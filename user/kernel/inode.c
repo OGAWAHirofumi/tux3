@@ -247,21 +247,24 @@ out:
 
 static int save_inode(struct inode *inode)
 {
-	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
-	trace("save inode 0x%Lx", (L)tux_inode(inode)->inum);
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
+	inum_t inum = tux_inode(inode)->inum;
 	int err;
-	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for new depth */
 
+	assert(inum != TUX_INVALID_INO);
+	trace("save inode 0x%Lx", (L)inum);
+
+	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
+
 	down_write(&cursor->btree->lock);
-	if ((err = probe(cursor, tux_inode(inode)->inum)))
+	if ((err = probe(cursor, inum)))
 		goto out;
 	/* paranoia check */
 	unsigned size;
-	if (!(ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size))) {
+	if (!(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size))) {
 		err = -EINVAL;
 		goto release;
 	}

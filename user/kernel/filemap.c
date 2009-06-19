@@ -122,24 +122,25 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 			down_read_nested(&btree->lock, inode == sb->bitmap);
 	}
 
-	block_t limit = start + count;
-	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
+	struct dwalk *walk = &(struct dwalk){ };
 	int err;
 
 	if ((err = probe(cursor, start))) {
 		segs = err;
 		goto out_unlock;
 	}
+	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
+	dleaf_dump(btree, leaf);
+	dwalk_probe(leaf, sb->blocksize, walk, start);
+
+	block_t limit = start + count;
 	//assert(start >= this_key(cursor, btree->root.depth))
 	/* do not overlap next leaf */
 	if (limit > next_key(cursor, btree->root.depth))
 		limit = next_key(cursor, btree->root.depth);
-	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
-	dleaf_dump(btree, leaf);
+	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 
-	struct dwalk *walk = &(struct dwalk){ };
 	block_t index = start, seg_start, block;
-	dwalk_probe(leaf, sb->blocksize, walk, start);
 	struct dwalk headwalk = *walk;
 	if (!dwalk_end(walk) && dwalk_index(walk) < start)
 		seg_start = dwalk_index(walk);
