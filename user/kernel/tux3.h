@@ -884,7 +884,7 @@ static inline void blockput_dirty(struct buffer_head *buffer)
 static inline void mark_btree_dirty(struct btree *btree)
 {
 	if (btree != itable_btree(btree->sb))
-		mark_inode_dirty(btree_inode(btree));
+		__mark_inode_dirty(btree_inode(btree), I_DIRTY_DATASYNC);
 }
 
 static inline struct buffer_head *vol_getblk(struct sb *sb, block_t block)
