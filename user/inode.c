@@ -247,6 +247,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	int err = alloc_inum(inode, dir->i_sb->nextalloc);
 	if (err)
 		goto error; // err ???
+	mark_inode_dirty(inode);
 	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
 		return inode;
 
@@ -398,8 +399,10 @@ int main(int argc, char *argv[])
 		assert(inode1 && inode2 && inode3 && inode4);
 		/* both is deferred allocation */
 		err = alloc_inum(inode1, 0x1000);
+		mark_inode_dirty(inode1);
 		assert(!err);
 		err = alloc_inum(inode2, 0x1000);
+		mark_inode_dirty(inode2);
 		assert(!err);
 		/* test inum allocation */
 		assert(inode1->inum != inode2->inum);
@@ -408,9 +411,11 @@ int main(int argc, char *argv[])
 		assert(!err);
 		/* try to alloc same inum after save */
 		err = alloc_inum(inode3, 0x1000);
+		mark_inode_dirty(inode3);
 		assert(!err);
 		/* try to alloc so far inum */
 		err = alloc_inum(inode4, 0x10000000);
+		mark_inode_dirty(inode4);
 		assert(!err);
 		/* save inodes */
 		err = sync_inode(inode2);

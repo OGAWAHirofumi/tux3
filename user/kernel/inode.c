@@ -279,7 +279,6 @@ retry:
 	 * btree->lock is needed to initialize. */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
 		init_btree(&tux_inode(inode)->btree, sb, (struct root){}, &dtree_ops);
-	mark_inode_dirty(inode);
 
 release:
 	release_cursor(cursor);
@@ -594,6 +593,11 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 		return ERR_PTR(err);
 	}
 	insert_inode_hash(inode);
+	/*
+	 * The unhashed inode ignores mark_inode_dirty(), so it should
+	 * be called after insert_inode_hash().
+	 */
+	mark_inode_dirty(inode);
 	return inode;
 }
 

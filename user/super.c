@@ -62,16 +62,19 @@ int make_tux3(struct sb *sb)
 	trace("create bitmap inode");
 	if (alloc_inum(sb->bitmap, TUX_BITMAP_INO))
 		goto eek;
+	mark_inode_dirty(sb->bitmap);
 	trace("create version table");
 	if (!(sb->vtable = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
 	if (alloc_inum(sb->vtable, TUX_VTABLE_INO))
 		goto eek;
+	mark_inode_dirty(sb->vtable);
 	trace("create root directory");
 	if (!(sb->rootdir = tux_new_inode(dir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }, 0)))
 		goto eek;
 	if (alloc_inum(sb->rootdir, TUX_ROOTDIR_INO))
 		goto eek;
+	mark_inode_dirty(sb->rootdir);
 	trace("create atom dictionary");
 	if (!(sb->atable = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
@@ -80,6 +83,7 @@ int make_tux3(struct sb *sb)
 	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
 	if (alloc_inum(sb->atable, TUX_ATABLE_INO))
 		goto eek;
+	mark_inode_dirty(sb->atable);
 	if ((err = sync_super(sb)))
 		goto eek;
 
