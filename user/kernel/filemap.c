@@ -348,8 +348,8 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
 	struct btree *btree = &tux_inode(inode)->btree;
 
-	if (!btree->root.depth) {
-		assert(create && sb->logmap == inode);
+	if (sb->logmap == inode) {
+		assert(!has_root(btree) && create);
 		return 0;
 	}
 
