@@ -41,6 +41,8 @@ int make_tux3(struct sb *sb)
 	trace("create bitmap");
 	if (!(sb->bitmap = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
 		goto eek;
+	/* bitmap->btree is used before make_inode(), so initialize */
+	init_btree(&sb->bitmap->btree, sb, (struct root){}, &dtree_ops);
 
 	trace("reserve superblock");
 	/* Always 8K regardless of blocksize */

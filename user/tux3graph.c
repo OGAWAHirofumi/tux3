@@ -656,6 +656,9 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 		if (IS_ERR(inode))
 			error("inode couldn't get: inum %Lu", (L)inum);
 
+		if (!has_root(&inode->btree))
+			goto out_iput;
+
 		char name[64];
 		if (inum < ARRAY_SIZE(dtree_names) && dtree_names[inum])
 			sprintf(name, "%s_dtree", dtree_names[inum]);
@@ -725,7 +728,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			.link_head = LIST_HEAD_INIT(ginfo_data.link_head),
 		};
 		draw_data(&ginfo_data, &inode->btree);
-
+out_iput:
 		iput(inode);
 	}
 }

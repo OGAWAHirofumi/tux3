@@ -233,8 +233,10 @@ int probe(struct cursor *cursor, tuxkey_t key)
 {
 	struct btree *btree = cursor->btree;
 	unsigned i, depth = btree->root.depth;
-	struct buffer_head *buffer = vol_bread(btree->sb, btree->root.block);
+	struct buffer_head *buffer;
 
+	assert(has_root(btree));
+	buffer = vol_bread(btree->sb, btree->root.block);
 	if (!buffer)
 		return -EIO;
 	struct bnode *node = bufdata(buffer);
@@ -313,8 +315,10 @@ tuxkey_t next_key(struct cursor *cursor, int depth)
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
-	struct cursor *cursor = alloc_cursor(btree, 0);
+	if (!has_root(btree))
+		return;
 
+	struct cursor *cursor = alloc_cursor(btree, 0);
 	if (!cursor)
 		error("out of memory");
 	if (probe(cursor, start))
@@ -461,6 +465,9 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	struct btree_ops *ops = btree->ops;
 	struct sb *sb = btree->sb;
 	int ret;
+
+	if (!has_root(btree))
+		return 0;
 
 	cursor = alloc_cursor(btree, 0);
 	prev = malloc(sizeof(*prev) * depth);
@@ -755,11 +762,9 @@ void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btr
 	ops->btree_init(btree);
 }
 
-int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
+int alloc_empty_btree(struct btree *btree)
 {
-	/* Initialize btree with dummy root */
-	init_btree(btree, sb, (struct root){}, ops);
-
+	struct sb *sb = btree->sb;
 	struct buffer_head *rootbuf = new_node(btree);
 	if (IS_ERR(rootbuf))
 		goto error;
@@ -767,6 +772,7 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	if (IS_ERR(leafbuf))
 		goto error_leafbuf;
 
+	assert(!has_root(btree));
 	trace("root at %Lx", (L)bufindex(rootbuf));
 	trace("leaf at %Lx", (L)bufindex(leafbuf));
 	struct bnode *rootnode = bufdata(rootbuf);
@@ -775,18 +781,27 @@ int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 	blockput_dirty(rootbuf);
 	blockput_dirty(leafbuf);
+	mark_btree_dirty(btree);
+
 	return 0;
 
 error_leafbuf:
-	(ops->bfree)(sb, bufindex(rootbuf), 1);
+	(btree->ops->bfree)(sb, bufindex(rootbuf), 1);
 	blockput(rootbuf);
 	rootbuf = leafbuf;
 error:
 	return PTR_ERR(rootbuf);
 }
 
-/* FIXME: right? */
-int free_btree(struct btree *btree)
+int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
+{
+	/* Initialize btree with dummy root */
+	init_btree(btree, sb, (struct root){}, ops);
+	return alloc_empty_btree(btree);
+}
+
+/* FIXME: right? and this should be done by tree_chop()? */
+int free_empty_btree(struct btree *btree)
 {
 	assert(btree->root.depth == 1);
 	struct sb *sb = btree->sb;

@@ -232,9 +232,10 @@ static int make_inode(struct inode *inode, inum_t goal)
 	}
 
 	tux_set_inum(inode, goal);
+	/* FIXME: should use conditional inode->present. But,
+	 * btree->lock is needed to initialize. */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
-		if ((err = new_btree(&tux_inode(inode)->btree, sb, &dtree_ops)))
-			goto release;
+		init_btree(&tux_inode(inode)->btree, sb, (struct root){}, &dtree_ops);
 	if ((err = store_attrs(inode, cursor)))
 		goto out;
 release:
@@ -353,7 +354,7 @@ void tux3_delete_inode(struct inode *inode)
 	if (inode->i_blocks)
 		tux3_truncate(inode);
 	/* FIXME: we have to free dtree-root, atable entry, etc too */
-	free_btree(&tux_inode(inode)->btree);
+	free_empty_btree(&tux_inode(inode)->btree);
 
 	/* clear_inode() before freeing this ino. */
 	clear_inode(inode);

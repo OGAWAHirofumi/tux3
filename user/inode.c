@@ -264,7 +264,7 @@ int tux_delete_inode(struct inode *inode)
 	if ((err = tuxtruncate(inode, 0)))
 		return err;
 	/* FIXME: we have to free dtree-root, atable entry, etc too */
-	free_btree(&tux_inode(inode)->btree);
+	free_empty_btree(&tux_inode(inode)->btree);
 	if ((err = purge_inum(sb, tux_inode(inode)->inum)))
 		return err;
 	clear_inode(inode);

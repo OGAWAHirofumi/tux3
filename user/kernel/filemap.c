@@ -101,17 +101,10 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
-	int segs = 0;
+	struct cursor *cursor = NULL;
+	int err, segs = 0;
 
 	assert(max_segs > 0);
-	if (!btree->root.depth)
-		goto out;
-
-	struct cursor *cursor = alloc_cursor(btree, 1); /* allows for depth increase */
-	if (!cursor) {
-		segs = -ENOMEM;
-		goto out;
-	}
 
 	if (create) {
 		down_write(&btree->lock);
@@ -122,16 +115,39 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 			down_read_nested(&btree->lock, inode == sb->bitmap);
 	}
 
-	struct dwalk *walk = &(struct dwalk){ };
-	int err;
-
-	if ((err = probe(cursor, start))) {
-		segs = err;
-		goto out_unlock;
+	if (!has_root(btree) && create) {
+		/*
+		 * Allocate empty btree if this btree doesn't have it yet.
+		 * FIXME: this should be merged to insert_leaf() or something?
+		 */
+		err = alloc_empty_btree(btree);
+		if (err) {
+			segs = err;
+			goto out_unlock;
+		}
 	}
-	struct dleaf *leaf = bufdata(cursor_leafbuf(cursor));
-	dleaf_dump(btree, leaf);
-	dwalk_probe(leaf, sb->blocksize, walk, start);
+
+	/* dwalk_end(walk) is true with this. */
+	struct dwalk *walk = &(struct dwalk){ };
+	struct dleaf *leaf = NULL;
+	if (has_root(btree)) {
+		cursor = alloc_cursor(btree, 1); /* allows for depth increase */
+		if (!cursor) {
+			segs = -ENOMEM;
+			goto out_unlock;
+		}
+
+		if ((err = probe(cursor, start))) {
+			segs = err;
+			goto out_unlock;
+		}
+		leaf = bufdata(cursor_leafbuf(cursor));
+		dleaf_dump(btree, leaf);
+		dwalk_probe(leaf, sb->blocksize, walk, start);
+	} else {
+		assert(!create);
+		/* btree doesn't have root yet */
+	}
 
 	block_t limit = start + count;
 	//assert(start >= this_key(cursor, btree->root.depth))
@@ -301,7 +317,8 @@ out_create:
 	if (tail)
 		free(tail);
 out_release:
-	release_cursor(cursor);
+	if (cursor)
+		release_cursor(cursor);
 out_unlock:
 	if (create) {
 		up_write(&btree->lock);
@@ -311,8 +328,9 @@ out_unlock:
 		if (!is_bitmap_write(sb))
 			up_read(&btree->lock);
 	}
-	free_cursor(cursor);
-out:
+	if (cursor)
+		free_cursor(cursor);
+
 	return segs;
 }
 

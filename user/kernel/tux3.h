@@ -666,6 +666,13 @@ static inline struct ileaf *to_ileaf(vleaf *leaf)
 	return leaf;
 }
 
+/* Does this btree have root bnode/leaf? */
+static inline int has_root(struct btree *btree)
+{
+	/* FIXME: should use conditional inode->present */
+	return btree->root.depth != 0;
+}
+
 /* for tree_chop */
 struct delete_info {
 	tuxkey_t key;
@@ -732,8 +739,9 @@ void free_cursor(struct cursor *cursor);
 void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
 
 void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
+int alloc_empty_btree(struct btree *btree);
 int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops);
-int free_btree(struct btree *btree);
+int free_empty_btree(struct btree *btree);
 struct buffer_head *new_leaf(struct btree *btree);
 int probe(struct cursor *cursor, tuxkey_t key);
 int advance(struct cursor *cursor);
