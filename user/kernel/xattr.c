@@ -313,11 +313,14 @@ struct xcache *new_xcache(unsigned maxsize)
 
 static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
 {
-	if (!xattr)
-		return 0;
-	unsigned size = (void *)xcache_next(xattr) - (void *)xattr;
-	memmove(xattr, xcache_next(xattr), xcache->size -= size);
-	return 1;
+	if (xattr) {
+		void *limit = xcache_limit(xcache);
+		void *next = xcache_next(xattr);
+		memmove(xattr, next, limit - next);
+		xcache->size -= next - (void *)xattr;
+		return 1;
+	}
+	return 0;
 }
 
 /*
