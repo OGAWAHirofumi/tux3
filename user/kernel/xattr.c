@@ -392,6 +392,10 @@ int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, u
 		goto out;
 	}
 	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom);
+	if (IS_ERR(xattr)) {
+		ret = PTR_ERR(xattr);
+		goto out;
+	}
 	ret = xattr->size;
 	if (ret <= size)
 		memcpy(data, xattr->body, ret);
