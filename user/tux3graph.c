@@ -316,6 +316,64 @@ static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t dr
 }
 
 typedef void (*draw_data_t)(struct graph_info *, struct btree *btree);
+typedef void (*walk_dleaf_t)(struct graph_info *, struct btree *btree,
+			     struct dwalk *walk);
+
+static void walk_dtree(struct graph_info *gi, struct btree *btree,
+		       walk_dleaf_t walk_dleaf)
+{
+	struct cursor *cursor = alloc_cursor(btree, 0);
+	assert(cursor);
+	int err = probe(cursor, 0);
+	assert(!err);
+	struct buffer_head *leafbuf;
+	do {
+		leafbuf = cursor_leafbuf(cursor);
+		assert((btree->ops->leaf_sniff)(btree, bufdata(leafbuf)));
+
+		struct dleaf *dleaf = bufdata(leafbuf);
+		struct dwalk walk;
+		if (!dwalk_probe(dleaf, btree->sb->blocksize, &walk, 0))
+			continue;
+		do {
+			walk_dleaf(gi, btree, &walk);
+		} while (dwalk_next(&walk));
+	} while (advance(cursor));
+	free_cursor(cursor);
+}
+
+static void walk_dleaf_bitmap(struct graph_info *gi, struct btree *btree,
+			      struct dwalk *walk)
+{
+	struct inode *bitmap = btree->sb->bitmap;
+	block_t index = dwalk_index(walk);
+	unsigned count = dwalk_count(walk);
+	void *data;
+
+	for (unsigned i = 0; i < count; i++) {
+		unsigned idx, size = btree->sb->blocksize * 8;
+		struct buffer_head *buffer;
+
+		fprintf(gi->f, " | index %llu: ", (L)(index + i));
+		buffer = blockread(mapping(bitmap), index + i);
+		assert(buffer);
+		data = bufdata(buffer);
+
+		idx = find_first_bit(data, size);
+		while (idx < size) {
+			fprintf(gi->f, "%u-", idx);
+			idx = find_next_zero_bit(data, size, idx + 1);
+			fprintf(gi->f, "%u, ", idx - 1);
+			if (idx >= size)
+				break;
+			idx = find_next_bit(data, size, idx + 1);
+			if (idx >= size)
+				break;
+		}
+
+		blockput(buffer);
+	}
+}
 
 static void draw_bitmap(struct graph_info *gi, struct btree *btree)
 {
@@ -323,12 +381,16 @@ static void draw_bitmap(struct graph_info *gi, struct btree *btree)
 		"subgraph cluster_%s {\n"
 		"label = \"%s\"\n"
 		"%s [\n"
-		"label = \"free bitmap:\\n"
-		"1 - used block\\n"
-		"0 - free block\"\n"
-		"]\n"
-		"}\n",
+		"label = \"{ dump of bitmap data",
 		gi->lname, gi->lname, gi->lname);
+
+	walk_dtree(gi, btree, walk_dleaf_bitmap);
+
+	fprintf(gi->f,
+		"}\"\n"
+		"shape = record\n"
+		"];\n"
+		"}\n");
 }
 
 static void draw_vtable(struct graph_info *gi, struct btree *btree)
