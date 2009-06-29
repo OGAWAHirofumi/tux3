@@ -132,13 +132,23 @@ void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count)
 	log_extent(sb, LOG_BFREE_ON_FLUSH, block, count);
 }
 
-void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+static void log_redirect(struct sb *sb, u8 intent, block_t newblock, block_t oldblock)
 {
 	unsigned char *data = log_begin(sb, 13);
 
-	*data++ = LOG_BNODE_REDIRECT;
+	*data++ = intent;
 	data = encode48(data, newblock);
 	log_end(sb, encode48(data, oldblock));
+}
+
+void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+{
+	log_redirect(sb, LOG_LEAF_REDIRECT, newblock, oldblock);
+}
+
+void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+{
+	log_redirect(sb, LOG_BNODE_REDIRECT, newblock, oldblock);
 }
 
 void log_bnode_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)

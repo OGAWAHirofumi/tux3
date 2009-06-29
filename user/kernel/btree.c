@@ -380,7 +380,7 @@ int cursor_redirect(struct cursor *cursor)
 			/* FIXME: this means dirty buffer */
 			list_move_tail(&clone->link, &sb->commit);
 #endif
-			log_bnode_redirect(sb, oldblock, newblock);
+			log_leaf_redirect(sb, oldblock, newblock);
 			defer_bfree(&sb->defree, oldblock, 1);
 			goto parent_level;
 		}

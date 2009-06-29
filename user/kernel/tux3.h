@@ -301,6 +301,7 @@ enum {
 	LOG_BALLOC = 0x33,	/* Log of block allocation */
 	LOG_BFREE,		/* Log of freeing block */
 	LOG_BFREE_ON_FLUSH,	/* Log of freeing block after next cycle */
+	LOG_LEAF_REDIRECT,	/* Log of leaf redirect */
 	LOG_BNODE_REDIRECT,	/* Log of bnode redirect */
 	LOG_BNODE_UPDATE,	/* Log of bnode entry update */
 	LOG_TYPES
@@ -843,6 +844,7 @@ void log_finish(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count);
+void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_bnode_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key);
 void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);

@@ -14,6 +14,7 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_BALLOC] = 8,
 	[LOG_BFREE] = 8,
 	[LOG_BFREE_ON_FLUSH] = 8,
+	[LOG_LEAF_REDIRECT] = 13,
 	[LOG_BNODE_REDIRECT] = 13,
 	[LOG_BNODE_UPDATE] = 19,
 };
@@ -65,6 +66,7 @@ int replay(struct sb *sb)
 			case LOG_BFREE_ON_FLUSH:
 				data += logsize[code] - 1;
 				break;
+			case LOG_LEAF_REDIRECT:
 			case LOG_BNODE_REDIRECT:
 			default:
 				goto unknown;
@@ -92,6 +94,7 @@ int replay(struct sb *sb)
 				warn(">>> bitmap err = %i", err);
 				break;
 			}
+			case LOG_LEAF_REDIRECT:
 			case LOG_BNODE_REDIRECT:
 			case LOG_BNODE_UPDATE:
 				data += logsize[code] - 1;
