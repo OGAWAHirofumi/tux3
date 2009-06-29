@@ -94,6 +94,23 @@ static void clean_buffer(struct buffer_head *buffer)
 #endif
 }
 
+static int flush_buffer_list(struct sb *sb, struct list_head *head)
+{
+#ifndef __KERNEL__
+	/* FIXME: code should be share with flush_buffers() */
+	struct buffer_head *buffer;
+
+	while (!list_empty(head)) {
+		buffer = list_entry(head->next, struct buffer_head, link);
+		trace(">>> flush buffer %Lx:%Lx", (L)tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
+		// mapping, index set but not hashed in mapping
+		buffer->map->io(buffer, 1);
+		evict_buffer(buffer);
+	}
+#endif
+	return 0;
+}
+
 static int move_deferred(struct sb *sb, u64 val)
 {
 	return stash_value(&sb->defree, val);
@@ -154,18 +171,9 @@ static int stage_delta(struct sb *sb)
 
 	sb->delta++;
 
-#ifndef __KERNEL__
-//	assert(!tuxsync(sb->rootdir));
 	/* btree node and leaf blocks */
+	flush_buffer_list(sb, &sb->commit);
 
-	while (!list_empty(&sb->commit)) {
-		struct buffer_head *buffer = list_entry(sb->commit.next, struct buffer_head, link);
-		trace(">>> flush buffer %Lx:%Lx", (L)tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
-		// mapping, index set but not hashed in mapping
-		buffer->map->io(buffer, 1);
-		evict_buffer(buffer);
-	}
-#endif
 	write_log(sb);
 
 	return 0;
