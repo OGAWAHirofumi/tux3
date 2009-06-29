@@ -169,6 +169,19 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, (L)new, (L)old);
 			break;
 		}
+		case LOG_BNODE_ROOT: {
+			u64 root, left, right, rkey;
+			unsigned count = *data++;
+			data = decode48(data, &root);
+			data = decode48(data, &left);
+			data = decode48(data, &right);
+			data = decode48(data, &rkey);
+			fprintf(gi->f,
+				" | [LOG_BNODE_ROOT] count %u, root %llu, "
+				"left %llu, right %llu, right key %llu ",
+				count, (L)root, (L)left, (L)right, (L)rkey);
+			break;
+		}
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE: {
 			u64 parent, child, key;
