@@ -155,10 +155,10 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, count, (L)block);
 			break;
 		}
-		case LOG_UPDATE:
+		case LOG_BNODE_REDIRECT:
 			assert(0);	/* not supported yet */
 			break;
-		case LOG_REDIRECT:
+		case LOG_BNODE_UPDATE:
 			assert(0);	/* not supported yet */
 			break;
 		default:

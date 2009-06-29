@@ -14,8 +14,8 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_BALLOC] = 8,
 	[LOG_BFREE] = 8,
 	[LOG_BFREE_ON_FLUSH] = 8,
-	[LOG_UPDATE] = 19,
-	[LOG_REDIRECT] = 19,
+	[LOG_BNODE_REDIRECT] = 19,
+	[LOG_BNODE_UPDATE] = 19,
 };
 
 int replay(struct sb *sb)
@@ -51,7 +51,7 @@ int replay(struct sb *sb)
 		unsigned char *data = log->data;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
-			case LOG_UPDATE:
+			case LOG_BNODE_UPDATE:
 			{
 				u64 child, parent, key;
 				data = decode48(data, &child);
@@ -65,7 +65,7 @@ int replay(struct sb *sb)
 			case LOG_BFREE_ON_FLUSH:
 				data += logsize[code] - 1;
 				break;
-			case LOG_REDIRECT:
+			case LOG_BNODE_REDIRECT:
 			default:
 				goto unknown;
 			}
@@ -92,8 +92,8 @@ int replay(struct sb *sb)
 				warn(">>> bitmap err = %i", err);
 				break;
 			}
-			case LOG_UPDATE:
-			case LOG_REDIRECT:
+			case LOG_BNODE_REDIRECT:
+			case LOG_BNODE_UPDATE:
 				data += logsize[code] - 1;
 				break;
 			default:
@@ -105,7 +105,7 @@ int replay(struct sb *sb)
 
 	return 0;
 unknown:
-	warn("unrecognized log code 0x%x, 0x%x", code, LOG_UPDATE);
+	warn("unrecognized log code 0x%x, 0x%x", code, LOG_BNODE_UPDATE);
 	log_drop(sb);
 	return -EINVAL;
 }

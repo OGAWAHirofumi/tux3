@@ -132,24 +132,24 @@ void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count)
 	log_extent(sb, LOG_BFREE_ON_FLUSH, block, count);
 }
 
-void log_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
-{
-	unsigned char *data = log_begin(sb, 19);
-
-	*data++ = LOG_UPDATE;
-	data = encode48(data, child);
-	data = encode48(data, parent);
-	log_end(sb, encode48(data, key));
-}
-
-void log_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 {
 return;
 	unsigned char *data = log_begin(sb, 19);
 
-	*data++ = LOG_REDIRECT;
+	*data++ = LOG_BNODE_REDIRECT;
 	data = encode48(data, newblock);
 	log_end(sb, encode48(data, oldblock));
+}
+
+void log_bnode_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
+{
+	unsigned char *data = log_begin(sb, 19);
+
+	*data++ = LOG_BNODE_UPDATE;
+	data = encode48(data, child);
+	data = encode48(data, parent);
+	log_end(sb, encode48(data, key));
 }
 
 /* Stash infrastructure (struct stash must be initialized by zero clear) */
