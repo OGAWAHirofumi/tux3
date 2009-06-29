@@ -155,9 +155,20 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, count, (L)block);
 			break;
 		}
-		case LOG_BNODE_REDIRECT:
-			assert(0);	/* not supported yet */
+		case LOG_LEAF_REDIRECT:
+		case LOG_BNODE_REDIRECT: {
+			u64 new, old;
+			char *name;
+			data = decode48(data, &new);
+			data = decode48(data, &old);
+			if (code == LOG_LEAF_REDIRECT)
+				name = "LOG_LEAF_REDIRECT";
+			else
+				name = "LOG_BNODE_REDIRECT";
+			fprintf(gi->f, " | [%s] new %llu, old %llu ",
+				name, (L)new, (L)old);
 			break;
+		}
 		case LOG_BNODE_UPDATE:
 			assert(0);	/* not supported yet */
 			break;
