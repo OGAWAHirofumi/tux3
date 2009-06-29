@@ -725,13 +725,16 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 {
 	trace("split leaf");
 	struct btree *btree = cursor->btree;
-	struct buffer_head *newbuf = new_leaf(btree);
+	struct buffer_head *newbuf;
 
+	newbuf = new_leaf(btree);
 	if (IS_ERR(newbuf)) {
 		/* the rule: release cursor at point of error */
 		release_cursor(cursor);
 		return PTR_ERR(newbuf);
 	}
+	log_balloc(btree->sb, bufindex(newbuf), 1);
+
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
 	if (key >= newkey)
