@@ -150,8 +150,8 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			else
 				name = "LOG_BFREE_ON_FLUSH";
 			fprintf(gi->f,
-				" | [%s] block %llu, count %u ",
-				name, (L)block, count);
+				" | [%s] count %u, block %llu ",
+				name, count, (L)block);
 			break;
 		}
 		case LOG_UPDATE:
