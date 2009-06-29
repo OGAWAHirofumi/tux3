@@ -19,11 +19,10 @@ static __always_inline unsigned long __ffs(unsigned long word)
 {
 	int num = 0;
 
-	if (BITS_PER_LONG == 64)  {
-		if ((word & 0xffffffff) == 0) {
-			num += 32;
-			word >>= 32;
-		}
+	if (BITS_PER_LONG == 64 && !(word & 0xffffffff)) {
+		num += 32;
+		word >>= 16; /* work around idiotic gcc warning */
+		word >>= 16; /* work around idiotic gcc warning */
 	}
 	if ((word & 0xffff) == 0) {
 		num += 16;
