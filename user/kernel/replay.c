@@ -14,7 +14,7 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_BALLOC] = 8,
 	[LOG_BFREE] = 8,
 	[LOG_BFREE_ON_FLUSH] = 8,
-	[LOG_BNODE_REDIRECT] = 19,
+	[LOG_BNODE_REDIRECT] = 13,
 	[LOG_BNODE_UPDATE] = 19,
 };
 

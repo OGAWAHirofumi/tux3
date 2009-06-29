@@ -134,8 +134,7 @@ void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count)
 
 void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 {
-return;
-	unsigned char *data = log_begin(sb, 19);
+	unsigned char *data = log_begin(sb, 13);
 
 	*data++ = LOG_BNODE_REDIRECT;
 	data = encode48(data, newblock);
