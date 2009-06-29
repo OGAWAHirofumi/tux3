@@ -758,8 +758,8 @@ void show_tree(struct btree *btree);
 int cursor_redirect(struct cursor *cursor);
 
 /* dir.c */
-int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode);
-loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
+void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *new_inode);
+int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result);
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
 int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);

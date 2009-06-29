@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20, 0);
 	struct buffer_head *buffer;
 	printf("empty = %i\n", tux_dir_is_empty(dir));
-	tux_create_entry(dir, "hello", 5, 0x666, S_IFREG);
-	tux_create_entry(dir, "world", 5, 0x777, S_IFLNK);
+	tux_create_dirent(dir, "hello", 5, 0x666, S_IFREG);
+	tux_create_dirent(dir, "world", 5, 0x777, S_IFLNK);
 	tux_dirent *entry = tux_find_entry(dir, "hello", 5, &buffer);
 	assert(!IS_ERR(entry));
 	hexdump(entry, entry->name_len);
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
-		tux_create_entry(dir, name, strlen(name), 0x800 + i, S_IFREG);
+		tux_create_dirent(dir, name, strlen(name), 0x800 + i, S_IFREG);
 	}
 	tux_dump_entries(blockget(dir->map, 0));
 	char dents[10000];

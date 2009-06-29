@@ -218,7 +218,7 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 
 // bug waiting to happen...
 tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size);
-loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size);
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size);
 
 static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
 {
@@ -239,7 +239,7 @@ static atom_t make_atom(struct inode *atable, const char *name, unsigned len)
 	if (atom != -1)
 		return atom;
 	atom = get_freeatom(atable);
-	loff_t where = _tux_create_entry(atable, name, len, atom, 0, &tux_sb(atable->i_sb)->dictsize);
+	loff_t where = tux_create_entry(atable, name, len, atom, 0, &tux_sb(atable->i_sb)->dictsize);
 	if (where < 0)
 		return -1; // and what about the err???
 

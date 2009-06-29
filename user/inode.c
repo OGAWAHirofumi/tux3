@@ -248,7 +248,8 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	if (err)
 		goto error; // err ???
 	mark_inode_dirty(inode);
-	if (tux_create_entry(dir, name, len, tux_inode(inode)->inum, iattr->mode) >= 0)
+	err = tux_create_dirent(dir, name, len, tux_inode(inode)->inum, iattr->mode);
+	if (!err)
 		return inode;
 
 	purge_inum(inode); // test me!!!

@@ -106,20 +106,28 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 	[S_IFLNK >> STAT_SHIFT] = TUX_LNK,
 };
 
-int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode)
+static void tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum, unsigned mode)
 {
-	struct inode *dir = buffer_inode(buffer);
-
 	entry->inum = to_be_u64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	blockput_dirty(buffer);
-	/* FIXME: this should be only dir, not xattr */
-	dir->i_mtime = dir->i_ctime = gettime();
-	mark_inode_dirty(dir);
-	return 0;
 }
 
-loff_t _tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size)
+/*
+ * NOTE: For now, we don't have ".." though, we shouldn't use this for
+ * "..". rename() shouldn't update ->mtime for ".." usually.
+ */
+void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *new_inode)
+{
+	struct inode *dir = buffer_inode(buffer);
+	inum_t new_inum = tux_inode(new_inode)->inum;
+
+	tux_update_entry(buffer, entry, new_inum, new_inode->i_mode);
+	dir->i_mtime = dir->i_ctime = gettime();
+	mark_inode_dirty(dir);
+}
+
+loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size)
 {
 	tux_dirent *entry;
 	struct buffer_head *buffer;
@@ -166,10 +174,24 @@ create:
 	entry->name_len = len;
 	memcpy(entry->name, name, len);
 	offset = (void *)entry - bufdata(buffer);
-	int err = tux_update_entry(buffer, entry, inum, mode);
-	if (err)
-		return err;
+	/* this releases buffer */
+	tux_update_entry(buffer, entry, inum, mode);
+
 	return (block << blockbits) + offset; /* only needed for xattr create */
+}
+
+int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
+{
+	loff_t where;
+
+	where = tux_create_entry(dir, name, len, inum, mode, &dir->i_size);
+	if (where < 0)
+		return where;
+
+	dir->i_mtime = dir->i_ctime = gettime();
+	mark_inode_dirty(dir);
+
+	return 0;
 }
 
 tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size)
@@ -205,11 +227,6 @@ tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct
 error:
 	*result = NULL;		/* for debug */
 	return ERR_PTR(err);
-}
-
-loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode)
-{
-	return _tux_create_entry(dir, name, len, inum, mode, &dir->i_size);
 }
 
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)

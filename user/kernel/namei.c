@@ -29,27 +29,16 @@ out:
 
 static int __tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
-	loff_t where;
-
-	where = tux_create_entry(dir, dentry->d_name.name, dentry->d_name.len,
+	return tux_create_dirent(dir, dentry->d_name.name, dentry->d_name.len,
 				 tux_inode(inode)->inum, inode->i_mode);
-	if (where < 0)
-		return where;
-	return 0;
 }
 
 static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
 {
 	int err = __tux_add_dirent(dir, dentry, inode);
-
 	if (!err)
 		d_instantiate(dentry, inode);
 	return err;
-}
-
-static int tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *inode)
-{
-	return tux_update_entry(buffer, entry, tux_inode(inode)->inum, inode->i_mode);
 }
 
 static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
@@ -212,9 +201,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			err = PTR_ERR(new_entry);
 			goto error;
 		}
-		err = tux_update_dirent(new_buffer, new_entry, old_inode);
-		if (err)
-			goto error;
+		/* this releases new_buffer */
+		tux_update_dirent(new_buffer, new_entry, old_inode);
 		new_inode->i_ctime = new_dir->i_ctime;
 		if (old_is_dir)
 			drop_nlink(new_inode);
