@@ -20,6 +20,41 @@ int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
 	return ioabs(dev->fd, data, len, rw, offset);
 }
 
+#if defined(ATOMIC) || defined(BLOCKDIRTY)
+struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
+{
+	unsigned oldstate = buffer->state;
+	assert(oldstate < BUFFER_STATES);
+	newdelta &= BUFFER_DIRTY_STATES - 1;
+	trace_on("---- before: fork buffer %p ----", buffer);
+	if (oldstate >= BUFFER_DIRTY) {
+		if (oldstate - BUFFER_DIRTY == newdelta)
+			return buffer;
+		trace_on("---- fork buffer %p ----", buffer);
+		struct buffer_head *clone = new_buffer(buffer->map);
+		if (IS_ERR(clone))
+			return clone;
+		/* Create the cloned buffer */
+		memcpy(bufdata(clone), bufdata(buffer), bufsize(buffer));
+		clone->index = buffer->index;
+		/* Replace the buffer by cloned buffer. */
+		remove_buffer_hash(buffer);
+		insert_buffer_hash(clone);
+		/*
+		 * FIXME: The refcount of buffer is not dropped here,
+		 * the refcount may not be needed actually. Because
+		 * this buffer was removed from lru list. Well, so,
+		 * the backend has to free this buffer (blockput(buffer))
+		 */
+		buffer = clone;
+	}
+	set_buffer_state_list(buffer, BUFFER_DIRTY + newdelta, &buffer->map->dirty);
+	__mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
+
+	return buffer;
+}
+#endif /* defined(ATOMIC) || defined(BLOCKDIRTY) */
+
 #include "kernel/commit.c"
 
 /*
