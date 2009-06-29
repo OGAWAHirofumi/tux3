@@ -298,11 +298,11 @@ struct logblock {
 };
 
 enum {
-	LOG_BALLOC = 0x33,
-	LOG_BFREE,
-	LOG_BFREE_ON_FLUSH,
-	LOG_UPDATE,
-	LOG_REDIRECT,
+	LOG_BALLOC = 0x33,	/* Log of block allocation */
+	LOG_BFREE,		/* Log of freeing block */
+	LOG_BFREE_ON_FLUSH,	/* Log of freeing block after next cycle */
+	LOG_UPDATE,		/* Log of bnode entry update */
+	LOG_REDIRECT,		/* Log of bnode redirect */
 	LOG_TYPES
 };
 
