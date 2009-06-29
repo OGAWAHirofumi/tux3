@@ -166,10 +166,16 @@ static int stage_delta(struct sb *sb)
 		evict_buffer(buffer);
 	}
 #endif
+	write_log(sb);
 
-	/* allocate and write log blocks */
+	return 0;
+}
 
+/* allocate and write log blocks */
+static int write_log(struct sb *sb)
+{
 	log_finish(sb);
+
 	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
 		block_t block;
 		int err = balloc(sb, 1, &block);
@@ -193,6 +199,7 @@ static int stage_delta(struct sb *sb)
 		sb->logchain = block;
 	}
 	sb->logthis = sb->lognext;
+
 	return 0;
 }
 
