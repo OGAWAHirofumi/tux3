@@ -744,10 +744,13 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 {
 	struct btree *btree = cursor->btree;
-	int err = cursor_redirect(cursor);
+	int err;
 
+	/* This redirects for the both of changing and spliting the leaf */
+	err = cursor_redirect(cursor);
 	if (err)
 		goto error;
+
 	for (int i = 0; i < 2; i++) {
 		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
