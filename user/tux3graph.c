@@ -182,6 +182,18 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				count, (L)root, (L)left, (L)right, (L)rkey);
 			break;
 		}
+		case LOG_BNODE_SPLIT: {
+			u64 src, dest;
+			unsigned pos;
+			data = decode32(data, &pos);
+			data = decode48(data, &src);
+			data = decode48(data, &dest);
+			fprintf(gi->f,
+				" | [LOG_BNODE_SPLIT] pos %u, src %llu, "
+				"dest %llu ",
+				pos, (L)src, (L)dest);
+			break;
+		}
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE: {
 			u64 parent, child, key;
