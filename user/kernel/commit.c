@@ -111,6 +111,10 @@ static int flush_log(struct sb *sb)
 	/* further block allocations belong to the next cycle */
 	sb->flush++;
 
+	/* empty the log, then start to log the bfree for bitmap redirect */
+	log_finish(sb);
+	sb->logbase = sb->lognext;
+
 	/*
 	 * sb->flush was incremented, so block fork may occur from here,
 	 * so before block fork was occured, cleans map->dirty list.
@@ -136,9 +140,6 @@ static int flush_log(struct sb *sb)
 
 	/* move deferred frees for rollup to delta deferred free list */
 	unstash(sb, &sb->deflush, move_deferred);
-
-	/* empty the log */
-	sb->logbase = sb->lognext;
 
 	return 0;
 }
