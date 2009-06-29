@@ -124,8 +124,11 @@ static int flush_log(struct sb *sb)
 	LIST_HEAD(io_buffers);
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
 
-	/* empty the log, then start to log the bfree for bitmap redirect */
-	sb->logbase = sb->lognext;
+	/* log must be empty, otherwise, sb->lognext points the next log */
+	assert(sb->logbuf == NULL);
+	/* empty the log of old cycle, then start the log of new cycle */
+	sb->logbase = sb->next_logbase;
+	sb->next_logbase = sb->lognext;
 
 	/* move deferred frees for rollup to delta deferred free list */
 	unstash(sb, &sb->deflush, move_deferred);
@@ -198,7 +201,10 @@ static int retire_bfree(struct sb *sb, u64 val)
 static int commit_delta(struct sb *sb)
 {
 	trace("commit %i logblocks", sb->lognext - sb->logbase);
+	/* FIXME: Move to save_sb()? Handle wraparound of lognext, etc */
 	sb->super.logcount = to_be_u32(sb->lognext - sb->logbase);
+	sb->super.next_logcount = to_be_u32(sb->lognext - sb->next_logbase);
+
 	int err = save_sb(sb);
 	if (err)
 		return err;
