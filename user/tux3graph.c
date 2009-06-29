@@ -169,9 +169,22 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, (L)new, (L)old);
 			break;
 		}
-		case LOG_BNODE_UPDATE:
-			assert(0);	/* not supported yet */
+		case LOG_BNODE_ADD:
+		case LOG_BNODE_UPDATE: {
+			u64 parent, child, key;
+			char *name;
+			data = decode48(data, &parent);
+			data = decode48(data, &child);
+			data = decode48(data, &key);
+			if (code == LOG_BNODE_ADD)
+				name = "LOG_BNODE_ADD";
+			else
+				name = "LOG_BNODE_UPDATE";
+			fprintf(gi->f,
+				" | [%s] parent %llu, child %llu, key %llu ",
+				name, (L)parent, (L)child, (L)key);
 			break;
+		}
 		default:
 			assert(0);
 			break;
