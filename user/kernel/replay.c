@@ -16,6 +16,7 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_BFREE_ON_FLUSH] = 8,
 	[LOG_LEAF_REDIRECT] = 13,
 	[LOG_BNODE_REDIRECT] = 13,
+	[LOG_BNODE_ADD] = 19,
 	[LOG_BNODE_UPDATE] = 19,
 };
 
@@ -52,6 +53,7 @@ int replay(struct sb *sb)
 		unsigned char *data = log->data;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
+			case LOG_BNODE_ADD:
 			case LOG_BNODE_UPDATE:
 			{
 				u64 child, parent, key;
@@ -96,6 +98,7 @@ int replay(struct sb *sb)
 			}
 			case LOG_LEAF_REDIRECT:
 			case LOG_BNODE_REDIRECT:
+			case LOG_BNODE_ADD:
 			case LOG_BNODE_UPDATE:
 				data += logsize[code] - 1;
 				break;

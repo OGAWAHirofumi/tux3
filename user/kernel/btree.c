@@ -621,6 +621,7 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_head *leafbuf, int keep)
 {
 	struct btree *btree = cursor->btree;
+	struct sb *sb = btree->sb;
 	int err, depth = btree->root.depth;
 	block_t childblock = bufindex(leafbuf);
 
@@ -640,7 +641,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			add_child(parent, at->next, childblock, childkey);
 			if (!keep)
 				at->next++;
-			/* FIXME: log of added child entry */
+			log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
 			mark_buffer_flush_non(parentbuf);
 			return 0;
 		}
@@ -675,7 +676,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		add_child(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
-		/* FIXME: log of added child entry */
+		log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
 		mark_buffer_flush_non(parentbuf);
 
 		childkey = newkey;
