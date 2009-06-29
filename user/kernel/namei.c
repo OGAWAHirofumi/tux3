@@ -12,7 +12,7 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, stru
 	struct inode *inode;
 	tux_dirent *entry;
 
-	entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+	entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
 	if (IS_ERR(entry)) {
 		if (PTR_ERR(entry) != -ENOENT)
 			return ERR_PTR(PTR_ERR(entry));
@@ -44,7 +44,7 @@ static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode
 static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
 
 	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_dirent(buffer, entry);
 }
@@ -177,8 +177,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	tux_dirent *old_entry, *new_entry;
 	int err, new_subdir = 0;
 
-	old_entry = tux_find_entry(old_dir, old_dentry->d_name.name,
-				   old_dentry->d_name.len, &old_buffer);
+	old_entry = tux_find_dirent(old_dir, old_dentry->d_name.name,
+				    old_dentry->d_name.len, &old_buffer);
 	if (IS_ERR(old_entry))
 		return PTR_ERR(old_entry);
 
@@ -194,8 +194,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 				goto error;
 		}
 
-		new_entry = tux_find_entry(new_dir, new_dentry->d_name.name,
-					   new_dentry->d_name.len, &new_buffer);
+		new_entry = tux_find_dirent(new_dir, new_dentry->d_name.name,
+					new_dentry->d_name.len, &new_buffer);
 		if (IS_ERR(new_entry)) {
 			BUG_ON(PTR_ERR(new_entry) == -ENOENT);
 			err = PTR_ERR(new_entry);

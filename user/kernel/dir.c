@@ -194,7 +194,7 @@ int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum,
 	return 0;
 }
 
-tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size)
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size)
 {
 	unsigned reclen = TUX_REC_LEN(len);
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
@@ -229,9 +229,9 @@ error:
 	return ERR_PTR(err);
 }
 
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result)
+tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result)
 {
-	return _tux_find_entry(dir, name, len, result, dir->i_size);
+	return tux_find_entry(dir, name, len, result, dir->i_size);
 }
 
 static unsigned char filetype[TUX_TYPES] = {

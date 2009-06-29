@@ -214,7 +214,7 @@ out:
 struct inode *tuxopen(struct inode *dir, const char *name, int len)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
 	if (IS_ERR(entry))
 		return NULL; // ERR_PTR me!!!
 	inum_t inum = from_be_u64(entry->inum);
@@ -226,7 +226,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
 	if (!IS_ERR(entry)) {
 		blockput(buffer);
 		return NULL; // should allow create of a file that already exists!!!
@@ -279,7 +279,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	struct sb *sb = tux_sb(dir->i_sb);
 	struct buffer_head *buffer;
 	int err;
-	tux_dirent *entry = tux_find_entry(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
 	if (IS_ERR(entry)) {
 		err = PTR_ERR(entry);
 		goto error;

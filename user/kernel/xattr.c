@@ -217,13 +217,13 @@ static int use_atom(struct inode *atable, atom_t atom, int use)
 }
 
 // bug waiting to happen...
-tux_dirent *_tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size);
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size);
 loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode, loff_t *size);
 
 static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = _tux_find_entry(atable, name, len, &buffer, tux_sb(atable->i_sb)->dictsize);
+	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer, tux_sb(atable->i_sb)->dictsize);
 
 	if (IS_ERR(entry))
 		return -1; /* FIXME: return correct errno */
