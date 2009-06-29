@@ -155,13 +155,13 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			break;
 		}
 		case LOG_UPDATE:
-			assert(1);	/* not supported yet */
+			assert(0);	/* not supported yet */
 			break;
 		case LOG_REDIRECT:
-			assert(1);	/* not supported yet */
+			assert(0);	/* not supported yet */
 			break;
 		default:
-			assert(1);
+			assert(0);
 			break;
 		}
 	}
