@@ -360,44 +360,55 @@ int cursor_redirect(struct cursor *cursor)
 	struct btree *btree = cursor->btree;
 	unsigned level = btree->root.depth;
 	struct sb *sb = btree->sb;
+	block_t child;
 
 	while (1) {
 		struct buffer_head *buffer = cursor->path[level].buffer;
 		if (buffer_dirty(buffer))
 			return 0;
 
+		/* Redirect buffer before changing */
 		struct buffer_head *clone = new_block(btree);
 		if (IS_ERR(clone))
 			return PTR_ERR(clone);
 		block_t oldblock = bufindex(buffer), newblock = bufindex(clone);
 		trace("redirect block %Lx to %Lx", (L)oldblock, (L)newblock);
 		level_redirect_blockput(cursor, level, clone);
-		log_redirect(sb, oldblock, newblock);
-		defer_bfree(&sb->defree, oldblock, 1);
-
+		if (level == btree->root.depth) {
+			/* This is leaf buffer */
 #ifdef ATOMIC
-		if (level < btree->root.depth)
-			list_move_tail(&clone->link, &sb->pinned);
+			/* FIXME: this means dirty buffer */
+			list_move_tail(&clone->link, &sb->commit);
 #endif
+			log_redirect(sb, oldblock, newblock);
+			defer_bfree(&sb->defree, oldblock, 1);
+			goto parent_level;
+		}
 
+		/* This is bnode buffer */
+#ifdef ATOMIC
+		/* FIXME: this means dirty buffer */
+		list_move_tail(&clone->link, &sb->pinned);
+#endif
+		log_redirect(sb, oldblock, newblock);
+		defer_bfree(&sb->deflush, oldblock, 1);
+
+		/* Update entry for the redirected child block */
+		trace("update parent");
+		struct index_entry *entry = cursor->path[level].next - 1;
+		entry->block = to_be_u64(child);
+		log_update(sb, child, newblock, from_be_u64(entry->key));
+
+parent_level:
 		if (!level--) {
 			trace("redirect root");
 			assert(oldblock == btree->root.block);
 			btree->root.block = newblock;
 			mark_btree_dirty(btree);
+			cursor_check(cursor);
 			return 0;
 		}
-
-		trace("update parent");
-		struct index_entry *entry = cursor->path[level].next - 1;
-		block_t parent = bufindex(cursor->path[level].buffer);
-		assert(oldblock == from_be_u64(entry->block));
-		entry->block = to_be_u64(newblock);
-		log_update(sb, newblock, parent, from_be_u64(entry->key));
-		/*
-		 * Note: this may change a clean buffer which is then copied
-		 * and discarded, which seems a little strange but does no harm.
-		 */
+		child = newblock;
 	}
 }
 
