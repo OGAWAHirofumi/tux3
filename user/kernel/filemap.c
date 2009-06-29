@@ -232,6 +232,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				segs = err;
 				goto out_release;
 			}
+			log_balloc(sb, block, count);
 			trace("fill in %Lx/%i ", (L)block, count);
 			map[i] = (struct seg){
 				.block = block,
