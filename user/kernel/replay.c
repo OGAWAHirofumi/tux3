@@ -17,6 +17,7 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_LEAF_REDIRECT] = 13,
 	[LOG_BNODE_REDIRECT] = 13,
 	[LOG_BNODE_ROOT] = 26,
+	[LOG_BNODE_SPLIT] = 15,
 	[LOG_BNODE_ADD] = 19,
 	[LOG_BNODE_UPDATE] = 19,
 };
@@ -72,6 +73,7 @@ int replay(struct sb *sb)
 			case LOG_LEAF_REDIRECT:
 			case LOG_BNODE_REDIRECT:
 			case LOG_BNODE_ROOT:
+			case LOG_BNODE_SPLIT:
 			default:
 				goto unknown;
 			}
@@ -101,6 +103,7 @@ int replay(struct sb *sb)
 			case LOG_LEAF_REDIRECT:
 			case LOG_BNODE_REDIRECT:
 			case LOG_BNODE_ROOT:
+			case LOG_BNODE_SPLIT:
 			case LOG_BNODE_ADD:
 			case LOG_BNODE_UPDATE:
 				data += logsize[code] - 1;

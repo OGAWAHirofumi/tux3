@@ -304,6 +304,7 @@ enum {
 	LOG_LEAF_REDIRECT,	/* Log of leaf redirect */
 	LOG_BNODE_REDIRECT,	/* Log of bnode redirect */
 	LOG_BNODE_ROOT,		/* Log of new bnode root allocation */
+	LOG_BNODE_SPLIT,	/* Log of spliting bnode to new bnode */
 	LOG_BNODE_ADD,		/* Log of adding bnode entry */
 	LOG_BNODE_UPDATE,	/* Log of bnode entry update */
 	LOG_TYPES
@@ -852,6 +853,7 @@ void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 		    block_t left, block_t right, tuxkey_t rkey);
+void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest);
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);

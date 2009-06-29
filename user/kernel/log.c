@@ -166,6 +166,16 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 	log_end(sb, encode48(data, rkey));
 }
 
+void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest)
+{
+	unsigned char *data = log_begin(sb, 15);
+
+	*data++ = LOG_BNODE_SPLIT;
+	data = encode32(data, pos);
+	data = encode48(data, src);
+	log_end(sb, encode48(data, dest));
+}
+
 static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t child, tuxkey_t key)
 {
 	unsigned char *data = log_begin(sb, 19);

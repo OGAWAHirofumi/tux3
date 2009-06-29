@@ -658,7 +658,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		newnode->count = to_be_u32(bcount(parent) - half);
 		memcpy(&newnode->entries[0], &parent->entries[half], bcount(newnode) * sizeof(struct index_entry));
 		parent->count = to_be_u32(half);
-		/* FIXME: log of bnode split */
+		log_bnode_split(sb, bufindex(parentbuf), half, bufindex(newbuf));
 
 		/* if the cursor is in the new node, use that as the parent */
 		int child_is_left = at->next <= parent->entries + half;
