@@ -289,7 +289,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 		err = PTR_ERR(inode);
 		goto error_iget;
 	}
-	if ((err = tux_delete_entry(buffer, entry)))
+	if ((err = tux_delete_dirent(buffer, entry)))
 		goto error_open;
 	inode->i_ctime = dir->i_ctime;
 	inode->i_nlink--;

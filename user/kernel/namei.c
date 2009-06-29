@@ -57,7 +57,7 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_entry(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
 
-	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_entry(buffer, entry);
+	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_dirent(buffer, entry);
 }
 
 static int tux3_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev)
@@ -236,7 +236,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	old_inode->i_ctime = new_dir->i_ctime;
 	mark_inode_dirty(old_inode);
 
-	err = tux_delete_entry(old_buffer, old_entry);
+	err = tux_delete_dirent(old_buffer, old_entry);
 	if (err) {
 		printk(KERN_ERR "TUX3: %s: couldn't delete old entry (%Lu)\n",
 		       __func__, (L)tux_inode(old_inode)->inum);

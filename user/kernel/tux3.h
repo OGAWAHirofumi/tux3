@@ -762,6 +762,7 @@ int tux_update_entry(struct buffer_head *buffer, tux_dirent *entry, inum_t inum,
 loff_t tux_create_entry(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result);
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
+int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);
 int tux_readdir(struct file *file, void *state, filldir_t filldir);
 int tux_dir_is_empty(struct inode *dir);
 extern const struct file_operations tux_dir_fops;

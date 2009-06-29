@@ -91,11 +91,8 @@ int main(int argc, char *argv[])
 	hexdump(entry, entry->name_len);
 	tux_dump_entries(blockget(dir->map, 0));
 
-	if (!tux_delete_entry(buffer, entry)) {
+	if (!tux_delete_dirent(buffer, entry))
 		show_buffers(dir->map);
-		dir->i_ctime = dir->i_mtime = gettime();
-		mark_inode_dirty(dir);
-	}
 
 	printf("empty = %i\n", tux_dir_is_empty(dir));
 	tux_dump_entries(blockget(dir->map, 0));

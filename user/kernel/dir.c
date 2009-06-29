@@ -289,7 +289,6 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 {
-	struct inode *dir = buffer_inode(buffer);
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
 
 	while ((char *)this < (char *)entry) {
@@ -308,10 +307,19 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	entry->name_len = entry->type = 0;
 	entry->inum = 0;
 	blockput_dirty(buffer);
-	/* FIXME: this should be only dir, not xattr */
-	dir->i_ctime = dir->i_mtime = gettime();
-	mark_inode_dirty(dir);
+
 	return 0;
+}
+
+int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry)
+{
+	struct inode *dir = buffer_inode(buffer);
+	int err = tux_delete_entry(buffer, entry); /* this releases buffer */
+	if (!err) {
+		dir->i_ctime = dir->i_mtime = gettime();
+		mark_inode_dirty(dir);
+	}
+	return err;
 }
 
 int tux_dir_is_empty(struct inode *dir)
