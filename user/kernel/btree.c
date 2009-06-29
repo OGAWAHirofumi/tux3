@@ -690,6 +690,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		if (child_is_left)
 			keep = 1;
 	}
+
+	/* Make new root bnode */
 	trace("add tree level");
 	struct buffer_head *newbuf = new_node(btree);
 	if (IS_ERR(newbuf)) {
@@ -697,18 +699,23 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		goto eek;
 	}
 	struct bnode *newroot = bufdata(newbuf);
+	block_t newrootblock = bufindex(newbuf);
+	block_t oldrootblock = btree->root.block;
 	int left_node = bufindex(cursor->path[0].buffer) != childblock;
 	newroot->count = to_be_u32(2);
-	newroot->entries[0].block = to_be_u64(btree->root.block);
+	newroot->entries[0].block = to_be_u64(oldrootblock);
 	newroot->entries[1].key = to_be_u64(childkey);
 	newroot->entries[1].block = to_be_u64(childblock);
-	btree->root.block = bufindex(newbuf);
-	btree->root.depth++;
 	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
-	/* FIXME: add new bnode log (with add child entry log) */
+	log_bnode_root(sb, newrootblock, 2, oldrootblock, childblock, childkey);
+	/* Change btree to point the new root */
+	btree->root.block = newrootblock;
+	btree->root.depth++;
+
 	mark_buffer_flush_non(newbuf);
 	mark_btree_dirty(btree);
 	cursor_check(cursor);
+
 	return 0;
 eek:
 	release_cursor(cursor);
@@ -790,14 +797,17 @@ int alloc_empty_btree(struct btree *btree)
 		goto error_leafbuf;
 
 	assert(!has_root(btree));
-	trace("root at %Lx", (L)bufindex(rootbuf));
-	trace("leaf at %Lx", (L)bufindex(leafbuf));
 	struct bnode *rootnode = bufdata(rootbuf);
-	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
+	block_t rootblock = bufindex(rootbuf);
+	block_t leafblock = bufindex(leafbuf);
+	trace("root at %Lx", (L)rootblock);
+	trace("leaf at %Lx", (L)leafblock);
+	rootnode->entries[0].block = to_be_u64(leafblock);
 	rootnode->count = to_be_u32(1);
-	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
+	btree->root = (struct root){ .block = rootblock, .depth = 1 };
 
-	log_balloc(sb, bufindex(leafbuf), 1);
+	log_bnode_root(sb, rootblock, 1, leafblock, 0, 0);
+	log_balloc(sb, leafblock, 1);
 
 	mark_buffer_dirty_non(rootbuf);
 	blockput(rootbuf);

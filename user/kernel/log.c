@@ -151,6 +151,21 @@ void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 	log_redirect(sb, LOG_BNODE_REDIRECT, newblock, oldblock);
 }
 
+/* The left key should always be 0 on new root */
+void log_bnode_root(struct sb *sb, block_t root, unsigned count,
+		    block_t left, block_t right, tuxkey_t rkey)
+{
+	unsigned char *data = log_begin(sb, 26);
+
+	assert(count == 1 || count == 2);
+	*data++ = LOG_BNODE_ROOT;
+	*data++ = count;
+	data = encode48(data, root);
+	data = encode48(data, left);
+	data = encode48(data, right);
+	log_end(sb, encode48(data, rkey));
+}
+
 static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t child, tuxkey_t key)
 {
 	unsigned char *data = log_begin(sb, 19);
