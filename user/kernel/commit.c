@@ -65,20 +65,6 @@ int load_itable(struct sb *sb)
 	return 0;
 }
 
-/* Delta transition */
-
-static int need_delta(struct sb *sb)
-{
-	static unsigned crudehack;
-	return !(++crudehack % 10);
-}
-
-static int need_flush(struct sb *sb)
-{
-	static unsigned crudehack;
-	return !(++crudehack % 3);
-}
-
 static void clean_buffer(struct buffer_head *buffer)
 {
 #ifdef __KERNEL__
@@ -93,6 +79,8 @@ static void clean_buffer(struct buffer_head *buffer)
 		set_buffer_clean(buffer);
 #endif
 }
+
+/* Delta transition */
 
 static int flush_buffer_list(struct sb *sb, struct list_head *head)
 {
@@ -116,30 +104,34 @@ static int move_deferred(struct sb *sb, u64 val)
 	return stash_value(&sb->defree, val);
 }
 
+/*
+ * Flush a snapshot of the allocation map to disk.  Physical blocks for
+ * the bitmaps and new or redirected bitmap btree nodes may be allocated
+ * during the flush.  Any bitmap blocks that are (re)dirtied by these
+ * allocations will be written out in the next flush cycle.
+ */
 static int flush_log(struct sb *sb)
 {
-	/*
-	 * Flush a snapshot of the allocation map to disk.  Physical blocks for
-	 * the bitmaps and new or redirected bitmap btree nodes may be allocated
-	 * during the flush.  Any bitmap blocks that are (re)dirtied by these
-	 * allocations will be written out in the next flush cycle.
-	 */
-
 	/* further block allocations belong to the next cycle */
 	sb->flush++;
 
-	/* empty the log, then start to log the bfree for bitmap redirect */
-	log_finish(sb);
-	sb->logbase = sb->lognext;
-
+#ifndef __KERNEL__
 	/*
 	 * sb->flush was incremented, so block fork may occur from here,
 	 * so before block fork was occured, cleans map->dirty list.
 	 * [If we have two lists per map for dirty, we may not need this.]
 	 */
 	LIST_HEAD(io_buffers);
-#ifndef __KERNEL__
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
+
+	/* empty the log, then start to log the bfree for bitmap redirect */
+	sb->logbase = sb->lognext;
+
+	/* move deferred frees for rollup to delta deferred free list */
+	unstash(sb, &sb->deflush, move_deferred);
+
+	/* bnode blocks */
+	flush_buffer_list(sb, &sb->pinned);
 
 	/* map dirty bitmap blocks to disk and write out */
 	struct buffer_head *buffer, *safe;
@@ -148,33 +140,22 @@ static int flush_log(struct sb *sb)
 		if (err)
 			return err;
 	}
-#endif
 	assert(list_empty(&io_buffers));
+#endif
 
-	/* add pinned metadata to delta list */
-	/* redirected btree nodes from cursor_redirect */
-	list_splice_tail_init(&sb->pinned, &sb->commit);
-
-	/* move deferred frees for rollup to delta deferred free list */
-	unstash(sb, &sb->deflush, move_deferred);
+	/* The end of logging on flush */
+	log_finish(sb);
 
 	return 0;
 }
 
 static int stage_delta(struct sb *sb)
 {
-	if (need_flush(sb)) {
-		int err = flush_log(sb);
-		if (err)
-			return err;
-	}
-
-	sb->delta++;
-
-	/* btree node and leaf blocks */
+	/* leaf blocks */
 	flush_buffer_list(sb, &sb->commit);
 
-	write_log(sb);
+	/* The end of logging on delta */
+	log_finish(sb);
 
 	return 0;
 }
@@ -182,8 +163,6 @@ static int stage_delta(struct sb *sb)
 /* allocate and write log blocks */
 static int write_log(struct sb *sb)
 {
-	log_finish(sb);
-
 	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
 		block_t block;
 		int err = balloc(sb, 1, &block);
@@ -226,6 +205,18 @@ static int commit_delta(struct sb *sb)
 	return unstash(sb, &sb->defree, retire_bfree);
 }
 
+static int need_delta(struct sb *sb)
+{
+	static unsigned crudehack;
+	return !(++crudehack % 10);
+}
+
+static int need_flush(struct sb *sb)
+{
+	static unsigned crudehack;
+	return !(++crudehack % 3);
+}
+
 int change_begin(struct sb *sb)
 {
 #ifndef __KERNEL__
@@ -236,21 +227,36 @@ int change_begin(struct sb *sb)
 
 int change_end(struct sb *sb)
 {
+	int err = 0;
 #ifndef __KERNEL__
-	if (need_delta(sb)) {
-		unsigned delta = sb->delta;
+	if (!need_delta(sb)) {
 		up_read(&sb->delta_lock);
-		down_write(&sb->delta_lock);
-		if (sb->delta == delta) {
-			trace(">>> commit delta %u", sb->delta);
-			stage_delta(sb);
-			commit_delta(sb);
+		return 0;
+	}
+	unsigned delta = sb->delta;
+	up_read(&sb->delta_lock);
+
+	down_write(&sb->delta_lock);
+	/* FIXME: error handling */
+	if (sb->delta == delta) {
+		trace(">>>>>>>>> commit delta %u", delta);
+		/* further changes of frontend belong to the next delta */
+		sb->delta++;
+
+		if (need_flush(sb)) {
+			err = flush_log(sb);
+			if (err)
+				goto out;
 		}
-		up_write(&sb->delta_lock);
-	} else
-		up_read(&sb->delta_lock);
+		stage_delta(sb);
+		write_log(sb);
+		commit_delta(sb);
+		trace("<<<<<<<<< commit done %u", delta);
+	}
+out:
+	up_write(&sb->delta_lock);
 #endif
-	return 0;
+	return err;
 }
 
 #ifdef __KERNEL__
