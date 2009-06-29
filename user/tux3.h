@@ -192,6 +192,8 @@ static inline struct timespec gettime(void)
 	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
 }
 
+#include "kernel/dirty-buffer.h"	/* remove this after atomic commit */
+
 struct tux_iattr {
 	unsigned mode, uid, gid;
 };

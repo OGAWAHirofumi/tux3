@@ -169,7 +169,7 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 	void *attr = encode_attrs(inode, base, size);
 	attr = encode_xattrs(inode, attr, base + size - attr);
 	assert(attr == base + size);
-	mark_buffer_dirty(cursor_leafbuf(cursor));
+	mark_buffer_dirty_non(cursor_leafbuf(cursor));
 	return 0;
 }
 

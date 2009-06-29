@@ -160,7 +160,7 @@ static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, u
 				buffer = blockdirty(buffer, sb->flush);
 				// FIXME: error check of buffer
 				set_bits(bufdata(buffer), found & mapmask, run);
-				mark_buffer_dirty(buffer);
+				mark_buffer_dirty_non(buffer);
 				blockput(buffer);
 				sb->nextalloc = found + run;
 				sb->freeblocks -= run;
@@ -215,7 +215,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	buffer = blockdirty(buffer, sb->flush);
 	// FIXME: error check of buffer
 	clear_bits(bufdata(buffer), start, blocks);
-	mark_buffer_dirty(buffer);
+	mark_buffer_dirty_non(buffer);
 	blockput(buffer);
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);

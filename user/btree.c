@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 		struct buffer_head *buffer = new_leaf(&btree);
 		for (int i = 0; i < 7; i++)
 			uleaf_insert(&btree, bufdata(buffer), i, i + 0x100);
-		mark_buffer_dirty(buffer);
+		mark_buffer_dirty_non(buffer);
 		uleaf_dump(&btree, bufdata(buffer));
 		exit(0);
 	}
@@ -198,7 +198,9 @@ int main(int argc, char *argv[])
 	assert(!probe(cursor, 0));
 	for (int i = 0; i < sb->entries_per_node - 1; i++) {
 		struct buffer_head *buffer = new_leaf(&btree);
+		trace("buffer: index %Lx", (L)buffer->index);
 		assert(!IS_ERR(buffer));
+		mark_buffer_dirty_non(buffer);
 		btree_insert_leaf(cursor, 100 + i, buffer);
 	}
 	release_cursor(cursor);
@@ -206,6 +208,7 @@ int main(int argc, char *argv[])
 	assert(!probe(cursor, 0));
 	struct buffer_head *buffer = new_leaf(&btree);
 	assert(!IS_ERR(buffer));
+	mark_buffer_dirty_non(buffer);
 	btree_insert_leaf(cursor, 1, buffer);
 	/* probe same key with cursor2 */
 	struct cursor *cursor2 = alloc_cursor(&btree, 0);

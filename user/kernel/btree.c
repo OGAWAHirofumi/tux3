@@ -49,9 +49,6 @@ static struct buffer_head *new_block(struct btree *btree)
 	struct buffer_head *buffer = vol_getblk(btree->sb, block);
 	if (!buffer)
 		return ERR_PTR(-ENOMEM); // ERR_PTR me!!! and bfree?
-#ifndef __KERNEL__
-	mark_buffer_dirty(buffer);
-#endif
 	return buffer;
 }
 
@@ -62,6 +59,7 @@ struct buffer_head *new_leaf(struct btree *btree)
 	if (!IS_ERR(buffer)) {
 		memset(bufdata(buffer), 0, bufsize(buffer));
 		(btree->ops->leaf_init)(btree, bufdata(buffer));
+		mark_buffer_dirty_atomic(buffer);
 	}
 	return buffer;
 }
@@ -70,8 +68,10 @@ static struct buffer_head *new_node(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
 
-	if (!IS_ERR(buffer))
+	if (!IS_ERR(buffer)) {
 		memset(bufdata(buffer), 0, bufsize(buffer));
+		mark_buffer_flush_atomic(buffer);
+	}
 	return buffer;
 }
 
@@ -376,20 +376,14 @@ int cursor_redirect(struct cursor *cursor)
 		level_redirect_blockput(cursor, level, clone);
 		if (level == btree->root.depth) {
 			/* This is leaf buffer */
-#ifdef ATOMIC
-			/* FIXME: this means dirty buffer */
-			list_move_tail(&clone->link, &sb->commit);
-#endif
+			mark_buffer_dirty_atomic(clone);
 			log_leaf_redirect(sb, oldblock, newblock);
 			defer_bfree(&sb->defree, oldblock, 1);
 			goto parent_level;
 		}
 
 		/* This is bnode buffer */
-#ifdef ATOMIC
-		/* FIXME: this means dirty buffer */
-		list_move_tail(&clone->link, &sb->pinned);
-#endif
+		mark_buffer_flush_atomic(clone);
 		log_bnode_redirect(sb, oldblock, newblock);
 		defer_bfree(&sb->deflush, oldblock, 1);
 
@@ -646,7 +640,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			add_child(parent, at->next, childblock, childkey);
 			if (!keep)
 				at->next++;
-			mark_buffer_dirty(parentbuf);
+			/* FIXME: log of added child entry */
+			mark_buffer_flush_non(parentbuf);
 			return 0;
 		}
 
@@ -662,23 +657,26 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		newnode->count = to_be_u32(bcount(parent) - half);
 		memcpy(&newnode->entries[0], &parent->entries[half], bcount(newnode) * sizeof(struct index_entry));
 		parent->count = to_be_u32(half);
+		/* FIXME: log of bnode split */
 
 		/* if the cursor is in the new node, use that as the parent */
 		int child_is_left = at->next <= parent->entries + half;
 		if (!child_is_left) {
 			struct index_entry *newnext;
-			mark_buffer_dirty(parentbuf);
+			mark_buffer_flush_non(parentbuf);
 			newnext = newnode->entries + (at->next - &parent->entries[half]);
 			get_bh(newbuf);
 			level_replace_blockput(cursor, depth, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else
-			mark_buffer_dirty(newbuf);
+			mark_buffer_flush_non(newbuf);
+
 		add_child(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
-		mark_buffer_dirty(parentbuf);
+		/* FIXME: log of added child entry */
+		mark_buffer_flush_non(parentbuf);
 
 		childkey = newkey;
 		childblock = bufindex(newbuf);
@@ -706,7 +704,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.block = bufindex(newbuf);
 	btree->root.depth++;
 	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
-	mark_buffer_dirty(newbuf);
+	/* FIXME: add new bnode log (with add child entry log) */
+	mark_buffer_flush_non(newbuf);
 	mark_btree_dirty(btree);
 	cursor_check(cursor);
 	return 0;
@@ -737,10 +736,10 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
-	if (key >= newkey)
-		mark_buffer_dirty(leafbuf);
+	if (key < newkey)
+		mark_buffer_dirty_non(newbuf);
 	else
-		mark_buffer_dirty(newbuf);
+		mark_buffer_dirty_non(leafbuf);
 	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
@@ -796,8 +795,12 @@ int alloc_empty_btree(struct btree *btree)
 	rootnode->entries[0].block = to_be_u64(bufindex(leafbuf));
 	rootnode->count = to_be_u32(1);
 	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
-	blockput_dirty(rootbuf);
-	blockput_dirty(leafbuf);
+
+	mark_buffer_dirty_non(rootbuf);
+	blockput(rootbuf);
+	mark_buffer_dirty_non(leafbuf);
+	blockput(leafbuf);
+
 	mark_btree_dirty(btree);
 
 	return 0;

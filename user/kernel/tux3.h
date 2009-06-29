@@ -740,6 +740,8 @@ static inline int buffer_clean(struct buffer_head *buffer)
 	return !buffer_dirty(buffer) || buffer_uptodate(buffer);
 }
 
+#include "dirty-buffer.h"	/* remove this after atomic commit */
+
 /* btree.c */
 unsigned calc_entries_per_node(unsigned blocksize);
 struct buffer_head *cursor_leafbuf(struct cursor *cursor);
