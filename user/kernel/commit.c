@@ -104,6 +104,34 @@ static int move_deferred(struct sb *sb, u64 val)
 	return stash_value(&sb->defree, val);
 }
 
+static int defree_logblocks(struct sb *sb, u64 val)
+{
+	log_bfree(sb, val & ~(-1ULL << 48), val >> 48);
+	return move_deferred(sb, val);
+}
+
+static int new_cycle_log(struct sb *sb)
+{
+	/* log must be empty, otherwise, sb->lognext points the next log */
+	assert(sb->logbuf == NULL);
+	/* empty the log of old cycle, then start the log of new cycle */
+	sb->logbase = sb->next_logbase;
+	sb->next_logbase = sb->lognext;
+
+	/* Log the obsoleted log blocks, and add defree entries */
+	unstash(sb, &sb->decycle, defree_logblocks);
+
+	/*
+	 * prepare ->new_decycle/decyle for next cycle. (->new_decycle
+	 * become ->decycle, then use empty ->decycle as ->new_decycle)
+	 */
+	struct stash tmp = sb->decycle;
+	sb->decycle = sb->new_decycle;
+	sb->new_decycle = tmp;
+
+	return 0;
+}
+
 /*
  * Flush a snapshot of the allocation map to disk.  Physical blocks for
  * the bitmaps and new or redirected bitmap btree nodes may be allocated
@@ -124,11 +152,8 @@ static int flush_log(struct sb *sb)
 	LIST_HEAD(io_buffers);
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
 
-	/* log must be empty, otherwise, sb->lognext points the next log */
-	assert(sb->logbuf == NULL);
-	/* empty the log of old cycle, then start the log of new cycle */
-	sb->logbase = sb->next_logbase;
-	sb->next_logbase = sb->lognext;
+	/* this is starting the new flush cycle of the log */
+	new_cycle_log(sb);	/* FIXME: error handling */
 
 	/* move deferred frees for rollup to delta deferred free list */
 	unstash(sb, &sb->deflush, move_deferred);
@@ -184,7 +209,9 @@ static int write_log(struct sb *sb)
 			bfree(sb, block, 1);
 			return err;
 		}
-		defer_bfree(&sb->deflush, block, 1);
+
+		defer_bfree(&sb->new_decycle, block, 1);
+
 		blockput(buffer);
 		sb->logchain = block;
 	}
