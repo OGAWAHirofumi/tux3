@@ -245,6 +245,40 @@ static int need_flush(struct sb *sb)
 	return !(++crudehack % 3);
 }
 
+/* must hold down_write(&sb->delta_lock) */
+static int do_commit(struct sb *sb, int can_flush)
+{
+	int err = 0;
+
+	trace(">>>>>>>>> commit delta %u", sb->delta);
+	/* further changes of frontend belong to the next delta */
+	sb->delta++;
+
+	if (can_flush && need_flush(sb)) {
+		err = flush_log(sb);
+		if (err)
+			return err;
+	}
+	stage_delta(sb);
+	write_log(sb);
+	commit_delta(sb);
+	trace("<<<<<<<<< commit done %u", sb->delta - 1);
+
+	return err; /* FIXME: error handling */
+}
+
+/* FIXME: untested */
+int force_delta(struct sb *sb)
+{
+	int err;
+
+	down_write(&sb->delta_lock);
+	err = do_commit(sb, 0);
+	up_write(&sb->delta_lock);
+
+	return err;
+}
+
 int change_begin(struct sb *sb)
 {
 #ifndef __KERNEL__
@@ -266,27 +300,13 @@ int change_end(struct sb *sb)
 
 	down_write(&sb->delta_lock);
 	/* FIXME: error handling */
-	if (sb->delta == delta) {
-		trace(">>>>>>>>> commit delta %u", delta);
-		/* further changes of frontend belong to the next delta */
-		sb->delta++;
-
-		if (need_flush(sb)) {
-			err = flush_log(sb);
-			if (err)
-				goto out;
-		}
-		stage_delta(sb);
-		write_log(sb);
-		commit_delta(sb);
-		trace("<<<<<<<<< commit done %u", delta);
-	}
-out:
+	if (sb->delta == delta)
+		err = do_commit(sb, 1);
 	up_write(&sb->delta_lock);
 #endif
 	return err;
 }
 
 #ifdef __KERNEL__
-static void *useme[] = { clean_buffer, need_delta, stage_delta, commit_delta, useme };
+static void *useme[] = { clean_buffer, new_cycle_log, need_delta, do_commit, useme };
 #endif
