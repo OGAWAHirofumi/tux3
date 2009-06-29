@@ -151,13 +151,13 @@ void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
 	log_redirect(sb, LOG_BNODE_REDIRECT, newblock, oldblock);
 }
 
-void log_bnode_update(struct sb *sb, block_t child, block_t parent, tuxkey_t key)
+void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	unsigned char *data = log_begin(sb, 19);
 
 	*data++ = LOG_BNODE_UPDATE;
-	data = encode48(data, child);
 	data = encode48(data, parent);
+	data = encode48(data, child);
 	log_end(sb, encode48(data, key));
 }
 

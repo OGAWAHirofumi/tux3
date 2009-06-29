@@ -391,7 +391,7 @@ int cursor_redirect(struct cursor *cursor)
 		trace("update parent");
 		struct index_entry *entry = cursor->path[level].next - 1;
 		entry->block = to_be_u64(child);
-		log_bnode_update(sb, child, newblock, from_be_u64(entry->key));
+		log_bnode_update(sb, newblock, child, from_be_u64(entry->key));
 
 parent_level:
 		if (!level--) {

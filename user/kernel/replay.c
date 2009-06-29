@@ -55,10 +55,10 @@ int replay(struct sb *sb)
 			case LOG_BNODE_UPDATE:
 			{
 				u64 child, parent, key;
-				data = decode48(data, &child);
 				data = decode48(data, &parent);
+				data = decode48(data, &child);
 				data = decode48(data, &key);
-				trace("child = 0x%Lx, parent = 0x%Lx, key = 0x%Lx", (L)child, (L)parent, (L)key);
+				trace("parent = 0x%Lx, child = 0x%Lx, key = 0x%Lx", (L)parent, (L)child, (L)key);
 				break;
 			}
 			case LOG_BALLOC:
