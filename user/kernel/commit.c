@@ -171,26 +171,21 @@ static int flush_log(struct sb *sb)
 	assert(list_empty(&io_buffers));
 #endif
 
-	/* The end of logging on flush */
-	log_finish(sb);
-
 	return 0;
 }
 
 static int stage_delta(struct sb *sb)
 {
 	/* leaf blocks */
-	flush_buffer_list(sb, &sb->commit);
-
-	/* The end of logging on delta */
-	log_finish(sb);
-
-	return 0;
+	return flush_buffer_list(sb, &sb->commit);
 }
 
 /* allocate and write log blocks */
 static int write_log(struct sb *sb)
 {
+	/* Finish to logging in this delta */
+	log_finish(sb);
+
 	for (unsigned index = sb->logthis; index < sb->lognext; index++) {
 		block_t block;
 		int err = balloc(sb, 1, &block);
