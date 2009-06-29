@@ -797,6 +797,8 @@ int alloc_empty_btree(struct btree *btree)
 	rootnode->count = to_be_u32(1);
 	btree->root = (struct root){ .block = bufindex(rootbuf), .depth = 1 };
 
+	log_balloc(sb, bufindex(leafbuf), 1);
+
 	mark_buffer_dirty_non(rootbuf);
 	blockput(rootbuf);
 	mark_buffer_dirty_non(leafbuf);
