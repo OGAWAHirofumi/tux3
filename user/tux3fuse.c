@@ -37,7 +37,7 @@
 
 //#include <sys/xattr.h>
 #include "trace.h"
-#include "tux3.h"
+#include "tux3user.h"
 
 #define FUSE_USE_VERSION 27
 #include <fuse.h>

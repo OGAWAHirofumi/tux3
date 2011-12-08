@@ -1,4 +1,4 @@
-#include "tux3.h"
+#include "tux3user.h"
 
 void tux_dump_entries(struct buffer_head *buffer);
 int tux_dir_is_empty(struct inode *dir);

@@ -8,7 +8,7 @@
  * the right to distribute those changes under any license.
  */
 
-#include "tux3.h"
+#include "tux3user.h"
 #include "diskio.h"
 
 #define trace trace_off

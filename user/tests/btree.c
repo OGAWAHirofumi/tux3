@@ -9,7 +9,7 @@
  * the right to distribute those changes under any license.
  */
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
+#include "tux3user.h"
 
 #ifndef trace
 #define trace trace_on

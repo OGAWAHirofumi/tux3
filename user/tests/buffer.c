@@ -1,4 +1,4 @@
-#include "tux3.h"
+#include "tux3user.h"
 
 int main(int argc, char *argv[])
 {

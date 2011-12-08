@@ -38,7 +38,7 @@
  * and moved here. AV
  */
 
-#include "tux3.h"	/* include user/tux3.h, not user/kernel/tux3.h */
+#include "tux3user.h"
 
 #ifndef trace
 #define trace trace_off

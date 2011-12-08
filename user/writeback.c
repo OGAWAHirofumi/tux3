@@ -1,4 +1,4 @@
-#include "tux3.h"
+#include "tux3user.h"
 
 /* dummy for not including commit.c */
 struct buffer_head * __weak blockdirty(struct buffer_head *buffer, unsigned newdelta)
