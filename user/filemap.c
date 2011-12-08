@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
 		.entries_per_node = 20,
 		.volblocks = size >> dev->bits);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, NULL, 0);
+	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
 	struct inode *inode = rapid_open_inode(sb, filemap_extent_io, 0);

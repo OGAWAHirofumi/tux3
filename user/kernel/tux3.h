@@ -159,6 +159,7 @@ static inline void *decode48(void *at, u64 *val)
 #define TUX_VOLMAP_INO		1	/* FIXME: reserve this */
 #define TUX_VTABLE_INO		2
 #define TUX_INVALID_INO		3	/* FIXME: reserve this */
+#define TUX_LOGMAP_INO		4	/* FIXME: reserve this */
 #define TUX_ATABLE_INO		10
 #define TUX_ROOTDIR_INO		13
 
@@ -820,6 +821,7 @@ extern struct btree_ops itable_ops;
 
 /* inode.c */
 struct inode *tux_new_volmap(struct sb *sb);
+struct inode *tux_new_logmap(struct sb *sb);
 void tux3_delete_inode(struct inode *inode);
 void tux3_clear_inode(struct inode *inode);
 int tux3_write_inode(struct inode *inode, int do_sync);

@@ -50,8 +50,18 @@ static void free_inode(struct inode *inode)
 
 static void tux_setup_inode(struct inode *inode)
 {
-	if (inode->inum != TUX_VOLMAP_INO)
+	assert(inode->inum != TUX_INVALID_INO);
+	switch (inode->inum) {
+	case TUX_VOLMAP_INO:
+		/* use default handler */
+		break;
+	case TUX_LOGMAP_INO:
+		inode->map->io = dev_errio;
+		break;
+	default:
 		inode->map->io = filemap_extent_io;
+		break;
+	}
 }
 
 void iput(struct inode *inode)
@@ -330,6 +340,7 @@ int write_inode(struct inode *inode)
 {
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
 	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
+	       tux_inode(inode)->inum != TUX_LOGMAP_INO &&
 	       tux_inode(inode)->inum != TUX_INVALID_INO);
 	switch (tux_inode(inode)->inum) {
 	case TUX_BITMAP_INO:
@@ -362,7 +373,7 @@ int main(int argc, char *argv[])
 		.entries_per_node = 20,
 		.volblocks = size >> dev->bits);
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, NULL, 0);
+	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))

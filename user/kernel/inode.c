@@ -35,6 +35,17 @@ struct inode *tux_new_volmap(struct sb *sb)
 	return inode;
 }
 
+/* FIXME: kill this, and use another infrastructure instead of inode */
+struct inode *tux_new_logmap(struct sb *sb)
+{
+	struct inode *inode = new_inode(vfs_sb(sb));
+	if (inode) {
+		tux_set_inum(inode, TUX_LOGMAP_INO);
+		tux_setup_inode(inode);
+	}
+	return inode;
+}
+
 static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 				   dev_t rdev)
 {
@@ -323,7 +334,7 @@ static int save_inode(struct inode *inode)
 	inum_t inum = tux_inode(inode)->inum;
 	int err = 0;
 
-	assert(inum != TUX_INVALID_INO);
+	assert(inum != TUX_LOGMAP_INO && inum != TUX_INVALID_INO);
 	trace("save inode 0x%Lx", (L)inum);
 
 #ifndef __KERNEL__
@@ -467,6 +478,7 @@ int tux3_write_inode(struct inode *inode, int do_sync)
 	BUG_ON(tux_inode(inode)->inum == TUX_BITMAP_INO ||
 	       tux_inode(inode)->inum == TUX_VOLMAP_INO ||
 	       tux_inode(inode)->inum == TUX_VTABLE_INO ||
+	       tux_inode(inode)->inum == TUX_LOGMAP_INO ||
 	       tux_inode(inode)->inum == TUX_INVALID_INO ||
 	       tux_inode(inode)->inum == TUX_ATABLE_INO);
 	return save_inode(inode);
@@ -553,6 +565,8 @@ static void tux_setup_inode(struct inode *inode)
 {
 	struct sb *sbi = tux_sb(inode->i_sb);
 
+	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
+
 	inode->i_blocks = ((inode->i_size + sbi->blockmask)
 			   & ~(loff_t)sbi->blockmask) >> 9;
 //	inode->i_generation = 0;
@@ -599,8 +613,8 @@ static void tux_setup_inode(struct inode *inode)
 		switch (inum) {
 		case TUX_VOLMAP_INO:
 		case TUX_BITMAP_INO:
-		/* FIXME: this means logmap for now */
-		case TUX_INVALID_INO:
+		/* FIXME: kill this, this means logmap for now */
+		case TUX_LOGMAP_INO:
 			gfp_mask &= ~__GFP_FS;
 			break;
 		}

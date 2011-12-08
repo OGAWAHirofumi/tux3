@@ -43,6 +43,10 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	if (!sb->volmap)
 		return -ENOMEM;
 
+	sb->logmap = tux_new_logmap(sb);
+	if (!sb->logmap)
+		return -ENOMEM;
+
 	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
 	int err = make_tux3(sb);
 	if (!err) {
@@ -51,6 +55,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 		iput(sb->rootdir);
 		iput(sb->atable);
 		iput(sb->bitmap);
+		iput(sb->logmap);
 		iput(sb->volmap);
 	}
 	return err;
@@ -112,8 +117,16 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20, 1);
 
 	sb->volmap = tux_new_volmap(sb);
-	if (!sb->volmap)
+	if (!sb->volmap) {
+		errno = ENOMEM;
 		goto eek;
+	}
+	sb->logmap = tux_new_logmap(sb);
+	if (!sb->logmap) {
+		errno = ENOMEM;
+		goto eek;
+	}
+
 	if ((errno = -load_itable(sb)))
 		goto eek;
 	sb->bitmap = iget(sb, TUX_BITMAP_INO);
@@ -293,6 +306,7 @@ int main(int argc, char *argv[])
 	iput(sb->rootdir);
 	iput(sb->atable);
 	iput(sb->bitmap);
+	iput(sb->logmap);
 	iput(sb->volmap);
 
 	return 0;

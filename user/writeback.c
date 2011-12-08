@@ -141,6 +141,31 @@ int __weak save_sb(struct sb *sb)
 	return 0;
 }
 
+/* dummy for not including log.c */
+void __weak log_finish(struct sb *sb)
+{
+}
+
+static void cleanup_garbage_for_writeback(struct sb *sb)
+{
+	/*
+	 * Clean garbage (atomic commit) stuff. Don't forget to update
+	 * this, if you update the atomic commit.
+	 */
+	log_finish(sb);
+
+	sb->logchain = 0;
+	sb->logbase = sb->next_logbase = 0;
+	sb->logthis = sb->lognext = 0;
+	invalidate_buffers(sb->logmap->map);
+
+	assert(flink_empty(&sb->defree.head));
+	assert(flink_empty(&sb->deflush.head));
+	assert(flink_empty(&sb->decycle.head));
+	assert(flink_empty(&sb->new_decycle.head));
+	assert(list_empty(&sb->pinned));
+}
+
 int sync_super(struct sb *sb)
 {
 	int err;
@@ -148,6 +173,9 @@ int sync_super(struct sb *sb)
 	printf("sync inodes\n");
 	if ((err = sync_inodes(sb)))
 		return err;
+
+	cleanup_garbage_for_writeback(sb);
+
 	printf("sync super\n");
 	if ((err = save_sb(sb)))
 		return err;

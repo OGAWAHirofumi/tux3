@@ -135,7 +135,6 @@ static const struct super_operations tux3_super_ops = {
 
 static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 {
-	static struct tux_iattr iattr;
 	struct sb *sbi;
 	int err, blocksize;
 
@@ -185,6 +184,10 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	insert_inode_hash(sbi->volmap);
 
+	sbi->logmap = tux_new_logmap(tux_sb(sb));
+	if (!sbi->logmap)
+		goto error_logmap;
+
 	err = load_itable(sbi);
 	if (err)
 		goto error_bitmap;
@@ -205,11 +208,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	if (IS_ERR(sbi->atable))
 		goto error_atable;
 
-	err = -ENOMEM;
-	sbi->logmap = tux_new_inode(sbi->rootdir, &iattr, 0);
-	if (!sbi->logmap)
-		goto error_logmap;
-
 	sb->s_root = d_alloc_root(sbi->rootdir);
 	if (!sb->s_root)
 		goto error_alloc_root;
@@ -217,14 +215,14 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
 error_alloc_root:
-	iput(sbi->logmap);
-error_logmap:
 	iput(sbi->atable);
 error_atable:
 	iput(sbi->rootdir);
 error_rootdir:
 	iput(sbi->bitmap);
 error_bitmap:
+	iput(sbi->logmap);
+error_logmap:
 	iput(sbi->volmap);
 error:
 	kfree(sbi);
