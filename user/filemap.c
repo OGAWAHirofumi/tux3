@@ -251,6 +251,9 @@ int main(int argc, char *argv[])
 		assert(!segs);
 		/* free leaked blocks by redirect */
 		assert(!bfree(sb, redirect_block, 20));
+		/* free stash for valgrind */
+		destroy_defer_bfree(&sb->defree);
+		destroy_defer_bfree(&sb->deflush);
 		sb->nextalloc = nextalloc;
 	}
 
@@ -367,7 +370,6 @@ int main(int argc, char *argv[])
 		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
 		sb->nextalloc = nextalloc;
 	}
-
 #if 1
 	assert(balloc_from_range(sb, 0x10, 1, 1) >= 0);
 	sb->nextalloc = 0xf;

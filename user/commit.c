@@ -57,6 +57,12 @@ int main(int argc, char *argv[])
 		//show_buffers(sb->volmap->map);
 		invalidate_buffers(mapping(sb->logmap));
 		replay(sb);
+
+		/* free stash for valgrind */
+		destroy_defer_bfree(&sb->new_decycle);
+		destroy_defer_bfree(&sb->decycle);
+		destroy_defer_bfree(&sb->deflush);
+		destroy_defer_bfree(&sb->defree);
 	}
 	exit(0);
 }
