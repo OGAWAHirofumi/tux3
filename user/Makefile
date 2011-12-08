@@ -92,9 +92,9 @@ DEP_FILES_PRESENT := $(wildcard $(DEP_FILES))
 
 # rules
 $(COMMON_OBJS) $(OBJS): %.o: %.c $(MISSING_DEP_DIRS)
-	$(CC) $(DEP_ARGS) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
+	$(CC) $(DEP_ARGS) $(CFLAGS) -c -o $@ $<
 ifeq ($(CHECK),1)
-	$(CHECKER) $(CFLAGS) -Dbuild_$(<:.c=) $(CHECKFLAGS) -c $<
+	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
 endif
 
 $(TEST_BIN) $(TUX3_BIN):
