@@ -32,17 +32,29 @@ static int clear_other_magic(struct sb *sb)
 
 int make_tux3(struct sb *sb)
 {
-	struct inode *dir = &(struct inode){ .i_sb = sb, .i_mode = S_IFDIR | 0755 };
-	int err = clear_other_magic(sb);
+	struct inode *dir = &(struct inode){
+		.i_sb = sb,
+		.i_mode = S_IFDIR | 0755,
+	};
+	struct tux_iattr *iattr = &(struct tux_iattr){};
+	int err;
 
+	err = clear_other_magic(sb);
 	if (err)
 		return err;
 
+	trace("create inode table");
+	init_btree(itable_btree(sb), sb, (struct root){}, &itable_ops);
+
 	trace("create bitmap");
-	if (!(sb->bitmap = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
+	sb->bitmap = __tux_create_inode(dir, TUX_BITMAP_INO, iattr, 0);
+	if (IS_ERR(sb->bitmap)) {
+		err = PTR_ERR(sb->bitmap);
 		goto eek;
-	/* bitmap->btree is used before make_inode(), so initialize */
-	init_btree(&sb->bitmap->btree, sb, (struct root){}, &dtree_ops);
+	}
+	assert(sb->bitmap->inum == TUX_BITMAP_INO);
+	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
+	/* should this?, tuxtruncate(sb->bitmap, (sb->volblocks + 7) >> 3); */
 
 	trace("reserve superblock");
 	/* Always 8K regardless of blocksize */
@@ -54,36 +66,34 @@ int make_tux3(struct sb *sb)
 		trace("reserve %Lx", (L)block); // error ???
 	}
 
-	trace("create inode table");
-	err = new_btree(itable_btree(sb), sb, &itable_ops);
-	if (err)
-		goto eek;
-	sb->bitmap->i_size = (sb->volblocks + 7) >> 3;
-	trace("create bitmap inode");
-	if (alloc_inum(sb->bitmap, TUX_BITMAP_INO))
-		goto eek;
-	mark_inode_dirty(sb->bitmap);
 	trace("create version table");
-	if (!(sb->vtable = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
+	sb->vtable = __tux_create_inode(dir, TUX_VTABLE_INO, iattr, 0);
+	if (IS_ERR(sb->vtable)) {
+		err = PTR_ERR(sb->vtable);
 		goto eek;
-	if (alloc_inum(sb->vtable, TUX_VTABLE_INO))
-		goto eek;
-	mark_inode_dirty(sb->vtable);
-	trace("create root directory");
-	if (!(sb->rootdir = tux_new_inode(dir, &(struct tux_iattr){ .mode = S_IFDIR | 0755 }, 0)))
-		goto eek;
-	if (alloc_inum(sb->rootdir, TUX_ROOTDIR_INO))
-		goto eek;
-	mark_inode_dirty(sb->rootdir);
+	}
+	assert(sb->vtable->inum == TUX_VTABLE_INO);
+
 	trace("create atom dictionary");
-	if (!(sb->atable = tux_new_inode(dir, &(struct tux_iattr){ }, 0)))
+	sb->atable = __tux_create_inode(dir, TUX_ATABLE_INO, iattr, 0);
+	if (IS_ERR(sb->atable)) {
+		err = PTR_ERR(sb->atable);
 		goto eek;
+	}
+	assert(sb->atable->inum == TUX_ATABLE_INO);
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
-	if (alloc_inum(sb->atable, TUX_ATABLE_INO))
+
+	trace("create root directory");
+	struct tux_iattr root_iattr = { .mode = S_IFDIR | 0755, };
+	sb->rootdir = __tux_create_inode(dir, TUX_ROOTDIR_INO, &root_iattr, 0);
+	if (IS_ERR(sb->rootdir)) {
+		err = PTR_ERR(sb->rootdir);
 		goto eek;
-	mark_inode_dirty(sb->atable);
+	}
+	assert(sb->rootdir->inum == TUX_ROOTDIR_INO);
+
 	if ((err = sync_super(sb)))
 		goto eek;
 

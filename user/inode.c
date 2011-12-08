@@ -223,6 +223,36 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	return IS_ERR(inode) ? NULL : inode; // ERR_PTR me!!!
 }
 
+static struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
+					struct tux_iattr *iattr, dev_t rdev)
+{
+	struct inode *inode = tux_new_inode(dir, iattr, rdev);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	/*
+	 * For now the inum allocation goal is the same as the block allocation
+	 * goal.  This allows a maximum inum density of one per block and should
+	 * give pretty good spacial correlation between inode table blocks and
+	 * file data belonging to those inodes provided somebody sets the block
+	 * allocation goal based on the directory the file will be in.
+	 */
+	int err = alloc_inum(inode, goal);
+	if (err) {
+		iput(inode);
+		return ERR_PTR(err);
+	}
+
+	mark_inode_dirty(inode);
+
+	return inode;
+}
+
+static struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev)
+{
+	return __tux_create_inode(dir, dir->i_sb->nextalloc, iattr, rdev);
+}
+
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
 {
 	struct buffer_head *buffer;
@@ -232,31 +262,20 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 		return NULL; // should allow create of a file that already exists!!!
 	}
 	if (PTR_ERR(entry) != -ENOENT)
-		return NULL;
+		return NULL; // err???
 
-	/*
-	 * For now the inum allocation goal is the same as the block allocation
-	 * goal.  This allows a maximum inum density of one per block and should
-	 * give pretty good spacial correlation between inode table blocks and
-	 * file data belonging to those inodes provided somebody sets the block
-	 * allocation goal based on the directory the file will be in.
-	 */
-	struct inode *inode = tux_new_inode(dir, iattr, 0);
-	if (!inode)
-		return NULL; // err ???
-	int err = alloc_inum(inode, dir->i_sb->nextalloc);
-	if (err)
-		goto error; // err ???
-	mark_inode_dirty(inode);
-	err = tux_create_dirent(dir, name, len, tux_inode(inode)->inum, iattr->mode);
-	if (!err)
-		return inode;
+	struct inode *inode = tux_create_inode(dir, iattr, 0);
+	if (IS_ERR(inode))
+		return NULL; // err???
 
-	purge_inum(inode); // test me!!!
-error:
-	iput(inode);
-	inode = NULL;
-	return NULL; // err ???
+	int err = tux_create_dirent(dir, name, len, tux_inode(inode)->inum, iattr->mode);
+	if (err) {
+		purge_inum(inode);
+		iput(inode);
+		return NULL; // err???
+	}
+
+	return inode;
 }
 
 int tux_delete_inode(struct inode *inode)
@@ -393,31 +412,23 @@ int main(int argc, char *argv[])
 
 	if (1) { /* try to allocate same inum */
 		struct tux_iattr *iattr = &(struct tux_iattr){};
-		struct inode *inode1 = tux_new_inode(sb->rootdir, iattr, 0);
-		struct inode *inode2 = tux_new_inode(sb->rootdir, iattr, 0);
-		struct inode *inode3 = tux_new_inode(sb->rootdir, iattr, 0);
-		struct inode *inode4 = tux_new_inode(sb->rootdir, iattr, 0);
-		assert(inode1 && inode2 && inode3 && inode4);
+		struct inode *inode1, *inode2, *inode3, *inode4;
 		/* both is deferred allocation */
-		err = alloc_inum(inode1, 0x1000);
-		mark_inode_dirty(inode1);
-		assert(!err);
-		err = alloc_inum(inode2, 0x1000);
-		mark_inode_dirty(inode2);
-		assert(!err);
+		inode1 = __tux_create_inode(sb->rootdir, 0x1000, iattr, 0);
+		assert(inode1);
+		inode2 = __tux_create_inode(sb->rootdir, 0x1000, iattr, 0);
+		assert(inode2);
 		/* test inum allocation */
 		assert(inode1->inum != inode2->inum);
 		/* save first inode */
 		err = sync_inode(inode1);
 		assert(!err);
 		/* try to alloc same inum after save */
-		err = alloc_inum(inode3, 0x1000);
-		mark_inode_dirty(inode3);
-		assert(!err);
+		inode3 = __tux_create_inode(sb->rootdir, 0x1000, iattr, 0);
+		assert(inode3);
 		/* try to alloc so far inum */
-		err = alloc_inum(inode4, 0x10000000);
-		mark_inode_dirty(inode4);
-		assert(!err);
+		inode4 = __tux_create_inode(sb->rootdir, 0x10000000, iattr, 0);
+		assert(inode4);
 		/* save inodes */
 		err = sync_inode(inode2);
 		assert(!err);
