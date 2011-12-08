@@ -15,7 +15,7 @@
 #endif
 
 #include "kernel/balloc.c"
-#include "dir.c"
+#include "../dir.c"
 #include "btree-dummy.c"
 #include "kernel/iattr.c"
 #include "kernel/xattr.c"

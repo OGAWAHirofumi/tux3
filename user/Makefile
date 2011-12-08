@@ -1,4 +1,6 @@
-ARCH = $(shell uname -m)
+TOPDIR = $(CURDIR)
+
+ARCH	= $(shell uname -m)
 
 CC	= gcc
 
@@ -9,6 +11,7 @@ CFLAGS	+= -m32
 endif
 
 CFLAGS	+= -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+CFLAGS	+= -I$(TOPDIR)
 # gcc warning options
 CFLAGS	+= -Wall -Wextra -Werror
 CFLAGS	+= -Wundef -Wstrict-prototypes -Werror-implicit-function-declaration
@@ -26,10 +29,9 @@ CHECKER	   = sparse
 CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
 CHECKFLAGS += -Wno-decl -Wno-declaration-after-statement
 
-VG	= valgrind --error-exitcode=200 --leak-check=full
 INSTALL	= install
 
-TESTDIR	= .
+TESTDIR	= $(TOPDIR)
 OWNER	= root
 GROUP	= root
 
@@ -39,35 +41,38 @@ SBINDIR	= $(PREFIX)/sbin
 LIBEXECDIR = $(PREFIX)/libexec/tux3
 
 TUX3_BIN	= tux3 tux3graph
-TEST_BIN	= buffer balloc dleaf ileaf iattr xattr btree dir filemap \
-	inode commit
 ifeq ($(shell pkg-config fuse && echo found), found)
 	FUSE_BIN = tux3fuse
 endif
+TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
+	tests/dir tests/dleaf tests/filemap tests/iattr tests/ileaf \
+	tests/inode tests/xattr
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
 COMMON_OBJS	= utility.o writeback.o
-OBJS		= buffer.o diskio.o dleaf.o balloc.o ileaf.o btree.o dir.o \
-	iattr.o xattr.o inode.o filemap.o commit.o tux3.o tux3graph.o
+OBJS		= buffer.o diskio.o dir.o tux3.o tux3graph.o
 FUSE_OBJS	= tux3fuse.o
-ALL_OBJS	= $(COMMON_OBJS) $(OBJS) $(FUSE_OBJS)
+TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
+	tests/dleaf.o tests/filemap.o tests/iattr.o tests/ileaf.o tests/xattr.o
+ALL_OBJS	= $(COMMON_OBJS) $(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
 
+.PHONY: tests
 all: $(ALL_BIN)
 
 # objects dependency
-buffer: buffer.o diskio.o
-dleaf: $(COMMON_OBJS) dleaf.o
-balloc: $(COMMON_OBJS) balloc.o
-ileaf: $(COMMON_OBJS) ileaf.o
-btree: $(COMMON_OBJS) btree.o
-dir: $(COMMON_OBJS) dir.o
-iattr: $(COMMON_OBJS) iattr.o
-xattr: $(COMMON_OBJS) xattr.o
-inode: $(COMMON_OBJS) inode.o
-filemap: $(COMMON_OBJS) filemap.o
-commit: $(COMMON_OBJS) commit.o
 tux3: $(COMMON_OBJS) tux3.o
 tux3graph: $(COMMON_OBJS) tux3graph.o
+tests/balloc: $(COMMON_OBJS) tests/balloc.o
+tests/btree: $(COMMON_OBJS) tests/btree.o
+tests/buffer: buffer.o diskio.o tests/buffer.o
+tests/commit: $(COMMON_OBJS) tests/commit.o
+tests/dir: $(COMMON_OBJS) dir.o tests/dir.o
+tests/dleaf: $(COMMON_OBJS) tests/dleaf.o
+tests/filemap: $(COMMON_OBJS) tests/filemap.o
+tests/iattr: $(COMMON_OBJS) tests/iattr.o
+tests/ileaf: $(COMMON_OBJS) tests/ileaf.o
+tests/inode: $(COMMON_OBJS) tests/inode.o
+tests/xattr: $(COMMON_OBJS) tests/xattr.o
 
 # dependency generation
 DEPDIR	  := .deps
@@ -102,8 +107,8 @@ ifeq ($(CHECK),1)
 endif
 
 clean:
-	rm -f $(ALL_BIN) *.o a.out foodev $(TESTDIR)/testdev
-	rm -f kernel/*.o
+	rm -f $(ALL_BIN) *.o tests/*.o kernel/*.o
+	rm -f a.out tests/foodev foodev $(TESTDIR)/testdev
 
 distclean: clean
 	rm -f *.orig kernel/*.orig
@@ -118,55 +123,15 @@ install-bin: $(TUX3_BIN) $(FUSE_BIN)
 install-test: install-bin $(TEST_BIN)
 	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(LIBEXECDIR)
 	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(TEST_BIN) $(DISTDIR)$(LIBEXECDIR)
-
-# test rules
-#.NOTPARALLEL: tests
-# The "tests" run in order, otherwise those will output the result
-# mixed.  But make seems to disable all in this Makefile. (FIXME: we
-# should move tests to other directory to fix this, and keep clean
-# source directory)
-
-tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
-	test_btree test_dir test_iattr test_xattr test_filemap test_inode
-
-test_buffer: buffer
-	$(VG) ./buffer
-
-test_balloc: balloc
-	$(VG) ./balloc
-
-test_dleaf: dleaf
-	$(VG) ./dleaf
-
-test_ileaf: ileaf
-	$(VG) ./ileaf
-
-test_btree: btree
-	$(VG) ./btree foodev
-
-test_dir: dir
-	$(VG) ./dir
-
-test_iattr: iattr
-	$(VG) ./iattr
-
-test_xattr: xattr
-	$(VG) ./xattr foodev
-
-test_filemap: filemap
-	$(VG) ./filemap foodev
-
-test_inode: inode
-	$(VG) ./inode foodev
-
-test_commit: commit
-	$(VG) ./commit foodev
-
 makefs mkfs: tux3
 	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs $(TESTDIR)/testdev
 	mkdir -p $(TESTDIR)/test
 	if [[ ! -f /etc/fuse.conf ]]; then sudo sh -c "echo user_allow_other >/etc/fuse.conf"; fi
+
+# tests rules
+tests: $(TEST_BIN)
+	make -C tests
 
 testfs testfuse: makefs
 	./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other

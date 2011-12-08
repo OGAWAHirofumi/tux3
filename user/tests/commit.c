@@ -12,7 +12,7 @@
 #include "diskio.h"
 
 #define trace trace_off
-#include "inode.c"
+#include "../inode.c"
 #undef trace
 #define trace trace_on
 
