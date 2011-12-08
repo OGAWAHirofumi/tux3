@@ -140,15 +140,16 @@ install-bin: $(TUX3_BIN) $(FUSE_BIN)
 install-test: install-bin $(TEST_BIN)
 	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(LIBEXECDIR)
 	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(TEST_BIN) $(DISTDIR)$(LIBEXECDIR)
+
+# tests rules
+tests: $(TEST_BIN)
+	make -C tests
+
 makefs mkfs: tux3
 	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs $(TESTDIR)/testdev
 	mkdir -p $(TESTDIR)/test
 	if [[ ! -f /etc/fuse.conf ]]; then sudo sh -c "echo user_allow_other >/etc/fuse.conf"; fi
-
-# tests rules
-tests: $(TEST_BIN)
-	make -C tests
 
 testfs testfuse: makefs
 	./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other
