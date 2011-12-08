@@ -118,17 +118,17 @@ int main(int argc, char *argv[])
 		goto eek;
 	sb->bitmap = iget(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
-		errno = PTR_ERR(sb->bitmap);
+		errno = -PTR_ERR(sb->bitmap);
 		goto eek;
 	}
 	sb->rootdir = iget(sb, TUX_ROOTDIR_INO);
 	if (IS_ERR(sb->rootdir)) {
-		errno = PTR_ERR(sb->rootdir);
+		errno = -PTR_ERR(sb->rootdir);
 		goto eek;
 	}
 	sb->atable = iget(sb, TUX_ATABLE_INO);
 	if (IS_ERR(sb->atable)) {
-		errno = PTR_ERR(sb->atable);
+		errno = -PTR_ERR(sb->atable);
 		goto eek;
 	}
 	show_tree_range(&sb->rootdir->btree, 0, -1);
