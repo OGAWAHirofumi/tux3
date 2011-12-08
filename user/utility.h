@@ -3,7 +3,7 @@
 
 #include <limits.h>
 
-#define BITS_PER_LONG		(sizeof(unsigned long) * CHAR_BIT)
+#define BITS_PER_LONG		LONG_BIT	/* SuS define this */
 #define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
 #define ffz(x)			__ffs(~(x))
 #define find_first_bit(addr, size) find_next_bit((addr), (size), 0)
@@ -19,11 +19,12 @@ static __always_inline unsigned long __ffs(unsigned long word)
 {
 	int num = 0;
 
-	if (BITS_PER_LONG == 64 && !(word & 0xffffffff)) {
+#if BITS_PER_LONG == 64
+	if ((word & 0xffffffff) == 0) {
 		num += 32;
-		word >>= 16; /* work around idiotic gcc warning */
-		word >>= 16; /* work around idiotic gcc warning */
+		word >>= 32;
 	}
+#endif
 	if ((word & 0xffff) == 0) {
 		num += 16;
 		word >>= 16;
