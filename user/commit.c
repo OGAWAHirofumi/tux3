@@ -37,8 +37,11 @@ int main(int argc, char *argv[])
 	struct sb *sb = rapid_sb(dev, .volblocks = volsize >> dev->bits);
 	sb->max_inodes_per_block = sb->blocksize / 64;
 	sb->entries_per_node = (sb->blocksize - sizeof(struct bnode)) / sizeof(struct index_entry);
-	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
+
+	sb->volmap = tux_new_volmap(sb);
+	assert(sb->volmap);
+	sb->logmap = tux_new_logmap(sb);
+	assert(sb->logmap);
 
 	assert(!make_tux3(sb));
 

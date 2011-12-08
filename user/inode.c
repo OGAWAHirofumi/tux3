@@ -372,8 +372,11 @@ int main(int argc, char *argv[])
 		.max_inodes_per_block = 64,
 		.entries_per_node = 20,
 		.volblocks = size >> dev->bits);
-	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
+
+	sb->volmap = tux_new_volmap(sb);
+	assert(sb->volmap);
+	sb->logmap = tux_new_logmap(sb);
+	assert(sb->logmap);
 
 	trace("make tux3 filesystem on %s (0x%Lx bytes)", name, (L)size);
 	if ((errno = -make_tux3(sb)))
