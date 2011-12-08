@@ -5,14 +5,6 @@
 #define trace trace_on
 #endif
 
-#include "kernel/log.c"
-#include "dir.c"
-#include "kernel/xattr.c"
-#include "kernel/dleaf.c"
-#include "kernel/btree.c"
-#include "kernel/iattr.c"
-#include "kernel/ileaf.c"
-#include "kernel/balloc.c"
 #include "kernel/filemap.c"
 
 int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
@@ -54,8 +46,6 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	return buffer;
 }
 #endif /* defined(ATOMIC) || defined(BLOCKDIRTY) */
-
-#include "kernel/commit.c"
 
 /*
  * Extrapolate from single buffer flush or blockread to opportunistic exent IO

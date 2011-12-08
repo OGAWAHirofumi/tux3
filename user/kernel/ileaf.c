@@ -10,6 +10,10 @@
 
 #include "tux3.h"
 
+#ifndef trace
+#define trace trace_on
+#endif
+
 struct ileaf {
 	be_u16 magic;		/* Magic number */
 	be_u16 count;		/* Counts of used offset info entries */

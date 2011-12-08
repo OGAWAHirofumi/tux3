@@ -43,8 +43,6 @@
 #include <fuse.h>
 #include <fuse/fuse_lowlevel.h>
 
-#include "inode.c"
-
 #undef trace
 #define trace trace_on
 

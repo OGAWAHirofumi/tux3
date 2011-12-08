@@ -9,6 +9,7 @@
  */
 
 #include "tux3user.h"
+#include "diskio.h"
 
 #ifndef trace
 #define trace trace_on

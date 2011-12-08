@@ -8,8 +8,9 @@
  * the right to distribute those changes under any license.
  */
 
-#include "inode.c"
 #include <getopt.h>
+#include "tux3user.h"
+#include "diskio.h"
 
 static void usage(void)
 {

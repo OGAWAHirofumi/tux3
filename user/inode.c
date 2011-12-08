@@ -14,8 +14,6 @@
 #define trace trace_on
 #endif
 
-#include "filemap.c"
-
 struct inode *new_inode(struct sb *sb)
 {
 	struct inode *inode = malloc(sizeof(*inode));
@@ -110,7 +108,7 @@ struct inode *iget(struct sb *sb, inum_t inum)
 	return inode;
 }
 
-int tuxio(struct file *file, char *data, unsigned len, int write)
+static int tuxio(struct file *file, char *data, unsigned len, int write)
 {
 	int err = 0;
 	struct inode *inode = file->f_inode;
@@ -233,8 +231,8 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	return IS_ERR(inode) ? NULL : inode; // ERR_PTR me!!!
 }
 
-static struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
-					struct tux_iattr *iattr, dev_t rdev)
+struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
+				 struct tux_iattr *iattr, dev_t rdev)
 {
 	struct inode *inode = tux_new_inode(dir, iattr, rdev);
 	if (!inode)
@@ -351,5 +349,3 @@ int write_inode(struct inode *inode)
 	}
 	return save_inode(inode);
 }
-
-#include "super.c"

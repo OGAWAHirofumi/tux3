@@ -14,11 +14,8 @@
 #define trace trace_off
 #endif
 
-#include "../dir.c"
 #include "balloc-dummy.c"
 #include "btree-dummy.c"
-#include "kernel/iattr.c"
-#include "kernel/xattr.c"
 #include "kernel/ileaf.c"
 
 int change_begin(struct sb *sb) { return 0; }

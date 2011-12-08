@@ -4,6 +4,10 @@
 
 #include "tux3.h"
 
+#ifndef trace
+#define trace trace_on
+#endif
+
 int blockio(int rw, struct buffer_head *buffer, block_t block)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);

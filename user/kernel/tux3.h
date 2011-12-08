@@ -20,10 +20,6 @@ typedef loff_t block_t;
 
 #include "trace.h"
 #include "link.h"
-
-#ifndef trace
-#define trace trace_on
-#endif
 #endif
 
 typedef long long L; // widen for printf on 64 bit systems
@@ -604,11 +600,6 @@ static inline fixed32 tuxtime(struct timespec time)
 	return ((u64)time.tv_sec << 32) + ((time.tv_nsec * mult + (3 << 29)) >> 31);
 }
 
-void hexdump(void *data, unsigned size);
-int balloc(struct sb *sb, unsigned blocks, block_t *block);
-int bfree(struct sb *sb, block_t start, unsigned blocks);
-int update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
-
 enum atkind {
 	/* Fixed size attrs */
 	RDEV_ATTR	= 0,
@@ -746,59 +737,9 @@ static inline int buffer_clean(struct buffer_head *buffer)
 
 #include "dirty-buffer.h"	/* remove this after atomic commit */
 
-/* btree.c */
-unsigned calc_entries_per_node(unsigned blocksize);
-struct buffer_head *cursor_leafbuf(struct cursor *cursor);
-void release_cursor(struct cursor *cursor);
-struct cursor *alloc_cursor(struct btree *btree, int);
-void free_cursor(struct cursor *cursor);
-void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
-
-void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
-int alloc_empty_btree(struct btree *btree);
-int free_empty_btree(struct btree *btree);
-struct buffer_head *new_leaf(struct btree *btree);
-int probe(struct cursor *cursor, tuxkey_t key);
-int advance(struct cursor *cursor);
-tuxkey_t next_key(struct cursor *cursor, int depth);
-int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline);
-int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);
-void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
-void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
-void show_tree(struct btree *btree);
-int cursor_redirect(struct cursor *cursor);
-
 /* dir.c */
-void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *new_inode);
-int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
-tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result);
-int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
-int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);
-int tux_readdir(struct file *file, void *state, filldir_t filldir);
-int tux_dir_is_empty(struct inode *dir);
 extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
-
-/* dtree.c */
-int dleaf_init(struct btree *btree, vleaf *leaf);
-unsigned dleaf_free(struct btree *btree, vleaf *leaf);
-void dleaf_dump(struct btree *btree, vleaf *vleaf);
-int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize);
-void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
-unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
-extern struct btree_ops dtree_ops;
-
-int dwalk_end(struct dwalk *walk);
-block_t dwalk_block(struct dwalk *walk);
-unsigned dwalk_count(struct dwalk *walk);
-tuxkey_t dwalk_index(struct dwalk *walk);
-int dwalk_next(struct dwalk *walk);
-int dwalk_back(struct dwalk *walk);
-int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
-int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
-void dwalk_copy(struct dwalk *walk, struct dleaf *dest);
-void dwalk_chop(struct dwalk *walk);
-int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 
 /* filemap.c */
 int tux3_get_block(struct inode *inode, sector_t iblock,
@@ -807,21 +748,7 @@ extern const struct address_space_operations tux_aops;
 extern const struct address_space_operations tux_blk_aops;
 extern const struct address_space_operations tux_vol_aops;
 
-/* iattr.c */
-unsigned encode_asize(unsigned bits);
-void dump_attrs(struct inode *inode);
-void *encode_attrs(struct inode *inode, void *attrs, unsigned size);
-void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
-
-/* ileaf.c */
-void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
-inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal);
-void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf);
-extern struct btree_ops itable_ops;
-
 /* inode.c */
-struct inode *tux_new_volmap(struct sb *sb);
-struct inode *tux_new_logmap(struct sb *sb);
 void tux3_delete_inode(struct inode *inode);
 void tux3_clear_inode(struct inode *inode);
 int tux3_write_inode(struct inode *inode, int do_sync);
@@ -833,50 +760,14 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum);
 /* symlink.c */
 extern const struct inode_operations tux_symlink_iops;
 
-/* xattr.c */
-int xcache_dump(struct inode *inode);
-struct xcache *new_xcache(unsigned maxsize);
-int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size);
-int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags);
-void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
-unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
-unsigned encode_xsize(struct inode *inode);
-
-/* log.c */
-void log_next(struct sb *sb);
-void log_drop(struct sb *sb);
-void log_finish(struct sb *sb);
-void log_balloc(struct sb *sb, block_t block, unsigned count);
-void log_bfree(struct sb *sb, block_t block, unsigned count);
-void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count);
-void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock);
-void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock);
-void log_bnode_root(struct sb *sb, block_t root, unsigned count,
-		    block_t left, block_t right, tuxkey_t rkey);
-void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest);
-void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
-void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
-void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);
-void log_iroot(struct sb *sb, block_t newroot, block_t oldroot);
-
-int stash_value(struct stash *stash, u64 value);
-int unstash(struct sb *sb, struct stash *defree, unstash_t actor);
-int defer_bfree(struct stash *defree, block_t block, unsigned count);
-void destroy_defer_bfree(struct stash *defree);
-
 /* utility.c */
-int vecio(int rw, struct block_device *dev, sector_t sector,
-	bio_end_io_t endio, void *data, unsigned vecs, struct bio_vec *vec);
-int syncio(int rw, struct block_device *dev, sector_t sector, unsigned vecs, struct bio_vec *vec);
-int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned len);
-
-/* commit.c */
-
-int load_sb(struct sb *sb);
-int save_sb(struct sb *sb);
-int load_itable(struct sb *sb);
-int change_begin(struct sb *sb);
-int change_end(struct sb *sb);
+int vecio(int rw, struct block_device *dev, loff_t offset, unsigned vecs,
+	  struct bio_vec *vec, bio_end_io_t endio, void *info);
+int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs,
+	   struct bio_vec *vec);
+int devio(int rw, struct block_device *dev, loff_t offset, void *data,
+	  unsigned len);
+void hexdump(void *data, unsigned size);
 
 /* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
@@ -903,6 +794,126 @@ static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigne
 	return buffer;
 }
 #endif /* !__KERNEL__ */
+
+/* balloc.c */
+block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
+block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks);
+int balloc(struct sb *sb, unsigned blocks, block_t *block);
+int bfree(struct sb *sb, block_t start, unsigned blocks);
+int update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
+
+/* btree.c */
+unsigned calc_entries_per_node(unsigned blocksize);
+struct buffer_head *cursor_leafbuf(struct cursor *cursor);
+void release_cursor(struct cursor *cursor);
+struct cursor *alloc_cursor(struct btree *btree, int);
+void free_cursor(struct cursor *cursor);
+void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
+
+void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
+int alloc_empty_btree(struct btree *btree);
+int free_empty_btree(struct btree *btree);
+struct buffer_head *new_leaf(struct btree *btree);
+int probe(struct cursor *cursor, tuxkey_t key);
+int advance(struct cursor *cursor);
+tuxkey_t next_key(struct cursor *cursor, int depth);
+int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline);
+int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);
+void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
+void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
+void show_tree(struct btree *btree);
+int cursor_redirect(struct cursor *cursor);
+
+/* commit.c */
+int load_sb(struct sb *sb);
+int save_sb(struct sb *sb);
+int load_itable(struct sb *sb);
+void clean_buffer(struct buffer_head *buffer);
+int change_begin(struct sb *sb);
+int change_end(struct sb *sb);
+
+/* dir.c */
+void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *new_inode);
+int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
+tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result);
+int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
+int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);
+int tux_readdir(struct file *file, void *state, filldir_t filldir);
+int tux_dir_is_empty(struct inode *dir);
+
+/* dtree.c */
+int dleaf_init(struct btree *btree, vleaf *leaf);
+unsigned dleaf_free(struct btree *btree, vleaf *leaf);
+void dleaf_dump(struct btree *btree, vleaf *vleaf);
+int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry,
+		   unsigned blocksize);
+void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
+unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
+extern struct btree_ops dtree_ops;
+
+int dwalk_end(struct dwalk *walk);
+block_t dwalk_block(struct dwalk *walk);
+unsigned dwalk_count(struct dwalk *walk);
+tuxkey_t dwalk_index(struct dwalk *walk);
+int dwalk_next(struct dwalk *walk);
+int dwalk_back(struct dwalk *walk);
+int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
+int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
+void dwalk_copy(struct dwalk *walk, struct dleaf *dest);
+void dwalk_chop(struct dwalk *walk);
+int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
+
+/* iattr.c */
+unsigned encode_asize(unsigned bits);
+void dump_attrs(struct inode *inode);
+void *encode_attrs(struct inode *inode, void *attrs, unsigned size);
+void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
+
+/* ileaf.c */
+void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
+inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal);
+void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf);
+extern struct btree_ops itable_ops;
+
+/* inode.c */
+struct inode *tux_new_volmap(struct sb *sb);
+struct inode *tux_new_logmap(struct sb *sb);
+
+/* log.c */
+void log_next(struct sb *sb);
+void log_drop(struct sb *sb);
+void log_finish(struct sb *sb);
+void log_balloc(struct sb *sb, block_t block, unsigned count);
+void log_bfree(struct sb *sb, block_t block, unsigned count);
+void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count);
+void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock);
+void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock);
+void log_bnode_root(struct sb *sb, block_t root, unsigned count,
+		    block_t left, block_t right, tuxkey_t rkey);
+void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest);
+void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
+void log_bnode_update(struct sb *sb, block_t parent, block_t child,
+		      tuxkey_t key);
+void log_droot(struct sb *sb, block_t newroot, block_t oldroot, tuxkey_t key);
+void log_iroot(struct sb *sb, block_t newroot, block_t oldroot);
+
+int stash_value(struct stash *stash, u64 value);
+int unstash(struct sb *sb, struct stash *defree, unstash_t actor);
+int defer_bfree(struct stash *defree, block_t block, unsigned count);
+void destroy_defer_bfree(struct stash *defree);
+
+/* replay.c */
+int replay(struct sb *sb);
+
+/* xattr.c */
+int xcache_dump(struct inode *inode);
+struct xcache *new_xcache(unsigned maxsize);
+int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size);
+int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags);
+int xattr_list(struct inode *inode, char *text, size_t size);
+void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
+unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
+unsigned encode_xsize(struct inode *inode);
 
 static inline void blockput_dirty(struct buffer_head *buffer)
 {

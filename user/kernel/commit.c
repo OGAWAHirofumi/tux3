@@ -65,7 +65,7 @@ int load_itable(struct sb *sb)
 	return 0;
 }
 
-static void clean_buffer(struct buffer_head *buffer)
+void clean_buffer(struct buffer_head *buffer)
 {
 #ifdef __KERNEL__
 	set_buffer_uptodate(buffer);
@@ -308,5 +308,5 @@ int change_end(struct sb *sb)
 }
 
 #ifdef __KERNEL__
-static void *useme[] = { clean_buffer, new_cycle_log, need_delta, do_commit, useme };
+static void *useme[] = { new_cycle_log, need_delta, do_commit, useme };
 #endif

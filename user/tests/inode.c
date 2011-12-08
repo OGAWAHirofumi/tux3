@@ -1,3 +1,6 @@
+#include "tux3user.h"
+#include "diskio.h"
+
 #include "../inode.c"
 
 int main(int argc, char *argv[])

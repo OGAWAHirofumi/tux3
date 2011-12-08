@@ -21,9 +21,6 @@
 #include "utility.h"
 #include "kernel/link.h"
 
-void stacktrace(void);
-void hexdump(void *data, unsigned size);
-
 #ifdef __CHECKER__
 #define __force		__attribute__((force))
 #define __bitwise__	__attribute__((bitwise))
@@ -177,6 +174,11 @@ static inline void __free_pages(struct page *page, unsigned order)
 }
 #define __free_page(page) __free_pages((page), 0)
 
+enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
+typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
+
+enum rw { READ, WRITE };
+
 #include "writeback.h"
 #include "kernel/tux3.h"
 
@@ -280,13 +282,35 @@ static inline dev_t huge_decode_dev(u64 dev)
 	__sb;							\
 	});
 
-enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
-typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
+/* dir.c */
+void tux_dump_entries(struct buffer_head *buffer);
 
-enum rw { READ, WRITE };
-
-int change_begin(struct sb *sb);
-int change_end(struct sb *sb);
+/* filemap.c */
+int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
+int filemap_extent_io(struct buffer_head *buffer, int write);
 int write_bitmap(struct buffer_head *buffer);
 
-#endif
+/* hexdump.c */
+void stacktrace(void);
+void hexdump(void *data, unsigned size);
+
+/* inode.c */
+void iput(struct inode *inode);
+void __iget(struct inode *inode);//
+struct inode *iget(struct sb *sb, inum_t inum);
+int tuxread(struct file *file, char *data, unsigned len);
+int tuxwrite(struct file *file, const char *data, unsigned len);
+void tuxseek(struct file *file, loff_t pos);
+int tuxtruncate(struct inode *inode, loff_t size);
+struct inode *tuxopen(struct inode *dir, const char *name, int len);
+struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
+				 struct tux_iattr *iattr, dev_t rdev);
+struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr);
+int tux_delete_inode(struct inode *inode);
+int tuxunlink(struct inode *dir, const char *name, int len);
+int write_inode(struct inode *inode);
+
+/* super.c */
+int make_tux3(struct sb *sb);
+
+#endif /* !USER_TUX3_H */

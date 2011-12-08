@@ -11,17 +11,12 @@
 #include "tux3user.h"
 #include "diskio.h"
 
-#define trace trace_off
-#include "../inode.c"
-#undef trace
 #define trace trace_on
 
 int bitmap_io(struct buffer_head *buffer, int write)
 {
 	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
 }
-
-#include "kernel/replay.c"
 
 int main(int argc, char *argv[])
 {
@@ -36,7 +31,7 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20, 0);
 	struct sb *sb = rapid_sb(dev, .volblocks = volsize >> dev->bits);
 	sb->max_inodes_per_block = sb->blocksize / 64;
-	sb->entries_per_node = (sb->blocksize - sizeof(struct bnode)) / sizeof(struct index_entry);
+	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
 
 	sb->volmap = tux_new_volmap(sb);
 	assert(sb->volmap);

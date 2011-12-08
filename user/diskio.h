@@ -1,3 +1,6 @@
+#ifndef TUX3_DISKIO_H
+#define TUX3_DISKIO_H
+
 #include <inttypes.h>
 #include <sys/types.h>
 
@@ -8,3 +11,4 @@ int streamread(int fd, void *data, size_t count);
 int streamwrite(int fd, void *data, size_t count);
 int fdsize64(int fd, uint64_t *size);
 
+#endif /* !TUX3_DISKIO_H */

@@ -112,7 +112,8 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 }
 #endif
 
-static block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
+/* userland only */
+block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
 {
 	struct inode *inode = sb->bitmap;
 	trace_off("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
