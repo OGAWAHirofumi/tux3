@@ -1,117 +1,133 @@
 ARCH = $(shell uname -m)
-CC = gcc
+
+CC	= gcc
+
 ifeq ($(ARCH),x86_64)
-CFLAGS  += -m64
+CFLAGS	+= -m64
 else
-CFLAGS  += -m32
+CFLAGS	+= -m32
 endif
 
-CFLAGS += -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
-CFLAGS += -Wall -Wextra -Werror
-CFLAGS += -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers
-CFLAGS += $(UCFLAGS)
+CFLAGS	+= -std=gnu99 -Wall -g -rdynamic -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64
+# gcc warning options
+CFLAGS	+= -Wall -Wextra -Werror
+CFLAGS	+= -Wundef -Wstrict-prototypes -Werror-implicit-function-declaration
+CFLAGS	+= -Wno-unused-parameter -Wno-sign-compare
+CFLAGS	+= -Wno-missing-field-initializers
+#CFLAGS += -Wp,-Wunused-macros
+# gcc checker
+CFLAGS	+= -D_FORTIFY_SOURCE=2
+# user flags
+CFLAGS	+= $(UCFLAGS)
 
 LDFLAGS =
 
-CHECKER = sparse
+CHECKER	   = sparse
 CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
 CHECKFLAGS += -Wno-decl -Wno-declaration-after-statement
 
-VG=valgrind --error-exitcode=200 --leak-check=full
-INSTALL = install
+VG	= valgrind --error-exitcode=200 --leak-check=full
+INSTALL	= install
 
-TESTDIR = .
-OWNER = root
-GROUP = root
+TESTDIR	= .
+OWNER	= root
+GROUP	= root
 
-DISTDIR =
-PREFIX = /usr/local
-SBINDIR = $(PREFIX)/sbin
+DISTDIR	=
+PREFIX	= /usr/local
+SBINDIR	= $(PREFIX)/sbin
 LIBEXECDIR = $(PREFIX)/libexec/tux3
 
+TUX3_BIN	= tux3 tux3graph
+TEST_BIN	= buffer balloc dleaf ileaf iattr xattr btree dir filemap \
+	inode commit
 ifeq ($(shell pkg-config fuse && echo found), found)
-	fusebin = tux3fuse
+	FUSE_BIN = tux3fuse
 endif
+ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
-testbin = buffer balloc dleaf ileaf iattr xattr btree dir filemap inode commit
-tux3bin = tux3 tux3graph
-binaries = $(testbin) $(tux3bin) $(fusebin)
+COMMON_OBJS	= utility.o writeback.o
+OBJS		= buffer.o diskio.o dleaf.o balloc.o ileaf.o btree.o dir.o \
+	iattr.o xattr.o inode.o filemap.o commit.o tux3.o tux3graph.o
+FUSE_OBJS	= tux3fuse.o
+ALL_OBJS	= $(COMMON_OBJS) $(OBJS) $(FUSE_OBJS)
 
-tuxdeps		= Makefile trace.h kernel/trace.h
-diskiodeps	= diskio.c diskio.h
-bufferdeps	= buffer.c buffer.h diskio.h err.h list.h
-utilitydeps	= $(bufferdeps) $(diskiodeps) utility.c
-basedeps	= $(tuxdeps) err.h list.h buffer.h diskio.h tux3.h \
-	kernel/tux3.h hexdump.c lockdebug.h
-ballocdeps	= kernel/balloc.c
-btreedeps	= balloc-dummy.c kernel/btree.c
-commitdeps	= $(inodedeps)
-dirdeps		= dir.c kernel/dir.c
-dleafdeps	= balloc-dummy.c kernel/dleaf.c
-filemapdeps	= $(dirdeps) kernel/log.c kernel/xattr.c kernel/dleaf.c \
-	kernel/btree.c kernel/iattr.c kernel/ileaf.c kernel/balloc.c \
-	filemap.c kernel/filemap.c kernel/commit.c
-iattrdeps	= btree-dummy.c kernel/iattr.c
-xattrcommondeps	= $(dirdeps) btree-dummy.c kernel/iattr.c \
-	kernel/xattr.c kernel/ileaf.c
-ileafdeps	= balloc-dummy.c $(xattrcommondeps)
-inodedeps	= $(filemapdeps) inode.c kernel/inode.c super.c
-superdeps	= $(inodedeps) super.c kernel/super.c
-writebackdeps	= writeback.c
-xattrdeps	= kernel/balloc.c $(xattrcommondeps)
+all: $(ALL_BIN)
 
-common-objs	= utility.o writeback.o
-
-all: $(binaries)
-tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
-	test_btree test_dir test_iattr test_xattr test_filemap test_inode
-
-bin: $(tux3bin) $(fusebin)
-testbin: $(testbin)
-
-# standalone and library
-buffer.o: $(tuxdeps) $(bufferdeps)
-diskio.o: $(tuxdeps) $(diskiodeps)
-utility.o: $(tuxdeps) $(utilitydeps)
-# standalone
-balloc.o: $(basedeps) $(ballocdeps)
-btree.o: $(basedeps) $(btreedeps)
-commit.o: $(basedeps) $(commitdeps)
-dir.o: $(basedeps) $(dirdeps)
-dleaf.o: $(basedeps) $(dleafdeps)
-filemap.o: $(basedeps) $(filemapdeps)
-iattr.o: $(basedeps) $(iattrdeps)
-ileaf.o: $(basedeps) $(ileafdeps)
-inode.o: $(basedeps) $(inodedeps)
-writeback.o: $(basedeps) $(writebackdeps)
-xattr.o:$(basedeps) $(xattrdeps)
-# programs
-tux3.o:$(basedeps) $(superdeps)
-tux3fuse.o:$(basedeps) $(superdeps)
-tux3graph.o:$(basedeps) $(superdeps)
-
+# objects dependency
 buffer: buffer.o diskio.o
-dleaf: $(common-objs) dleaf.o
-balloc: $(common-objs) balloc.o
-ileaf: $(common-objs) ileaf.o
-btree: $(common-objs) btree.o
-dir: $(common-objs) dir.o
-iattr: $(common-objs) iattr.o
-xattr: $(common-objs) xattr.o
-inode: $(common-objs) inode.o
-filemap: $(common-objs) filemap.o
-commit: $(common-objs) commit.o
-tux3: $(common-objs) tux3.o
-tux3graph: $(common-objs) tux3graph.o
+dleaf: $(COMMON_OBJS) dleaf.o
+balloc: $(COMMON_OBJS) balloc.o
+ileaf: $(COMMON_OBJS) ileaf.o
+btree: $(COMMON_OBJS) btree.o
+dir: $(COMMON_OBJS) dir.o
+iattr: $(COMMON_OBJS) iattr.o
+xattr: $(COMMON_OBJS) xattr.o
+inode: $(COMMON_OBJS) inode.o
+filemap: $(COMMON_OBJS) filemap.o
+commit: $(COMMON_OBJS) commit.o
+tux3: $(COMMON_OBJS) tux3.o
+tux3graph: $(COMMON_OBJS) tux3graph.o
 
-.c.o:
-	$(CC) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
+# dependency generation
+DEPDIR	  := .deps
+DEP_FILES := $(foreach f,$(ALL_OBJS),$(dir $f)$(DEPDIR)/$(notdir $f).d)
+DEP_DIRS  := $(addsuffix $(DEPDIR),$(sort $(dir $(ALL_OBJS))))
+MISSING_DEP_DIRS := $(filter-out $(wildcard $(DEP_DIRS)),$(DEP_DIRS))
+
+$(DEP_DIRS):
+	mkdir -p $@
+
+DEP_FILE = $(dir $@)$(DEPDIR)/$(notdir $@).d
+DEP_ARGS = -MF $(DEP_FILE) -MP -MMD
+# Take advantage of gcc's on-the-fly dependency generation
+# See <http://gcc.gnu.org/gcc-3.0/features.html>.
+DEP_FILES_PRESENT := $(wildcard $(DEP_FILES))
+-include $(DEP_FILES_PRESENT)
+
+# rules
+$(COMMON_OBJS) $(OBJS): %.o: %.c $(MISSING_DEP_DIRS)
+	$(CC) $(DEP_ARGS) $(CFLAGS) -Dbuild_$(<:.c=) -c -o $@ $<
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) -Dbuild_$(<:.c=) $(CHECKFLAGS) -c $<
 endif
 
-$(testbin) $(tux3bin):
+$(TEST_BIN) $(TUX3_BIN):
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+$(FUSE_BIN): $(COMMON_OBJS) $(MISSING_DEP_DIRS)
+	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) $(COMMON_OBJS) tux3fuse.c -lfuse -o tux3fuse
+ifeq ($(CHECK),1)
+	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
+endif
+
+clean:
+	rm -f $(ALL_BIN) *.o a.out foodev $(TESTDIR)/testdev
+	rm -f kernel/*.o
+
+distclean: clean
+	rm -f *.orig kernel/*.orig
+	rm -rf $(DEP_DIRS)
+
+install: install-bin install-test
+
+install-bin: $(TUX3_BIN) $(FUSE_BIN)
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(SBINDIR)
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(TUX3_BIN) $(FUSE_BIN) $(DISTDIR)$(SBINDIR)
+
+install-test: install-bin $(TEST_BIN)
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(LIBEXECDIR)
+	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(TEST_BIN) $(DISTDIR)$(LIBEXECDIR)
+
+# test rules
+#.NOTPARALLEL: tests
+# The "tests" run in order, otherwise those will output the result
+# mixed.  But make seems to disable all in this Makefile. (FIXME: we
+# should move tests to other directory to fix this, and keep clean
+# source directory)
+
+tests: test_buffer test_balloc test_commit test_dleaf test_ileaf \
+	test_btree test_dir test_iattr test_xattr test_filemap test_inode
 
 test_buffer: buffer
 	$(VG) ./buffer
@@ -146,12 +162,6 @@ test_inode: inode
 test_commit: commit
 	$(VG) ./commit foodev
 
-tux3fuse: $(common-objs) tux3fuse.o
-	$(CC) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) $(common-objs) tux3fuse.c -lfuse -o tux3fuse
-ifeq ($(CHECK),1)
-	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
-endif
-
 makefs mkfs: tux3
 	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M
 	./tux3 mkfs $(TESTDIR)/testdev
@@ -159,7 +169,7 @@ makefs mkfs: tux3
 	if [[ ! -f /etc/fuse.conf ]]; then sudo sh -c "echo user_allow_other >/etc/fuse.conf"; fi
 
 testfs testfuse: makefs
-	./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other 
+	./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other
 
 debug defuse: tux3fuse
 	sudo ./tux3fuse $(TESTDIR)/testdev $(TESTDIR)/test -o allow_other -f
@@ -170,20 +180,3 @@ untest:
 
 unbork:
 	sudo umount -l $(TESTDIR)/test
-
-clean:
-	rm -f $(binaries) *.o a.out foodev $(TESTDIR)/testdev
-	rm -f kernel/*.o
-
-distclean: clean
-	rm -f *.orig kernel/*.orig
-
-install: install-bin install-test
-
-install-bin:
-	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(SBINDIR)
-	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(tux3bin) $(fusebin) $(DISTDIR)$(SBINDIR)
-
-install-test: install-bin
-	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 -d $(DISTDIR)$(LIBEXECDIR)
-	$(INSTALL) -c -o $(OWNER) -g $(GROUP) -m 755 $(testbin) $(DISTDIR)$(LIBEXECDIR)
