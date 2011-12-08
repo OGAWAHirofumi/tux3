@@ -11,16 +11,6 @@
 #include "inode.c"
 #include <getopt.h>
 
-int fls(uint32_t v)
-{
-	uint32_t mask;
-	int bit = 0;
-	for (bit = 32, mask = 1 << 31; bit; mask >>= 1, bit--)
-		if ((v & mask))
-			break;
-	return bit;
-}
-
 static void usage(void)
 {
 	printf("tux3 [-s|--seek=<offset>] [-b|--blocksize=<size>] [-h|--help]\n"
@@ -35,7 +25,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
 	int blockbits = 12;
 	if (blocksize) {
-		blockbits = fls(blocksize) - 1;
+		blockbits = ffs(blocksize) - 1;
 		if (1 << blockbits != blocksize)
 			error("blocksize must be a power of two");
 	}
