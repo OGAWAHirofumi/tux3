@@ -168,7 +168,9 @@ int main(int argc, char *argv[])
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize),
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = { };
-	assert(!new_btree(&btree, sb, &ops));
+	init_btree(&btree, sb, (struct root){}, &ops);
+	int err = alloc_empty_btree(&btree);
+	assert(!err);
 
 	if (0) {
 		struct buffer_head *buffer = new_leaf(&btree);

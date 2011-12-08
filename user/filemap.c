@@ -223,7 +223,9 @@ int main(int argc, char *argv[])
 	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
 	init_buffers(dev, 1 << 20, 0);
 	struct inode *inode = rapid_open_inode(sb, filemap_extent_io, 0);
-	assert(!new_btree(&inode->btree, sb, &dtree_ops));
+	init_btree(&inode->btree, sb, (struct root){}, &dtree_ops);
+	int err = alloc_empty_btree(&inode->btree);
+	assert(!err);
 
 	block_t nextalloc = sb->nextalloc;
 	struct seg map[64];

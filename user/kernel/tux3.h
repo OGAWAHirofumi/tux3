@@ -755,7 +755,6 @@ void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_
 
 void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
 int alloc_empty_btree(struct btree *btree);
-int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops);
 int free_empty_btree(struct btree *btree);
 struct buffer_head *new_leaf(struct btree *btree);
 int probe(struct cursor *cursor, tuxkey_t key);

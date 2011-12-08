@@ -826,14 +826,6 @@ error:
 	return PTR_ERR(rootbuf);
 }
 
-/* userland only */
-int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
-{
-	/* Initialize btree with dummy root */
-	init_btree(btree, sb, (struct root){}, ops);
-	return alloc_empty_btree(btree);
-}
-
 /* FIXME: right? and this should be done by tree_chop()? */
 int free_empty_btree(struct btree *btree)
 {
