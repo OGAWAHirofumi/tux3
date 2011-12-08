@@ -41,7 +41,7 @@ void test_append(struct btree *btree, struct ileaf *leaf, inum_t inum, int more,
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
-	printf("attrs size = %i\n", size);
+	printf("attrs %p, attrs size = %i\n", attrs, size);
 	attrs = ileaf_resize(btree, inum, leaf, size + more);
 	memset(attrs + size, fill, more);
 }
@@ -50,7 +50,7 @@ void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, int less)
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
-	printf("attrs size = %i\n", size);
+	printf("attrs %p, attrs size = %i\n", attrs, size);
 	attrs = ileaf_resize(btree, inum, leaf, size - less);
 }
 

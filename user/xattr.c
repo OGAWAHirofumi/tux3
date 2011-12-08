@@ -66,16 +66,26 @@ int main(int argc, char *argv[])
 	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
 
 	warn("---- test inode xattr cache ----");
-	int err = 0;
+	int err;
 	err = xcache_update(inode, 0x666, "hello", 5, 0);
+	if (err)
+		printf("err %d\n", err);
 	err = xcache_update(inode, 0x777, "world!", 6, 0);
+	if (err)
+		printf("err %d\n", err);
 	xcache_dump(inode);
 	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, 0x777);
 	if (!IS_ERR(xattr))
 		printf("atom %x => %.*s\n", xattr->atom, xattr->size, xattr->body);
 	err = xcache_update(inode, 0x111, "class", 5, 0);
+	if (err)
+		printf("err %d\n", err);
 	err = xcache_update(inode, 0x666, NULL, 0, 0);
+	if (err)
+		printf("err %d\n", err);
 	err = xcache_update(inode, 0x222, "boooyah", 7, 0);
+	if (err)
+		printf("err %d\n", err);
 	xcache_dump(inode);
 
 	warn("---- test xattr inode table encode and decode ----");
