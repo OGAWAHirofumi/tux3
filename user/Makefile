@@ -3,6 +3,7 @@ TOPDIR = $(CURDIR)
 ARCH	= $(shell uname -m)
 
 CC	= gcc
+AR	= ar
 
 ifeq ($(ARCH),x86_64)
 CFLAGS	+= -m64
@@ -24,6 +25,7 @@ CFLAGS	+= -D_FORTIFY_SOURCE=2
 CFLAGS	+= $(UCFLAGS)
 
 LDFLAGS =
+AFLAGS	= rcs
 
 CHECKER	   = sparse
 CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
@@ -40,7 +42,7 @@ PREFIX	= /usr/local
 SBINDIR	= $(PREFIX)/sbin
 LIBEXECDIR = $(PREFIX)/libexec/tux3
 
-TUX3_BIN	= tux3 #tux3graph
+TUX3_BIN	= tux3 tux3graph
 ifeq ($(shell pkg-config fuse && echo found), found)
 	FUSE_BIN = tux3fuse
 endif
@@ -49,34 +51,35 @@ TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
 	tests/inode tests/xattr
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
-COMMON_OBJS	= utility.o writeback.o
-OBJS		= buffer.o diskio.o dir.o tux3.o tux3graph.o
+TUX3_LIB	= libtux3.a
+COMMON_OBJS	= dir.o filemap.o inode.o super.o utility.o writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
 	kernel/dleaf.o kernel/iattr.o kernel/ileaf.o kernel/log.o \
 	kernel/replay.o kernel/xattr.o
+
+OBJS		= tux3.o tux3graph.o
 FUSE_OBJS	= tux3fuse.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
 	tests/dleaf.o tests/filemap.o tests/iattr.o tests/ileaf.o tests/xattr.o
-ALL_OBJS	= $(COMMON_OBJS) $(OBJS) $(KERN_OBJS) $(FUSE_OBJS) $(TEST_OBJS)
+ALL_OBJS	= $(COMMON_OBJS) $(KERN_OBJS) $(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
 
 .PHONY: tests
 all: $(ALL_BIN)
 
 # objects dependency
-tux3: $(COMMON_OBJS) $(KERN_OBJS) dir.o filemap.o inode.o super.o tux3.o
-tux3graph: $(COMMON_OBJS) tux3graph.o
-tests/balloc: $(COMMON_OBJS) tests/balloc.o
-tests/btree: $(COMMON_OBJS) kernel/btree.o kernel/log.o tests/btree.o
-tests/buffer: buffer.o diskio.o tests/buffer.o
-tests/commit: $(COMMON_OBJS) $(KERN_OBJS) dir.o filemap.o inode.o super.o \
-	 tests/commit.o
-tests/dir: $(COMMON_OBJS) dir.o tests/dir.o
-tests/dleaf: $(COMMON_OBJS) tests/dleaf.o
-tests/filemap: $(COMMON_OBJS) $(KERN_OBJS) dir.o tests/filemap.o
-tests/iattr: $(COMMON_OBJS) tests/iattr.o
-tests/ileaf: $(COMMON_OBJS) kernel/iattr.o dir.o kernel/xattr.o tests/ileaf.o
-tests/inode: $(COMMON_OBJS) $(KERN_OBJS) dir.o filemap.o super.o tests/inode.o
-tests/xattr: $(COMMON_OBJS) dir.o kernel/balloc.o kernel/dleaf.o kernel/iattr.o kernel/log.o tests/xattr.o
+tux3: tux3.o $(TUX3_LIB)
+tux3graph: tux3graph.o $(TUX3_LIB)
+tests/balloc: tests/balloc.o $(TUX3_LIB)
+tests/btree: tests/btree.o $(TUX3_LIB)
+tests/buffer: tests/buffer.o $(TUX3_LIB)
+tests/commit: tests/commit.o $(TUX3_LIB)
+tests/dir: tests/dir.o $(TUX3_LIB)
+tests/dleaf: tests/dleaf.o $(TUX3_LIB)
+tests/filemap: tests/filemap.o $(TUX3_LIB)
+tests/iattr: tests/iattr.o $(TUX3_LIB)
+tests/ileaf: tests/ileaf.o $(TUX3_LIB)
+tests/inode: tests/inode.o $(TUX3_LIB)
+tests/xattr: tests/xattr.o $(TUX3_LIB)
 
 # dependency generation
 DEPDIR	  := .deps
@@ -108,18 +111,20 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) -include tux3user.h $(CHECKFLAGS) -c $<
 endif
 
+$(TUX3_LIB): $(COMMON_OBJS) $(KERN_OBJS)
+	rm -f $@ && $(AR) $(AFLAGS) $@ $^
 
 $(TEST_BIN) $(TUX3_BIN):
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-$(FUSE_BIN): $(COMMON_OBJS) $(KERN_OBJS) $(MISSING_DEP_DIRS)
-	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) $(COMMON_OBJS) $(KERN_OBJS) filemap.o dir.o inode.o tux3fuse.c -lfuse -o tux3fuse
+$(FUSE_BIN): $(TUX3_LIB) $(MISSING_DEP_DIRS)
+	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c -lfuse -o tux3fuse $(TUX3_LIB)
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
 
 clean:
-	rm -f $(ALL_BIN) *.o tests/*.o kernel/*.o
+	rm -f $(ALL_BIN) $(TUX3_LIB) *.o tests/*.o kernel/*.o
 	rm -f a.out tests/foodev foodev $(TESTDIR)/testdev
 
 distclean: clean
