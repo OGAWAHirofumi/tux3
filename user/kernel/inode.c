@@ -14,51 +14,7 @@
 #define trace trace_on
 #endif
 
-static int check_present(struct inode *inode)
-{
-	tuxnode_t *tuxnode = tux_inode(inode);
-
-	switch (inode->i_mode & S_IFMT) {
-	case S_IFSOCK:
-	case S_IFIFO:
-		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(!(tuxnode->present & RDEV_BIT));
-		break;
-	case S_IFBLK:
-	case S_IFCHR:
-		assert(tuxnode->present & MODE_OWNER_BIT);
-//		assert(tuxnode->present & RDEV_BIT);
-		break;
-	case S_IFREG:
-		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(tuxnode->present & DATA_BTREE_BIT);
-		assert(!(tuxnode->present & RDEV_BIT));
-		break;
-	case S_IFDIR:
-		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(tuxnode->present & DATA_BTREE_BIT);
-		assert(!(tuxnode->present & RDEV_BIT));
-		break;
-	case S_IFLNK:
-		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(tuxnode->present & DATA_BTREE_BIT);
-		assert(!(tuxnode->present & RDEV_BIT));
-		break;
-	case 0: /* internal inode */
-		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
-			assert(tuxnode->present == 0);
-		else {
-			assert(tuxnode->present & DATA_BTREE_BIT);
-			assert(!(tuxnode->present & RDEV_BIT));
-		}
-		break;
-	default:
-		error("Unknown mode: inum %Lx, mode %07o",
-		      (L)tuxnode->inum, inode->i_mode);
-		break;
-	}
-	return 0;
-}
+static void tux_setup_inode(struct inode *inode);
 
 static inline void tux_set_inum(struct inode *inode, inum_t inum)
 {
@@ -68,13 +24,23 @@ static inline void tux_set_inum(struct inode *inode, inum_t inum)
 	tux_inode(inode)->inum = inum;
 }
 
-static void tux_setup_inode(struct inode *inode);
+struct inode *tux_new_volmap(struct sb *sb)
+{
+	struct inode *inode = new_inode(vfs_sb(sb));
+	if (inode) {
+		inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
+		tux_set_inum(inode, TUX_VOLMAP_INO);
+		tux_setup_inode(inode);
+	}
+	return inode;
+}
 
 struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 			    dev_t rdev)
 {
-	struct inode *inode = new_inode(dir->i_sb);
+	struct inode *inode;
 
+	inode = new_inode(dir->i_sb);
 	if (!inode)
 		return NULL;
 	assert(!tux_inode(inode)->present);
@@ -102,78 +68,13 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 	tux_inode(inode)->present |= CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
 	tux_set_inum(inode, TUX_INVALID_INO);
 	tux_setup_inode(inode);
+
 	return inode;
 }
 
-struct inode *tux_new_volmap(struct sb *sb)
-{
-	struct inode *inode = new_inode(vfs_sb(sb));
-
-	if (!inode)
-		return NULL;
-	inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
-	tux_set_inum(inode, TUX_VOLMAP_INO);
-	tux_setup_inode(inode);
-	return inode;
-}
-
-static int open_inode(struct inode *inode)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	struct btree *itable = itable_btree(sb);
-	int err;
-	struct cursor *cursor = alloc_cursor(itable, 0);
-
-	if (!cursor)
-		return -ENOMEM;
-	down_read(&cursor->btree->lock);
-	if ((err = probe(cursor, tux_inode(inode)->inum)))
-		goto out;
-	unsigned size;
-	void *attrs = ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
-	if (!attrs) {
-		err = -ENOENT;
-		goto release;
-	}
-	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(itable, bufdata(cursor[depth].buffer));
-	//hexdump(attrs, size);
-	unsigned xsize = decode_xsize(inode, attrs, size);
-	err = -ENOMEM;
-	if (xsize && !(tux_inode(inode)->xcache = new_xcache(xsize)))
-		goto release;
-	decode_attrs(inode, attrs, size); // error???
-	if (tux3_trace)
-		dump_attrs(inode);
-	if (tux_inode(inode)->xcache)
-		xcache_dump(inode);
-	check_present(inode);
-	tux_setup_inode(inode);
-	err = 0;
-release:
-	release_cursor(cursor);
-out:
-	up_read(&cursor->btree->lock);
-	free_cursor(cursor);
-	return err;
-}
-
-static int store_attrs(struct inode *inode, struct cursor *cursor)
-{
-	unsigned size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
-	assert(size);
-	void *base = tree_expand(cursor, tux_inode(inode)->inum, size);
-
-	if (IS_ERR(base))
-		return PTR_ERR(base);
-	void *attr = encode_attrs(inode, base, size);
-	attr = encode_xattrs(inode, attr, base + size - attr);
-	assert(attr == base + size);
-	mark_buffer_dirty_non(cursor_leafbuf(cursor));
-	return 0;
-}
-
-/* Deferred ileaf update for inode number allocation */
+/*
+ * Deferred ileaf update for inode number allocation
+ */
 /* must hold itable->btree.lock */
 static int is_defer_alloc_inum(struct inode *inode)
 {
@@ -234,10 +135,12 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	int err = 0, depth = itable->root.depth;
-	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for now depth */
+	struct cursor *cursor;
 
+	cursor = alloc_cursor(itable, 1); /* +1 for now depth */
 	if (!cursor)
 		return -ENOMEM;
+
 	down_write(&cursor->btree->lock);
 retry:
 #ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
@@ -294,6 +197,116 @@ out:
 	up_write(&cursor->btree->lock);
 	free_cursor(cursor);
 	return err;
+}
+
+static int check_present(struct inode *inode)
+{
+	tuxnode_t *tuxnode = tux_inode(inode);
+
+	switch (inode->i_mode & S_IFMT) {
+	case S_IFSOCK:
+	case S_IFIFO:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(!(tuxnode->present & RDEV_BIT));
+		break;
+	case S_IFBLK:
+	case S_IFCHR:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+//		assert(tuxnode->present & RDEV_BIT);
+		break;
+	case S_IFREG:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		assert(!(tuxnode->present & RDEV_BIT));
+		break;
+	case S_IFDIR:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		assert(!(tuxnode->present & RDEV_BIT));
+		break;
+	case S_IFLNK:
+		assert(tuxnode->present & MODE_OWNER_BIT);
+		assert(tuxnode->present & DATA_BTREE_BIT);
+		assert(!(tuxnode->present & RDEV_BIT));
+		break;
+	case 0: /* internal inode */
+		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
+			assert(tuxnode->present == 0);
+		else {
+			assert(tuxnode->present & DATA_BTREE_BIT);
+			assert(!(tuxnode->present & RDEV_BIT));
+		}
+		break;
+	default:
+		error("Unknown mode: inum %Lx, mode %07o",
+		      (L)tuxnode->inum, inode->i_mode);
+		break;
+	}
+	return 0;
+}
+
+static int open_inode(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct btree *itable = itable_btree(sb);
+	int err;
+
+	struct cursor *cursor = alloc_cursor(itable, 0);
+	if (!cursor)
+		return -ENOMEM;
+
+	down_read(&cursor->btree->lock);
+	if ((err = probe(cursor, tux_inode(inode)->inum)))
+		goto out;
+	unsigned size;
+	void *attrs = ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
+	if (!attrs) {
+		err = -ENOENT;
+		goto release;
+	}
+	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
+	//ileaf_dump(itable, bufdata(cursor[depth].buffer));
+	//hexdump(attrs, size);
+	unsigned xsize = decode_xsize(inode, attrs, size);
+	err = -ENOMEM;
+	if (xsize && !(tux_inode(inode)->xcache = new_xcache(xsize)))
+		goto release;
+	decode_attrs(inode, attrs, size); // error???
+	if (tux3_trace)
+		dump_attrs(inode);
+	if (tux_inode(inode)->xcache)
+		xcache_dump(inode);
+	check_present(inode);
+	tux_setup_inode(inode);
+	err = 0;
+release:
+	release_cursor(cursor);
+out:
+	up_read(&cursor->btree->lock);
+	free_cursor(cursor);
+
+	return err;
+}
+
+static int store_attrs(struct inode *inode, struct cursor *cursor)
+{
+	unsigned size;
+	void *base;
+
+	size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
+	assert(size);
+
+	base = tree_expand(cursor, tux_inode(inode)->inum, size);
+	if (IS_ERR(base))
+		return PTR_ERR(base);
+
+	void *attr = encode_attrs(inode, base, size);
+	attr = encode_xattrs(inode, attr, base + size - attr);
+	assert(attr == base + size);
+
+	mark_buffer_dirty_non(cursor_leafbuf(cursor));
+
+	return 0;
 }
 
 static int save_inode(struct inode *inode)
@@ -601,10 +614,12 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 		.gid	= current_fsgid(),
 		.mode	= mode,
 	};
-	struct inode *inode = tux_new_inode(dir, &iattr, rdev);
+	struct inode *inode;
 
+	inode = tux_new_inode(dir, &iattr, rdev);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
+
 	int err = alloc_inum(inode, tux_sb(dir->i_sb)->nextalloc);
 	if (err) {
 		make_bad_inode(inode);
@@ -617,6 +632,7 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 	 * be called after insert_inode_hash().
 	 */
 	mark_inode_dirty(inode);
+
 	return inode;
 }
 
@@ -650,5 +666,4 @@ struct inode *tux3_iget(struct super_block *sb, inum_t inum)
 	unlock_new_inode(inode);
 	return inode;
 }
-
 #endif /* !__KERNEL__ */
