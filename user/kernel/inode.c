@@ -233,13 +233,18 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
-	int err = -ENOENT, depth = itable->root.depth;
+	int err = 0, depth = itable->root.depth;
 	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for now depth */
 
 	if (!cursor)
 		return -ENOMEM;
 	down_write(&cursor->btree->lock);
 retry:
+#ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
+	/* If this is not mkfs path, it should have itable root */
+	if (!has_root(itable))
+		goto skip_itable;
+#endif
 	if ((err = probe(cursor, goal)))
 		goto out;
 
@@ -264,6 +269,9 @@ retry:
 			goto release;
 		}
 	}
+#ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
+skip_itable:
+#endif
 	/* Is this inum already used by deferred inum allocation? */
 	if (find_defer_alloc_inum(sb, goal)) {
 		goal++;
@@ -293,10 +301,21 @@ static int save_inode(struct inode *inode)
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	inum_t inum = tux_inode(inode)->inum;
-	int err;
+	int err = 0;
 
 	assert(inum != TUX_INVALID_INO);
 	trace("save inode 0x%Lx", (L)inum);
+
+#ifndef __KERNEL__
+	/* FIXME: kill this, only mkfs path needs this */
+	/* FIXME: this should be merged to tree_expand()? */
+	down_write(&itable->lock);
+	if (!has_root(itable))
+		err = alloc_empty_btree(itable);
+	up_write(&itable->lock);
+	if (err)
+		return err;
+#endif
 
 	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for new depth */
 	if (!cursor)

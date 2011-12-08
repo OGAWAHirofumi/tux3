@@ -826,6 +826,7 @@ error:
 	return PTR_ERR(rootbuf);
 }
 
+/* userland only */
 int new_btree(struct btree *btree, struct sb *sb, struct btree_ops *ops)
 {
 	/* Initialize btree with dummy root */
