@@ -820,7 +820,6 @@ void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf);
 extern struct btree_ops itable_ops;
 
 /* inode.c */
-struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev);
 struct inode *tux_new_volmap(struct sb *sb);
 void tux3_delete_inode(struct inode *inode);
 void tux3_clear_inode(struct inode *inode);

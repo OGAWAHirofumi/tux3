@@ -35,8 +35,8 @@ struct inode *tux_new_volmap(struct sb *sb)
 	return inode;
 }
 
-struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
-			    dev_t rdev)
+static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
+				   dev_t rdev)
 {
 	struct inode *inode;
 
@@ -66,8 +66,9 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 		break;
 	}
 	tux_inode(inode)->present |= CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
+
+	/* Just for debug, will rewrite by alloc_inum() */
 	tux_set_inum(inode, TUX_INVALID_INO);
-	tux_setup_inode(inode);
 
 	return inode;
 }
@@ -132,6 +133,8 @@ static void del_defer_alloc_inum(struct inode *inode)
 
 static int alloc_inum(struct inode *inode, inum_t goal)
 {
+	static struct root dummy;
+
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	int err = 0, depth = itable->root.depth;
@@ -184,12 +187,16 @@ skip_itable:
 		goto retry;
 	}
 
-	tux_set_inum(inode, goal);
-	add_defer_alloc_inum(inode);
 	/* FIXME: should use conditional inode->present. But,
 	 * btree->lock is needed to initialize. */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
-		init_btree(&tux_inode(inode)->btree, sb, (struct root){}, &dtree_ops);
+		init_btree(&tux_inode(inode)->btree, sb, dummy, &dtree_ops);
+
+	/* Final initialization of inode */
+	tux_set_inum(inode, goal);
+	tux_setup_inode(inode);
+
+	add_defer_alloc_inum(inode);
 
 release:
 	release_cursor(cursor);
