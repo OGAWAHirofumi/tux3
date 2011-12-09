@@ -672,10 +672,12 @@ static inline struct ileaf *to_ileaf(vleaf *leaf)
 }
 
 /* Does this btree have root bnode/leaf? */
+extern struct root no_root;
 static inline int has_root(struct btree *btree)
 {
 	/* FIXME: should use conditional inode->present */
-	return btree->root.depth != 0;
+	return (btree->root.block != no_root.block) ||
+		(btree->root.depth != no_root.depth);
 }
 
 /* for tree_chop */

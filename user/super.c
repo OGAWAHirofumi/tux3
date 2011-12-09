@@ -45,7 +45,7 @@ int make_tux3(struct sb *sb)
 		return err;
 
 	trace("create inode table");
-	init_btree(itable_btree(sb), sb, (struct root){}, &itable_ops);
+	init_btree(itable_btree(sb), sb, no_root, &itable_ops);
 
 	trace("create bitmap");
 	sb->bitmap = __tux_create_inode(dir, TUX_BITMAP_INO, iattr, 0);

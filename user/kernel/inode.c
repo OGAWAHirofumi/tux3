@@ -144,8 +144,6 @@ static void del_defer_alloc_inum(struct inode *inode)
 
 static int alloc_inum(struct inode *inode, inum_t goal)
 {
-	static struct root dummy;
-
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	int err = 0, depth = itable->root.depth;
@@ -201,7 +199,7 @@ skip_itable:
 	/* FIXME: should use conditional inode->present. But,
 	 * btree->lock is needed to initialize. */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
-		init_btree(&tux_inode(inode)->btree, sb, dummy, &dtree_ops);
+		init_btree(&tux_inode(inode)->btree, sb, no_root, &dtree_ops);
 
 	/* Final initialization of inode */
 	tux_set_inum(inode, goal);

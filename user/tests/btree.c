@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize),
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = { };
-	init_btree(&btree, sb, (struct root){}, &ops);
+	init_btree(&btree, sb, no_root, &ops);
 	int err = alloc_empty_btree(&btree);
 	assert(!err);
 

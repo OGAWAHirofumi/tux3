@@ -15,11 +15,18 @@
 #define trace trace_off
 #endif
 
+/* This value is special case to tell btree doesn't have root yet. */
+struct root no_root = {
+	.block	= 0,
+	.depth	= 0,
+};
+
 struct bnode
 {
 	be_u32 count, unused;
 	struct index_entry { be_u64 key; be_u64 block; } __packed entries[];
 } __packed;
+
 /*
  * Note that the first key of an index block is never accessed.  This is
  * because for a btree, there is always one more key than nodes in each
