@@ -45,6 +45,11 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 	return buffer;
 }
+#else
+struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
+{
+	return buffer;
+}
 #endif /* defined(ATOMIC) || defined(BLOCKDIRTY) */
 
 /*

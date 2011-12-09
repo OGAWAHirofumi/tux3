@@ -14,11 +14,7 @@
 #define trace trace_on
 #endif
 
-#include "btree-dummy.c"
 #include "kernel/xattr.c"
-
-int change_begin(struct sb *sb) { return 0; }
-int change_end(struct sb *sb) { return 0; }
 
 int main(int argc, char *argv[])
 {

@@ -14,7 +14,6 @@
 #define trace trace_off
 #endif
 
-#include "btree-dummy.c"
 #include "kernel/iattr.c"
 
 int main(int argc, char *argv[])

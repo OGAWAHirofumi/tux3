@@ -14,12 +14,7 @@
 #define trace trace_off
 #endif
 
-#include "balloc-dummy.c"
-#include "btree-dummy.c"
 #include "kernel/ileaf.c"
-
-int change_begin(struct sb *sb) { return 0; }
-int change_end(struct sb *sb) { return 0; }
 
 struct ileaf *ileaf_create(struct btree *btree)
 {

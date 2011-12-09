@@ -1,22 +1,5 @@
 #include "tux3user.h"
 
-/* dummy for not including commit.c */
-struct buffer_head * __weak blockdirty(struct buffer_head *buffer, unsigned newdelta)
-{
-	return buffer;
-}
-
-/* dummy for not including inode.c */
-void __weak __iget(struct inode *inode)
-{
-}
-
-/* dummy for not including inode.c */
-void __weak iput(struct inode *inode)
-{
-	assert(0);
-}
-
 void clear_inode(struct inode *inode)
 {
 	int has_refcnt = !list_empty(&inode->list);
@@ -54,13 +37,6 @@ void mark_buffer_dirty(struct buffer_head *buffer)
 		set_buffer_dirty(buffer);
 		__mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
 	}
-}
-
-/* dummy for not including inode.c */
-int __weak write_inode(struct inode *inode)
-{
-	assert(0);
-	return 0;
 }
 
 int sync_inode(struct inode *inode)
@@ -132,18 +108,6 @@ static int sync_inodes(struct sb *sb)
 error:
 	list_splice_init(&dirty_inodes, &sb->dirty_inodes);
 	return err;
-}
-
-/* dummy for not including super.c */
-int __weak save_sb(struct sb *sb)
-{
-	assert(0);
-	return 0;
-}
-
-/* dummy for not including log.c */
-void __weak log_finish(struct sb *sb)
-{
 }
 
 static void cleanup_garbage_for_writeback(struct sb *sb)
