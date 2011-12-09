@@ -488,6 +488,7 @@ int tux3_write_inode(struct inode *inode, int do_sync)
 	       tux_inode(inode)->inum == TUX_LOGMAP_INO ||
 	       tux_inode(inode)->inum == TUX_INVALID_INO ||
 	       tux_inode(inode)->inum == TUX_ATABLE_INO);
+	/* this should not update the bitmap/vtable/atable except btree root */
 	return save_inode(inode);
 }
 
