@@ -421,7 +421,7 @@ static int tux_can_truncate(struct inode *inode)
 	return 0;
 }
 
-static void tux3_truncate(struct inode *inode)
+static void __tux3_truncate(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct delete_info del_info = {
@@ -434,12 +434,19 @@ static void tux3_truncate(struct inode *inode)
 	/* FIXME: must fix expand size */
 	WARN_ON(inode->i_size);
 	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
-	change_begin(sb);
 	err = tree_chop(&tux_inode(inode)->btree, &del_info, 0);
 	inode->i_blocks = ((inode->i_size + sb->blockmask)
 			   & ~(loff_t)sb->blockmask) >> 9;
 	inode->i_mtime = inode->i_ctime = gettime();
 	mark_inode_dirty(inode);
+}
+
+static void tux3_truncate(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	change_begin(sb);
+	__tux3_truncate(inode);
 	change_end(sb);
 }
 
@@ -456,7 +463,7 @@ void tux3_delete_inode(struct inode *inode)
 	}
 	inode->i_size = 0;
 	if (inode->i_blocks)
-		tux3_truncate(inode);
+		__tux3_truncate(inode);
 	/* FIXME: we have to free dtree-root, atable entry, etc too */
 	free_empty_btree(&tux_inode(inode)->btree);
 
