@@ -240,7 +240,7 @@ static void empty_stash(struct stash *stash)
 	if (!flink_empty(head)) {
 		struct page *page;
 		while (1) {
-			page = flink_next_entry(head, struct page, private);
+			page = __flink_next_entry(head, struct page, private);
 			if (flink_is_last(head))
 				break;
 			flink_del_next(head);
@@ -264,7 +264,7 @@ int unstash(struct sb *sb, struct stash *stash, unstash_t actor)
 		return 0;
 	while (1) {
 		int err;
-		page = flink_next_entry(head, struct page, private);
+		page = __flink_next_entry(head, struct page, private);
 		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
 		if (top == stash->top)
 			top = stash->pos;

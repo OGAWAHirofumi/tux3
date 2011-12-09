@@ -6,8 +6,7 @@
 struct link { struct link *next; };
 
 #define LINK_INIT_CIRCULAR(name)	{ &(name), }
-#define link_entry(ptr, type, member) \
-	container_of((typeof(((type *)0)->member) *)ptr, type, member)
+#define link_entry(ptr, type, member)	container_of(ptr, type, member)
 
 static inline void init_link_circular(struct link *head)
 {
@@ -37,6 +36,11 @@ struct flink_head { struct link *tail; };
 #define FLINK_HEAD_INIT(name)	{ NULL, }
 #define flink_next_entry(head, type, member) \
 	link_entry(flink_next(head), type, member)
+/* take care: this doesn't check member is `struct link *' or not */
+#define __flink_next_entry(head, type, member) ({			\
+	struct link *next = flink_next(head);	       			\
+	link_entry((typeof(((type *)0)->member) *)next, type, member);	\
+})
 
 static inline void init_flink_head(struct flink_head *head)
 {
