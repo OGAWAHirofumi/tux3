@@ -176,7 +176,7 @@ struct disksuper {
 	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
 	be_u64 logchain;	/* Most recent delta commit block pointer */
 	be_u32 logcount;	/* Count of log blocks in the current log chain */
-	be_u32 next_logcount;	/* sb->logcount for the next flush cycle */
+	be_u32 next_logcount;	/* sb->logcount for the next rollup cycle */
 } __packed;
 
 struct root {
@@ -238,7 +238,7 @@ struct sb {
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */
 	unsigned delta;		/* delta commit cycle */
-	unsigned flush;		/* log flush cycle */
+	unsigned rollup;	/* log rollup cycle */
 	struct rw_semaphore delta_lock; /* delta transition exclusive */
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
@@ -260,7 +260,7 @@ struct sb {
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 	struct stash defree;	/* defer extent frees until after commit */
-	struct stash deflush;	/* defer extent frees until after log flush */
+	struct stash derollup;	/* defer extent frees until after log rollup */
 	struct stash decycle;	/* defer extent frees until this new cycle */
 	struct stash new_decycle;/* defer extent frees until next new cycle */
 
@@ -297,7 +297,7 @@ struct logblock {
 enum {
 	LOG_BALLOC = 0x33,	/* Log of block allocation */
 	LOG_BFREE,		/* Log of freeing block */
-	LOG_BFREE_ON_FLUSH,	/* Log of freeing block after next cycle */
+	LOG_BFREE_ON_ROLLUP,	/* Log of freeing block after next cycle */
 	LOG_LEAF_REDIRECT,	/* Log of leaf redirect */
 	LOG_BNODE_REDIRECT,	/* Log of bnode redirect */
 	LOG_BNODE_ROOT,		/* Log of new bnode root allocation */
@@ -887,7 +887,7 @@ void log_drop(struct sb *sb);
 void log_finish(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
-void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count);
+void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count);
 void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock);
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,

@@ -135,28 +135,28 @@ static int new_cycle_log(struct sb *sb)
 /*
  * Flush a snapshot of the allocation map to disk.  Physical blocks for
  * the bitmaps and new or redirected bitmap btree nodes may be allocated
- * during the flush.  Any bitmap blocks that are (re)dirtied by these
- * allocations will be written out in the next flush cycle.
+ * during the rollup.  Any bitmap blocks that are (re)dirtied by these
+ * allocations will be written out in the next rollup cycle.
  */
-static int flush_log(struct sb *sb)
+static int rollup_log(struct sb *sb)
 {
 	/* further block allocations belong to the next cycle */
-	sb->flush++;
+	sb->rollup++;
 
 #ifndef __KERNEL__
 	/*
-	 * sb->flush was incremented, so block fork may occur from here,
+	 * sb->rollup was incremented, so block fork may occur from here,
 	 * so before block fork was occured, cleans map->dirty list.
 	 * [If we have two lists per map for dirty, we may not need this.]
 	 */
 	LIST_HEAD(io_buffers);
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
 
-	/* this is starting the new flush cycle of the log */
+	/* this is starting the new rollup cycle of the log */
 	new_cycle_log(sb);	/* FIXME: error handling */
 
 	/* move deferred frees for rollup to delta deferred free list */
-	unstash(sb, &sb->deflush, move_deferred);
+	unstash(sb, &sb->derollup, move_deferred);
 
 	/* bnode blocks */
 	flush_buffer_list(sb, &sb->pinned);
@@ -239,14 +239,14 @@ static int need_delta(struct sb *sb)
 	return !(++crudehack % 10);
 }
 
-static int need_flush(struct sb *sb)
+static int need_rollup(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 3);
 }
 
 /* must hold down_write(&sb->delta_lock) */
-static int do_commit(struct sb *sb, int can_flush)
+static int do_commit(struct sb *sb, int can_rollup)
 {
 	int err = 0;
 
@@ -254,8 +254,8 @@ static int do_commit(struct sb *sb, int can_flush)
 	/* further changes of frontend belong to the next delta */
 	sb->delta++;
 
-	if (can_flush && need_flush(sb)) {
-		err = flush_log(sb);
+	if (can_rollup && need_rollup(sb)) {
+		err = rollup_log(sb);
 		if (err)
 			return err;
 	}

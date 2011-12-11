@@ -124,7 +124,7 @@ static void cleanup_garbage_for_writeback(struct sb *sb)
 	invalidate_buffers(sb->logmap->map);
 
 	assert(flink_empty(&sb->defree.head));
-	assert(flink_empty(&sb->deflush.head));
+	assert(flink_empty(&sb->derollup.head));
 	assert(flink_empty(&sb->decycle.head));
 	assert(flink_empty(&sb->new_decycle.head));
 	assert(list_empty(&sb->pinned));

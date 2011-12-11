@@ -77,7 +77,7 @@ static struct buffer_head *new_node(struct btree *btree)
 
 	if (!IS_ERR(buffer)) {
 		memset(bufdata(buffer), 0, bufsize(buffer));
-		mark_buffer_flush_atomic(buffer);
+		mark_buffer_rollup_atomic(buffer);
 	}
 	return buffer;
 }
@@ -390,9 +390,9 @@ int cursor_redirect(struct cursor *cursor)
 		}
 
 		/* This is bnode buffer */
-		mark_buffer_flush_atomic(clone);
+		mark_buffer_rollup_atomic(clone);
 		log_bnode_redirect(sb, oldblock, newblock);
-		defer_bfree(&sb->deflush, oldblock, 1);
+		defer_bfree(&sb->derollup, oldblock, 1);
 
 		/* Update entry for the redirected child block */
 		trace("update parent");
@@ -649,7 +649,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			if (!keep)
 				at->next++;
 			log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
-			mark_buffer_flush_non(parentbuf);
+			mark_buffer_rollup_non(parentbuf);
 			return 0;
 		}
 
@@ -671,20 +671,20 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		int child_is_left = at->next <= parent->entries + half;
 		if (!child_is_left) {
 			struct index_entry *newnext;
-			mark_buffer_flush_non(parentbuf);
+			mark_buffer_rollup_non(parentbuf);
 			newnext = newnode->entries + (at->next - &parent->entries[half]);
 			get_bh(newbuf);
 			level_replace_blockput(cursor, depth, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else
-			mark_buffer_flush_non(newbuf);
+			mark_buffer_rollup_non(newbuf);
 
 		add_child(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
 		log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
-		mark_buffer_flush_non(parentbuf);
+		mark_buffer_rollup_non(parentbuf);
 
 		childkey = newkey;
 		childblock = bufindex(newbuf);
@@ -719,7 +719,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.block = newrootblock;
 	btree->root.depth++;
 
-	mark_buffer_flush_non(newbuf);
+	mark_buffer_rollup_non(newbuf);
 	mark_btree_dirty(btree);
 	cursor_check(cursor);
 

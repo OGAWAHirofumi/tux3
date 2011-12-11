@@ -158,7 +158,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned
 					goto final_partial_byte;
 				}
 				found -= run - 1;
-				buffer = blockdirty(buffer, sb->flush);
+				buffer = blockdirty(buffer, sb->rollup);
 				// FIXME: error check of buffer
 				set_bits(bufdata(buffer), found & mapmask, run);
 				mark_buffer_dirty_non(buffer);
@@ -213,7 +213,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
 		goto double_free;
-	buffer = blockdirty(buffer, sb->flush);
+	buffer = blockdirty(buffer, sb->rollup);
 	// FIXME: error check of buffer
 	clear_bits(bufdata(buffer), start, blocks);
 	mark_buffer_dirty_non(buffer);

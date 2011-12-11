@@ -23,7 +23,7 @@
  *    instead there is a reverse chain starting from sb->logchain.  Log blocks
  *    are read only at replay on mount and written only at delta transition.
  *
- *  - sb->logbase: Logical index of the oldest log block in flush cycle
+ *  - sb->logbase: Logical index of the oldest log block in rollup cycle
  *  - sb->logthis: Logical index of the oldest log block in delta cycle
  *  - sb->lognext: Logmap index of next log block
  *  - sb->logpos/logtop: Pointer/limit to write next log entry
@@ -39,14 +39,14 @@
  *
  *  - At delta commit, count of log blocks from logthis to lognext is recorded
  *    in superblock (later, metablock) which are the log blocks for the current
- *    flush cycle.
+ *    rollup cycle.
  *
- *  - On delta completion, if log was flushed in current delta then log blocks
- *    are freed for reuse.  Log blocks to be freed are recorded in sb->deflush,
+ *  - On delta completion, if log was rolluped in current delta then log blocks
+ *    are freed for reuse.  Log blocks to be freed are recorded in sb->derollup,
  *    which is appended to sb->defree, the per-delta deferred free list at log
  *    flush time.
  *
- *  - On replay, sb->logcount log blocks for current flush cycle are loaded in
+ *  - On replay, sb->logcount log blocks for current rollup cycle are loaded in
  *    reverse order into logmap, using the log block reverse chain pointers.
  *
  * Log block format
@@ -127,9 +127,9 @@ void log_bfree(struct sb *sb, block_t block, unsigned count)
 	log_extent(sb, LOG_BFREE, block, count);
 }
 
-void log_bfree_on_flush(struct sb *sb, block_t block, unsigned count)
+void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_BFREE_ON_FLUSH, block, count);
+	log_extent(sb, LOG_BFREE_ON_ROLLUP, block, count);
 }
 
 static void log_redirect(struct sb *sb, u8 intent, block_t newblock, block_t oldblock)

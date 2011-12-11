@@ -17,7 +17,7 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 static unsigned logsize[LOG_TYPES] = {
 	[LOG_BALLOC] = 8,
 	[LOG_BFREE] = 8,
-	[LOG_BFREE_ON_FLUSH] = 8,
+	[LOG_BFREE_ON_ROLLUP] = 8,
 	[LOG_LEAF_REDIRECT] = 13,
 	[LOG_BNODE_REDIRECT] = 13,
 	[LOG_BNODE_ROOT] = 26,
@@ -71,7 +71,7 @@ int replay(struct sb *sb)
 			}
 			case LOG_BALLOC:
 			case LOG_BFREE:
-			case LOG_BFREE_ON_FLUSH:
+			case LOG_BFREE_ON_ROLLUP:
 				data += logsize[code] - 1;
 				break;
 			case LOG_LEAF_REDIRECT:
@@ -94,7 +94,7 @@ int replay(struct sb *sb)
 			switch (code = *data++) {
 			case LOG_BALLOC:
 			case LOG_BFREE:
-			case LOG_BFREE_ON_FLUSH:
+			case LOG_BFREE_ON_ROLLUP:
 			{
 				u64 block;
 				unsigned count = *data++;

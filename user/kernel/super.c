@@ -88,7 +88,7 @@ static void tux3_put_super(struct super_block *sb)
 
 	destroy_defer_bfree(&sbi->new_decycle);
 	destroy_defer_bfree(&sbi->decycle);
-	destroy_defer_bfree(&sbi->deflush);
+	destroy_defer_bfree(&sbi->derollup);
 	destroy_defer_bfree(&sbi->defree);
 	iput(sbi->atable);
 	iput(sbi->bitmap);

@@ -88,8 +88,8 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	if (inode == sb->bitmap) {
-		log_bfree_on_flush(sb, block, count);
-		defer_bfree(&sb->deflush, block, count);
+		log_bfree_on_rollup(sb, block, count);
+		defer_bfree(&sb->derollup, block, count);
 	} else {
 		log_bfree(sb, block, count);
 		defer_bfree(&sb->defree, block, count);
@@ -677,7 +677,7 @@ int write_bitmap(struct buffer_head *buffer)
 	if (err < 0)
 		return err;
 	assert(err == 1);
-	assert(buffer->state - BUFFER_DIRTY == ((sb->flush - 1) & (BUFFER_DIRTY_STATES - 1)));
+	assert(buffer->state - BUFFER_DIRTY == ((sb->rollup - 1) & (BUFFER_DIRTY_STATES - 1)));
 	trace("write bitmap %Lx", (L)buffer->index);
 	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
 		clean_buffer(buffer);

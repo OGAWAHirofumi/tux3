@@ -5,7 +5,7 @@
  * FIXME: this is for debug and information until complete
  * atomic-commit. Remove this after atomic-commit
  *
- * FIXME: mark_buffer_flush() would be bad name
+ * FIXME: mark_buffer_rollup() would be bad name
  */
 
 /* mark buffer dirty if atomic-commit */
@@ -26,8 +26,8 @@ static inline void mark_buffer_dirty_non(struct buffer_head *buffer)
 #endif
 }
 
-/* mark buffer dirty for flush cycle on both style */
-static inline void mark_buffer_flush(struct buffer_head *buffer)
+/* mark buffer dirty for rollup cycle on both style */
+static inline void mark_buffer_rollup(struct buffer_head *buffer)
 {
 #ifdef ATOMIC
 	struct sb *sb = buffer_inode(buffer)->i_sb;
@@ -38,21 +38,21 @@ static inline void mark_buffer_flush(struct buffer_head *buffer)
 #endif
 }
 
-/* mark buffer dirty for flush cycle if atomic-commit style */
-static inline void mark_buffer_flush_atomic(struct buffer_head *buffer)
+/* mark buffer dirty for rollup cycle if atomic-commit style */
+static inline void mark_buffer_rollup_atomic(struct buffer_head *buffer)
 {
 #ifdef ATOMIC
-	mark_buffer_flush(buffer);
+	mark_buffer_rollup(buffer);
 #endif
 }
 
-/* mark buffer dirty for flush cycle if non atomic-commit style */
-static inline void mark_buffer_flush_non(struct buffer_head *buffer)
+/* mark buffer dirty for rollup cycle if non atomic-commit style */
+static inline void mark_buffer_rollup_non(struct buffer_head *buffer)
 {
 #ifdef ATOMIC
 	assert(buffer_dirty(buffer));
 #else
-	mark_buffer_flush(buffer);
+	mark_buffer_rollup(buffer);
 #endif
 }
 #endif /* !ATOMIC_COMMIT_H */

@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 		assert(!bfree(sb, redirect_block, 20));
 		/* free stash for valgrind */
 		destroy_defer_bfree(&sb->defree);
-		destroy_defer_bfree(&sb->deflush);
+		destroy_defer_bfree(&sb->derollup);
 		sb->nextalloc = nextalloc;
 	}
 
