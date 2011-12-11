@@ -7,6 +7,9 @@ VG	= valgrind --error-exitcode=200 --leak-check=full
 all: test_balloc test_btree test_buffer test_commit test_dir test_dleaf \
 	test_filemap test_iattr test_ileaf test_inode test_xattr
 
+clean:
+	rm -f foodev
+
 test_balloc: balloc
 	$(VG) ./balloc
 

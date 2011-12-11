@@ -125,7 +125,8 @@ endif
 
 clean:
 	rm -f $(ALL_BIN) $(TUX3_LIB) *.o tests/*.o kernel/*.o
-	rm -f a.out tests/foodev foodev $(TESTDIR)/testdev
+	rm -f a.out $(TESTDIR)/testdev
+	make -C tests clean
 
 distclean: clean
 	rm -f *.orig kernel/*.orig
