@@ -133,9 +133,10 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 
 	fprintf(gi->f,
 		"logchain_%llu [\n"
-		"label = \"{ <logchain_%llu> [log] (blocknr %llu)"
+		"label = \"{ <logchain_%llu> [log] (blocknr %llu%s)"
 		" | <f0> magic 0x%04x, bytes %u, logchain %llu",
 		(L)buffer->index, (L)buffer->index, (L)buffer->index,
+		buffer_dirty(buffer) ? ", dirty" : "",
 		from_be_u16(log->magic), from_be_u16(log->bytes),
 		(L)from_be_u64(log->logchain));
 
@@ -268,8 +269,10 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 
 	fprintf(gi->f,
 		"%s_bnode_%llu [\n"
-		"label = \"{ <bnode0> [bnode] (blocknr %llu) | count %u |",
-		gi->bname, (L)blocknr, (L)blocknr, bcount(bnode));
+		"label = \"{ <bnode0> [bnode] (blocknr %llu%s) | count %u |",
+		gi->bname, (L)blocknr, (L)blocknr,
+		buffer_dirty(buffer) ? ", dirty" : "",
+		bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
 		fprintf(gi->f,
 			" %c <f%u> key %llu, block %lld",
@@ -596,10 +599,11 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer
 		 gi->lname, (L)blocknr);
 	fprintf(gi->f,
 		"%s [\n"
-		"label = \"{ <%s0> [%s] (blocknr %llu)"
+		"label = \"{ <%s0> [%s] (blocknr %llu%s)"
 		" | magic 0x%04x, free %u, used %u, groups %u",
 		dleaf_name,
 		gi->lname, gi->lname, (L)blocknr,
+		buffer_dirty(buffer) ? ", dirty" : "",
 		from_be_u16(leaf->magic), from_be_u16(leaf->free), from_be_u16(leaf->used), dleaf_groups(leaf));
 
 	/* draw extents */
@@ -705,10 +709,11 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 		 gi->lname, (L)blocknr);
 	fprintf(gi->f,
 		"%s [\n"
-		"label = \"{ <%s0> [%s] (blocknr %llu)"
+		"label = \"{ <%s0> [%s] (blocknr %llu%s)"
 		" | magic 0x%04x, count %u, ibase %llu",
 		ileaf_name, gi->lname,
 		gi->lname, (L)blocknr,
+		buffer_dirty(buffer) ? ", dirty" : "",
 		ileaf->magic, icount(ileaf), (L)ibase(ileaf));
 
 	/* draw inode attributes */
