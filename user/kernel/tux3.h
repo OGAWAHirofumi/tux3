@@ -888,8 +888,8 @@ void log_finish(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count);
-void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock);
-void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock);
+void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock);
+void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 		    block_t left, block_t right, tuxkey_t rkey);
 void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest);

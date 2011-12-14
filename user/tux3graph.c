@@ -163,16 +163,16 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		}
 		case LOG_LEAF_REDIRECT:
 		case LOG_BNODE_REDIRECT: {
-			u64 new, old;
+			u64 old, new;
 			char *name;
-			data = decode48(data, &new);
 			data = decode48(data, &old);
+			data = decode48(data, &new);
 			if (code == LOG_LEAF_REDIRECT)
 				name = "LOG_LEAF_REDIRECT";
 			else
 				name = "LOG_BNODE_REDIRECT";
-			fprintf(gi->f, " | [%s] new %llu, old %llu ",
-				name, (L)new, (L)old);
+			fprintf(gi->f, " | [%s] old %llu, new %llu ",
+				name, (L)old, (L)new);
 			break;
 		}
 		case LOG_BNODE_ROOT: {

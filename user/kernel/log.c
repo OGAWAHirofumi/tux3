@@ -132,23 +132,23 @@ void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 	log_extent(sb, LOG_BFREE_ON_ROLLUP, block, count);
 }
 
-static void log_redirect(struct sb *sb, u8 intent, block_t newblock, block_t oldblock)
+static void log_redirect(struct sb *sb, u8 intent, block_t oldblock, block_t newblock)
 {
 	unsigned char *data = log_begin(sb, 13);
 
 	*data++ = intent;
-	data = encode48(data, newblock);
-	log_end(sb, encode48(data, oldblock));
+	data = encode48(data, oldblock);
+	log_end(sb, encode48(data, newblock));
 }
 
-void log_leaf_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
-	log_redirect(sb, LOG_LEAF_REDIRECT, newblock, oldblock);
+	log_redirect(sb, LOG_LEAF_REDIRECT, oldblock, newblock);
 }
 
-void log_bnode_redirect(struct sb *sb, block_t newblock, block_t oldblock)
+void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
-	log_redirect(sb, LOG_BNODE_REDIRECT, newblock, oldblock);
+	log_redirect(sb, LOG_BNODE_REDIRECT, oldblock, newblock);
 }
 
 /* The left key should always be 0 on new root */
