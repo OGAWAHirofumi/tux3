@@ -148,7 +148,15 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	return err;
 }
 
-/* temporary hack */
+/*
+ * FIXME: temporary hack.  The bitmap pages has possibility to
+ * blockfork. It means we can't get the page buffer with blockget(),
+ * because it gets cloned buffer for frontend. But, in here, we are
+ * interest older buffer to write out. So, for now, this is grabbing
+ * old buffer while blockfork.
+ *
+ * This is why we can't use filemap_extent_io() simply.
+ */
 int write_bitmap(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
