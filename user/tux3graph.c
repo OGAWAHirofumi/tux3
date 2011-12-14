@@ -224,7 +224,9 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 	fprintf(gi->f,
 		"}\"\n"
 		"shape = record\n"
-		"];\n");
+		"%s"
+		"];\n",
+		buffer_dirty(buffer) ? ", color = red\n" : "");
 }
 
 static void draw_logchain(struct graph_info *gi, struct sb *sb)
@@ -282,7 +284,9 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 	fprintf(gi->f,
 		" }}\"\n"
 		"shape = record\n"
-		"];\n");
+		"%s"
+		"];\n",
+		buffer_dirty(buffer) ? ", color = red\n" : "");
 
 	if (level == depth - 1) {
 		for (n = 0; n < bcount(bnode); n++) {
@@ -399,6 +403,8 @@ static void walk_dtree(struct graph_info *gi, struct btree *btree,
 	free_cursor(cursor);
 }
 
+static int bitmap_has_dirty;
+
 static void walk_dleaf_bitmap(struct graph_info *gi, struct btree *btree,
 			      struct dwalk *walk)
 {
@@ -428,6 +434,8 @@ static void walk_dleaf_bitmap(struct graph_info *gi, struct btree *btree,
 				break;
 		}
 
+		if (buffer_dirty(buffer))
+			bitmap_has_dirty = 1;
 		blockput(buffer);
 	}
 }
@@ -446,8 +454,10 @@ static void draw_bitmap(struct graph_info *gi, struct btree *btree)
 	fprintf(gi->f,
 		"}\"\n"
 		"shape = record\n"
+		"%s"
 		"];\n"
-		"}\n");
+		"}\n",
+		bitmap_has_dirty ? ", color = red\n" : "");
 }
 
 static void draw_vtable(struct graph_info *gi, struct btree *btree)
@@ -659,7 +669,9 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer
 	fprintf(gi->f,
 		" }\"\n"
 		"shape = record\n"
-		"];\n");
+		"%s"
+		"];\n",
+		buffer_dirty(buffer) ? ", color = red\n" : "");
 
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group_ptr(groups, gr);
@@ -756,7 +768,9 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 	fprintf(gi->f,
 		" }\"\n"
 		"shape = record\n"
-		"];\n");
+		"%s"
+		"];\n",
+		buffer_dirty(buffer) ? ", color = red\n" : "");
 
 	/* draw allows from offset to attributes */
 	for (at = 1; at < icount(ileaf); at++) {
