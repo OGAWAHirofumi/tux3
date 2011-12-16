@@ -226,7 +226,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		"shape = record\n"
 		"%s"
 		"];\n",
-		buffer_dirty(buffer) ? ", color = red\n" : "");
+		buffer_dirty(buffer) ? "color = red\n" : "");
 }
 
 static void draw_logchain(struct graph_info *gi, struct sb *sb)
@@ -286,7 +286,7 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 		"shape = record\n"
 		"%s"
 		"];\n",
-		buffer_dirty(buffer) ? ", color = red\n" : "");
+		buffer_dirty(buffer) ? "color = red\n" : "");
 
 	if (level == depth - 1) {
 		for (n = 0; n < bcount(bnode); n++) {
@@ -457,7 +457,7 @@ static void draw_bitmap(struct graph_info *gi, struct btree *btree)
 		"%s"
 		"];\n"
 		"}\n",
-		bitmap_has_dirty ? ", color = red\n" : "");
+		bitmap_has_dirty ? "color = red\n" : "");
 }
 
 static void draw_vtable(struct graph_info *gi, struct btree *btree)
@@ -671,7 +671,7 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer
 		"shape = record\n"
 		"%s"
 		"];\n",
-		buffer_dirty(buffer) ? ", color = red\n" : "");
+		buffer_dirty(buffer) ? "color = red\n" : "");
 
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group_ptr(groups, gr);
@@ -770,7 +770,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 		"shape = record\n"
 		"%s"
 		"];\n",
-		buffer_dirty(buffer) ? ", color = red\n" : "");
+		buffer_dirty(buffer) ? "color = red\n" : "");
 
 	/* draw allows from offset to attributes */
 	for (at = 1; at < icount(ileaf); at++) {
