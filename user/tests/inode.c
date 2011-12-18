@@ -1,5 +1,5 @@
 #include "tux3user.h"
-#include "diskio.h"
+#include "diskio.h"	/* for fdsize64() */
 
 #include "../inode.c"
 

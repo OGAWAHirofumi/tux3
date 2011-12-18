@@ -1,3 +1,6 @@
+#ifndef TUX3_ERR_H
+#define TUX3_ERR_H
+
 /* Ripped from Linux Kernel by D.Phillips, GPL v2 */
 
 #define MAX_ERRNO       4095
@@ -23,3 +26,4 @@ static inline void *ERR_CAST(const void *ptr)
 	return (void *)ptr;
 }
 
+#endif /* !TUX3_ERR_H */

@@ -1,7 +1,11 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
+#ifdef BUFFER_FOR_TUX3
+#include "utility.h"
+#else
 #include "diskio.h"
+#endif
 #include "buffer.h"
 #include "trace.h"
 #include "err.h"
@@ -454,14 +458,17 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 
 int dev_blockio(struct buffer_head *buffer, int write)
 {
-	trace_on("%s [%Lx]", write ? "write" : "read", (L)buffer->index);
 	struct dev *dev = buffer->map->dev;
 	assert(dev->bits >= 8 && dev->fd);
 	int err;
+#ifdef BUFFER_FOR_TUX3
+	err = blockio(write, buffer, buffer->index);
+#else
 	if (write)
 		err = diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
 	else
 		err = diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+#endif
 	if (!err)
 		set_buffer_clean(buffer);
 	return err;

@@ -1,4 +1,5 @@
 #include "../filemap.c"
+#include "diskio.h"	/* for fdsize64() */
 
 static void check_created_seg(struct seg *seg)
 {

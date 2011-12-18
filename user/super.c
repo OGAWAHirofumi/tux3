@@ -9,7 +9,6 @@
  */
 
 #include "tux3user.h"
-#include "diskio.h"
 
 #ifndef trace
 #define trace trace_on
@@ -25,7 +24,8 @@ static int clear_other_magic(struct sb *sb)
 		unsigned len = (loff_t[2]){ SB_LOC, sb->blocksize }[i];
 		char data[len];
 		memset(data, 0, len);
-		if ((err = diskwrite(sb->dev->fd, data, len, loc)))
+		err = devio(WRITE, sb->dev, loc, data, len);
+		if (err)
 			break;
 	}
 	return err;

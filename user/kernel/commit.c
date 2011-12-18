@@ -199,7 +199,8 @@ static int write_log(struct sb *sb)
 		struct logblock *log = bufdata(buffer);
 		assert(log->magic == to_be_u16(TUX3_MAGIC_LOG));
 		log->logchain = to_be_u64(sb->logchain);
-		if ((err = devio(WRITE, sb_dev(sb), block << sb->blockbits, bufdata(buffer), sb->blocksize))) {
+		err = blockio(WRITE, buffer, block);
+		if (err) {
 			blockput(buffer);
 			bfree(sb, block, 1);
 			return err;

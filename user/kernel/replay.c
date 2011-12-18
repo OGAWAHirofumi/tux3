@@ -8,12 +8,6 @@
 #define trace trace_on
 #endif
 
-int blockio(int rw, struct buffer_head *buffer, block_t block)
-{
-	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
-	return devio(rw, sb_dev(sb), block << sb->blockbits, bufdata(buffer), sb->blocksize);
-}
-
 static unsigned logsize[LOG_TYPES] = {
 	[LOG_BALLOC] = 8,
 	[LOG_BFREE] = 8,

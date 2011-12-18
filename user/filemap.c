@@ -1,16 +1,10 @@
 #include "tux3user.h"
-#include "diskio.h"
 
 #ifndef trace
 #define trace trace_on
 #endif
 
 #include "kernel/filemap.c"
-
-int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len)
-{
-	return ioabs(dev->fd, data, len, rw, offset);
-}
 
 #if defined(ATOMIC) || defined(BLOCKDIRTY)
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
@@ -134,12 +128,12 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 			buffer = blockget(mapping(inode), index + j);
 			trace_on("block 0x%Lx => %Lx", (L)bufindex(buffer), (L)block);
 			if (write) {
-				err = diskwrite(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
+				err = blockio(WRITE, buffer, block);
 			} else {
 				if (hole)
 					memset(bufdata(buffer), 0, sb->blocksize);
 				else
-					err = diskread(dev->fd, bufdata(buffer), sb->blocksize, block << dev->bits);
+					err = blockio(READ, buffer, block);
 			}
 			blockput(set_buffer_clean(buffer)); // leave empty if error ???
 		}
@@ -167,7 +161,8 @@ int write_bitmap(struct buffer_head *buffer)
 	assert(err == 1);
 	assert(buffer->state - BUFFER_DIRTY == ((sb->rollup - 1) & (BUFFER_DIRTY_STATES - 1)));
 	trace("write bitmap %Lx", (L)buffer->index);
-	if (!(err = diskwrite(sb->dev->fd, buffer->data, sb->blocksize, seg.block << sb->blockbits)))
+	err = blockio(WRITE, buffer, seg.block);
+	if (!err)
 		clean_buffer(buffer);
 	return 0;
 }

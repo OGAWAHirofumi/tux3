@@ -3,6 +3,8 @@
 
 #include "list.h"
 
+#define BUFFER_FOR_TUX3
+
 #define BUFFER_DIRTY_STATES 4
 
 enum {
@@ -21,7 +23,7 @@ struct buffer_head;
 typedef int (blockio_t)(struct buffer_head *buffer, int write);
 
 struct map {
-#if 1 /* tux3 only */
+#ifdef BUFFER_FOR_TUX3
 	struct inode *inode;
 #endif
 	struct list_head dirty;
