@@ -453,6 +453,10 @@ struct group { be_u32 count_and_keyhi; };
 struct entry { be_u32 limit_and_keylo; };
 struct dleaf { be_u16 magic, groups, free, used; struct diskextent table[]; };
 
+/* Maximum size of one extent on dleaf. */
+#define DLEAF_MAX_EXTENT_SIZE \
+	(sizeof(struct group)+sizeof(struct entry)+sizeof(struct diskextent))
+
 struct dwalk {
 	struct dleaf *leaf;
 	struct group *group, *gstop, *gdict;

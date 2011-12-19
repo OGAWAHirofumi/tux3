@@ -260,18 +260,20 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 	dwalk_chop(&headwalk);
 	index = start;
 	for (int i = -!!below; i < segs + !!above; i++) {
-		if (dleaf_free(btree, leaf) < 16) {
-			mark_buffer_dirty(cursor_leafbuf(cursor));
+		if (dleaf_free(btree, leaf) < DLEAF_MAX_EXTENT_SIZE) {
+			mark_buffer_dirty_non(cursor_leafbuf(cursor));
 			struct buffer_head *newbuf = new_leaf(btree);
 			if (IS_ERR(newbuf)) {
 				segs = PTR_ERR(newbuf);
 				goto out_create;
 			}
 			/*
-			 * ENOSPC on btree index split could leave the cache state
-			 * badly messed up.  Going to have to do this in two steps:
-			 * first, look at the cursor to see how many splits we need,
-			 * then make sure we have that, or give up before starting.
+			 * ENOSPC on btree index split could leave the
+			 * cache state badly messed up.  Going to have
+			 * to do this in two steps: first, look at the
+			 * cursor to see how many splits we need, then
+			 * make sure we have that, or give up before
+			 * starting.
 			 */
 			btree_insert_leaf(cursor, index, newbuf);
 			leaf = bufdata(cursor_leafbuf(cursor));
@@ -297,7 +299,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf))
 			dleaf_merge(btree, leaf, tail);
 		else {
-			mark_buffer_dirty(cursor_leafbuf(cursor));
+			mark_buffer_dirty_non(cursor_leafbuf(cursor));
 			assert(dleaf_groups(tail) >= 1);
 			/* Tail does not fit, add it as a new btree leaf */
 			struct buffer_head *newbuf = new_leaf(btree);
@@ -313,7 +315,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 			}
 		}
 	}
-	mark_buffer_dirty(cursor_leafbuf(cursor));
+	mark_buffer_dirty_non(cursor_leafbuf(cursor));
 out_create:
 	if (tail)
 		free(tail);
