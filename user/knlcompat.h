@@ -1,0 +1,147 @@
+#ifndef TUX3_KERNEL_COMPAT_H
+#define TUX3_KERNEL_COMPAT_H
+
+#include <stdint.h>
+#include "list.h"
+#include "err.h"
+#include "lockdebug.h"
+
+#ifdef __CHECKER__
+#define __force		__attribute__((force))
+#define __bitwise__	__attribute__((bitwise))
+#else
+#define __force
+#define __bitwise__
+#endif
+#ifdef __CHECK_ENDIAN__
+#define __bitwise __bitwise__
+#else
+#define __bitwise
+#endif
+
+#define __packed	__attribute__((packed))
+#define __weak		__attribute__((weak))
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+/*
+ * min()/max()/clamp() macros that also do
+ * strict type-checking.. See the
+ * "unnecessary" pointer comparison.
+ */
+#define min(x, y) ({				\
+	typeof(x) _min1 = (x);			\
+	typeof(y) _min2 = (y);			\
+	(void) (&_min1 == &_min2);		\
+	_min1 < _min2 ? _min1 : _min2; })
+
+#define max(x, y) ({				\
+	typeof(x) _max1 = (x);			\
+	typeof(y) _max2 = (y);			\
+	(void) (&_max1 == &_max2);		\
+	_max1 > _max2 ? _max1 : _max2; })
+
+/*
+ * ..and if you can't take the strict
+ * types, you can specify one yourself.
+ *
+ * Or not use min/max/clamp at all, of course.
+ */
+#define min_t(type, x, y) ({			\
+	type __min1 = (x);			\
+	type __min2 = (y);			\
+	__min1 < __min2 ? __min1: __min2; })
+
+#define max_t(type, x, y) ({			\
+	type __max1 = (x);			\
+	type __max2 = (y);			\
+	__max1 > __max2 ? __max1: __max2; })
+
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+/* Kernel page emulation for deferred free support */
+
+typedef unsigned __bitwise__ gfp_t;
+
+#define GFP_KERNEL	(__force gfp_t)0x10u
+#define GFP_NOFS	(__force gfp_t)0x20u
+
+struct page { void *address; unsigned long private; };
+
+#define PAGE_SIZE (1 << 6)
+
+static inline void *page_address(struct page *page)
+{
+	return page->address;
+}
+
+static inline struct page *alloc_pages(gfp_t gfp_mask, unsigned order)
+{
+	struct page *page = malloc(sizeof(*page));
+	void *data = malloc(PAGE_SIZE);
+	if (!page || !data)
+		goto error;
+	*page = (struct page){ .address = data };
+	return page;
+
+error:
+	if (page)
+		free(page);
+	if (data)
+		free(data);
+	return NULL;
+}
+#define alloc_page(gfp_mask) alloc_pages(gfp_mask, 0)
+
+static inline void __free_pages(struct page *page, unsigned order)
+{
+	free(page_address(page));
+	free(page);
+}
+#define __free_page(page) __free_pages((page), 0)
+
+enum { DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK };
+typedef int (filldir_t)(void *dirent, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type);
+
+enum rw { READ, WRITE };
+
+#define MINORBITS	20
+#define MINORMASK	((1U << MINORBITS) - 1)
+
+#define MAJOR(dev)	((unsigned int) ((dev) >> MINORBITS))
+#define MINOR(dev)	((unsigned int) ((dev) & MINORMASK))
+#define MKDEV(ma,mi)	(((ma) << MINORBITS) | (mi))
+
+static inline u32 new_encode_dev(dev_t dev)
+{
+	unsigned major = MAJOR(dev);
+	unsigned minor = MINOR(dev);
+	return (minor & 0xff) | (major << 8) | ((minor & ~0xff) << 12);
+}
+
+static inline dev_t new_decode_dev(u32 dev)
+{
+	unsigned major = (dev & 0xfff00) >> 8;
+	unsigned minor = (dev & 0xff) | ((dev >> 12) & 0xfff00);
+	return MKDEV(major, minor);
+}
+
+static inline int huge_valid_dev(dev_t dev)
+{
+	return 1;
+}
+
+static inline u64 huge_encode_dev(dev_t dev)
+{
+	return new_encode_dev(dev);
+}
+
+static inline dev_t huge_decode_dev(u64 dev)
+{
+	return new_decode_dev(dev);
+}
+
+#endif /* !TUX3_KERNEL_COMPAT_H */
