@@ -316,9 +316,10 @@ static void tux3_releasedir(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req, 0); /* Success */
 }
 
-struct fillstate { char *dirent; int done; unsigned inode; unsigned type; };
+struct fillstate { char *dirent; int done; u64 ino; unsigned type; };
 
-int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigned inode, unsigned type)
+int tux3_filler(void *info, const char *name, int namelen, loff_t offset,
+		u64 ino, unsigned type)
 {
 	struct fillstate *state = info;
 	if (state->done || namelen > TUX_NAME_LEN)
@@ -326,7 +327,7 @@ int tux3_filler(void *info, char *name, unsigned namelen, loff_t offset, unsigne
 	printf("'%.*s'\n", namelen, name);
 	memcpy(state->dirent, name, namelen);
 	state->dirent[namelen] = 0;
-	state->inode = inode;
+	state->ino = ino;
 	state->type = type;
 	state->done = 1;
 	return 0;
@@ -354,7 +355,7 @@ static void tux3_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offs
 			return;
 		}
 		struct stat stbuf = {
-			.st_ino = fstate.inode,
+			.st_ino = fstate.ino,
 			.st_mode = fstate.type,
 		};
 		size_t len = fuse_add_direntry(req, buf, size, dirent, &stbuf, dirfile->f_pos);
