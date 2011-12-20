@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
 	if (argc < 2)
 		error("usage: %s <volname>", argv[0]);
 	char *name = argv[1];
-	int fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRWXU);
+	int fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
 	assert(!ftruncate(fd, 1 << 24));
 	u64 size = 0;
 	if (fdsize64(fd, &size))

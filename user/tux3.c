@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 	/* open volume, create superblock */
 	const char *command = argv[optind++];
 	const char *volname = argv[optind++];
-	int fd = open(volname, O_RDWR, S_IRWXU);
+	int fd = open(volname, O_RDWR);
 	if (fd < 0)
 		goto eek;
 

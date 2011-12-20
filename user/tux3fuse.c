@@ -386,7 +386,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 {
 	const char *volname = data;
 	int fd;
-	if ((fd = open(volname, O_RDWR, S_IRWXU)) < 0)
+	if ((fd = open(volname, O_RDWR)) < 0)
 		error("volume %s not found", volname);
 
 	dev = malloc(sizeof(*dev));

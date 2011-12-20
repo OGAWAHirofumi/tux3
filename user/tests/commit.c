@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 		error("usage: %s <volname>", argv[0]);
 	int fd;
 
-	assert(fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRWXU));
+	assert(fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR));
 	u64 volsize = 1 << 24;
 	assert(!ftruncate(fd, volsize));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
