@@ -14,7 +14,7 @@
 #define trace trace_on
 #endif
 
-struct inode *new_inode(struct sb *sb)
+static struct inode *new_inode(struct sb *sb)
 {
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
