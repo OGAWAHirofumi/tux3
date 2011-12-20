@@ -1,5 +1,6 @@
 /* Copyright (c) 2008 Daniel Phillips <phillips@phunq.net>, GPL v2 */
 
+#ifdef __KERNEL__
 #include <linux/kernel.h>
 #include <linux/bio.h>
 
@@ -48,9 +49,15 @@ int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned 
 		.bv_len = len });
 }
 
+void hexdump(void *data, unsigned size)
+{
+	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_ADDRESS, 16, 1, data, size, 1);
+}
+#endif /* !__KERNEL__ */
+
 /* Bitmap operations... try to use linux/lib/bitmap.c */
 
-void set_bits(uint8_t *bitmap, unsigned start, unsigned count)
+void set_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -67,7 +74,7 @@ void set_bits(uint8_t *bitmap, unsigned start, unsigned count)
 		bitmap[roff] |= rmask;
 }
 
-void clear_bits(uint8_t *bitmap, unsigned start, unsigned count)
+void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
@@ -84,11 +91,11 @@ void clear_bits(uint8_t *bitmap, unsigned start, unsigned count)
 		bitmap[roff] &= ~rmask;
 }
 
-int all_set(uint8_t *bitmap, unsigned start, unsigned count)
+int all_set(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
-	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
-	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
+	unsigned lmask = (-1 << (start & 7)) & 0xff;	/* little endian!!! */
+	unsigned rmask = ~(-1 << (limit & 7)) & 0xff;	/* little endian!!! */
 	unsigned loff = start >> 3, roff = limit >> 3;
 
 	if (loff == roff) {
@@ -102,11 +109,11 @@ int all_set(uint8_t *bitmap, unsigned start, unsigned count)
 		(!rmask || (bitmap[roff] & rmask) == rmask);
 }
 
-int all_clear(uint8_t *bitmap, unsigned start, unsigned count) // untested
+int all_clear(u8 *bitmap, unsigned start, unsigned count)
 {
 	unsigned limit = start + count;
-	unsigned lmask = (-1 << (start & 7)) & 0xff; // little endian!!!
-	unsigned rmask = ~(-1 << (limit & 7)) & 0xff; // little endian!!!
+	unsigned lmask = (-1 << (start & 7)) & 0xff;	/* little endian!!! */
+	unsigned rmask = ~(-1 << (limit & 7)) & 0xff;	/* little endian!!! */
 	unsigned loff = start >> 3, roff = limit >> 3;
 
 	if (loff == roff) {
@@ -120,12 +127,11 @@ int all_clear(uint8_t *bitmap, unsigned start, unsigned count) // untested
 		(!rmask || !(bitmap[roff] & rmask));
 }
 
-int bytebits(uint8_t c)
+int bytebits(u8 c)
 {
-	return hweight8(c);
-}
+	unsigned count = 0;
 
-void hexdump(void *data, unsigned size)
-{
-	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_ADDRESS, 16, 1, data, size, 1);
+	for (; c; c >>= 1)
+		count += c & 1;
+	return count;
 }

@@ -286,13 +286,8 @@ static inline dev_t huge_decode_dev(u64 dev)
 void tux_dump_entries(struct buffer_head *buffer);
 
 /* filemap.c */
-int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
 int filemap_extent_io(struct buffer_head *buffer, int write);
 int write_bitmap(struct buffer_head *buffer);
-
-/* hexdump.c */
-void stacktrace(void);
-void hexdump(void *data, unsigned size);
 
 /* inode.c */
 void iput(struct inode *inode);
@@ -309,6 +304,11 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 int tux_delete_inode(struct inode *inode);
 int tuxunlink(struct inode *dir, const char *name, int len);
 int write_inode(struct inode *inode);
+
+/* utility.c */
+void stacktrace(void);
+int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
+int blockio(int rw, struct buffer_head *buffer, block_t block);
 
 /* super.c */
 int make_tux3(struct sb *sb);

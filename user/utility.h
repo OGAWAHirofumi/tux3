@@ -1,5 +1,5 @@
-#ifndef UTILITY_H
-#define UTILITY_H
+#ifndef TUX3_UTILITY_H
+#define TUX3_UTILITY_H
 
 #include <limits.h>
 
@@ -46,11 +46,9 @@ static __always_inline unsigned long __ffs(unsigned long word)
 	return num;
 }
 
-int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
-int blockio(int rw, struct buffer_head *buffer, block_t block);
 unsigned long find_next_bit(const unsigned long *addr, unsigned long size,
 			    unsigned long offset);
 unsigned long find_next_zero_bit(const unsigned long *addr, unsigned long size,
 				 unsigned long offset);
 
-#endif /* !UTILITY_H */
+#endif /* !TUX3_UTILITY_H */

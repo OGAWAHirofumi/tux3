@@ -276,14 +276,6 @@ struct sb {
 #endif
 };
 
-/* Bitmap range operations */
-
-void set_bits(uint8_t *bitmap, unsigned start, unsigned count);
-void clear_bits(uint8_t *bitmap, unsigned start, unsigned count);
-int all_set(uint8_t *bitmap, unsigned start, unsigned count);
-int all_clear(uint8_t *bitmap, unsigned start, unsigned count);
-int bytebits(uint8_t c);
-
 /* logging  */
 
 struct logblock {
@@ -773,7 +765,6 @@ int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs,
 	   struct bio_vec *vec);
 int devio(int rw, struct block_device *dev, loff_t offset, void *data,
 	  unsigned len);
-void hexdump(void *data, unsigned size);
 
 /* temporary hack for buffer */
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
@@ -910,6 +901,14 @@ void destroy_defer_bfree(struct stash *defree);
 
 /* replay.c */
 int replay(struct sb *sb);
+
+/* utility.c */
+void hexdump(void *data, unsigned size);
+void set_bits(u8 *bitmap, unsigned start, unsigned count);
+void clear_bits(u8 *bitmap, unsigned start, unsigned count);
+int all_set(u8 *bitmap, unsigned start, unsigned count);
+int all_clear(u8 *bitmap, unsigned start, unsigned count);
+int bytebits(u8 c);
 
 /* xattr.c */
 int xcache_dump(struct inode *inode);
