@@ -30,28 +30,28 @@ static void uleaf_btree_init(struct btree *btree)
 	btree->entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct entry);
 }
 
-int uleaf_sniff(struct btree *btree, vleaf *leaf)
+static int uleaf_sniff(struct btree *btree, vleaf *leaf)
 {
 	return to_uleaf(leaf)->magic == 0xc0de;
 }
 
-int uleaf_init(struct btree *btree, vleaf *leaf)
+static int uleaf_init(struct btree *btree, vleaf *leaf)
 {
 	*to_uleaf(leaf) = (struct uleaf){ .magic = 0xc0de };
 	return 0;
 }
 
-unsigned uleaf_need(struct btree *btree, vleaf *leaf)
+static unsigned uleaf_need(struct btree *btree, vleaf *leaf)
 {
 	return to_uleaf(leaf)->count;
 }
 
-unsigned uleaf_free(struct btree *btree, vleaf *leaf)
+static unsigned uleaf_free(struct btree *btree, vleaf *leaf)
 {
 	return btree->entries_per_leaf - to_uleaf(leaf)->count;
 }
 
-void uleaf_dump(struct btree *btree, vleaf *data)
+static void uleaf_dump(struct btree *btree, vleaf *data)
 {
 	struct uleaf *leaf = data;
 	printf("leaf %p/%i", leaf, leaf->count);
@@ -61,7 +61,7 @@ void uleaf_dump(struct btree *btree, vleaf *data)
 	printf(" (%x free)\n", uleaf_free(btree, leaf));
 }
 
-tuxkey_t uleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
+static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
 {
 	assert(uleaf_sniff(btree, from));
 	struct uleaf *leaf = from;
@@ -76,7 +76,7 @@ tuxkey_t uleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into
 	return tail ? to_uleaf(into)->entries[0].key : key;
 }
 
-unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)
+static unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)
 {
 	unsigned at = 0;
 	while (at < leaf->count && leaf->entries[at].key < key)
@@ -84,7 +84,7 @@ unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)
 	return at;
 }
 
-int uleaf_chop(struct btree *btree, tuxkey_t key, vleaf *vleaf)
+static int uleaf_chop(struct btree *btree, tuxkey_t key, vleaf *vleaf)
 {
 	struct uleaf *leaf = vleaf;
 	unsigned at = uleaf_seek(btree, key, leaf);
@@ -92,7 +92,7 @@ int uleaf_chop(struct btree *btree, tuxkey_t key, vleaf *vleaf)
 	return 1;
 }
 
-void *uleaf_resize(struct btree *btree, tuxkey_t key, vleaf *data, unsigned one)
+static void *uleaf_resize(struct btree *btree, tuxkey_t key, vleaf *data, unsigned one)
 {
 	assert(uleaf_sniff(btree, data));
 	struct uleaf *leaf = data;
@@ -107,11 +107,11 @@ out:
 	return leaf->entries + at;
 }
 
-void uleaf_merge(struct btree *btree, vleaf *into, vleaf *from)
+static void uleaf_merge(struct btree *btree, vleaf *into, vleaf *from)
 {
 }
 
-struct btree_ops ops = {
+static struct btree_ops ops = {
 	.btree_init = uleaf_btree_init,
 	.leaf_sniff = uleaf_sniff,
 	.leaf_init = uleaf_init,
@@ -126,7 +126,7 @@ struct btree_ops ops = {
 	.bfree = bfree,
 };
 
-int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)
+static int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)
 {
 	printf("insert 0x%x -> 0x%x\n", key, val);
 	struct uentry *entry = uleaf_resize(btree, key, leaf, 1);

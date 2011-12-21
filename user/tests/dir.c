@@ -7,7 +7,7 @@ tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct
 int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);
 int tux_readdir(struct file *file, void *state, filldir_t filldir);
 
-int filldir(void *entry, const char *name, int namelen, loff_t offset, u64 inum, unsigned type)
+static int filldir(void *entry, const char *name, int namelen, loff_t offset, u64 inum, unsigned type)
 {
 	printf("\"%.*s\"\n", namelen, name);
 	return 0;

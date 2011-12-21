@@ -20,7 +20,7 @@
 #define MAX_GROUP_ENTRIES 7
 #include "kernel/dleaf.c"
 
-struct dleaf *dleaf_create(struct btree *btree)
+static struct dleaf *dleaf_create(struct btree *btree)
 {
 	struct dleaf *leaf = malloc(btree->sb->blocksize);
 	if (leaf)
@@ -28,13 +28,13 @@ struct dleaf *dleaf_create(struct btree *btree)
 	return leaf;
 }
 
-void dleaf_destroy(struct btree *btree, struct dleaf *leaf)
+static void dleaf_destroy(struct btree *btree, struct dleaf *leaf)
 {
 	assert(dleaf_sniff(btree, leaf));
 	free(leaf);
 }
 
-void *dleaf_lookup(struct btree *btree, struct dleaf *leaf, tuxkey_t index, unsigned *count)
+static void *dleaf_lookup(struct btree *btree, struct dleaf *leaf, tuxkey_t index, unsigned *count)
 {
 	struct group *groups = (void *)leaf + btree->sb->blocksize, *grbase = groups - dleaf_groups(leaf);
 	struct entry *entries = (void *)grbase;

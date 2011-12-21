@@ -318,7 +318,7 @@ static void tux3_releasedir(fuse_req_t req, fuse_ino_t ino,
 
 struct fillstate { char *dirent; int done; u64 ino; unsigned type; };
 
-int tux3_filler(void *info, const char *name, int namelen, loff_t offset,
+static int tux3_filler(void *info, const char *name, int namelen, loff_t offset,
 		u64 ino, unsigned type)
 {
 	struct fillstate *state = info;

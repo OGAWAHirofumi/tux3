@@ -16,20 +16,20 @@
 
 #include "kernel/ileaf.c"
 
-struct ileaf *ileaf_create(struct btree *btree)
+static struct ileaf *ileaf_create(struct btree *btree)
 {
 	struct ileaf *leaf = malloc(btree->sb->blocksize);
 	ileaf_init(btree, leaf);
 	return leaf;
 }
 
-void ileaf_destroy(struct btree *btree, struct ileaf *leaf)
+static void ileaf_destroy(struct btree *btree, struct ileaf *leaf)
 {
 	assert(ileaf_sniff(btree, leaf));
 	free(leaf);
 }
 
-void test_append(struct btree *btree, struct ileaf *leaf, inum_t inum, int more, char fill)
+static void test_append(struct btree *btree, struct ileaf *leaf, inum_t inum, int more, char fill)
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
@@ -38,7 +38,7 @@ void test_append(struct btree *btree, struct ileaf *leaf, inum_t inum, int more,
 	memset(attrs + size, fill, more);
 }
 
-void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, int less)
+static void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, int less)
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);

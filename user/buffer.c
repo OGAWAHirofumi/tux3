@@ -36,7 +36,7 @@
 #define BUFFER_PARANOIA_DEBUG
 typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
 
-struct list_head buffers[BUFFER_STATES], lru_buffers;
+static struct list_head buffers[BUFFER_STATES], lru_buffers;
 static unsigned max_buffers = 10000, max_evict = 1000, buffer_count;
 
 void show_buffer(struct buffer_head *buffer)
@@ -404,10 +404,11 @@ static void destroy_buffers(void)
 }
 #endif
 
-struct buffer_head *prealloc_heads;
+#ifndef BUFFER_PARANOIA_DEBUG
+static struct buffer_head *prealloc_heads;
 static unsigned char *data_pool;
 
-int preallocate_buffers(unsigned bufsize)
+static int preallocate_buffers(unsigned bufsize)
 {
 	int i, err = -ENOMEM; /* if malloc fails */
 
@@ -439,6 +440,7 @@ buffers_allocation_failure:
 	warn("Unable to pre-allocate buffers. Using on demand allocation for buffers");
 	return err;
 }
+#endif /* !BUFFER_PARANOIA_DEBUG */
 
 void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 {

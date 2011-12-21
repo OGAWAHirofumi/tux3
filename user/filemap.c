@@ -58,7 +58,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
  *
  * For both, stop when extent is "big enough", whatever that means.
  */
-void guess_region(struct buffer_head *buffer, block_t *start, unsigned *count, int write)
+static void guess_region(struct buffer_head *buffer, block_t *start, unsigned *count, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
 	block_t ends[2] = { bufindex(buffer), bufindex(buffer) };
