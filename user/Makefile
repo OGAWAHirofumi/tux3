@@ -28,8 +28,10 @@ LDFLAGS =
 AFLAGS	= rcs
 
 CHECKER	   = sparse
-CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__ -Wbitwise -Wno-transparent-union
-CHECKFLAGS += -Wno-decl -Wno-declaration-after-statement
+CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__
+CHECKFLAGS += -Wsparse-all -Wno-transparent-union
+CHECKFLAGS += -Wno-declaration-after-statement
+CHECKFLAGS += -Wno-decl
 
 INSTALL	= install
 
