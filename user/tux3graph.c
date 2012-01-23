@@ -343,10 +343,13 @@ eek:
 	return -EIO;
 }
 
-static void draw_tree(struct graph_info *gi, struct btree *btree, draw_leaf_t draw_leaf)
+static void draw_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t draw_leaf)
 {
 	struct cursor *cursor;
 	struct buffer_head *buffer;
+
+	if (!has_root(btree))
+		return;
 
 	snprintf(gi->subgraph, sizeof(gi->subgraph), "cluster_%s", gi->bname);
 	fprintf(gi->f,
@@ -848,7 +851,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			.lname = "dleaf",
 			.link_head = LIST_HEAD_INIT(ginfo_dtree.link_head),
 		};
-		draw_tree(&ginfo_dtree, &inode->btree, draw_dleaf);
+		draw_btree(&ginfo_dtree, &inode->btree, draw_dleaf);
 		/* draw at least one dleaf */
 		drawn &= ~DRAWN_DLEAF;
 
@@ -990,7 +993,7 @@ int main(int argc, char *argv[])
 	};
 	draw_sb(&ginfo, sb);
 	draw_logchain(&ginfo, sb);
-	draw_tree(&ginfo, itable_btree(sb), draw_ileaf);
+	draw_btree(&ginfo, itable_btree(sb), draw_ileaf);
 	merge_tmpfiles(&ginfo);
 
 	fprintf(ginfo.f, "}\n");
