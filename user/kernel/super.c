@@ -182,7 +182,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sbi->volmap = tux_new_volmap(tux_sb(sb));
 	if (!sbi->volmap)
 		goto error;
-	insert_inode_hash(sbi->volmap);
 
 	sbi->logmap = tux_new_logmap(tux_sb(sb));
 	if (!sbi->logmap)

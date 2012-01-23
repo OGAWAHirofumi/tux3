@@ -379,6 +379,7 @@ typedef struct inode {
 	struct mutex i_mutex;
 	dev_t i_rdev;
 	atomic_t i_count;
+	struct hlist_node i_hash;
 	struct list_head list;	/* link for dirty inodes */
 	unsigned state;
 } tuxnode_t;

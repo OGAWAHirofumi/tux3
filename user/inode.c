@@ -14,12 +14,39 @@
 #define trace trace_on
 #endif
 
+#define HASH_SHIFT	10
+#define HASH_SIZE	(1 << 10)
+#define HASH_MASK	(HASH_SIZE - 1)
+
+static struct hlist_head inode_hashtable[HASH_SIZE] = {
+	[0 ... (HASH_SIZE - 1)] = HLIST_HEAD_INIT,
+};
+
+static unsigned long hash(inum_t inum)
+{
+	u64 hash = inum * GOLDEN_RATIO_PRIME;
+	return hash >> (64 - HASH_SHIFT);
+}
+
+static void insert_inode_hash(struct inode *inode)
+{
+	struct hlist_head *b = inode_hashtable + hash(inode->inum);
+	hlist_add_head(&inode->i_hash, b);
+}
+
+static void remove_inode_hash(struct inode *inode)
+{
+	if (!hlist_unhashed(&inode->i_hash))
+		hlist_del_init(&inode->i_hash);
+}
+
 static struct inode *new_inode(struct sb *sb)
 {
 	struct inode *inode = malloc(sizeof(*inode));
 	if (!inode)
 		goto error;
 	*inode = (struct inode){ INIT_INODE(*inode, sb, 0), };
+	INIT_HLIST_NODE(&inode->i_hash);
 	inode->map = new_map(sb->dev, NULL);
 	if (!inode->map)
 		goto error_map;
@@ -35,6 +62,7 @@ error:
 static void free_inode(struct inode *inode)
 {
 	assert(list_empty(&inode->alloc_list));
+	assert(hlist_unhashed(&inode->i_hash));
 	assert(list_empty(&inode->list));
 	assert(!inode->state);
 	assert(mapping(inode)); /* some inodes are not malloced */
@@ -64,8 +92,10 @@ static void tux_setup_inode(struct inode *inode)
 
 void iput(struct inode *inode)
 {
-	if (atomic_dec_and_test(&inode->i_count))
+	if (atomic_dec_and_test(&inode->i_count)) {
+		remove_inode_hash(inode);
 		free_inode(inode);
+	}
 }
 
 void __iget(struct inode *inode)
@@ -78,11 +108,13 @@ void __iget(struct inode *inode)
 	assert(atomic_read(&inode->i_count) > 0);
 }
 
-static struct inode *find_dirty_inode(struct sb *sb, inum_t inum)
+static struct inode *find_inode(struct sb *sb, inum_t inum)
 {
+	struct hlist_head *head = inode_hashtable + hash(inum);
+	struct hlist_node *node;
 	struct inode *inode;
-	/* FIXME: should find all in-core inodes for reopen? */
-	list_for_each_entry(inode, &sb->dirty_inodes, list) {
+
+	hlist_for_each_entry(inode, node, head, i_hash) {
 		if (inode->inum == inum) {
 			__iget(inode);
 			return inode;
@@ -93,12 +125,14 @@ static struct inode *find_dirty_inode(struct sb *sb, inum_t inum)
 
 struct inode *iget(struct sb *sb, inum_t inum)
 {
-	struct inode *inode = find_dirty_inode(sb, inum);
+	struct inode *inode = find_inode(sb, inum);
 	if (!inode) {
 		inode = new_inode(sb);
 		if (!inode)
 			return ERR_PTR(-ENOMEM);
 		tux_set_inum(inode, inum);
+		insert_inode_hash(inode);
+
 		int err = open_inode(inode);
 		if (err) {
 			iput(inode);
@@ -251,6 +285,7 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 		iput(inode);
 		return ERR_PTR(err);
 	}
+	insert_inode_hash(inode);
 
 	mark_inode_dirty(inode);
 

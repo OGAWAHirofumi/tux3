@@ -1,9 +1,8 @@
 #ifndef TUX3_UTILITY_H
 #define TUX3_UTILITY_H
 
-#include <limits.h>
+#include "knlcompat.h"
 
-#define BITS_PER_LONG		LONG_BIT	/* SuS define this */
 #define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
 #define ffz(x)			__ffs(~(x))
 #define find_first_bit(addr, size) find_next_bit((addr), (size), 0)

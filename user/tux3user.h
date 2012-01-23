@@ -128,6 +128,7 @@ struct tux_iattr {
 		},						\
 		init_defs					\
 	};							\
+	INIT_HLIST_NODE(&__inode->i_hash);			\
 	__inode->map = new_map((sb)->dev, io);			\
 	assert(__inode->map);					\
 	__inode->map->inode = __inode;				\

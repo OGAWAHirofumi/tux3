@@ -30,6 +30,7 @@ struct inode *tux_new_volmap(struct sb *sb)
 	if (inode) {
 		inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
 		tux_set_inum(inode, TUX_VOLMAP_INO);
+		insert_inode_hash(inode);
 		tux_setup_inode(inode);
 	}
 	return inode;

@@ -2,6 +2,7 @@
 #define TUX3_KERNEL_COMPAT_H
 
 #include <stdint.h>
+#include <limits.h>
 #include "list.h"
 #include "err.h"
 #include "lockdebug.h"
@@ -71,6 +72,23 @@ typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+
+#define BITS_PER_LONG		LONG_BIT	/* SuS define this */
+
+/* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
+#define GOLDEN_RATIO_PRIME_32 0x9e370001UL
+/*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
+#define GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001UL
+
+#if BITS_PER_LONG == 32
+#define GOLDEN_RATIO_PRIME GOLDEN_RATIO_PRIME_32
+#define hash_long(val, bits) hash_32(val, bits)
+#elif BITS_PER_LONG == 64
+#define hash_long(val, bits) hash_64(val, bits)
+#define GOLDEN_RATIO_PRIME GOLDEN_RATIO_PRIME_64
+#else
+#error Wordsize not 32 or 64
+#endif
 
 /* Kernel page emulation for deferred free support */
 
