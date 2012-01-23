@@ -167,6 +167,7 @@ void evict_buffer(struct buffer_head *buffer)
 	assert(buffer_clean(buffer) || buffer_empty(buffer));
 	assert(!buffer->count);
 	remove_buffer_hash(buffer);
+	buffer->map = NULL;
 	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
 	buffer_count--;
 }
@@ -495,5 +496,13 @@ map_t *new_map(struct dev *dev, blockio_t *io)
 void free_map(map_t *map)
 {
 	assert(list_empty(&map->dirty));
+
+	for (int i = 0; i < BUFFER_BUCKETS; i++) {
+		struct hlist_head *bucket = &map->hash[i];
+		struct buffer_head *buffer;
+		struct hlist_node *node, *n;
+		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink)
+			evict_buffer(buffer);
+	}
 	free(map);
 }
