@@ -22,6 +22,16 @@
 #define __packed	__attribute__((packed))
 #define __weak		__attribute__((weak))
 
+#ifdef __GNUC__
+/*
+ * A trick to suppress uninitialized variable warning without generating any
+ * code
+ */
+#define uninitialized_var(x) x = x
+#else
+#define uninitialized_var(x) x
+#endif
+
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /*
