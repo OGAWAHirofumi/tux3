@@ -309,9 +309,8 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 			}
 			memcpy(bufdata(newbuf), tail, sb->blocksize);
 			if ((err = btree_insert_leaf(cursor, tailkey, newbuf))) {
-				free(tail);
 				segs = err;
-				goto out_unlock;
+				goto out_create;
 			}
 		}
 	}

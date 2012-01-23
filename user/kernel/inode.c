@@ -176,7 +176,7 @@ retry:
 		int more = advance(cursor);
 		if (more < 0) {
 			err = more;
-			goto out;
+			goto release;
 		}
 		trace("no more inode space here, advance %i", more);
 		if (!more) {
@@ -359,8 +359,9 @@ static int save_inode(struct inode *inode)
 		assert(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size));
 	}
 	if ((err = store_attrs(inode, cursor)))
-		goto out;
+		goto error_release;
 	del_defer_alloc_inum(inode);
+error_release:
 	release_cursor(cursor);
 out:
 	up_write(&cursor->btree->lock);

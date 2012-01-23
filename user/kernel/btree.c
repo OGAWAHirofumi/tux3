@@ -283,7 +283,7 @@ int advance(struct cursor *cursor)
 	while (1) {
 		buffer = vol_bread(btree->sb, from_be_u64(cursor->path[level].next->block));
 		if (!buffer)
-			goto eek;
+			return -EIO;
 		cursor->path[level].next++;
 		if (level + 1 == depth)
 			break;
@@ -293,9 +293,6 @@ int advance(struct cursor *cursor)
 	level_push(cursor, buffer, NULL);
 	cursor_check(cursor);
 	return 1;
-eek:
-	release_cursor(cursor);
-	return -EIO;
 }
 
 /*
@@ -629,7 +626,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 {
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
-	int err, depth = btree->root.depth;
+	int depth = btree->root.depth;
 	block_t childblock = bufindex(leafbuf);
 
 	if (keep)
@@ -655,10 +652,9 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 
 		/* split a full index node */
 		struct buffer_head *newbuf = new_node(btree);
-		if (IS_ERR(newbuf)) {
-			err = PTR_ERR(newbuf);
-			goto eek;
-		}
+		if (IS_ERR(newbuf))
+			return PTR_ERR(newbuf);
+
 		struct bnode *newnode = bufdata(newbuf);
 		unsigned half = bcount(parent) / 2;
 		u64 newkey = from_be_u64(parent->entries[half].key);
@@ -701,10 +697,9 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	/* Make new root bnode */
 	trace("add tree level");
 	struct buffer_head *newbuf = new_node(btree);
-	if (IS_ERR(newbuf)) {
-		err = PTR_ERR(newbuf);
-		goto eek;
-	}
+	if (IS_ERR(newbuf))
+		return PTR_ERR(newbuf);
+
 	struct bnode *newroot = bufdata(newbuf);
 	block_t newrootblock = bufindex(newbuf);
 	block_t oldrootblock = btree->root.block;
@@ -724,9 +719,6 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	cursor_check(cursor);
 
 	return 0;
-eek:
-	release_cursor(cursor);
-	return err;
 }
 
 /* Insert new leaf to next cursor position, then set cursor to new leaf */
@@ -742,11 +734,8 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 	struct buffer_head *newbuf;
 
 	newbuf = new_leaf(btree);
-	if (IS_ERR(newbuf)) {
-		/* the rule: release cursor at point of error */
-		release_cursor(cursor);
+	if (IS_ERR(newbuf))
 		return PTR_ERR(newbuf);
-	}
 	log_balloc(btree->sb, bufindex(newbuf), 1);
 
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
