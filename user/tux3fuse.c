@@ -69,32 +69,33 @@ static void tux3_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct inode *parent_ino = open_fuse_ino(parent);
 	struct inode *inode = tuxopen(parent_ino, name, strlen(name));
 
-	if (inode) {
-		struct fuse_entry_param ep = {
-			.attr = {
-				.st_ino   = inode->inum,
-				.st_mode  = inode->i_mode,
-				.st_ctim = inode->i_ctime,
-				.st_mtim = inode->i_mtime,
-				.st_atim = inode->i_atime,
-				.st_size  = inode->i_size,
-				.st_uid   = inode->i_uid,
-				.st_gid   = inode->i_gid,
-				.st_nlink = inode->i_nlink,
-			},
-
-			.ino = inode->inum,
-			.generation = 1,
-			.attr_timeout = 0.0,
-			.entry_timeout = 0.0,
-		};
-
-		iput(inode);
-
-		fuse_reply_entry(req, &ep);
-	} else {
-		fuse_reply_err(req, ENOENT);
+	if (IS_ERR(inode)) {
+		fuse_reply_err(req, -PTR_ERR(inode));
+		return;
 	}
+
+	struct fuse_entry_param ep = {
+		.attr = {
+			.st_ino   = inode->inum,
+			.st_mode  = inode->i_mode,
+			.st_ctim = inode->i_ctime,
+			.st_mtim = inode->i_mtime,
+			.st_atim = inode->i_atime,
+			.st_size  = inode->i_size,
+			.st_uid   = inode->i_uid,
+			.st_gid   = inode->i_gid,
+			.st_nlink = inode->i_nlink,
+		},
+
+		.ino = inode->inum,
+		.generation = 1,
+		.attr_timeout = 0.0,
+		.entry_timeout = 0.0,
+	};
+
+	iput(inode);
+
+	fuse_reply_entry(req, &ep);
 }
 
 static void tux3_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
@@ -165,33 +166,34 @@ static void tux3_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	trace("tux3_create(%Lx, '%s', uid = %u, gid = %u, mode = %o)", (L)parent, name, ctx->uid, ctx->gid, mode);
 	struct inode *inode = tuxcreate(parent_ino, name, strlen(name),
 		&(struct tux_iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
-	if (inode) {
-		struct fuse_entry_param fep = {
-			.attr = {
-				.st_ino   = inode->inum,
-				.st_mode  = inode->i_mode,
-				.st_ctim = inode->i_ctime,
-				.st_mtim = inode->i_mtime,
-				.st_atim = inode->i_atime,
-				.st_size  = inode->i_size,
-				.st_uid   = inode->i_uid,
-				.st_gid   = inode->i_gid,
-				.st_nlink = inode->i_nlink,
-			},
-
-			.ino = inode->inum,
-			.generation = 1,
-			.attr_timeout = 0.0,
-			.entry_timeout = 0.0,
-		};
-
-		sync_super(inode->i_sb);
-
-		fi->fh = (uint64_t)(unsigned long)inode;
-		fuse_reply_create(req, &fep, fi);
-	} else {
-		fuse_reply_err(req, ENOMEM);
+	if (IS_ERR(inode)) {
+		fuse_reply_err(req, -PTR_ERR(inode));
+		return;
 	}
+
+	struct fuse_entry_param fep = {
+		.attr = {
+			.st_ino   = inode->inum,
+			.st_mode  = inode->i_mode,
+			.st_ctim = inode->i_ctime,
+			.st_mtim = inode->i_mtime,
+			.st_atim = inode->i_atime,
+			.st_size  = inode->i_size,
+			.st_uid   = inode->i_uid,
+			.st_gid   = inode->i_gid,
+			.st_nlink = inode->i_nlink,
+		},
+
+		.ino = inode->inum,
+		.generation = 1,
+		.attr_timeout = 0.0,
+		.entry_timeout = 0.0,
+	};
+
+	sync_super(inode->i_sb);
+
+	fi->fh = (uint64_t)(unsigned long)inode;
+	fuse_reply_create(req, &fep, fi);
 }
 
 static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
@@ -206,32 +208,34 @@ static void tux3_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode
 	struct inode *inode = tuxcreate(parent_ino, name, strlen(name),
 		&(struct tux_iattr){ .uid = ctx->uid, .gid = ctx->gid, .mode = mode });
 
-	if (inode) {
-		struct fuse_entry_param fep = {
-			.attr = {
-				.st_ino   = inode->inum,
-				.st_mode  = inode->i_mode,
-				.st_ctim = inode->i_ctime,
-				.st_mtim = inode->i_mtime,
-				.st_atim = inode->i_atime,
-				.st_size  = inode->i_size,
-				.st_uid   = inode->i_uid,
-				.st_gid   = inode->i_gid,
-				.st_nlink = inode->i_nlink,
-			},
+	if (IS_ERR(inode)) {
+		fuse_reply_err(req, -PTR_ERR(inode));
+		return;
+	}
 
-			.ino = inode->inum,
-			.generation = 1,
-			.attr_timeout = 0.0,
-			.entry_timeout = 0.0,
-		};
+	struct fuse_entry_param fep = {
+		.attr = {
+			.st_ino   = inode->inum,
+			.st_mode  = inode->i_mode,
+			.st_ctim = inode->i_ctime,
+			.st_mtim = inode->i_mtime,
+			.st_atim = inode->i_atime,
+			.st_size  = inode->i_size,
+			.st_uid   = inode->i_uid,
+			.st_gid   = inode->i_gid,
+			.st_nlink = inode->i_nlink,
+		},
 
-		iput(inode);
-		sync_super(inode->i_sb);
+		.ino = inode->inum,
+		.generation = 1,
+		.attr_timeout = 0.0,
+		.entry_timeout = 0.0,
+	};
 
-		fuse_reply_entry(req, &fep);
-	} else 
-		fuse_reply_err(req, ENOMEM);
+	iput(inode);
+	sync_super(inode->i_sb);
+
+	fuse_reply_entry(req, &fep);
 }
 
 static void tux3_write(fuse_req_t req, fuse_ino_t ino, const char *buf,

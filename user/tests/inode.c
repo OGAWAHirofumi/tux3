@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
 		goto eek;
 	trace("create file");
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
-	if (!inode)
+	if (IS_ERR(inode))
 		exit(1);
 	tux_dump_entries(blockget(mapping(sb->rootdir), 0));
 

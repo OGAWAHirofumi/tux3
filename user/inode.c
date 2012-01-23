@@ -224,11 +224,12 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	struct buffer_head *buffer;
 	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
 	if (IS_ERR(entry))
-		return NULL; // ERR_PTR me!!!
+		return ERR_CAST(entry);
 	inum_t inum = from_be_u64(entry->inum);
 	blockput(buffer);
 	struct inode *inode = iget(dir->i_sb, inum);
-	return IS_ERR(inode) ? NULL : inode; // ERR_PTR me!!!
+	assert(PTR_ERR(inode) != -ENOENT);
+	return inode;
 }
 
 struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
@@ -267,20 +268,20 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
 	if (!IS_ERR(entry)) {
 		blockput(buffer);
-		return NULL; // should allow create of a file that already exists!!!
+		return ERR_PTR(-EEXIST); // should allow create of a file that already exists!!!
 	}
 	if (PTR_ERR(entry) != -ENOENT)
-		return NULL; // err???
+		return ERR_CAST(entry);
 
 	struct inode *inode = tux_create_inode(dir, iattr, 0);
 	if (IS_ERR(inode))
-		return NULL; // err???
+		return inode;
 
 	int err = tux_create_dirent(dir, name, len, tux_inode(inode)->inum, iattr->mode);
 	if (err) {
 		purge_inum(inode);
 		iput(inode);
-		return NULL; // err???
+		return ERR_PTR(err);
 	}
 
 	return inode;

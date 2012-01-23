@@ -155,14 +155,14 @@ int main(int argc, char *argv[])
 	if (!strcmp(command, "write")) {
 		printf("---- open file ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-		if (!inode) {
+		if (IS_ERR(inode) && PTR_ERR(inode) == -ENOENT) {
 			printf("---- create file ----\n");
 			inode = tuxcreate(sb->rootdir, filename, strlen(filename),
 					  &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
-			if (!inode) {
-				errno = EEXIST;
-				goto eek;
-			}
+		}
+		if (IS_ERR(inode)) {
+			errno = -PTR_ERR(inode);
+			goto eek;
 		}
 		tux_dump_entries(blockget(sb->rootdir->map, 0));
 		printf("---- write file ----\n");
@@ -199,8 +199,8 @@ int main(int argc, char *argv[])
 		//show_tree_range(&sb->itable, 0, -1);
 		//tux_dump_entries(blockread(sb->rootdir->map, 0));
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-		if (!inode) {
-			errno = ENOENT;
+		if (IS_ERR(inode)) {
+			errno = -PTR_ERR(inode);
 			goto eek;
 		}
 		struct file *file = &(struct file){ .f_inode = inode };
@@ -222,8 +222,8 @@ int main(int argc, char *argv[])
 	if (!strcmp(command, "get") || !strcmp(command, "set")) {
 		printf("---- read attribute ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-		if (!inode) {
-			errno = ENOENT;
+		if (IS_ERR(inode)) {
+			errno = -PTR_ERR(inode);
 			goto eek;
 		}
 		if (argc - optind < 1)
@@ -266,8 +266,8 @@ int main(int argc, char *argv[])
 	if (!strcmp(command, "stat")) {
 		printf("---- stat file ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-		if (!inode) {
-			errno = ENOENT;
+		if (IS_ERR(inode)) {
+			errno = -PTR_ERR(inode);
 			goto eek;
 		}
 		dump_attrs(inode);
@@ -286,8 +286,8 @@ int main(int argc, char *argv[])
 	if (!strcmp(command, "truncate")) {
 		printf("---- truncate file ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
-		if (!inode) {
-			errno = ENOENT;
+		if (IS_ERR(inode)) {
+			errno = -PTR_ERR(inode);
 			goto eek;
 		}
 		loff_t seek = 0;
