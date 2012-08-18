@@ -281,8 +281,32 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 static void tux3fuse_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct inode *inode;
+	int err;
+
+	trace("(%Lx)", (L)ino);
+
+	inode = tux3fuse_iget(sb, ino);
+	if (IS_ERR(inode)) {
+		err = PTR_ERR(inode);
+		goto error;
+	}
+
+	err = -ENOMEM;
+	char *buf = malloc(inode->i_size);
+	if (buf) {
+		err = page_readlink(inode, buf, inode->i_size);
+		if (!err) {
+			buf[inode->i_size - 1] = '\0';
+			fuse_reply_readlink(req, buf);
+		}
+		free(buf);
+	}
+	iput(inode);
+error:
+	if (err)
+		fuse_reply_err(req, -err);
 }
 
 static struct inode *__tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent,
