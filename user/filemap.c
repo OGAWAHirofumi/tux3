@@ -86,8 +86,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", tux_inode(inode)->inum, bufindex(buffer));
 	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
-	struct dev *dev = sb->dev;
-	assert(dev->bits >= 8 && dev->fd);
+
 	if (write && buffer_empty(buffer))
 		warn("egad, writing an invalid buffer");
 	if (!write && buffer_dirty(buffer))

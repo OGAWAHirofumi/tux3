@@ -29,8 +29,9 @@
  * add async IO.
  */
 
-#define SECTOR_BITS 9
-#define SECTOR_SIZE (1 << SECTOR_BITS)
+#define MIN_SECTOR_BITS		6
+#define SECTOR_BITS		9
+#define SECTOR_SIZE		(1 << SECTOR_BITS)
 
 #define BUFFER_PARANOIA_DEBUG
 /*
@@ -529,7 +530,7 @@ static int preallocate_buffers(unsigned bufsize)
 	if (!prealloc_heads)
 		goto buffers_allocation_failure;
 	buftrace("Pre-allocating data for buffers...");
-	err = posix_memalign(&data_pool, 1 << SECTOR_BITS, max_buffers*bufsize);
+	err = posix_memalign(&data_pool, SECTOR_SIZE, max_buffers * bufsize);
 	if (err)
 		goto data_allocation_failure;
 
@@ -580,9 +581,10 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 
 int dev_blockio(struct buffer_head *buffer, int write)
 {
-	struct dev *dev = buffer->map->dev;
-	assert(dev->bits >= 8 && dev->fd);
 	int err;
+
+	assert(buffer->map->dev->bits >= 6 && buffer->map->dev->fd);
+
 #ifdef BUFFER_FOR_TUX3
 	err = blockio(write, buffer, buffer->index);
 #else
