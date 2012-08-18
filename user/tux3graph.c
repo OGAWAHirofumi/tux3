@@ -145,7 +145,8 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		switch (code) {
 		case LOG_BALLOC:
 		case LOG_BFREE:
-		case LOG_BFREE_ON_ROLLUP: {
+		case LOG_BFREE_ON_ROLLUP:
+		case LOG_BFREE_RELOG: {
 			unsigned count = *data++;
 			u64 block;
 			char *name;
@@ -154,8 +155,10 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name = "LOG_BALLOC";
 			else if (code == LOG_BFREE)
 				name = "LOG_BFREE";
-			else
+			else if (code == LOG_BFREE_ON_ROLLUP)
 				name = "LOG_BFREE_ON_ROLLUP";
+			else
+				name = "LOG_BFREE_RELOG";
 			fprintf(gi->f,
 				" | [%s] count %u, block %llu ",
 				name, count, (L)block);

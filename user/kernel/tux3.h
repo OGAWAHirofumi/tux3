@@ -289,8 +289,9 @@ struct logblock {
 
 enum {
 	LOG_BALLOC = 0x33,	/* Log of block allocation */
-	LOG_BFREE,		/* Log of freeing block */
-	LOG_BFREE_ON_ROLLUP,	/* Log of freeing block after next cycle */
+	LOG_BFREE,		/* Log of freeing block after delta */
+	LOG_BFREE_ON_ROLLUP,	/* Log of freeing block after rollup */
+	LOG_BFREE_RELOG,	/* LOG_BFREE, but re-log of free after rollup */
 	LOG_LEAF_REDIRECT,	/* Log of leaf redirect */
 	LOG_BNODE_REDIRECT,	/* Log of bnode redirect */
 	LOG_BNODE_ROOT,		/* Log of new bnode root allocation */
@@ -895,6 +896,7 @@ void log_finish(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count);
+void log_bfree_relog(struct sb *sb, block_t block, unsigned count);
 void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,

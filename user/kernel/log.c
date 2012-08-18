@@ -68,6 +68,7 @@ unsigned log_size[] = {
 	[LOG_BALLOC]		= 8,
 	[LOG_BFREE]		= 8,
 	[LOG_BFREE_ON_ROLLUP]	= 8,
+	[LOG_BFREE_RELOG]	= 8,
 	[LOG_LEAF_REDIRECT]	= 13,
 	[LOG_BNODE_REDIRECT]	= 13,
 	[LOG_BNODE_ROOT]	= 26,
@@ -148,6 +149,11 @@ void log_bfree(struct sb *sb, block_t block, unsigned count)
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 {
 	log_extent(sb, LOG_BFREE_ON_ROLLUP, block, count);
+}
+
+void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
+{
+	log_extent(sb, LOG_BFREE_RELOG, block, count);
 }
 
 static void log_redirect(struct sb *sb, u8 intent, block_t oldblock, block_t newblock)

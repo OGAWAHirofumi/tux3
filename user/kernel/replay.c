@@ -13,6 +13,7 @@ static const char *log_name[] = {
 	X(LOG_BALLOC),
 	X(LOG_BFREE),
 	X(LOG_BFREE_ON_ROLLUP),
+	X(LOG_BFREE_RELOG),
 	X(LOG_LEAF_REDIRECT),
 	X(LOG_BNODE_REDIRECT),
 	X(LOG_BNODE_ROOT),
@@ -210,6 +211,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 		case LOG_BALLOC:
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
+		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
 		case LOG_ROLLUP:
 		case LOG_DELTA:
@@ -253,6 +255,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 		case LOG_BALLOC:
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
+		case LOG_BFREE_RELOG:
 		{
 			u64 block;
 			u8 count;
