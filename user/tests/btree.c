@@ -17,6 +17,7 @@
 #endif
 
 #include "balloc-dummy.c"
+#include "kernel/btree.c"
 
 static void clean_main(struct sb *sb, struct inode *inode)
 {
@@ -101,8 +102,17 @@ static unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf
 static int uleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 {
 	struct uleaf *leaf = vleaf;
-	unsigned at = uleaf_seek(btree, start, leaf);
-	leaf->count = at;
+	unsigned start_at, stop_at, count;
+	tuxkey_t stop;
+
+	/* Chop all range if len >= TUXKEY_LIMIT */
+	stop = (len >= TUXKEY_LIMIT) ? TUXKEY_LIMIT : start + len;
+
+	start_at = uleaf_seek(btree, start, leaf);
+	stop_at = uleaf_seek(btree, stop, leaf);
+	count = leaf->count - stop_at;
+	vecmove(&leaf->entries[start_at], &leaf->entries[stop_at], count);
+	leaf->count = start_at + count;
 	return 1;
 }
 
@@ -121,8 +131,14 @@ out:
 	return leaf->entries + at;
 }
 
-static void uleaf_merge(struct btree *btree, vleaf *into, vleaf *from)
+static void uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 {
+	struct uleaf *into = vinto;
+	struct uleaf *from = vfrom;
+
+	assert(into->count + from->count <= btree->entries_per_leaf);
+	vecmove(&into->entries[into->count], from->entries, from->count);
+	into->count += from->count;
 }
 
 static struct btree_ops ops = {
@@ -175,8 +191,25 @@ static void test01(struct sb *sb, struct inode *inode)
 	/* ->leaf_init() should be called */
 	struct buffer_head *buffer = new_leaf(btree);
 	test_assert(uleaf_sniff(btree, bufdata(buffer)));
+	/* Test of uleaf_insert() */
 	for (int i = 0; i < 7; i++)
 		uleaf_insert(btree, bufdata(buffer), i, i + 0x100);
+	for (int i = 0; i < 7; i++) {
+		struct uentry *uentry = uleaf_lookup(bufdata(buffer), i);
+		test_assert(uentry);
+		test_assert(uentry->val == i + 0x100);
+	}
+	/* Test of uleaf_chop() */
+	uleaf_chop(btree, 2, 3, bufdata(buffer));
+	for (int i = 0; i < 7; i++) {
+		struct uentry *uentry = uleaf_lookup(bufdata(buffer), i);
+		if (2 <= i && i < 5) {
+			test_assert(uentry == NULL);
+		} else {
+			test_assert(uentry);
+			test_assert(uentry->val == i + 0x100);
+		}
+	}
 	mark_buffer_dirty_non(buffer);
 	uleaf_dump(btree, bufdata(buffer));
 	blockput(buffer);
@@ -489,6 +522,118 @@ static void test05(struct sb *sb, struct inode *inode)
 	clean_test05(sb, inode, cursor, orig);
 }
 
+/* btree_chop() range chop (and adjust_parent_sep()) test */
+static void test06(struct sb *sb, struct inode *inode)
+{
+	struct btree *btree = &tux_inode(inode)->btree;
+
+	init_btree(btree, sb, no_root, &ops);
+
+	/*
+	 * Test below:
+	 *
+	 *         +----- (0, 8)---------+
+	 *         |                     |
+	 *    + (..., 2, 5) +        + (8, 12) +
+	 *    |        |    |        |         |
+	 * (dummy)   (3,4) (6,7)   (10,11)    (13,14)
+	 *
+	 * Make above tree and chop (7 - 10), then btree_chop() merges
+	 * (6) and (11). And adjust_parent_sep() adjust (0,8) to (0,12).
+	 *
+	 * [(dummy) is to prevent merge nodes of (2,5) and (8,12)]
+	 */
+
+	/* Create leaves */
+	struct buffer_head *leaf[4];
+	int leaf_key[] = { 3, 6, 10, 13, };
+	for (int i = 0; i < ARRAY_SIZE(leaf); i++) {
+		leaf[i] = new_leaf(btree);
+		test_assert(uleaf_sniff(btree, bufdata(leaf[i])));
+		for (int j = leaf_key[i]; j < leaf_key[i] + 2; j++)
+			uleaf_insert(btree, bufdata(leaf[i]), j, j + 0x100);
+	}
+
+	/* Create nodes */
+	struct buffer_head *node[3];
+	/* [left key, right key, left child, right child] */
+	int node_key[3][4] = {
+		{ 0, 8, 0, 0, }, /* child pointer is filled later */
+		{ 2, 5, bufindex(leaf[0]), bufindex(leaf[1]), },
+		{ 8, 12, bufindex(leaf[2]), bufindex(leaf[3]), },
+	};
+	for (int i = 0; i < ARRAY_SIZE(node); i++) {
+		node[i] = new_node(btree);
+		for (int j = 0; j < 2; j++) {
+			struct bnode *bnode = bufdata(node[i]);
+			struct index_entry *p = bnode->entries;
+			bnode_add_index(bnode, p + j, node_key[i][2 + j],
+					node_key[i][j]);
+		}
+	}
+	/* fill node with dummy to prevent merge */
+	for (int i = 0; i < sb->entries_per_node - 2; i++) {
+		struct bnode *bnode = bufdata(node[1]);
+		bnode_add_index(bnode, bnode->entries, 0, 100);
+	}
+
+	/* Fill child pointer in root node */
+	struct bnode *root = bufdata(node[0]);
+	root->entries[0].block = to_be_u64(bufindex(node[1]));
+	root->entries[1].block = to_be_u64(bufindex(node[2]));
+	/* Set root node to btree */
+	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 2 };
+
+	for(int i = 0; i < ARRAY_SIZE(leaf); i++)
+		blockput(leaf[i]);
+	for(int i = 0; i < ARRAY_SIZE(node); i++)
+		blockput(node[i]);
+
+	struct cursor *cursor = alloc_cursor(btree, 8); /* +8 for new depth */
+	test_assert(cursor);
+
+	/* Check keys */
+	for (int i = 0; i < ARRAY_SIZE(leaf_key); i++) {
+		test_assert(btree_probe(cursor, leaf_key[i]) == 0);
+		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
+		for (int j = 0; j < 2; j++) {
+			struct uentry *entry;
+			entry = uleaf_lookup(bufdata(leafbuf), leaf_key[i] + j);
+			test_assert(entry);
+			test_assert(entry->key == leaf_key[i] + j);
+		}
+		release_cursor(cursor);
+	}
+
+	/* Chop (7 - 10) and check again */
+	test_assert(btree_chop(btree, 7, 4) == 0);
+	/* Check if adjust_parent_sep() changed key from 8 to 12 */
+	test_assert(cursor_read_root(cursor) == 0);
+	root = bufdata(cursor->path[cursor->level].buffer);
+	test_assert(from_be_u64(root->entries[1].key) == 12);
+	release_cursor(cursor);
+
+	for (int i = 0; i < ARRAY_SIZE(leaf_key); i++) {
+		test_assert(btree_probe(cursor, leaf_key[i]) == 0);
+		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
+		for (int j = 0; j < 2; j++) {
+			struct uentry *entry;
+			entry = uleaf_lookup(bufdata(leafbuf), leaf_key[i] + j);
+			if (7 <= leaf_key[i] + j && leaf_key[i] + j <= 10) {
+				test_assert(entry == NULL);
+			} else {
+				test_assert(entry);
+				test_assert(entry->key == leaf_key[i] + j);
+			}
+		}
+		release_cursor(cursor);
+	}
+
+	free_cursor(cursor);
+
+	clean_main(sb, inode);
+}
+
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
@@ -527,6 +672,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test05"))
 		test05(sb, inode);
+	test_end();
+
+	if (test_start("test06"))
+		test06(sb, inode);
 	test_end();
 
 	clean_main(sb, inode);
