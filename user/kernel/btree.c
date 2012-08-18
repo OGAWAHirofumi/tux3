@@ -642,12 +642,14 @@ static void bnode_init_root(struct bnode *root, unsigned count, block_t left,
 
 /* Insertion */
 
-static void add_child(struct bnode *node, struct index_entry *p, block_t child, u64 childkey)
+static void bnode_add_index(struct bnode *node, struct index_entry *p,
+			    block_t child, u64 childkey)
 {
-	vecmove(p + 1, p, node->entries + bcount(node) - p);
-	p->block = to_be_u64(child);
-	p->key = to_be_u64(childkey);
-	node->count = to_be_u32(bcount(node) + 1);
+	unsigned count = bcount(node);
+	vecmove(p + 1, p, node->entries + count - p);
+	p->block	= to_be_u64(child);
+	p->key		= to_be_u64(childkey);
+	node->count	= to_be_u32(count + 1);
 }
 
 static void bnode_split(struct bnode *src, unsigned pos, struct bnode *dst)
@@ -684,7 +686,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 
 		/* insert and exit if not full */
 		if (bcount(parent) < btree->sb->entries_per_node) {
-			add_child(parent, at->next, childblock, childkey);
+			bnode_add_index(parent, at->next, childblock, childkey);
 			if (!keep)
 				at->next++;
 			log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
@@ -717,7 +719,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		} else
 			mark_buffer_rollup_non(newbuf);
 
-		add_child(parent, at->next, childblock, childkey);
+		bnode_add_index(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
 		log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
@@ -993,7 +995,7 @@ static void add_func(struct bnode *bnode, block_t child, tuxkey_t key)
 		entry++;
 	}
 
-	add_child(bnode, entry, child, key);
+	bnode_add_index(bnode, entry, child, key);
 }
 
 int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
