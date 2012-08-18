@@ -250,6 +250,7 @@ static int write_log(struct sb *sb)
 	/* Finish to logging in this delta */
 	log_finish(sb);
 
+	/* FIXME: maybe, we should use bufvec to write log blocks at once */
 	for (index = 0; index < sb->lognext; index++) {
 		block_t block;
 		int err = balloc(sb, 1, &block);

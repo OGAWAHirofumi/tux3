@@ -43,6 +43,29 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	return buffer;
 }
 
+static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
+{
+	trace("%s inode 0x%Lx block 0x%Lx",
+	      (mode == MAP_READ) ? "read" :
+			(mode == MAP_WRITE) ? "write" : "redirect",
+	      buffer_inode(bufvec->bufv[bufvec->pos])->inum,
+	      bufvec_first_index(bufvec));
+
+	if (bufvec_last_index(bufvec) & (-1LL << MAX_BLOCKS_BITS))
+		return -EIO;
+
+	for (unsigned i = 0; i < bufvec_inuse(bufvec); i++) {
+		struct buffer_head *buffer = bufvec_bufv(bufvec)[i];
+
+		if (mode != MAP_READ && buffer_empty(buffer))
+			warn("egad, writing an invalid buffer");
+		if (mode == MAP_READ && buffer_dirty(buffer))
+			warn("egad, reading a dirty buffer");
+	}
+
+	return 0;
+}
+
 /*
  * Extrapolate from single buffer blockread to opportunistic extent IO
  *
@@ -52,31 +75,52 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
  *
  * Stop when extent is "big enough", whatever that means.
  */
-static unsigned guess_readahead(struct buffer_head *buffer)
+static struct bufvec *guess_readahead(struct inode *inode, block_t index)
 {
-	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = inode->i_sb;
 	block_t limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
-	block_t index = bufindex(buffer);
-	unsigned count = 1;
+	struct bufvec *bufvec;
+	struct buffer_head *buffer;
+	int ret;
 
-	while (count < MAX_EXTENT) {
-		block_t next = index + count;
+	/* FIXME: MAX_EXTENT is not true for dleaf2 */
+	bufvec = bufvec_alloc(MAX_EXTENT);
+	if (!bufvec)
+		return NULL;
 
-		if (next >= limit)
+	/*
+	 * FIXME: pin buffers early may be inefficient. We can delay to
+	 * prepare buffers until map_region() was done.
+	 */
+	buffer = blockget(mapping(inode), index++);
+	if (!buffer)
+		return NULL;
+	ret = bufvec_add(bufvec, buffer);
+	assert(ret);
+
+	while (bufvec_space(bufvec)) {
+		if (index >= limit)
 			break;
 
-		struct buffer_head *nextbuf = peekblk(buffer->map, next);
+		struct buffer_head *nextbuf = peekblk(buffer->map, index);
 		if (nextbuf) {
 			unsigned stop = !buffer_empty(nextbuf);
-			blockput(nextbuf);
-			if (stop)
+			if (stop) {
+				blockput(nextbuf);
+				break;
+			}
+		} else {
+			nextbuf = blockget(buffer->map, index);
+			if (!nextbuf)
 				break;
 		}
-		count++;
+		ret = bufvec_add(bufvec, nextbuf);
+		assert(ret);
+
+		index++;
 	}
 
-	return count;
+	return bufvec;
 }
 
 static void clean_buffer(struct buffer_head *buffer)
@@ -90,92 +134,104 @@ static void clean_buffer(struct buffer_head *buffer)
 		set_buffer_clean(buffer);
 }
 
-static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
+static int filemap_extent_io(struct bufvec *bufvec, enum map_mode mode)
 {
-	struct inode *inode = buffer_inode(buffer);
+	struct inode *inode = buffer_inode(bufvec_first_buf(bufvec));
 	struct sb *sb = tux_sb(inode->i_sb);
+	block_t block, index = bufvec_first_index(bufvec);
+	int err, rw = (mode == MAP_READ) ? READ : WRITE;
 
-	trace("%s inode 0x%Lx block 0x%Lx",
-	      (mode == MAP_READ) ? "read" :
-			(mode == MAP_WRITE) ? "write" : "redirect",
-	      tux_inode(inode)->inum, bufindex(buffer));
+	/* FIXME: now assuming buffer is only 1 for MAP_READ */
+	assert(mode != MAP_READ || bufvec_inuse(bufvec) == 1);
+	err = filemap_bufvec_check(bufvec, mode);
+	if (err)
+		return err;
 
-	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
-		return -EIO;
-
-	if (mode != MAP_READ && buffer_empty(buffer))
-		warn("egad, writing an invalid buffer");
-	if (mode == MAP_READ && buffer_dirty(buffer))
-		warn("egad, reading a dirty buffer");
-
-	block_t index = bufindex(buffer);
-	unsigned count = 1;
-	if (mode == MAP_READ)
-		count = guess_readahead(buffer);
-
-	trace("---- extent 0x%Lx/%x ----\n", index, count);
+	struct bufvec *bufvec_io;
+	unsigned count;
+	if (rw == READ) {
+		/* In the case of read, use new bufvec for readahead */
+		bufvec_io = guess_readahead(inode, index);
+		if (!bufvec_io)
+			return -ENOMEM;
+	} else {
+		bufvec_io = bufvec;
+	}
+	count = bufvec_inuse(bufvec_io);
 
 	struct seg map[10];
 
 	int segs = map_region(inode, index, count, map, ARRAY_SIZE(map), mode);
 	if (segs < 0)
 		return segs;
-
 	if (!segs) {
-		if (mode == MAP_READ) {
-			trace("unmapped block %Lx", bufindex(buffer));
-			memset(bufdata(buffer), 0, sb->blocksize);
-			set_buffer_clean(buffer);
-			return 0;
-		}
-		return -EIO;
+		if (rw == WRITE)
+			return -EIO;
+
+		trace("unmapped block %Lx", index);
+		/* There was no extent, handle as hole */
+		segs = 1;
+		map[0].block = 0;
+		map[0].count = bufvec_inuse(bufvec);
+		map[0].state = SEG_HOLE;
 	}
 
-	int err = 0, rw = (mode == MAP_READ) ? READ : WRITE;
-	for (int i = 0; !err && i < segs; i++) {
-		int hole = map[i].state == SEG_HOLE;
+	for (int i = 0; i < segs; i++) {
+		block = map[i].block;
+		count = map[i].count;
 
-		trace("extent 0x%Lx/%x => %Lx",
-		      index, map[i].count, map[i].block);
+		assert(rw == READ || map[i].state != SEG_HOLE);
+		trace("extent 0x%Lx/%x => %Lx", index, count, block);
 
-		for (int j = 0; !err && j < map[i].count; j++) {
-			block_t block = map[i].block + j;
+		if (map[i].state != SEG_HOLE) {
+			err = blockio_vec(rw, bufvec_io, count, block);
+			if (err)
+				break;
+		}
 
-			if (rw == READ) {
-				buffer = blockget(mapping(inode), index + j);
-				if (!buffer) {
-					err = -ENOMEM;
-					break;
-				}
-			}
+		for (unsigned j = 0; j < count; j++) {
+			struct buffer_head *buffer = bufvec_bufv(bufvec_io)[j];
 
-			trace("block 0x%Lx => %Lx", bufindex(buffer), block);
-			if (hole) {
-				assert(rw == READ);
+			if (map[i].state == SEG_HOLE)
 				memset(bufdata(buffer), 0, sb->blocksize);
-			} else
-				err = blockio(rw, buffer, block);
 
 			/* FIXME: leave empty if error ??? */
-			clean_buffer(buffer);
-			if (rw == READ)
+			if (rw == READ) {
+				set_buffer_clean(buffer);
 				blockput(buffer);
+			} else
+				clean_buffer(buffer);
 		}
-		index += map[i].count;
+
+		bufvec_io_done(bufvec_io, count);
+		index += count;
 	}
+
+	/*
+	 * In the write case, bufvec owner is caller. And caller must
+	 * be handle buffers was not mapped (and is not written out)
+	 * this time.
+	 */
+	if (rw == READ) {
+		/* Clean buffers was not mapped in this time */
+		for (unsigned i = 0; i < bufvec_inuse(bufvec_io); i++)
+			blockput(bufvec_bufv(bufvec_io)[i]);
+		bufvec_free(bufvec_io);
+	}
+
 	return err;
 }
 
-int filemap_overwrite_io(struct buffer_head *buffer, int write)
+int filemap_overwrite_io(struct bufvec *bufvec, int rw)
 {
-	enum map_mode mode = write ? MAP_WRITE : MAP_READ;
-	return filemap_extent_io(buffer, mode);
+	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_WRITE;
+	return filemap_extent_io(bufvec, mode);
 }
 
-int filemap_redirect_io(struct buffer_head *buffer, int write)
+int filemap_redirect_io(struct bufvec *bufvec, int rw)
 {
-	enum map_mode mode = write ? MAP_REDIRECT : MAP_READ;
-	return filemap_extent_io(buffer, mode);
+	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_REDIRECT;
+	return filemap_extent_io(bufvec, mode);
 }
 
 static int tuxio(struct file *file, void *data, unsigned len, int write)

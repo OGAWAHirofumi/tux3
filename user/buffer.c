@@ -7,6 +7,7 @@
 #include "buffer.h"
 #include "trace.h"
 #include "libklib/err.h"
+#include "libklib/list_sort.h"
 
 #define buftrace trace_off
 
@@ -386,8 +387,16 @@ struct buffer_head *blockread(map_t *map, block_t block)
 {
 	struct buffer_head *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
+		struct iovec iov[1];
+		struct buffer_head *bufv[1];
+		struct bufvec bufvec = {
+			.bufv = bufv,
+			.iov = iov,
+			.max_count = 1,
+		};
+		bufvec_add(&bufvec, buffer);
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
-		int err = buffer->map->io(buffer, 0);
+		int err = buffer->map->io(&bufvec, READ);
 		if (err) {
 			blockput(buffer);
 			return NULL; // ERR_PTR me!!!
@@ -447,16 +456,51 @@ void invalidate_buffers(map_t *map)
 	}
 }
 
+static int buffer_index_cmp(void *priv, struct list_head *a,
+			    struct list_head *b)
+{
+	struct buffer_head *buf_a = list_entry(a, struct buffer_head, link);
+	struct buffer_head *buf_b = list_entry(b, struct buffer_head, link);
+
+	if (bufindex(buf_a) < bufindex(buf_b))
+		return -1;
+	else if (bufindex(buf_a) > bufindex(buf_b))
+		return 1;
+	return 0;
+}
+
 int flush_list(struct list_head *list)
 {
+	struct bufvec *bufvec;
+	struct buffer_head *buffer, *n;
 	int err = 0;
-	while (!list_empty(list)) {
-		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, link);
-		buftrace("write buffer %Lx", buffer->index);
+
+	if (list_empty(list))
+		return 0;
+
+	bufvec = bufvec_alloc(MAX_EXTENT);
+	if (!bufvec)
+		return -ENOMEM;
+
+	list_sort(NULL, list, buffer_index_cmp);
+
+	list_for_each_entry_safe(buffer, n, list, link) {
 		assert(buffer_dirty(buffer));
-		if ((err = buffer->map->io(buffer, 1)))
-			break;
+		while (!bufvec_add(bufvec, buffer)) {
+			err = bufvec_first_buf(bufvec)->map->io(bufvec, WRITE);
+			if (err)
+				goto error;
+		}
 	}
+	while (bufvec_inuse(bufvec)) {
+		err = bufvec_first_buf(bufvec)->map->io(bufvec, WRITE);
+		if (err)
+			goto error;
+	}
+
+error:
+	bufvec_free(bufvec);
+
 	return err;
 }
 
@@ -592,26 +636,30 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 #endif
 }
 
-static int dev_blockio(struct buffer_head *buffer, int write)
+static int dev_blockio(struct bufvec *bufvec, int rw)
 {
+	block_t block = bufvec_first_index(bufvec);
+	unsigned count = bufvec_inuse(bufvec);
 	int err;
 
-	assert(buffer->map->dev->bits >= 6 && buffer->map->dev->fd);
+	assert(bufvec_first_buf(bufvec)->map->dev->bits >= 6 &&
+	       bufvec_first_buf(bufvec)->map->dev->fd);
 
 #ifdef BUFFER_FOR_TUX3
-	err = blockio(write, buffer, buffer->index);
+	err = blockio_vec(rw, bufvec, count, block);
 #else
-	if (write)
-		err = diskwrite(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
-	else
-		err = diskread(dev->fd, buffer->data, bufsize(buffer), buffer->index << dev->bits);
+	err = iovabs(bufvec_first_buf(bufvec)->map->dev->fd, bufvec->iov,
+		     count, rw, block << dev->bits);
 #endif
-	if (!err)
-		set_buffer_clean(buffer);
+	if (!err) {
+		for (unsigned i = 0; i < count; i++)
+			set_buffer_clean(bufvec_bufv(bufvec)[i]);
+		bufvec_io_done(bufvec, count);
+	}
 	return err;
 }
 
-int dev_errio(struct buffer_head *buffer, int write)
+int dev_errio(struct bufvec *bufvec, int rw)
 {
 	assert(0);
 	return -EIO;

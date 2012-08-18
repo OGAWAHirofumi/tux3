@@ -36,8 +36,9 @@ typedef loff_t			block_t;
 struct dev { unsigned fd, bits; };
 
 struct buffer_head;
+struct bufvec;
 
-typedef int (blockio_t)(struct buffer_head *buffer, int write);
+typedef int (blockio_t)(struct bufvec *bufvec, int rw);
 
 struct dirty_buffers {
 	struct list_head heads[BUFFER_DIRTY_STATES];
@@ -213,7 +214,7 @@ int flush_state(unsigned state);
 void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
-int dev_errio(struct buffer_head *buffer, int write);
+int dev_errio(struct bufvec *bufvec, int rw);
 void init_dirty_buffers(struct dirty_buffers *dirty);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);

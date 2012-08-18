@@ -108,6 +108,7 @@ static struct replay *replay_prepare(struct sb *sb)
 	if (IS_ERR(rp))
 		return rp;
 
+	/* FIXME: maybe, we should use bufvec to read log blocks */
 	trace("load %u logblocks", logcount);
 	i = logcount;
 	while (i-- > 0) {
