@@ -1036,6 +1036,8 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key, tuxkey_t hint)
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	tuxkey_t newkey = btree->ops->leaf_split(btree, hint, bufdata(leafbuf),
 						 bufdata(newbuf));
+	assert(cursor_this_key(cursor) < newkey);
+	assert(newkey < cursor_next_key(cursor));
 	if (key < newkey)
 		mark_buffer_dirty_non(newbuf);
 	else
