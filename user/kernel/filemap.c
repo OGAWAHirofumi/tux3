@@ -528,8 +528,26 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 		return map_region2(inode, start, count, map, max_segs, mode);
 }
 
+static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec);
+int tux3_filemap_overwrite_io(int rw, struct bufvec *bufvec)
+{
+	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_WRITE;
+	return filemap_extent_io(mode, bufvec);
+}
+
+int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
+{
+	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_REDIRECT;
+	return filemap_extent_io(mode, bufvec);
+}
+
 #ifdef __KERNEL__
 #include <linux/mpage.h>
+
+static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
+{
+	return 0;
+}
 
 /* create modes: 0 - read, 1 - write, 2 - redirect, 3 - delalloc */
 static int __tux3_get_block(struct inode *inode, sector_t iblock,

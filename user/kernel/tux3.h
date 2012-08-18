@@ -751,6 +751,10 @@ static inline struct btree_ops *dtree_ops(void)
 	return &dtree2_ops;
 }
 
+/* filemap.c */
+int tux3_filemap_overwrite_io(int rw, struct bufvec *bufvec);
+int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec);
+
 /* iattr.c */
 void dump_attrs(struct inode *inode);
 void *encode_kind(void *attrs, unsigned kind, unsigned version);

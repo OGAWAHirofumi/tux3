@@ -224,11 +224,11 @@ static void tux_setup_inode(struct inode *inode)
 		inode->map->io = dev_errio;
 		break;
 	case S_IFREG:
-		inode->map->io = filemap_overwrite_io;
+		inode->map->io = tux3_filemap_overwrite_io;
 		break;
 	case S_IFDIR:
 	case S_IFLNK:
-		inode->map->io = filemap_redirect_io;
+		inode->map->io = tux3_filemap_redirect_io;
 		break;
 	case 0: /* internal inode */
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
@@ -240,7 +240,7 @@ static void tux_setup_inode(struct inode *inode)
 			/* FALLTHRU */
 		case TUX_ATABLE_INO:
 		case TUX_VTABLE_INO:
-			inode->map->io = filemap_redirect_io;
+			inode->map->io = tux3_filemap_redirect_io;
 			break;
 		case TUX_VOLMAP_INO:
 			/* use default handler */;

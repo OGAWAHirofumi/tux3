@@ -761,16 +761,19 @@ static void tux_setup_inode(struct inode *inode)
 		inode->i_op = &tux_file_iops;
 		inode->i_fop = &tux_file_fops;
 		inode->i_mapping->a_ops = &tux_aops;
+		tux_inode(inode)->io = tux3_filemap_overwrite_io;
 		break;
 	case S_IFDIR:
 		inode->i_op = &tux_dir_iops;
 		inode->i_fop = &tux_dir_fops;
 		inode->i_mapping->a_ops = &tux_blk_aops;
+		tux_inode(inode)->io = tux3_filemap_redirect_io;
 		mapping_set_gfp_mask(inode->i_mapping, GFP_USER);
 		break;
 	case S_IFLNK:
 		inode->i_op = &tux_symlink_iops;
 		inode->i_mapping->a_ops = &tux_aops;
+		tux_inode(inode)->io = tux3_filemap_redirect_io;
 		break;
 	case 0: /* internal inode */
 	{
@@ -785,6 +788,7 @@ static void tux_setup_inode(struct inode *inode)
 			/* set fake i_size to escape the check of block_* */
 			inode->i_size = MAX_LFS_FILESIZE;
 			inode->i_mapping->a_ops = &tux_blk_aops;
+			tux_inode(inode)->io = tux3_filemap_redirect_io;
 		}
 
 		/* Prevent reentering into our fs recursively by mem reclaim */

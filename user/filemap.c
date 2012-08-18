@@ -212,18 +212,6 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 	return err;
 }
 
-int filemap_overwrite_io(int rw, struct bufvec *bufvec)
-{
-	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_WRITE;
-	return filemap_extent_io(mode, bufvec);
-}
-
-int filemap_redirect_io(int rw, struct bufvec *bufvec)
-{
-	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_REDIRECT;
-	return filemap_extent_io(mode, bufvec);
-}
-
 static int tuxio(struct file *file, void *data, unsigned len, int write)
 {
 	struct inode *inode = file->f_inode;
