@@ -150,7 +150,8 @@ int write_bitmap(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 	struct seg seg;
-	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1, 2);
+	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1,
+			     MAP_REDIRECT);
 	if (err < 0)
 		return err;
 	assert(err == 1);

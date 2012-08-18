@@ -31,12 +31,12 @@ static void add_maps(struct inode *inode, block_t index, struct seg *seg,
 
 /* Create segments, then save state to buffer */
 static int d_map_region(struct inode *inode, block_t start, unsigned count,
-			struct seg *seg, unsigned max_segs, int create)
+			struct seg *seg, unsigned max_segs, enum map_mode mode)
 {
 	int nr_segs;
-	/* this should be called with "create > 0" */
-	assert(create > 0);
-	nr_segs = map_region(inode, start, count, seg, max_segs, create);
+	/* this should be called with "mode != MAP_READ" */
+	assert(mode != MAP_READ);
+	nr_segs = map_region(inode, start, count, seg, max_segs, mode);
 	if (nr_segs > 0)
 		add_maps(inode, start, seg, nr_segs);
 	return nr_segs;
@@ -67,7 +67,7 @@ static int check_map_region(struct inode *inode, block_t start, unsigned count,
 			    struct seg *seg, unsigned max_segs)
 {
 	int nr_segs;
-	nr_segs = map_region(inode, start, count, seg, max_segs, 0);
+	nr_segs = map_region(inode, start, count, seg, max_segs, MAP_READ);
 	if (nr_segs > 0)
 		check_maps(inode, start, seg, nr_segs);
 	return nr_segs;
@@ -76,7 +76,7 @@ static int check_map_region(struct inode *inode, block_t start, unsigned count,
 struct test_data {
 	block_t index;
 	unsigned count;
-	int create;
+	enum map_mode mode;
 };
 
 /* Test basic operations */
@@ -94,7 +94,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		int err, segs;
 
 		for (int i = 0, j = 0; i < 30; i++, j++) {
-			segs = d_map_region(inode, 2*i, 1, &seg, 1, 1);
+			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
 			test_assert(segs == 1);
 		}
 #ifdef CAN_HANDLE_A_LEAF
@@ -127,7 +127,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		}
 
 		/* Check if truncated all */
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
+		segs = map_region(inode, 0, INT_MAX, &seg, 1, MAP_READ);
 		test_assert(segs == 1);
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == SEG_HOLE);
@@ -143,7 +143,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		int err, segs;
 
 		for (int i = 30; i >= 0; i--) {
-			segs = d_map_region(inode, 2*i, 1, &seg, 1, 1);
+			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
 			test_assert(segs == 1);
 		}
 #ifdef CAN_HANDLE_A_LEAF
@@ -160,7 +160,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(!err);
 
 		/* Check if truncated all */
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
+		segs = map_region(inode, 0, INT_MAX, &seg, 1, MAP_READ);
 		test_assert(segs == 1);
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == SEG_HOLE);
@@ -180,9 +180,9 @@ static void test02(struct sb *sb, struct inode *inode)
 	struct seg map[32];
 
 	struct test_data data[] = {
-		{ .index = 5,  .count = 64, .create = 1, },
-		{ .index = 10, .count = 20, .create = 2, },
-		{ .index = 80, .count = 10, .create = 2, },
+		{ .index = 5,  .count = 64, .mode = MAP_WRITE, },
+		{ .index = 10, .count = 20, .mode = MAP_REDIRECT, },
+		{ .index = 80, .count = 10, .mode = MAP_REDIRECT, },
 	};
 
 	int total_segs = 0;
@@ -190,7 +190,7 @@ static void test02(struct sb *sb, struct inode *inode)
 		int segs1, segs2;
 
 		segs1 = d_map_region(inode, data[i].index, data[i].count,
-				    map, ARRAY_SIZE(map), data[i].create);
+				    map, ARRAY_SIZE(map), data[i].mode);
 		test_assert(segs1 > 0);
 		total_segs += segs1;
 
@@ -217,13 +217,13 @@ static void test03(struct sb *sb, struct inode *inode)
 	int segs1, segs2;
 
 	/* Create range */
-	segs1 = d_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1), 1);
+	segs1 = d_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1), MAP_WRITE);
 	test_assert(segs1 > 0);
 	segs2 = check_map_region(inode, 2, 5, map2, ARRAY_SIZE(map2));
 	test_assert(segs1 == segs2);
 
 	/* Overwrite range */
-	segs1 = d_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1), 1);
+	segs1 = d_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1), MAP_WRITE);
 	test_assert(segs1 > 0);
 	segs2 = check_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1));
 	test_assert(segs1 == segs2);
@@ -259,7 +259,7 @@ static void __test04(struct test_data data[], int nr, struct inode *inode)
 		int segs1, segs2;
 
 		segs1 = d_map_region(inode, t->index, t->count,
-				     map, ARRAY_SIZE(map), t->create);
+				     map, ARRAY_SIZE(map), t->mode);
 		test_assert(segs1 > 0);
 		total_segs += segs1;
 
@@ -282,15 +282,15 @@ static void test04(struct sb *sb, struct inode *inode)
 	struct test_data data[][3] = {
 		/* Test case 1 */
 		{
-			{ .index = 2, .count = 1, .create = 1, },
-			{ .index = 6, .count = 1, .create = 1, },
-			{ .index = 4, .count = 1, .create = 1, },
+			{ .index = 2, .count = 1, .mode = MAP_WRITE, },
+			{ .index = 6, .count = 1, .mode = MAP_WRITE, },
+			{ .index = 4, .count = 1, .mode = MAP_WRITE, },
 		},
 		/* Test case 2 */
 		{
-			{ .index = 0x1100000, .count = 0x40, .create = 1, },
-			{ .index =  0x800000, .count = 0x40, .create = 1, },
-			{ .index =  0x800040, .count = 0x40, .create = 1, },
+			{ .index = 0x1100000, .count = 0x40, .mode=MAP_WRITE, },
+			{ .index =  0x800000, .count = 0x40, .mode=MAP_WRITE, },
+			{ .index =  0x800040, .count = 0x40, .mode=MAP_WRITE, },
 		},
 	};
 

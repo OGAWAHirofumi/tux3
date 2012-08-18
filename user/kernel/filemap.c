@@ -50,6 +50,13 @@
 #define trace trace_on
 #endif
 
+enum map_mode {
+	MAP_READ	= 0,	/* map_region for read */
+	MAP_WRITE	= 1,	/* map_region for overwrite */
+	MAP_REDIRECT	= 2,	/* map_region for redirected write
+				 * (copy-on-write) */
+};
+
 #if 1
 /* FIXME: this is temporary fix */
 #ifndef __KERNEL__
@@ -95,7 +102,7 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 
 /* map_region() by using dleaf1 */
 static int map_region1(struct inode *inode, block_t start, unsigned count,
-		       struct seg map[], unsigned max_segs, int create)
+		       struct seg map[], unsigned max_segs, enum map_mode mode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -104,7 +111,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 
 	assert(max_segs > 0);
 
-	if (create) {
+	if (mode != MAP_READ) {
 		down_write(&btree->lock);
 		if (inode == sb->bitmap)
 			get_bitmap_write(sb);
@@ -113,7 +120,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			down_read_nested(&btree->lock, inode == sb->bitmap);
 	}
 
-	if (!has_root(btree) && create) {
+	if (!has_root(btree) && mode != MAP_READ) {
 		/*
 		 * Allocate empty btree if this btree doesn't have it yet.
 		 * FIXME: this should be merged to insert_leaf() or something?
@@ -143,7 +150,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		dleaf_dump(btree, leaf);
 		dwalk_probe(leaf, sb->blocksize, walk, start);
 	} else {
-		assert(!create);
+		assert(mode == MAP_READ);
 		/* btree doesn't have root yet */
 	}
 
@@ -190,14 +197,14 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 	map[0].count -= below;
 	map[segs - 1].count -= above;
 
-	if (!create)
+	if (mode == MAP_READ)
 		goto out_release;
 
 	/* Save blocks before change map[] for below or above. */
 	block_t below_block, above_block;
 	below_block = map[0].block - below;
 	above_block = map[segs - 1].block + map[segs - 1].count;
-	if (create == 2) {
+	if (mode == MAP_REDIRECT) {
 		/* Change the map[] to redirect this region as one extent */
 		count = 0;
 		for (int i = 0; i < segs; i++) {
@@ -212,35 +219,35 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		map[0].state = SEG_HOLE;
 	}
 	for (int i = 0; i < segs; i++) {
-		if (map[i].state == SEG_HOLE) {
-			count = map[i].count;
-			if ((err = balloc(sb, count, &block))) { // goal ???
-				/*
-				 * Out of space on file data allocation.  It happens.  Tread
-				 * carefully.  We have not stored anything in the btree yet,
-				 * so we free what we allocated so far.  We need to leave the
-				 * user with a nice ENOSPC return and all metadata consistent
-				 * on disk.  We better have reserved everything we need for
-				 * metadata, just giving up is not an option.
-				 */
-				/*
-				 * Alternatively, we can go ahead and try to record just what
-				 * we successfully allocated, then if the update fails on no
-				 * space for btree splits, free just the blocks for extents
-				 * we failed to store.
-				 */
-				segs = err;
-				goto out_release;
-			}
-			log_balloc(sb, block, count);
-			trace("fill in %Lx/%i ", block, count);
-			map[i] = (struct seg){
-				.block = block,
-				.count = count,
-				/* if create == 2, buffer should be dirty */
-				.state = create == 2 ? 0 : SEG_NEW,
-			};
+		if (map[i].state != SEG_HOLE)
+			continue;
+
+		count = map[i].count;
+		if ((err = balloc(sb, count, &block))) { // goal ???
+			/*
+			 * Out of space on file data allocation.  It happens.  Tread
+			 * carefully.  We have not stored anything in the btree yet,
+			 * so we free what we allocated so far.  We need to leave the
+			 * user with a nice ENOSPC return and all metadata consistent
+			 * on disk.  We better have reserved everything we need for
+			 * metadata, just giving up is not an option.
+			 */
+			/*
+			 * Alternatively, we can go ahead and try to record just what
+			 * we successfully allocated, then if the update fails on no
+			 * space for btree splits, free just the blocks for extents
+			 * we failed to store.
+			 */
+			segs = err;
+			goto out_release;
 		}
+		log_balloc(sb, block, count);
+		trace("fill in %Lx/%i ", block, count);
+
+		map[i].block = block;
+		map[i].count = count;
+		/* if mode == MAP_REDIRECT, buffer should be dirty */
+		map[i].state = (mode == MAP_REDIRECT) ? 0 : SEG_NEW;
 	}
 
 	/* Start to reflect the map[] changes to the data btree */
@@ -327,7 +334,7 @@ out_release:
 	if (cursor)
 		release_cursor(cursor);
 out_unlock:
-	if (create) {
+	if (mode != MAP_READ) {
 		up_write(&btree->lock);
 		if (inode == sb->bitmap)
 			put_bitmap_write(sb);
@@ -343,7 +350,7 @@ out_unlock:
 
 /* map_region() by using dleaf2 */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
-		       struct seg seg[], unsigned max_segs, int create)
+		       struct seg seg[], unsigned max_segs, enum map_mode mode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -352,7 +359,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 
 	assert(max_segs > 0);
 
-	if (create) {
+	if (mode != MAP_READ) {
 		down_write(&btree->lock);
 		if (inode == sb->bitmap)
 			get_bitmap_write(sb);
@@ -361,7 +368,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			down_read_nested(&btree->lock, inode == sb->bitmap);
 	}
 
-	if (!has_root(btree) && create) {
+	if (!has_root(btree) && mode != MAP_READ) {
 		/*
 		 * Allocate empty btree if this btree doesn't have it yet.
 		 * FIXME: this should be merged to insert_leaf() or something?
@@ -402,17 +409,17 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		}
 		segs = rq.nr_segs;
 	} else {
-		assert(!create);
+		assert(mode == MAP_READ);
 		/* btree doesn't have root yet */
 		seg[0].block = 0;
 		seg[0].count = count;
 		seg[0].state = SEG_HOLE;
 	}
 
-	if (!create)
+	if (mode == MAP_READ)
 		goto out_release;
 
-	if (create == 2) {
+	if (mode == MAP_REDIRECT) {
 		/* Change the seg[] to redirect this region as one extent */
 		unsigned total = 0;
 		for (int i = 0; i < segs; i++) {
@@ -458,8 +465,8 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		log_balloc(sb, block, seg[i].count);
 
 		seg[i].block = block;
-		/* if create == 2, buffer should be dirty */
-		seg[i].state = create == 2 ? 0 : SEG_NEW;
+		/* if mode == MAP_REDIRECT, buffer should be dirty */
+		seg[i].state = (mode == MAP_REDIRECT) ? 0 : SEG_NEW;
 	}
 
 	/* Write extents from data btree */
@@ -482,7 +489,7 @@ out_release:
 	if (cursor)
 		release_cursor(cursor);
 out_unlock:
-	if (create) {
+	if (mode != MAP_READ) {
 		up_write(&btree->lock);
 		if (inode == sb->bitmap)
 			put_bitmap_write(sb);
@@ -498,14 +505,14 @@ out_unlock:
 
 /* Map specified logical region to physical region. (overwrite or allocate) */
 static int map_region(struct inode *inode, block_t start, unsigned count,
-		      struct seg map[], unsigned max_segs, int create)
+		      struct seg map[], unsigned max_segs, enum map_mode mode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
 
 	if (btree->ops == &dtree1_ops)
-		return map_region1(inode, start, count, map, max_segs, create);
+		return map_region1(inode, start, count, map, max_segs, mode);
 	else
-		return map_region2(inode, start, count, map, max_segs, create);
+		return map_region2(inode, start, count, map, max_segs, mode);
 }
 
 #ifdef __KERNEL__
@@ -521,6 +528,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
 	struct btree *btree = &tux_inode(inode)->btree;
+	enum map_mode mode;
 
 	if (sb->logmap == inode) {
 		assert(!has_root(btree) && create);
@@ -530,12 +538,14 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	int delalloc;
 	if (create == 3) {
 		delalloc = 1;
-		create = 0;
-	} else
+		mode = MAP_READ;
+	} else {
 		delalloc = 0;
+		mode = create;
+	}
 
 	struct seg seg;
-	int segs = map_region(inode, iblock, max_blocks, &seg, 1, create);
+	int segs = map_region(inode, iblock, max_blocks, &seg, 1, mode);
 	if (segs < 0) {
 		warn("map_region failed: %d", -segs);
 		return -EIO;
@@ -846,7 +856,8 @@ int write_bitmap(struct buffer_head *buffer)
 #if 0
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 	struct seg seg;
-	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1, 2);
+	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1,
+			     MAP_REDIRECT);
 	if (err < 0)
 		return err;
 	assert(err == 1);
@@ -857,18 +868,5 @@ int write_bitmap(struct buffer_head *buffer)
 		clean_buffer(buffer);
 #endif
 	return 0;
-}
-
-int bitmap_io(struct buffer_head *buffer, int write)
-{
-#ifdef __KERNEL__
-	if (write)
-		clear_buffer_dirty(buffer);
-	else
-		set_buffer_uptodate(buffer);
-	return 0;
-#else
-	return (write) ? write_bitmap(buffer) : filemap_extent_io(buffer, 0);
-#endif
 }
 #endif /* __KERNEL__ */
