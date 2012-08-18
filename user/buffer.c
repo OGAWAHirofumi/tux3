@@ -402,7 +402,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 		};
 		bufvec_add(&bufvec, buffer);
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
-		int err = buffer->map->io(&bufvec, READ);
+		int err = buffer->map->io(READ, &bufvec);
 		if (err) {
 			blockput(buffer);
 			return NULL; // ERR_PTR me!!!
@@ -493,13 +493,13 @@ int flush_list(struct list_head *head)
 	list_for_each_entry_safe(buffer, n, head, link) {
 		assert(buffer_dirty(buffer));
 		while (!bufvec_add(bufvec, buffer)) {
-			err = bufvec_first_buf(bufvec)->map->io(bufvec, WRITE);
+			err = bufvec_first_buf(bufvec)->map->io(WRITE, bufvec);
 			if (err)
 				goto error;
 		}
 	}
 	while (bufvec_inuse(bufvec)) {
-		err = bufvec_first_buf(bufvec)->map->io(bufvec, WRITE);
+		err = bufvec_first_buf(bufvec)->map->io(WRITE, bufvec);
 		if (err)
 			goto error;
 	}
@@ -637,7 +637,7 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 #endif
 }
 
-static int dev_blockio(struct bufvec *bufvec, int rw)
+static int dev_blockio(int rw, struct bufvec *bufvec)
 {
 	block_t block = bufvec_first_index(bufvec);
 	unsigned count = bufvec_inuse(bufvec);
@@ -660,7 +660,7 @@ static int dev_blockio(struct bufvec *bufvec, int rw)
 	return err;
 }
 
-int dev_errio(struct bufvec *bufvec, int rw)
+int dev_errio(int rw, struct bufvec *bufvec)
 {
 	assert(0);
 	return -EIO;

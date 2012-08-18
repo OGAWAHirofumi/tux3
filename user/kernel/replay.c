@@ -120,7 +120,7 @@ static struct replay *replay_prepare(struct sb *sb)
 			goto error;
 		}
 		assert(bufindex(buffer) == i);
-		err = blockio(0, buffer, logchain);
+		err = blockio(READ, buffer, logchain);
 		if (err) {
 			blockput(buffer);
 			goto error;

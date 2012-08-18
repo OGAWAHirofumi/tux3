@@ -134,7 +134,7 @@ static void clean_buffer(struct buffer_head *buffer)
 		set_buffer_clean(buffer);
 }
 
-static int filemap_extent_io(struct bufvec *bufvec, enum map_mode mode)
+static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
 	struct inode *inode = buffer_inode(bufvec_first_buf(bufvec));
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -212,16 +212,16 @@ static int filemap_extent_io(struct bufvec *bufvec, enum map_mode mode)
 	return err;
 }
 
-int filemap_overwrite_io(struct bufvec *bufvec, int rw)
+int filemap_overwrite_io(int rw, struct bufvec *bufvec)
 {
 	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_WRITE;
-	return filemap_extent_io(bufvec, mode);
+	return filemap_extent_io(mode, bufvec);
 }
 
-int filemap_redirect_io(struct bufvec *bufvec, int rw)
+int filemap_redirect_io(int rw, struct bufvec *bufvec)
 {
 	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_REDIRECT;
-	return filemap_extent_io(bufvec, mode);
+	return filemap_extent_io(mode, bufvec);
 }
 
 static int tuxio(struct file *file, void *data, unsigned len, int write)
