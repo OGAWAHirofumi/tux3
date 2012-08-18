@@ -249,7 +249,36 @@ static void test03(struct sb *sb, struct inode *inode)
 	clean_main(sb, inode);
 }
 
-static void __test04(struct test_data data[], int nr, struct inode *inode)
+/* Test overwrite extent and hole at once */
+static void test04(struct sb *sb, struct inode *inode)
+{
+	struct seg map1[32], map2[32];
+	int segs1, segs2;
+
+	/* Create extents */
+	segs1 = d_map_region(inode, 2, 2, map1, ARRAY_SIZE(map1), MAP_WRITE);
+	test_assert(segs1 > 0);
+	segs2 = check_map_region(inode, 2, 2, map2, ARRAY_SIZE(map2));
+	test_assert(segs1 == segs2);
+
+	/* Overwrite extent and hole at once */
+	segs1 = d_map_region(inode, 2, 4, map1, ARRAY_SIZE(map1), MAP_WRITE);
+	test_assert(segs1 > 0);
+	segs2 = check_map_region(inode, 2, 4, map1, ARRAY_SIZE(map1));
+	test_assert(segs1 == segs2);
+
+	/* Check whole rage from 0 */
+	segs2 = check_map_region(inode, 0, 200, map2, ARRAY_SIZE(map2));
+	test_assert(segs2 >= segs1);
+
+	/* Clear dirty page to prevent to call map_region again */
+	truncate_inode_pages(mapping(inode), 0);
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb, inode);
+}
+
+static void __test05(struct test_data data[], int nr, struct inode *inode)
 {
 	struct test_data *t = data;
 	struct seg map[32];
@@ -277,7 +306,7 @@ static void __test04(struct test_data data[], int nr, struct inode *inode)
 }
 
 /* Test to write block to hole */
-static void test04(struct sb *sb, struct inode *inode)
+static void test05(struct sb *sb, struct inode *inode)
 {
 	struct test_data data[][3] = {
 		/* Test case 1 */
@@ -295,7 +324,7 @@ static void test04(struct sb *sb, struct inode *inode)
 	};
 
 	for (int test = 0; test < ARRAY_SIZE(data); test++) {
-		__test04(data[test], ARRAY_SIZE(data[test]), inode);
+		__test05(data[test], ARRAY_SIZE(data[test]), inode);
 
 		int err = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		test_assert(!err);
@@ -351,6 +380,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test04"))
 		test04(sb, inode);
+	test_end();
+
+	if (test_start("test05"))
+		test05(sb, inode);
 	test_end();
 
 	clean_main(sb, inode);
