@@ -74,18 +74,25 @@ static void tux3_destroy_inode(struct inode *inode)
 
 static void tux3_write_super(struct super_block *sb)
 {
+	lock_super(sb);
 	if (save_sb(tux_sb(sb))) {
 		printk(KERN_ERR "TUX3: unable to write superblock\n");
 		return;
 	}
 	sb->s_dirt = 0;
+	unlock_super(sb);
+}
+
+static int tux3_sync_fs(struct super_block *sb, int wait)
+{
+	tux3_write_super(sb); /* FIXME: error handling */
+	return 0;
 }
 
 static void tux3_put_super(struct super_block *sb)
 {
 	struct sb *sbi = tux_sb(sb);
 
-	/* FIXME: remove this, then use sb->s_dirt instead */
 	tux3_write_super(sb);
 
 	destroy_defer_bfree(&sbi->derollup);
@@ -128,6 +135,7 @@ static const struct super_operations tux3_super_ops = {
 	.evict_inode	= tux3_evict_inode,
 	.write_inode	= tux3_write_inode,
 	.write_super	= tux3_write_super,
+	.sync_fs	= tux3_sync_fs,
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,
 };
