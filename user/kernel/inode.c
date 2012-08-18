@@ -144,6 +144,52 @@ void del_defer_alloc_inum(struct inode *inode)
  * we should only round down the split point, not the returned goal.)
  */
 
+static int find_free_inum(struct cursor *cursor, inum_t goal, inum_t *allocated)
+{
+	int ret;
+
+#ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
+	/* If this is not mkfs path, it should have itable root */
+	if (!has_root(cursor->btree)) {
+		*allocated = goal;
+		return 0;
+	}
+#endif
+
+	ret = btree_probe(cursor, goal);
+	if (ret)
+		return ret;
+
+	/* FIXME: need better allocation policy */
+
+	ret = btree_traverse(cursor, goal, TUXKEY_LIMIT, ileaf_find_free,
+			     allocated);
+	if (ret < 0)
+		goto out;
+	if (ret > 0) {
+		/* Found free inum */
+		ret = 0;
+		goto out;
+	}
+
+	ret = btree_traverse(cursor, 0, goal, ileaf_find_free, allocated);
+	if (ret < 0)
+		goto out;
+	if (ret > 0) {
+		/* Found free inum */
+		ret = 0;
+		goto out;
+	}
+
+	/* Couldn't find free inum */
+	ret = -ENOSPC;
+
+out:
+	release_cursor(cursor);
+
+	return ret;
+}
+
 static int alloc_inum(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -156,46 +202,18 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
-retry:
-#ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
-	/* If this is not mkfs path, it should have itable root */
-	if (!has_root(itable))
-		goto skip_itable;
-#endif
-	if ((err = btree_probe(cursor, goal)))
-		goto out;
-
-	/* FIXME: inum allocation should check min and max */
-	trace("create inode 0x%Lx", (L)goal);
-	assert(!tux_inode(inode)->btree.root.depth);
-	assert(goal < cursor_next_key(cursor));
 	while (1) {
-		trace_off("find empty inode in [%Lx] base %Lx", (L)bufindex(cursor_leafbuf(cursor)), (L)ibase(leaf));
-		goal = find_empty_inode(itable, bufdata(cursor_leafbuf(cursor)), goal);
-		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)cursor_next_key(cursor));
-		if (goal < cursor_next_key(cursor))
+		err = find_free_inum(cursor, goal, &goal);
+		if (err)
+			goto error;
+
+		/* Is this inum already used by deferred inum allocation? */
+		if (!find_defer_alloc_inum(sb, goal))
 			break;
-		int more = cursor_advance(cursor);
-		if (more < 0) {
-			err = more;
-			goto release;
-		}
-		trace("no more inode space here, advance %i", more);
-		if (!more) {
-			err = -ENOSPC;
-			goto release;
-		}
-	}
-#ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
-skip_itable:
-#endif
-	/* Is this inum already used by deferred inum allocation? */
-	if (find_defer_alloc_inum(sb, goal)) {
+
 		goal++;
 		while (find_defer_alloc_inum(sb, goal))
 			goal++;
-		release_cursor(cursor);
-		goto retry;
 	}
 
 	/* FIXME: should use conditional inode->present. But,
@@ -209,11 +227,10 @@ skip_itable:
 
 	add_defer_alloc_inum(inode);
 
-release:
-	release_cursor(cursor);
-out:
+error:
 	up_write(&cursor->btree->lock);
 	free_cursor(cursor);
+
 	return err;
 }
 
