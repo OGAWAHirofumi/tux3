@@ -31,3 +31,33 @@ struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
 
 	return dentry.d_inode;
 }
+
+struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
+			struct tux_iattr *iattr)
+{
+	struct dentry dentry = {
+		.d_name.name = (unsigned char *)name,
+		.d_name.len = len,
+	};
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+
+	/*
+	 * FIXME: we can find space with existent check
+	 */
+
+	entry = tux_find_dirent(dir, dentry.d_name.name, dentry.d_name.len,
+				&buffer);
+	if (!IS_ERR(entry)) {
+		blockput(buffer);
+		return ERR_PTR(-EEXIST); // should allow create of a file that already exists!!!
+	}
+	if (PTR_ERR(entry) != -ENOENT)
+		return ERR_CAST(entry);
+
+	int err = __tux3_mknod(dir, &dentry, iattr, 0);
+	if (err)
+		return ERR_PTR(err);
+
+	return dentry.d_inode;
+}

@@ -326,33 +326,6 @@ out:
 	return err;
 }
 
-struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
-			struct tux_iattr *iattr)
-{
-	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_dirent(dir, (unsigned char *)name, len, &buffer);
-	if (!IS_ERR(entry)) {
-		blockput(buffer);
-		return ERR_PTR(-EEXIST); // should allow create of a file that already exists!!!
-	}
-	if (PTR_ERR(entry) != -ENOENT)
-		return ERR_CAST(entry);
-
-	struct inode *inode = tux_create_inode(dir, iattr, 0);
-	if (IS_ERR(inode))
-		return inode;
-
-	int err = tux_create_dirent(dir, (unsigned char *)name, len,
-				    tux_inode(inode)->inum, iattr->mode);
-	if (err) {
-		purge_inode(inode);
-		iput(inode);
-		return ERR_PTR(err);
-	}
-
-	return inode;
-}
-
 int tuxunlink(struct inode *dir, const char *name, unsigned len)
 {
 	struct sb *sb = tux_sb(dir->i_sb);

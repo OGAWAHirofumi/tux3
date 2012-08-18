@@ -84,13 +84,15 @@ out:
 	return d_splice_alias(inode, dentry);
 }
 
-static int __tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
+static int __tux_add_dirent(struct inode *dir, struct dentry *dentry,
+			    struct inode *inode)
 {
 	return tux_create_dirent(dir, dentry->d_name.name, dentry->d_name.len,
 				 tux_inode(inode)->inum, inode->i_mode);
 }
 
-static int tux_add_dirent(struct inode *dir, struct dentry *dentry, struct inode *inode)
+static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
+			  struct inode *inode)
 {
 	int err = __tux_add_dirent(dir, dentry, inode);
 	if (!err)
@@ -106,27 +108,25 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_dirent(buffer, entry);
 }
 
-static int tux3_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
-		      dev_t rdev)
+static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
+			struct tux_iattr *iattr, dev_t rdev)
 {
-	struct tux_iattr iattr = {
-//		.uid	= current_fsuid(),
-//		.gid	= current_fsgid(),
-		.mode	= mode,
-	};
 	struct inode *inode;
-	int err;
+	int err, is_dir = S_ISDIR(iattr->mode);
 
 	if (!huge_valid_dev(rdev))
 		return -EINVAL;
 
+	if (is_dir && dir->i_nlink >= TUX_LINK_MAX)
+		return -EMLINK;
+
 	change_begin(tux_sb(dir->i_sb));
-	inode = tux_create_inode(dir, &iattr, rdev);
+	inode = tux_create_inode(dir, iattr, rdev);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = tux_add_dirent(dir, dentry, inode);
 		if (!err) {
-			if ((inode->i_mode & S_IFMT) == S_IFDIR)
+			if (is_dir)
 				inode_inc_link_count(dir);
 			goto out;
 		}
@@ -139,6 +139,19 @@ out:
 	return err;
 }
 
+#ifdef __KERNEL__
+static int tux3_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
+		      dev_t rdev)
+{
+	struct tux_iattr iattr = {
+		.uid	= current_fsuid(),
+		.gid	= current_fsgid(),
+		.mode	= mode,
+	};
+
+	return __tux3_mknod(dir, dentry, &iattr, rdev);
+}
+
 static int tux3_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		       struct nameidata *nd)
 {
@@ -147,10 +160,9 @@ static int tux3_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 static int tux3_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
-	if (dir->i_nlink >= TUX_LINK_MAX)
-		return -EMLINK;
 	return tux3_mknod(dir, dentry, S_IFDIR | mode, 0);
 }
+#endif /* !__KERNEL__ */
 
 static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 		     struct dentry *dentry)
@@ -313,7 +325,7 @@ error:
 }
 
 void *a[] = {
-	set_nlink, tux3_create, tux3_mkdir, tux3_link,
+	set_nlink, tux3_link,
 	tux3_symlink, tux3_unlink, tux3_rmdir, tux3_rename,
 };
 
