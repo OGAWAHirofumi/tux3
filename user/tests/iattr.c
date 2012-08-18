@@ -27,11 +27,8 @@ static void test01(struct sb *sb)
 		.i_uid		= 0x12121212,
 		.i_gid		= 0x34343434,
 		.i_size		= 0x123456789ULL,
-		/* FIXME: fixed32 can't represent nanoseconds fully */
-//		.i_ctime	= spectime(0xdec0de01dec0de02ULL),
-		.i_ctime	= spectime(0xdec0de01dec00000ULL),
-//		.i_mtime	= spectime(0xbadface1badface2ULL),
-		.i_mtime	= spectime(0xbadface1badf0000ULL),
+		.i_ctime	= spectime(0xdec0de01dec0de02ULL),
+		.i_mtime	= spectime(0xbadface1badface2ULL),
 		);
 	struct inode *inode2 = rapid_open_inode(sb, NULL, 0x666);
 

@@ -28,8 +28,6 @@
 #define veccopy(d, s, n) memcpy((d), (s), (n) * sizeof(*(d)))
 #define vecmove(d, s, n) memmove((d), (s), (n) * sizeof(*(d)))
 
-typedef u64 fixed32; /* Tux3 time values */
-typedef u32 millisecond_t;
 typedef u64 inum_t;
 typedef u64 tuxkey_t;
 
@@ -86,7 +84,7 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Tux3 disk format */
 
-#define TUX3_MAGIC		"tux3" "\x20\x12\x02\x16"
+#define TUX3_MAGIC		"tux3" "\x20\x12\x07\x02"
 /*
  * TUX3_LABEL includes the date of the last incompatible disk format change
  * NOTE: Always update this history for each incompatible change!
@@ -99,6 +97,7 @@ static inline void *decode48(void *at, u64 *val)
  * 2009-02-28: Attributes renumbered, rdev added
  * 2009-03-10: Alignment fix of disksuper
  * 2012-02-16: Update for atomic commit
+ * 2012-07-02: Use timestamp 32.32 fixed point. Increase log_balloc size.
  */
 
 #define TUX3_MAGIC_LOG		0x10ad
@@ -498,37 +497,6 @@ struct btree_ops {
 	int (*leaf_can_free)(struct btree *btree, void *leaf);
 	void (*leaf_dump)(struct btree *btree, void *leaf);
 };
-
-/*
- * Tux3 times are 32.32 fixed point while time attributes are stored in 32.16
- * format, trading away some precision to compress time fields by two bytes
- * each.  It is not clear whether the saved space is worth the lower precision.
- *
- * FIXME: 32.32 and 32.16 difference is bad. It means, if inode cache
- * was reclaimed, next read for inode will show different timestamp.
- */
-#define TIME_ATTR_SHIFT 16
-
-static inline u32 high32(fixed32 val)
-{
-	return val >> 32;
-}
-
-static inline unsigned billionths(fixed32 val)
-{
-	return (((val & 0xffffffff) * 1000000000) + 0x80000000) >> 32;
-}
-
-static inline struct timespec spectime(fixed32 time)
-{
-	return (struct timespec){ .tv_sec = high32(time), .tv_nsec = billionths(time) };
-}
-
-static inline fixed32 tuxtime(struct timespec time)
-{
-	u64 mult = ((1ULL << 63) / 1000000000ULL);
-	return ((u64)time.tv_sec << 32) + ((time.tv_nsec * mult + (3 << 29)) >> 31);
-}
 
 enum atkind {
 	/* Fixed size attrs */
