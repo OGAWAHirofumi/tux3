@@ -563,20 +563,23 @@ static void blockput_free(struct btree *btree, struct buffer_head *buffer)
 
 static void adjust_parent_sep(struct cursor *cursor, int level, be_u64 newsep)
 {
+	/* Update separating key until nearest common parent */
 	while (level >= 0) {
 		struct path_level *parent_at = &cursor->path[level];
 		struct index_entry *parent = parent_at->next - 1;
 
-		/* If nearest common parent, update separating key */
-		if (parent != level_node(cursor, level)->entries) {
-			log_bnode_adjust(cursor->btree->sb,
-					 bufindex(parent_at->buffer),
-					 from_be_u64(parent->key),
-					 from_be_u64(newsep));
-			parent->key = newsep;
-			mark_buffer_rollup_non(parent_at->buffer);
+		assert(0 < from_be_u64(parent->key));
+		assert(from_be_u64(parent->key) < from_be_u64(newsep));
+		log_bnode_adjust(cursor->btree->sb,
+				 bufindex(parent_at->buffer),
+				 from_be_u64(parent->key),
+				 from_be_u64(newsep));
+		parent->key = newsep;
+		mark_buffer_rollup_non(parent_at->buffer);
+
+		if (parent != level_node(cursor, level)->entries)
 			break;
-		}
+
 		level--;
 	}
 }
