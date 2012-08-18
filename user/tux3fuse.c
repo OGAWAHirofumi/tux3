@@ -35,7 +35,7 @@
  * 2. Mount on foo/ like: ./tux3fuse testvol -f foo/ (-f for foreground)
  */
 
-//#include <sys/xattr.h>
+#include <linux/xattr.h>
 #include "trace.h"
 #include "tux3user.h"
 
@@ -753,13 +753,39 @@ static void tux3fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_reply_err(req, 0);
 }
 
-/* FIXME: xattr should check prefix like 'user.' */
+/*
+ * FIXME: If we didn't return error for POSIX acl, userland will use
+ * POSIX acl instead of chmod, etc. So, return error if it was not
+ * 'user.' or 'trusted.'. We need to implement others.
+ */
+static int xattr_prefix_check(const char *name)
+{
+	if (!strncmp(name, XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN)) {
+		if (strlen(name) <= XATTR_TRUSTED_PREFIX_LEN)
+			return -EINVAL;
+		return 0;
+	}
+	if (!strncmp(name, XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN)) {
+		if (strlen(name) <= XATTR_USER_PREFIX_LEN)
+			return -EINVAL;
+		return 0;
+	}
+	return -EOPNOTSUPP;
+}
+
 static void tux3fuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			      const char *value, size_t size, int flags)
 {
 	trace("(%lx, '%s'='%s')", ino, name, value);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
+	int err;
+
+	err = xattr_prefix_check(name);
+	if (err) {
+		fuse_reply_err(req, -err);
+		return;
+	}
 
 	inode = tux3fuse_iget(sb, ino);
 	if (IS_ERR(inode)) {
@@ -767,7 +793,7 @@ static void tux3fuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		return;
 	}
 
-	int err = set_xattr(inode, name, strlen(name), value, size, flags);
+	err = set_xattr(inode, name, strlen(name), value, size, flags);
 	iput(inode);
 
 	fuse_reply_err(req, -err);
@@ -779,6 +805,13 @@ static void tux3fuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	trace("(%lx, '%s')", ino, name);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
+	int err;
+
+	err = xattr_prefix_check(name);
+	if (err) {
+		fuse_reply_err(req, -err);
+		return;
+	}
 
 	inode = tux3fuse_iget(sb, ino);
 	if (IS_ERR(inode)) {
@@ -851,8 +884,15 @@ static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,
 {
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
+	int err;
 
 	trace("(%lx, '%s')", ino, name);
+
+	err = xattr_prefix_check(name);
+	if (err) {
+		fuse_reply_err(req, -err);
+		return;
+	}
 
 	inode = tux3fuse_iget(sb, ino);
 	if (IS_ERR(inode)) {
@@ -860,7 +900,7 @@ static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,
 		return;
 	}
 
-	int err = del_xattr(inode, name, strlen(name));
+	err = del_xattr(inode, name, strlen(name));
 	iput(inode);
 
 	fuse_reply_err(req, -err);
