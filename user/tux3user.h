@@ -163,6 +163,7 @@ int page_readlink(struct inode *inode, void *buf, unsigned size);
 void inode_leak_check(void);
 void __iget(struct inode *inode);
 void ihold(struct inode *inode);
+struct inode *tux3_ilookup(struct sb *sb, inum_t inum);
 void iput(struct inode *inode);
 int tuxtruncate(struct inode *inode, loff_t size);
 int write_inode(struct inode *inode);
