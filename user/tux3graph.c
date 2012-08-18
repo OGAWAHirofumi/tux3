@@ -183,6 +183,20 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, (L)old, (L)new);
 			break;
 		}
+		case LOG_LEAF_FREE:
+		case LOG_BNODE_FREE: {
+			u64 block;
+			char *name;
+			data = decode48(data, &block);
+			if (code == LOG_LEAF_FREE)
+				name = "LOG_LEAF_FREE";
+			else
+				name = "LOG_BNODE_FREE";
+			fprintf(gi->f, " | [%s] %s %llu ",
+				name, code == LOG_LEAF_FREE ? "leaf" : "bnode",
+				(L)block);
+			break;
+		}
 		case LOG_BNODE_ROOT: {
 			u64 root, left, right, rkey;
 			unsigned count = *data++;
