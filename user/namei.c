@@ -43,6 +43,22 @@ struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
 	return dentry.d_inode;
 }
 
+static int tux_check_exist(struct inode *dir, struct qstr *qstr)
+{
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+
+	entry = tux_find_dirent(dir, qstr, &buffer);
+	if (!IS_ERR(entry)) {
+		blockput(buffer);
+		return -EEXIST;
+	}
+	if (PTR_ERR(entry) != -ENOENT)
+		return PTR_ERR(entry);
+
+	return 0;
+}
+
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr)
 {
@@ -50,26 +66,70 @@ struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 		.d_name.name = (unsigned char *)name,
 		.d_name.len = len,
 	};
-	struct buffer_head *buffer;
-	tux_dirent *entry;
+	int err;
 
 	/*
 	 * FIXME: we can find space with existent check
 	 */
 
-	entry = tux_find_dirent(dir, &dentry.d_name, &buffer);
-	if (!IS_ERR(entry)) {
-		blockput(buffer);
-		return ERR_PTR(-EEXIST); // should allow create of a file that already exists!!!
+	err = tux_check_exist(dir, &dentry.d_name);
+	if (err) {
+		if (err == -EEXIST) {
+			// should allow create of a file that already exists!!!
+		}
+		return ERR_PTR(err);
 	}
-	if (PTR_ERR(entry) != -ENOENT)
-		return ERR_CAST(entry);
 
-	int err = __tux3_mknod(dir, &dentry, iattr, 0);
+	err = __tux3_mknod(dir, &dentry, iattr, 0);
 	if (err)
 		return ERR_PTR(err);
 
 	return dentry.d_inode;
+}
+
+int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
+	    const char *dstname, unsigned dstlen)
+{
+	struct dentry src = {
+		.d_name.name = (unsigned char *)srcname,
+		.d_name.len = srclen,
+	};
+	struct dentry dst = {
+		.d_name.name = (unsigned char *)dstname,
+		.d_name.len = dstlen,
+	};
+	int err;
+
+	err = tuxlookup(dir, &src);
+	if (err)
+		return err;
+	if (S_ISDIR(src.d_inode->i_mode)) {
+		err = -EPERM;
+		goto error_src;
+	}
+	/* Orphaned inode. We shouldn't grab this. */
+	if (src.d_inode->i_nlink == 0) {
+		err = -ENOENT;
+		goto error_src;
+	}
+
+	/*
+	 * FIXME: we can find space with existent check
+	 */
+
+	err = tux_check_exist(dir, &dst.d_name);
+	if (err)
+		goto error_src;
+
+	err = tux3_link(&src, dir, &dst);
+	if (!err) {
+		assert(dst.d_inode == src.d_inode);
+		iput(dst.d_inode);
+	}
+error_src:
+	iput(src.d_inode);
+
+	return err;
 }
 
 int tuxunlink(struct inode *dir, const char *name, unsigned len)

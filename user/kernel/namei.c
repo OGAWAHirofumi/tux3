@@ -174,6 +174,7 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 		iput(inode);
 	}
 	change_end(tux_sb(inode->i_sb));
+
 	return err;
 }
 
@@ -337,7 +338,7 @@ error:
 }
 
 void *a[] = {
-	set_nlink, tux3_link, tux3_symlink, tux3_rename,
+	set_nlink, tux3_symlink, tux3_rename,
 };
 
 #ifdef __KERNEL__
