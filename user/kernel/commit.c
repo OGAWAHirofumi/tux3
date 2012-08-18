@@ -334,6 +334,7 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 	return err; /* FIXME: error handling */
 }
 
+#ifdef ATOMIC
 /* FIXME: quickly designed, rethink this. */
 int force_rollup(struct sb *sb)
 {
@@ -357,6 +358,7 @@ int force_delta(struct sb *sb)
 
 	return err;
 }
+#endif /* !ATOMIC */
 
 int change_begin(struct sb *sb)
 {

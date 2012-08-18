@@ -6,9 +6,11 @@
 
 #include "kernel/filemap.c"
 
-#if defined(ATOMIC) || defined(BLOCKDIRTY)
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
+#ifndef ATOMIC
+	return buffer;
+#endif
 	unsigned oldstate = buffer->state;
 	assert(oldstate < BUFFER_STATES);
 	newdelta &= BUFFER_DIRTY_STATES - 1;
@@ -38,12 +40,6 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 	return buffer;
 }
-#else
-struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
-{
-	return buffer;
-}
-#endif /* defined(ATOMIC) || defined(BLOCKDIRTY) */
 
 /*
  * Extrapolate from single buffer flush or blockread to opportunistic exent IO

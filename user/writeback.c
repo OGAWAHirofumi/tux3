@@ -142,3 +142,15 @@ int sync_super(struct sb *sb)
 	return 0;
 #endif /* !ATOMIC */
 }
+
+#ifndef ATOMIC
+int force_rollup(struct sb *sb)
+{
+	return sync_super(sb);
+}
+
+int force_delta(struct sb *sb)
+{
+	return sync_super(sb);
+}
+#endif

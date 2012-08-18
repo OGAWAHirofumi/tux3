@@ -397,6 +397,7 @@ static void test04(struct sb *sb, struct inode *inode)
 	clean_main(sb, inode);
 }
 
+#ifdef ATOMIC
 static void clean_test05(struct sb *sb, struct inode *inode,
 			 struct cursor *cursor, struct path_level *path)
 {
@@ -522,6 +523,12 @@ static void test05(struct sb *sb, struct inode *inode)
 
 	clean_test05(sb, inode, cursor, orig);
 }
+#else
+/* Of course, redirect doesn't work on writeback */
+static void test05(struct sb *sb, struct inode *inode)
+{
+}
+#endif /* !ATOMIC */
 
 /* btree_chop() range chop (and adjust_parent_sep()) test */
 static void test06(struct sb *sb, struct inode *inode)
@@ -585,10 +592,14 @@ static void test06(struct sb *sb, struct inode *inode)
 	/* Set root node to btree */
 	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 2 };
 
-	for(int i = 0; i < ARRAY_SIZE(leaf); i++)
+	for(int i = 0; i < ARRAY_SIZE(leaf); i++) {
+		mark_buffer_dirty_non(leaf[i]);
 		blockput(leaf[i]);
-	for(int i = 0; i < ARRAY_SIZE(node); i++)
+	}
+	for(int i = 0; i < ARRAY_SIZE(node); i++) {
+		mark_buffer_rollup_non(node[i]);
 		blockput(node[i]);
+	}
 
 	struct cursor *cursor = alloc_cursor(btree, 8); /* +8 for new depth */
 	test_assert(cursor);
