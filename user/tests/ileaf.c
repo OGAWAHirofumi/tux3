@@ -47,20 +47,29 @@ static void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, in
 	attrs = ileaf_resize(btree, inum, leaf, size - less);
 }
 
-#define check_ileaf_with_data(btree, leaf, d) do {			\
-	for (int i = 0; i < ARRAY_SIZE(d); i++) {			\
-		void *__a;						\
-		unsigned __s;						\
-		__a = ileaf_lookup(btree, (d)[i].inum, leaf, &__s); \
-		if ((d)[i].size == 0)					\
-			test_assert(__a == NULL);			\
-		else {							\
-			test_assert(__a);				\
-			test_assert(__s == (d)[i].size);		\
-			test_assert(!memcmp((d)[i].buf, __a, (d)[i].size)); \
-		}							\
-	}								\
-} while (0)
+struct ileaf_data {
+	inum_t inum;
+	int size;
+	unsigned char c;
+	unsigned char buf[32];
+};
+
+static void check_ileaf_with_data(struct btree *btree, struct ileaf *ileaf,
+				  struct ileaf_data *data, int nr_data)
+{
+	for (int i = 0; i < nr_data; i++) {
+		void *attrs;
+		unsigned size;
+		attrs = ileaf_lookup(btree, data[i].inum, ileaf, &size);
+		if (data[i].size == 0)
+			test_assert(attrs == NULL);
+		else {
+			test_assert(attrs);
+			test_assert(size == data[i].size);
+			test_assert(!memcmp(data[i].buf, attrs, data[i].size));
+		}
+	}
+}
 
 
 /* Test basic ileaf operations */
@@ -72,12 +81,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	void *attrs;
 	unsigned size, more;
 
-	struct {
-		inum_t inum;
-		int size;
-		unsigned char c;
-		unsigned char buf[32];
-	} data[] = {
+	struct ileaf_data data[] = {
 		{ .inum = 0x10, .size = 0, .c = 'n', },
 		{ .inum = 0x13, .size = 2, .c = 'a', },
 		{ .inum = 0x14, .size = 4, .c = 'b', },
@@ -97,23 +101,23 @@ static void test01(struct sb *sb, struct btree *btree)
 		test_append(btree, leaf, data[i].inum, data[i].size, data[i].c);
 	}
 	/* Check */
-	check_ileaf_with_data(btree, leaf, data);
+	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 
 	/* Split leaf */
 	inum_t dest_base = ileaf_split(btree, 0x10, leaf, dest);
-	test_assert(dest_base == 0x10);
+	test_assert(dest_base == 0x11);
 	/* Check leaf and dest */
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
 		attrs = ileaf_lookup(btree, data[i].inum, leaf, &size);
 		test_assert(attrs == NULL);
 		test_assert(size == 0);
 	}
-	check_ileaf_with_data(btree, dest, data);
+	check_ileaf_with_data(btree, dest, &data[1], ARRAY_SIZE(data) - 1);
 
 	/* Merge leaf and dest */
 	ileaf_merge(btree, leaf, dest);
 	/* Check leaf */
-	check_ileaf_with_data(btree, leaf, data);
+	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 
 	/* Change attribute */
 	more = 2;
@@ -121,7 +125,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	data[0].size += more;
 	test_append(btree, leaf, data[0].inum, more, 'x');
 	/* Check */
-	check_ileaf_with_data(btree, leaf, data);
+	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 
 	/* Add new inode */
 	more = 3;
@@ -129,14 +133,14 @@ static void test01(struct sb *sb, struct btree *btree)
 	data[4].size += more;
 	test_append(btree, leaf, data[4].inum, more, data[4].c);
 	/* Check */
-	check_ileaf_with_data(btree, leaf, data);
+	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 
 	/* Shrink attribute */
 	more = 5;
 	data[3].size -= more;
 	test_remove(btree, leaf, data[3].inum, more);
 	/* Check */
-	check_ileaf_with_data(btree, leaf, data);
+	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 
 	/* Test find_empty_inode() */
 	for (int i = 0x11; i <= 0x20; i++) {
@@ -157,7 +161,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	data[4].size = 0;
 	ileaf_purge(btree, data[4].inum, leaf);
 	/* Check */
-	check_ileaf_with_data(btree, leaf, data);
+	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 
 	test_assert(ileaf_check(btree, leaf) == 0);
 

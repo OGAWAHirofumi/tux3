@@ -191,8 +191,14 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
 	be_u16 *dict = from + btree->sb->blocksize, *destdict = into + btree->sb->blocksize;
 
 #ifdef SPLIT_AT_INUM
+	/*
+	 * This is to prevent to have same ibase on both of from and into
+	 * FIXME: we would want to split at better position.
+	 */
+	if (hint == ibase(leaf))
+		hint++;
+
 	trace("split at inum 0x%Lx", (L)hint);
-	assert(hint >= ibase(leaf));
 	unsigned at = min_t(tuxkey_t, hint - ibase(leaf), icount(leaf));
 #else
 	/* binsearch inum starting nearest middle of block */
