@@ -144,7 +144,10 @@ static void test01(struct sb *sb, struct btree *btree)
 
 	/* Test find_empty_inode() */
 	for (int i = 0x11; i <= 0x20; i++) {
-		inum_t alloc = find_empty_inode(btree, leaf, i);
+		inum_t alloc;
+		int ret = ileaf_find_free(btree, 0, TUXKEY_LIMIT, leaf,
+					  i, TUXKEY_LIMIT, &alloc);
+		test_assert(ret == 1);
 
 		inum_t expected = i;
 		for (int j = 0; j < ARRAY_SIZE(data); j++) {

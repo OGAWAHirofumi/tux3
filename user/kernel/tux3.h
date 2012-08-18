@@ -947,7 +947,9 @@ extern struct ileaf_attr_ops iattr_ops;
 
 /* ileaf.c */
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
-inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal);
+int ileaf_find_free(struct btree *btree, tuxkey_t key_bottom,
+		    tuxkey_t key_limit, void *leaf,
+		    tuxkey_t key, u64 len, void *data);
 int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
 		    int (*func)(struct btree *, inum_t, void *, u16, void *),
 		    void *func_data);
