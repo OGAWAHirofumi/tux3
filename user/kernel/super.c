@@ -146,9 +146,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_op = &tux3_super_ops;
 	sb->s_time_gran = 1;
 
-	mutex_init(&sbi->loglock);
-	INIT_LIST_HEAD(&sbi->alloc_inodes);
-
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);
 	if (!blocksize) {

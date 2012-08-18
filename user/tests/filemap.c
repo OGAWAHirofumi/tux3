@@ -61,14 +61,16 @@ int main(int argc, char *argv[])
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
-	struct sb *sb = rapid_sb(dev,
-		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
-		.volblocks = size >> dev->bits);
+	init_buffers(dev, 1 << 20, 0);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, size >> dev->bits);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
+
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
 	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
-	init_buffers(dev, 1 << 20, 0);
 	struct inode *inode = rapid_open_inode(sb, filemap_extent_io, 0);
 	init_btree(&inode->btree, sb, no_root, &dtree_ops);
 	int err = alloc_empty_btree(&inode->btree);

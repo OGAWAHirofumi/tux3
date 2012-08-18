@@ -11,6 +11,17 @@
 
 void setup_sb(struct sb *sb, struct disksuper *super)
 {
+	init_rwsem(&sb->delta_lock);
+	mutex_init(&sb->loglock);
+	INIT_LIST_HEAD(&sb->alloc_inodes);
+#ifndef __KERNEL__
+	INIT_LIST_HEAD(&sb->dirty_inodes);
+#endif
+	INIT_LIST_HEAD(&sb->commit);
+	INIT_LIST_HEAD(&sb->pinned);
+	stash_init(&sb->defree);
+	stash_init(&sb->derollup);
+
 	sb->blockbits = from_be_u16(super->blockbits);
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;

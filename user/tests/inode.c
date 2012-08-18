@@ -14,12 +14,14 @@ int main(int argc, char *argv[])
 	u64 size = 0;
 	if (fdsize64(fd, &size))
 		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
+
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = rapid_sb(dev,
-		.max_inodes_per_block = 64,
-		.entries_per_node = 20,
-		.volblocks = size >> dev->bits);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, size >> dev->bits);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
 
 	sb->volmap = tux_new_volmap(sb);
 	assert(sb->volmap);

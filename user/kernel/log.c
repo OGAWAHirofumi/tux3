@@ -290,7 +290,7 @@ static inline struct link *page_link(struct page *page)
 	return (void *)&page->private;
 }
 
-static void stash_init(struct stash *stash)
+void stash_init(struct stash *stash)
 {
 	init_flink_head(&stash->head);
 	stash->pos = stash->top = NULL;

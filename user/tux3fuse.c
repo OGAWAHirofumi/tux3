@@ -398,7 +398,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	*dev = (struct dev){ .fd = fd };
 	sb = malloc(sizeof(*sb));
-	*sb = (struct sb){ INIT_SB(*sb, dev), };
+	*sb = *rapid_sb(dev);
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	dev->bits = sb->blockbits;

@@ -48,8 +48,13 @@ static void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, in
 
 int main(int argc, char *argv[])
 {
+	struct dev *dev = &(struct dev){ .bits = 12 };
+	struct disksuper super = INIT_DISKSB(dev->bits, 150);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
+
 	printf("--- test inode table leaf methods ---\n");
-	struct sb *sb = &(struct sb){ .blocksize = 4096 };
 	struct btree *btree = &(struct btree){
 		.sb = sb,
 		.ops = &itable_ops,

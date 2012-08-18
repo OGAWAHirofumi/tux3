@@ -97,6 +97,26 @@ struct tux_iattr {
 	unsigned mode, uid, gid;
 };
 
+#ifdef ATOMIC
+#define INIT_DISKSB_FREEBLOCKS(_blocks)
+#else
+#define INIT_DISKSB_FREEBLOCKS(_blocks)	.freeblocks = to_be_u64(_blocks)
+#endif
+#define INIT_DISKSB(_bits, _blocks) {				\
+	.magic		= TUX3_MAGIC,				\
+	.birthdate	= 0,					\
+	.flags		= 0,					\
+	.iroot		= to_be_u64(pack_root(&no_root)),	\
+	.blockbits	= to_be_u16(_bits),			\
+	.volblocks	= to_be_u64(_blocks),			\
+	.freeatom	= 0,					\
+	.atomgen	= to_be_u32(1),				\
+	.dictsize	= 0,					\
+	.logchain	= 0,					\
+	.logcount	= 0,					\
+	INIT_DISKSB_FREEBLOCKS(_blocks)				\
+}
+
 #define INIT_INODE(inode, sb, mode)				\
 	.i_sb = sb,						\
 	.i_mode = mode,						\
@@ -106,18 +126,6 @@ struct tux_iattr {
 	.i_count = ATOMIC_INIT(1),				\
 	.alloc_list = LIST_HEAD_INIT((inode).alloc_list),	\
 	.list = LIST_HEAD_INIT((inode).list)
-
-#define INIT_SB(sb, dev)					\
-	.dev = dev,						\
-	.blockbits = (dev)->bits,				\
-	.blocksize = 1 << (dev)->bits,				\
-	.blockmask = ((1 << (dev)->bits) - 1),			\
-	.delta_lock = __RWSEM_INITIALIZER,			\
-	.loglock = __MUTEX_INITIALIZER,				\
-	.alloc_inodes = LIST_HEAD_INIT((sb).alloc_inodes),	\
-	.dirty_inodes = LIST_HEAD_INIT((sb).dirty_inodes),	\
-	.commit = LIST_HEAD_INIT((sb).commit),			\
-	.pinned = LIST_HEAD_INIT((sb).pinned)
 
 #define rapid_open_inode(sb, io, mode, init_defs...) ({		\
 	struct inode *__inode = &(struct inode){};		\
@@ -135,14 +143,7 @@ struct tux_iattr {
 	__inode;						\
 	})
 
-#define rapid_sb(dev, init_defs...) ({				\
-	struct sb *__sb = &(struct sb){};			\
-	*__sb = (struct sb){					\
-		INIT_SB(*__sb, dev),				\
-		init_defs					\
-	};							\
-	__sb;							\
-	});
+#define rapid_sb(dev)	(&(struct sb){ .dev = dev })
 
 /* dir.c */
 void tux_dump_entries(struct buffer_head *buffer);

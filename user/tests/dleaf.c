@@ -69,8 +69,13 @@ static void dwalk_probe_check(struct dwalk *walk, block_t index, struct diskexte
 
 int main(int argc, char *argv[])
 {
+	struct dev *dev = &(struct dev){ .bits = 10 };
+	struct disksuper super = INIT_DISKSB(dev->bits, 150);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
+
 	printf("--- leaf test ---\n");
-	struct sb *sb = &(struct sb){ .blocksize = 1 << 10 };
 	unsigned blocksize = sb->blocksize;
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = dleaf_create(btree);

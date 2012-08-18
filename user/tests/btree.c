@@ -159,10 +159,15 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
+	init_buffers(dev, 1 << 20, 0);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, 1024);
 	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
+
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
-	init_buffers(dev, 1 << 20, 0);
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize),
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = { };

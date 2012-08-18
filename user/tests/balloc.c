@@ -48,14 +48,18 @@ int main(int argc, char *argv[])
 		free(bitmap);
 	}
 	struct dev *dev = &(struct dev){ .bits = 3 };
-	struct sb *sb = rapid_sb(dev, .volblocks = 150);
-	struct inode *bitmap = rapid_open_inode(sb, NULL, 0);
-	sb->freeblocks = sb->volblocks;
+	init_buffers(dev, 1 << 20, 0);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, 150);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
 	sb->nextalloc = sb->volblocks; // this should wrap around to zero
+
+	struct inode *bitmap = rapid_open_inode(sb, NULL, 0);
 	sb->bitmap = bitmap;
 
-	init_buffers(dev, 1 << 20, 0);
-	unsigned blocksize = 1 << dev->bits;
+	unsigned blocksize = sb->blocksize;
 	unsigned dumpsize = blocksize > 16 ? 16 : blocksize;
 
 	for (int block = 0; block < 10; block++) {

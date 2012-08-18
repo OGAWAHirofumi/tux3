@@ -16,9 +16,14 @@ static int filldir(void *entry, const char *name, int namelen, loff_t offset, u6
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	struct sb *sb = rapid_sb(dev, .volblocks = 150);
-	struct inode *dir = rapid_open_inode(sb, NULL, S_IFDIR);
 	init_buffers(dev, 1 << 20, 0);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, 150);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
+
+	struct inode *dir = rapid_open_inode(sb, NULL, S_IFDIR);
 	struct buffer_head *buffer;
 	printf("empty = %i\n", tux_dir_is_empty(dir));
 	tux_create_dirent(dir, "hello", 5, 0x666, S_IFREG);

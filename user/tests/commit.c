@@ -27,11 +27,14 @@ int main(int argc, char *argv[])
 	assert(fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR));
 	u64 volsize = 1 << 24;
 	assert(!ftruncate(fd, volsize));
+
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = rapid_sb(dev, .volblocks = volsize >> dev->bits);
-	sb->max_inodes_per_block = sb->blocksize / 64;
-	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
 
 	sb->volmap = tux_new_volmap(sb);
 	assert(sb->volmap);

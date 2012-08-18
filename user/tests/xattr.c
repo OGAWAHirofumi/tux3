@@ -18,15 +18,20 @@
 
 int main(int argc, char *argv[])
 {
+	size_t volsize = 1 << 24;
 	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRUSR|S_IWUSR) };
-	assert(!ftruncate(dev->fd, 1 << 24));
+	assert(!ftruncate(dev->fd, volsize));
 	init_buffers(dev, 1 << 20, 0);
-	struct sb *sb = rapid_sb(dev,
-		.version = 0,
-		.atomref_base = 1 << 10,
-		.unatom_base = 1 << 11,
-		.atomgen = 1);
+
+	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
+	struct sb *sb = rapid_sb(dev);
+	sb->super = super;
+	setup_sb(sb, &super);
+
+	sb->atomref_base = 1 << 10;
+	sb->unatom_base = 1 << 11;
+
 	struct inode *inode = rapid_open_inode(sb, NULL, S_IFDIR | 0x666,
 		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
 		.i_ctime = spectime(0xdec0debeadULL),

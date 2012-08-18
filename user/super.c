@@ -201,9 +201,6 @@ int make_tux3(struct sb *sb)
 		err = PTR_ERR(sb->atable);
 		goto eek;
 	}
-	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
-	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
-	sb->atomgen = 1; // atom 0 not allowed, means end of atom freelist
 
 	trace("create root directory");
 	struct tux_iattr root_iattr = { .mode = S_IFDIR | 0755, };
