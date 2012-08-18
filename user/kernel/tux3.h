@@ -218,11 +218,6 @@ static inline int sync_inodes(struct sb *sb, unsigned delta)
 {
 	return 0;
 }
-
-static inline int blockio(int rw, struct buffer_head *buffer, block_t block)
-{
-	return 0;
-}
 #endif
 
 struct sb {
@@ -687,6 +682,7 @@ int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs,
 	   struct bio_vec *vec);
 int devio(int rw, struct block_device *dev, loff_t offset, void *data,
 	  unsigned len);
+int blockio(int rw, struct buffer_head *buffer, block_t block);
 
 /* temporary hack for buffer */
 struct buffer_head *peekblk(struct address_space *mapping, block_t iblock);

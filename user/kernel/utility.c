@@ -1,8 +1,7 @@
 /* Copyright (c) 2008 Daniel Phillips <phillips@phunq.net>, GPL v2 */
 
 #ifdef __KERNEL__
-#include <linux/kernel.h>
-#include <linux/bio.h>
+#include "tux3.h"
 
 int vecio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec,
 	bio_end_io_t endio, void *info)
@@ -47,6 +46,18 @@ int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned 
 		.bv_page = virt_to_page(data),
 		.bv_offset = offset_in_page(data),
 		.bv_len = len });
+}
+
+int blockio(int rw, struct buffer_head *buffer, block_t block)
+{
+	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+	struct bio_vec vec = {
+		.bv_page	= buffer->b_page,
+		.bv_offset	= bh_offset(buffer),
+		.bv_len		= sb->blocksize,
+	};
+
+	return syncio(rw, sb_dev(sb), block << sb->blockbits, 1, &vec);
 }
 
 void hexdump(void *data, unsigned size)
