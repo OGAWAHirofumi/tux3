@@ -32,7 +32,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	}
 
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = blockbits };
-	init_buffers(dev, 1 << 20, 1);
+	init_buffers(dev, 1 << 20, 2);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
 	struct sb *sb = rapid_sb(dev);
@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	dev->bits = sb->blockbits;
-	init_buffers(dev, 1 << 20, 1);
+	init_buffers(dev, 1 << 20, 2);
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap) {

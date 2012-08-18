@@ -35,6 +35,11 @@
 #define SECTOR_SIZE (1 << SECTOR_BITS)
 
 #define BUFFER_PARANOIA_DEBUG
+/*
+ * 0 - no debug
+ * 1 - leak check
+ * 2 - "1" and reclaim buffer early
+ */
 static int debug_buffer;
 
 typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
@@ -119,10 +124,42 @@ int count_buffers(void)
 	return count;
 }
 
+static int reclaim_buffer(struct buffer_head *buffer)
+{
+	/* If buffer is not dirty and ->count == 1, we can reclaim buffer */
+	if (buffer->count == 1 && !buffer_dirty(buffer)) {
+		if (!hlist_unhashed(&buffer->hashlink)) {
+			remove_buffer_hash(buffer);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static inline int reclaim_buffer_early(struct buffer_head *buffer)
+{
+#ifdef BUFFER_PARANOIA_DEBUG
+	if (debug_buffer >= 2)
+		return reclaim_buffer(buffer);
+#endif
+	return 0;
+}
+
+static inline int is_reclaim_buffer_early(void)
+{
+#ifdef BUFFER_PARANOIA_DEBUG
+	if (debug_buffer >= 2)
+		return 1;
+#endif
+	return 0;
+}
+
 void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
 {
 	list_move_tail(&buffer->link, list);
 	buffer->state = state;
+	/* state was changed, try to reclaim */
+	reclaim_buffer_early(buffer);
 }
 
 static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
@@ -186,7 +223,10 @@ void blockput(struct buffer_head *buffer)
 		assert(hlist_unhashed(&buffer->hashlink));
 		assert(list_empty(&buffer->lru));
 		free_buffer(buffer);
+		return;
 	}
+
+	reclaim_buffer_early(buffer);
 }
 
 void get_bh(struct buffer_head *buffer)
@@ -236,7 +276,7 @@ static void evict_buffer(struct buffer_head *buffer)
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
 	assert(buffer_clean(buffer) || buffer_empty(buffer));
 	assert(buffer->count == 1);
-	remove_buffer_hash(buffer);
+	reclaim_buffer(buffer);
 }
 
 struct buffer_head *new_buffer(map_t *map)
@@ -256,10 +296,7 @@ struct buffer_head *new_buffer(map_t *map)
 		int count = 0;
 	
 		list_for_each_entry_safe(victim, safe, &lru_buffers, lru) {
-			if (victim->count != 1)
-				continue;
-			if (buffer_clean(victim) || buffer_empty(victim)) {
-				evict_buffer(victim);
+			if (reclaim_buffer(victim)) {
 				if (++count == max_evict)
 					break;
 			}
@@ -380,6 +417,8 @@ void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend)
 
 			if (!buffer_empty(buffer))
 				set_buffer_empty(buffer);
+			if (!is_reclaim_buffer_early())
+				reclaim_buffer(buffer);
 		}
 	}
 }
@@ -396,7 +435,8 @@ void invalidate_buffers(map_t *map)
 			if (buffer->count == 1) {
 				if (!buffer_empty(buffer))
 					set_buffer_empty(buffer);
-				evict_buffer(buffer);
+				if (!is_reclaim_buffer_early())
+					evict_buffer(buffer);
 			}
 		}
 	}

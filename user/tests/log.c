@@ -91,7 +91,7 @@ static void test01(struct sb *sb)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	init_buffers(dev, 1 << 20, 1);
+	init_buffers(dev, 1 << 20, 2);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 2048);
 	struct sb *sb = rapid_sb(dev);

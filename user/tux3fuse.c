@@ -402,7 +402,7 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	if ((errno = -load_sb(sb)))
 		goto eek;
 	dev->bits = sb->blockbits;
-	init_buffers(dev, 1 << 20, 1);
+	init_buffers(dev, 1 << 20, 2);
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)

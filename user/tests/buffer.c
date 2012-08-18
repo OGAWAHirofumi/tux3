@@ -7,6 +7,7 @@ static void test01(void)
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
 
+	/* This expect buffer is never reclaimed */
 	init_buffers(dev, NR_BUF << dev->bits, 1);
 
 	map_t *map1 = new_map(dev, NULL);

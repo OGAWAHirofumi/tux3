@@ -225,6 +225,7 @@ static void test06(struct sb *sb, block_t blocks)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 3 };
+	/* This expect buffer is never reclaimed */
 	init_buffers(dev, 1 << 20, 1);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 150);

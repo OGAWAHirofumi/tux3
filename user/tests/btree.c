@@ -637,7 +637,7 @@ static void test06(struct sb *sb, struct inode *inode)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
-	init_buffers(dev, 1 << 20, 1);
+	init_buffers(dev, 1 << 20, 2);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 1024);
 	struct sb *sb = rapid_sb(dev);
