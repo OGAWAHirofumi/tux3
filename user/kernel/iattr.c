@@ -188,7 +188,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			init_btree(&tuxnode->btree, sb, unpack_root(v64), &dtree_ops);
+			init_btree(&tuxnode->btree, sb, unpack_root(v64), dtree_ops());
 			break;
 		case LINK_COUNT_ATTR:
 			attrs = decode32(attrs, &inode->i_nlink);

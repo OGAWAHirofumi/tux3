@@ -44,6 +44,7 @@
  */
 
 #include "tux3.h"
+#include "dleaf2.h"
 
 #ifndef trace
 #define trace trace_on
@@ -70,11 +71,6 @@ static void put_bitmap_write(struct sb *sb)
 }
 #endif
 
-#define SEG_HOLE	(1 << 0)
-#define SEG_NEW		(1 << 1)
-
-struct seg { block_t block; unsigned count; unsigned state; };
-
 /* userland only */
 void show_segs(struct seg map[], unsigned segs)
 {
@@ -97,7 +93,9 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 	return 0;
 }
 
-static int map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
+/* map_region() by using dleaf1 */
+static int map_region1(struct inode *inode, block_t start, unsigned count,
+		       struct seg map[], unsigned max_segs, int create)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -343,6 +341,173 @@ out_unlock:
 		free_cursor(cursor);
 
 	return segs;
+}
+
+/* map_region() by using dleaf2 */
+static int map_region2(struct inode *inode, block_t start, unsigned count,
+		       struct seg seg[], unsigned max_segs, int create)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct btree *btree = &tux_inode(inode)->btree;
+	struct cursor *cursor = NULL;
+	int err, segs = 0;
+
+	assert(max_segs > 0);
+
+	if (create) {
+		down_write(&btree->lock);
+		if (inode == sb->bitmap)
+			get_bitmap_write(sb);
+	} else {
+		if (!is_bitmap_write(sb))
+			down_read_nested(&btree->lock, inode == sb->bitmap);
+	}
+
+	if (!has_root(btree) && create) {
+		/*
+		 * Allocate empty btree if this btree doesn't have it yet.
+		 * FIXME: this should be merged to insert_leaf() or something?
+		 */
+		err = alloc_empty_btree(btree);
+		if (err) {
+			segs = err;
+			goto out_unlock;
+		}
+	}
+
+	if (has_root(btree)) {
+		struct dleaf_req rq = {
+			.key = {
+				.start	= start,
+				.len	= count,
+			},
+			.max_segs	= max_segs,
+			.seg		= seg,
+		};
+
+		cursor = alloc_cursor(btree, 1); /* allows for depth increase */
+		if (!cursor) {
+			segs = -ENOMEM;
+			goto out_unlock;
+		}
+
+		err = btree_probe(cursor, start);
+		if (err) {
+			segs = err;
+			goto out_unlock;
+		}
+		/* Read extents from data btree */
+		err = btree_read(cursor, &rq.key);
+		if (err) {
+			segs = err;
+			goto out_unlock;
+		}
+		segs = rq.nr_segs;
+	} else {
+		assert(!create);
+		/* btree doesn't have root yet */
+		seg[0].block = 0;
+		seg[0].count = count;
+		seg[0].state = SEG_HOLE;
+	}
+
+	if (!create)
+		goto out_release;
+
+	if (create == 2) {
+		/* Change the seg[] to redirect this region as one extent */
+		unsigned total = 0;
+		for (int i = 0; i < segs; i++) {
+			/* Logging overwrited extents as free */
+			if (seg[i].state != SEG_HOLE)
+				map_bfree(inode, seg[i].block, seg[i].count);
+			total += seg[i].count;
+		}
+		assert(total == count);
+		segs = 1;
+		seg[0].block = 0;
+		seg[0].count = total;
+		seg[0].state = SEG_HOLE;
+	}
+	for (int i = 0; i < segs; i++) {
+		block_t block;
+
+		if (seg[i].state != SEG_HOLE)
+			continue;
+
+		err = balloc(sb, seg[i].count, &block);
+		if (err) { // goal ???
+			/*
+			 * Out of space on file data allocation.  It
+			 * happens.  Tread carefully.  We have not
+			 * stored anything in the btree yet, so we
+			 * free what we allocated so far.  We need to
+			 * leave the user with a nice ENOSPC return
+			 * and all metadata consistent on disk.  We
+			 * better have reserved everything we need for
+			 * metadata, just giving up is not an option.
+			 */
+			/*
+			 * Alternatively, we can go ahead and try to
+			 * record just what we successfully allocated,
+			 * then if the update fails on no space for
+			 * btree splits, free just the blocks for
+			 * extents we failed to store.
+			 */
+			segs = err;
+			goto out_release;
+		}
+		log_balloc(sb, block, seg[i].count);
+
+		seg[i].block = block;
+		/* if create == 2, buffer should be dirty */
+		seg[i].state = create == 2 ? 0 : SEG_NEW;
+	}
+
+	/* Write extents from data btree */
+	struct dleaf_req rq = {
+		.key = {
+			.start	= start,
+			.len	= count,
+		},
+		.max_segs	= segs,
+		.seg		= seg,
+	};
+	err = btree_write(cursor, &rq.key);
+	if (err) {
+		segs = err;
+		goto out_release;
+	}
+	assert(segs == rq.nr_segs);
+
+out_release:
+	if (cursor)
+		release_cursor(cursor);
+out_unlock:
+	if (create) {
+		up_write(&btree->lock);
+		if (inode == sb->bitmap)
+			put_bitmap_write(sb);
+	} else {
+		if (!is_bitmap_write(sb))
+			up_read(&btree->lock);
+	}
+	if (cursor)
+		free_cursor(cursor);
+
+	return segs;
+}
+
+/* Map specified logical region to physical region. (overwrite or allocate) */
+static int map_region(struct inode *inode, block_t start, unsigned count,
+		      struct seg map[], unsigned max_segs, int create)
+{
+	struct btree *btree = &tux_inode(inode)->btree;
+
+	if (btree->ops == &dtree1_ops)
+		return map_region1(inode, start, count, map, max_segs, create);
+	else
+		return map_region2(inode, start, count, map, max_segs, create);
 }
 
 #ifdef __KERNEL__

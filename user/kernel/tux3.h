@@ -907,7 +907,7 @@ unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
 unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
-extern struct btree_ops dtree_ops;
+extern struct btree_ops dtree1_ops;
 
 void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst);
 int dwalk_end(struct dwalk *walk);
@@ -921,6 +921,13 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
 void dwalk_copy(struct dwalk *walk, struct dleaf *dest);
 void dwalk_chop(struct dwalk *walk);
 int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
+
+/* dleaf2.c */
+extern struct btree_ops dtree2_ops;
+static inline struct btree_ops *dtree_ops(void)
+{
+	return &dtree2_ops;
+}
 
 /* iattr.c */
 unsigned encode_asize(unsigned bits);

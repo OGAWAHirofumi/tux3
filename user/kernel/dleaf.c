@@ -852,7 +852,7 @@ out:
 	return 1;
 }
 
-struct btree_ops dtree_ops = {
+struct btree_ops dtree1_ops = {
 	.btree_init = dleaf_btree_init,
 	.leaf_sniff = dleaf_sniff,
 	.leaf_init = dleaf_init,

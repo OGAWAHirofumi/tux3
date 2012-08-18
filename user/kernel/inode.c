@@ -200,7 +200,7 @@ skip_itable:
 	/* FIXME: should use conditional inode->present. But,
 	 * btree->lock is needed to initialize. */
 	if (tux_inode(inode)->present & DATA_BTREE_BIT)
-		init_btree(&tux_inode(inode)->btree, sb, no_root, &dtree_ops);
+		init_btree(&tux_inode(inode)->btree, sb, no_root, dtree_ops());
 
 	/* Final initialization of inode */
 	tux_set_inum(inode, goal);

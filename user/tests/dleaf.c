@@ -389,7 +389,7 @@ int main(int argc, char *argv[])
 	test_init(argv[0]);
 
 	struct btree btree;
-	init_btree(&btree, sb, no_root, &dtree_ops);
+	init_btree(&btree, sb, no_root, &dtree1_ops);
 
 	if (test_start("test01"))
 		test01(sb, &btree);
