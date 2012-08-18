@@ -564,7 +564,6 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	case SEG_NEW:
 		assert(create && !delalloc);
 		assert(seg.block);
-		inode->i_blocks += blocks << (sb->blockbits - 9);
 		if (buffer_delay(bh_result)) {
 			/* for now, block_write_full_page() clear delay */
 //			clear_buffer_delay(bh_result);

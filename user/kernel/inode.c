@@ -525,9 +525,6 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 			goto error;
 	}
 
-	/* FIXME: implement i_blocks */
-	inode->i_blocks = ALIGN(newsize, sb->blocksize) >> 9;
-
 	inode->i_mtime = inode->i_ctime = gettime();
 	mark_inode_dirty(inode);
 error:
@@ -646,6 +643,20 @@ int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat
 
 	generic_fillattr(inode, stat);
 	stat->ino = tux_inode(inode)->inum;
+	/*
+	 * FIXME: need to implement ->i_blocks?
+	 *
+	 * If we want to add i_blocks account, we have to check
+	 * existent extent for dirty buffer.  And only if there is no
+	 * existent extent, we add to ->i_blocks.
+	 *
+	 * Yes, ->i_blocks must be including delayed allocation buffers
+	 * as allocated, because some apps (e.g. tar) think it is empty file
+	 * if i_blocks == 0.
+	 *
+	 * But, it is purely unnecessary overhead.
+	 */
+	stat->blocks = ALIGN(inode->i_size, sb->blocksize) >> 9;
 	return 0;
 }
 
@@ -723,7 +734,6 @@ static void tux_setup_inode(struct inode *inode)
 
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 
-	inode->i_blocks = ALIGN(inode->i_size, sbi->blocksize) >> 9;
 //	inode->i_generation = 0;
 //	inode->i_flags = 0;
 
