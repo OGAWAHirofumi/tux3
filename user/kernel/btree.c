@@ -1068,6 +1068,59 @@ error:
 	return ERR_PTR(err);
 }
 
+int btree_write(struct cursor *cursor, struct btree_key_range *key)
+{
+	struct btree *btree = cursor->btree;
+	struct btree_ops *ops = btree->ops;
+	tuxkey_t split_hint;
+	int err;
+
+	/* FIXME: we might be better to support multiple leaves */
+
+	err = cursor_redirect(cursor);
+	if (err)
+		return err;
+
+	while (key->len > 0) {
+		tuxkey_t bottom = cursor_this_key(cursor);
+		tuxkey_t limit = cursor_next_key(cursor);
+		void *leaf = bufdata(cursor_leafbuf(cursor));
+
+		assert(bottom <= key->start && key->start < limit);
+		assert(ops->leaf_sniff(btree, leaf));
+
+		err = ops->leaf_write(btree, bottom, limit, leaf, key,
+				      &split_hint);
+		if (!err) {
+			mark_buffer_dirty_non(cursor_leafbuf(cursor));
+			continue;
+		}
+		assert(err == -ENOSPC);
+
+		err = btree_leaf_split(cursor, key->start, split_hint);
+		if (err)
+			break;	/* FIXME: error handling */
+	}
+
+	return err;
+}
+
+int btree_read(struct cursor *cursor, struct btree_key_range *key)
+{
+	struct btree *btree = cursor->btree;
+	struct btree_ops *ops = btree->ops;
+	void *leaf = bufdata(cursor_leafbuf(cursor));
+	tuxkey_t bottom = cursor_this_key(cursor);
+	tuxkey_t limit = cursor_next_key(cursor);
+
+	/* FIXME: we might be better to support multiple leaves */
+
+	assert(bottom <= key->start && key->start < limit);
+	assert(ops->leaf_sniff(btree, leaf));
+
+	return ops->leaf_read(btree, bottom, limit, leaf, key);
+}
+
 void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops)
 {
 	btree->sb = sb;

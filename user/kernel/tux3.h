@@ -580,6 +580,11 @@ static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 
 typedef void vleaf;
 
+struct btree_key_range {
+	tuxkey_t start;
+	unsigned len;
+};
+
 struct btree_ops {
 	void (*btree_init)(struct btree *btree);
 	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
@@ -592,6 +597,8 @@ struct btree_ops {
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, vleaf *leaf);
 	void (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
+	int (*leaf_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key, tuxkey_t *split_hint);
+	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
 	int (*bfree)(struct sb *sb, block_t block, unsigned blocks);
 };
@@ -858,6 +865,8 @@ int btree_probe(struct cursor *cursor, tuxkey_t key);
 int btree_chop(struct btree *btree, tuxkey_t start, u64 len);
 int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);
 void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
+int btree_write(struct cursor *cursor, struct btree_key_range *key);
+int btree_read(struct cursor *cursor, struct btree_key_range *key);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 void show_tree(struct btree *btree);
 int cursor_redirect(struct cursor *cursor);
