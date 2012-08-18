@@ -424,6 +424,54 @@ error:
 	return ret;
 }
 
+/*
+ * Traverse btree for specified range
+ * key: start to traverse (cursor should point leaf is including key)
+ * len: length to traverse
+ *
+ * return value:
+ * < 0 - error
+ *   0 - traversed all range
+ * 0 < - traverse was stopped by func, and return value of func
+ */
+int btree_traverse(struct cursor *cursor, tuxkey_t key, u64 len,
+		   btree_traverse_func_t func, void *data)
+{
+	struct btree *btree = cursor->btree;
+	int ret;
+
+	do {
+		tuxkey_t bottom = cursor_this_key(cursor);
+		tuxkey_t limit = cursor_next_key(cursor);
+		void *leaf = bufdata(cursor_leafbuf(cursor));
+		assert(btree->ops->leaf_sniff(btree, leaf));
+
+		if (key < bottom) {
+			len -= min_t(u64, len, bottom - key);
+			if (len == 0)
+				break;
+			key = bottom;
+		}
+
+		ret = func(btree, bottom, limit, leaf, key, len, data);
+		/* Stop traverse if ret >= 1, or error */
+		if (ret)
+			goto out;
+
+		/* If next key is out of range, done */
+		if (key + len <= limit)
+			break;
+
+		ret = cursor_advance(cursor);
+		if (ret < 0)
+			goto out;
+	} while (ret);
+
+	ret = 0;
+out:
+	return ret;
+}
+
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
 	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
