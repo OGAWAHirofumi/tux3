@@ -67,6 +67,8 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	      sb->volblocks, sb->freeblocks, sb->nextalloc);
 	trace("atom_dictsize %Lu, freeatom %u, atomgen %u",
 	      (s64)sb->atomdictsize, sb->freeatom, sb->atomgen);
+	trace("logchain %Lu, logcount %u",
+	      be64_to_cpu(super->logchain), be32_to_cpu(super->logcount));
 
 	setup_roots(sb, super);
 }
