@@ -326,7 +326,7 @@ static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 }
 
 static int load_enum_inode(struct btree *btree, inum_t inum, void *attrs,
-			   u16 size, void *data)
+			   unsigned size, void *data)
 {
 	struct replay *rp = data;
 	struct sb *sb = rp->sb;
@@ -349,7 +349,11 @@ static int load_otable_orphan_inode(struct replay *rp)
 {
 	struct sb *sb = rp->sb;
 	struct btree *otable = otable_btree(sb);
-	int ret, err;
+	struct ileaf_enumrate_cb cb = {
+		.callback	= load_enum_inode,
+		.data		= rp,
+	};
+	int err;
 
 	if (!has_root(&sb->otable))
 		return 0;
@@ -362,20 +366,10 @@ static int load_otable_orphan_inode(struct replay *rp)
 	err = btree_probe(cursor, 0);
 	if (err)
 		goto error;
-	do {
-		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
-		void *leaf = bufdata(leafbuf);
 
-		err = ileaf_enum_inum(otable, leaf, load_enum_inode, rp);
-		if (err)
-			break;
+	err = btree_traverse(cursor, 0, TUXKEY_LIMIT, ileaf_enumerate, &cb);
+	/* FIXME: error handling */
 
-		ret = cursor_advance(cursor);
-		if (ret < 0) {
-			err = ret;
-			break;
-		}
-	} while (ret);
 	release_cursor(cursor);
 error:
 	up_write(&cursor->btree->lock);

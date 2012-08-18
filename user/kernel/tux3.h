@@ -950,9 +950,6 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 int ileaf_find_free(struct btree *btree, tuxkey_t key_bottom,
 		    tuxkey_t key_limit, void *leaf,
 		    tuxkey_t key, u64 len, void *data);
-int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
-		    int (*func)(struct btree *, inum_t, void *, u16, void *),
-		    void *func_data);
 struct ileaf_enumrate_cb {
 	int (*callback)(struct btree *btree, inum_t inum, void *attrs,
 			unsigned size, void *data);

@@ -292,34 +292,6 @@ static int ileaf_merge(struct btree *btree, void *vinto, void *vfrom)
 	return 1;
 }
 
-int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
-		    int (*func)(struct btree *, inum_t, void *, u16, void *),
-		    void *func_data)
-{
-	be_u16 *dict = ileaf_dict(btree, ileaf);
-	int at, offset;
-
-	offset = 0;
-	for (at = 0; at < icount(ileaf); at++) {
-		inum_t inum;
-		int err, limit, size;
-
-		limit = __atdict(dict, at + 1);
-		if (limit <= offset)
-			continue;
-		size = limit - offset;
-
-		inum = ibase(ileaf) + at;
-		err = func(btree, inum, ileaf->table + offset, size, func_data);
-		if (err)
-			return err;
-
-		offset = limit;
-	}
-
-	return 0;
-}
-
 /*
  * Chop inums
  * return value:
