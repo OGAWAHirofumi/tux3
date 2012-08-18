@@ -57,22 +57,23 @@ ifeq ($(shell pkg-config fuse && echo found), found)
 	FUSE_BIN = tux3fuse
 endif
 TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
-	tests/dir tests/dleaf tests/filemap tests/iattr tests/ileaf \
-	tests/inode tests/log tests/xattr
+	tests/dir tests/dleaf tests/dleaf2 tests/filemap tests/iattr \
+	tests/ileaf tests/inode tests/log tests/xattr
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
 TUX3_LIB	= libtux3.a
 COMMON_OBJS	= dir.o filemap.o inode.o super.o utility.o writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
-	kernel/dleaf.o kernel/iattr.o kernel/ileaf.o kernel/log.o \
-	kernel/orphan.o kernel/replay.o kernel/xattr.o
+	kernel/dleaf.o kernel/dleaf2.o kernel/iattr.o kernel/ileaf.o \
+	kernel/log.o kernel/orphan.o kernel/replay.o kernel/xattr.o
 
 OBJS		= tux3.o tux3graph.o
 FUSE_OBJS	= tux3fuse.o
 TEST_LIB_OBJS	= tests/test.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
-	tests/dir.o tests/dleaf.o tests/filemap.o tests/iattr.o tests/ileaf.o \
-	tests/inode.o tests/log.o tests/xattr.o $(TEST_LIB_OBJS)
+	tests/dir.o tests/dleaf.o tests/dleaf2.o tests/filemap.o \
+	tests/iattr.o tests/ileaf.o tests/inode.o tests/log.o \
+	tests/xattr.o $(TEST_LIB_OBJS)
 ALL_OBJS	= $(COMMON_OBJS) $(KERN_OBJS) $(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
 
 .PHONY: tests
@@ -87,6 +88,7 @@ tests/buffer: tests/buffer.o $(TUX3_LIB)
 tests/commit: tests/commit.o $(TUX3_LIB)
 tests/dir: tests/dir.o $(TUX3_LIB)
 tests/dleaf: tests/dleaf.o $(TUX3_LIB)
+tests/dleaf2: tests/dleaf2.o $(TUX3_LIB)
 tests/filemap: tests/filemap.o $(TUX3_LIB)
 tests/iattr: tests/iattr.o $(TUX3_LIB)
 tests/ileaf: tests/ileaf.o $(TUX3_LIB)
