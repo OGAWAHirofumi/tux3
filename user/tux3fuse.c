@@ -906,6 +906,8 @@ static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_err(req, -err);
 }
 
+#ifdef NEED_REMOTE_LOCKS
+/* We don't need to hook getlk/setlk */
 static void tux3fuse_getlk(fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_file_info *fi, struct flock *lock)
 {
@@ -920,7 +922,9 @@ static void tux3fuse_setlk(fuse_req_t req, fuse_ino_t ino,
 	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
+#endif /* !NEED_REMOTE_LOCKS */
 
+/* This is only used if 'blkdev' option was passed to fuse */
 static void tux3fuse_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 			  uint64_t idx)
 {
@@ -960,8 +964,10 @@ static struct fuse_lowlevel_ops tux3_ops = {
 	.removexattr	= tux3fuse_removexattr,
 	.access		= tux3fuse_access,
 	.create		= tux3fuse_create,
+#ifdef NEED_REMOTE_LOCKS
 	.getlk		= tux3fuse_getlk,
 	.setlk		= tux3fuse_setlk,
+#endif
 	.bmap		= tux3fuse_bmap,
 	/* .ioctl */
 	/* .poll */
