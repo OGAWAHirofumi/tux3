@@ -235,6 +235,18 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 				return err;
 			break;
 		}
+		case LOG_BNODE_MERGE:
+		{
+			u64 src, dst;
+			data = decode48(data, &src);
+			data = decode48(data, &dst);
+			trace("%s: src 0x%Lx, dst 0x%Lx",
+			      log_name[code], (L)src, (L)dst);
+			err = replay_bnode_merge(sb, src, dst);
+			if (err)
+				return err;
+			break;
+		}
 		case LOG_BNODE_DEL:
 		{
 			unsigned count;
@@ -267,7 +279,6 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
-		case LOG_BNODE_MERGE:
 		case LOG_FREEBLOCKS:
 		case LOG_ROLLUP:
 		case LOG_DELTA:
@@ -377,6 +388,18 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 				return err;
 			break;
 		}
+		case LOG_BNODE_MERGE:
+		{
+			u64 src, dst;
+			data = decode48(data, &src);
+			data = decode48(data, &dst);
+			trace("%s: src 0x%Lx, dst 0x%Lx",
+			      log_name[code], (L)src, (L)dst);
+			err = replay_update_bitmap(sb, src, 1, 0);
+			if (err)
+				return err;
+			break;
+		}
 		case LOG_FREEBLOCKS:
 		{
 			u64 freeblocks;
@@ -388,7 +411,6 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 		}
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE:
-		case LOG_BNODE_MERGE:
 		case LOG_BNODE_DEL:
 		case LOG_BNODE_ADJUST:
 		case LOG_ROLLUP:

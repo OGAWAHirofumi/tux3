@@ -1227,6 +1227,35 @@ int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t k
 	return replay_bnode_change(sb, parent, child, key, update_func);
 }
 
+int replay_bnode_merge(struct sb *sb, block_t src, block_t dst)
+{
+	struct buffer_head *srcbuf, *dstbuf;
+	int err = 0;
+
+	srcbuf = vol_getblk(sb, src);
+	if (IS_ERR(srcbuf)) {
+		err = -ENOMEM;
+		goto error;
+	}
+
+	dstbuf = vol_getblk(sb, dst);
+	if (IS_ERR(dstbuf)) {
+		err = -ENOMEM;
+		goto error_put_srcbuf;
+	}
+
+	bnode_merge_nodes(bufdata(dstbuf), bufdata(srcbuf));
+
+	mark_buffer_rollup_non(dstbuf);
+	mark_buffer_rollup_non(srcbuf);
+
+	blockput(dstbuf);
+error_put_srcbuf:
+	blockput(srcbuf);
+error:
+	return err;
+}
+
 static void del_func(struct bnode *bnode, u64 key, u64 count)
 {
 	struct index_entry *entry = bnode_lookup(bnode, key);
