@@ -1,5 +1,9 @@
 #include "tux3user.h"
 
+#ifndef trace
+#define trace trace_on
+#endif
+
 void clear_inode(struct inode *inode)
 {
 	int has_refcnt = !list_empty(&inode->list);
@@ -110,8 +114,33 @@ error:
 	return err;
 }
 
-static void cleanup_garbage_for_writeback(struct sb *sb)
+static void cleanup_garbage_for_debugging(struct sb *sb)
 {
+#ifdef ATOMIC
+	struct buffer_head *buf, *n;
+
+	/*
+	 * Pinned buffer is not flushing always, it is normal. So,
+	 * this clean those for unmount to check buffer debugging
+	 */
+	list_for_each_entry_safe(buf, n, &mapping(sb->bitmap)->dirty, link) {
+		trace(">>> clean bitmap buffer %Lx:%Lx, count %d, state %d",
+		      (L)tux_inode(buffer_inode(buf))->inum,
+		      (L)bufindex(buf), bufcount(buf),
+		      buf->state);
+		assert(buffer_dirty(buf));
+		set_buffer_clean(buf);
+	}
+
+	list_for_each_entry_safe(buf, n, &sb->pinned, link) {
+		trace(">>> clean pinned buffer %Lx:%Lx, count %d, state %d",
+		      (L)tux_inode(buffer_inode(buf))->inum,
+		      (L)bufindex(buf), bufcount(buf),
+		      buf->state);
+		assert(buffer_dirty(buf));
+		set_buffer_clean(buf);
+	}
+#else /* !ATOMIC */
 	/*
 	 * Clean garbage (atomic commit) stuff. Don't forget to update
 	 * this, if you update the atomic commit.
@@ -128,21 +157,26 @@ static void cleanup_garbage_for_writeback(struct sb *sb)
 	assert(flink_empty(&sb->decycle.head));
 	assert(flink_empty(&sb->new_decycle.head));
 	assert(list_empty(&sb->pinned));
+#endif /* !ATOMIC */
 }
 
 int sync_super(struct sb *sb)
 {
 	int err;
 
-	printf("sync inodes\n");
+	trace("sync inodes");
 	if ((err = sync_inodes(sb)))
 		return err;
-
-	cleanup_garbage_for_writeback(sb);
-
-	printf("sync super\n");
+#ifdef ATOMIC
+	if ((err = force_delta(sb)))
+		return err;
+#else
+	trace("sync super");
 	if ((err = save_sb(sb)))
 		return err;
+#endif /* !ATOMIC */
+
+	cleanup_garbage_for_debugging(sb);
 
 	return 0;
 }

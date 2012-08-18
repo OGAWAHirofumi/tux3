@@ -828,6 +828,7 @@ int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
 int load_itable(struct sb *sb);
 void clean_buffer(struct buffer_head *buffer);
+int force_delta(struct sb *sb);
 int change_begin(struct sb *sb);
 int change_end(struct sb *sb);
 

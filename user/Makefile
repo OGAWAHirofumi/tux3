@@ -21,6 +21,8 @@ CFLAGS	+= -Wno-missing-field-initializers
 #CFLAGS += -Wp,-Wunused-macros
 # gcc checker
 CFLAGS	+= -D_FORTIFY_SOURCE=2
+# use atomic-commit
+CFLAGS	+= -DATOMIC=1
 # user flags
 CFLAGS	+= $(UCFLAGS)
 

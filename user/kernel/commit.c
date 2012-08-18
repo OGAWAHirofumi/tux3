@@ -268,7 +268,7 @@ static int do_commit(struct sb *sb, int can_rollup)
 	return err; /* FIXME: error handling */
 }
 
-/* FIXME: untested */
+/* FIXME: quickly designed, rethink this. */
 int force_delta(struct sb *sb)
 {
 	int err;
