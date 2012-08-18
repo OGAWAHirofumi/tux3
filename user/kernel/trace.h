@@ -8,10 +8,8 @@ extern int tux3_trace;
 #define tux3_trace	1
 #endif
 
-#define logline(caller, fmt, args...)	do {	\
-	printf("%s: ", caller);			\
-	printf(fmt , ##args);			\
-	printf("\n");				\
+#define logline(caller, fmt, args...)	do {		\
+	printf("%s: " fmt "\n" , caller , ##args);	\
 } while (0)
 
 #define error(fmt, args...) ({ warn(fmt "!" , ##args); die(99); 1; })
