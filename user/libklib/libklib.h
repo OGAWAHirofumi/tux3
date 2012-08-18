@@ -10,19 +10,7 @@
 #include <libklib/list.h>
 #include <libklib/err.h>
 #include <libklib/bitops.h>
-
-#ifdef __CHECKER__
-#define __force		__attribute__((force))
-#define __bitwise__	__attribute__((bitwise))
-#else
-#define __force
-#define __bitwise__
-#endif
-#ifdef __CHECK_ENDIAN__
-#define __bitwise __bitwise__
-#else
-#define __bitwise
-#endif
+#include <libklib/compiler.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)
@@ -38,19 +26,6 @@ extern int __build_bug_on_failed;
 	} while(0)
 #endif
 #endif /* __CHECKER__ */
-
-#define __packed	__attribute__((packed))
-#define __weak		__attribute__((weak))
-
-#ifdef __GNUC__
-/*
- * A trick to suppress uninitialized variable warning without generating any
- * code
- */
-#define uninitialized_var(x) x = x
-#else
-#define uninitialized_var(x) x
-#endif
 
 #define ALIGN(x, a)		__ALIGN_MASK(x, (typeof(x))(a) - 1)
 #define __ALIGN_MASK(x, mask)	(((x) + (mask)) & ~(mask))
