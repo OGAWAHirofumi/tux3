@@ -96,6 +96,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | magic %.4s, 0x%02x, 0x%02x, 0x%02x, 0x%02x"
 		" | birthdate %llu | flags 0x%016llx"
 		" | <iroot0> iroot 0x%016llx (depth %u, block %llu)"
+		" | <oroot0> oroot 0x%016llx (depth %u, block %llu)"
 		" | blockbits %u (size %u) | volblocks %llu"
 #ifndef ATOMIC
 		" | freeblocks %llu"
@@ -112,8 +113,11 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(u8)txsb->magic[4], (u8)txsb->magic[5],
 		(u8)txsb->magic[6], (u8)txsb->magic[7],
 		(L)from_be_u64(txsb->birthdate),
-		(L)from_be_u64(txsb->flags), (L)from_be_u64(txsb->iroot),
+		(L)from_be_u64(txsb->flags),
+		(L)from_be_u64(txsb->iroot),
 		itable_btree(sb)->root.depth, (L)itable_btree(sb)->root.block,
+		(L)from_be_u64(txsb->oroot),
+		otable_btree(sb)->root.depth, (L)otable_btree(sb)->root.block,
 		sb->blockbits, sb->blocksize,
 		(L)from_be_u64(txsb->volblocks),
 #ifndef ATOMIC
@@ -150,6 +154,8 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		X(LOG_BNODE_DEL),
 		X(LOG_BNODE_ADJUST),
 		X(LOG_BNODE_FREE),
+		X(LOG_ORPHAN_ADD),
+		X(LOG_ORPHAN_DEL),
 		X(LOG_FREEBLOCKS),
 		X(LOG_ROLLUP),
 		X(LOG_DELTA),
@@ -265,6 +271,16 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &to);
 			fprintf(gi->f, "node %llu, from %llu, to %llu ",
 				(L)node, (L)from, (L)to);
+			break;
+		}
+		case LOG_ORPHAN_ADD:
+		case LOG_ORPHAN_DEL: {
+			unsigned version;
+			u64 inum;
+			data = decode16(data, &version);
+			data = decode48(data, &inum);
+			fprintf(gi->f, "version %x, inum %llu ",
+				version, (L)inum);
 			break;
 		}
 		case LOG_FREEBLOCKS: {
