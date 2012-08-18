@@ -35,6 +35,8 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	INIT_LIST_HEAD(&sb->orphan_del);
 	spin_lock_init(&sb->dirty_inodes_lock);
 	INIT_LIST_HEAD(&sb->dirty_inodes);
+	spin_lock_init(&sb->forked_buffers_lock);
+	init_link_circular(&sb->forked_buffers);
 	init_dirty_buffers(&sb->pinned);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
@@ -423,6 +425,15 @@ int change_end(struct sb *sb)
 	/* FIXME: error handling */
 	if (sb->delta == delta)
 		err = do_commit(sb, ALLOW_ROLLUP);
+
+	/*
+	 * Check referencer of forked buffer was gone, and can free
+	 * FIXME: For now, although protecting this by ->delta_lock,
+	 * because easy to avoid race.  But probably, we would not
+	 * need to protect.
+	 */
+	free_forked_buffers(sb, 0);
+
 	up_write(&sb->delta_lock);
 
 	return err;

@@ -8,6 +8,155 @@
 #define PageForked(x)		PageChecked(x)
 #define SetPageForked(x)	SetPageChecked(x)
 
+/*
+ * Scanning the freeable forked page.
+ *
+ * Although we would like to free forked page at early stage (e.g. in
+ * blockdirty()). To free page, we have to set NULL to page->mapping,
+ * and free buffers on the page. But reader side can be grabbing the
+ * forked page, and may use ->mapping or buffers.  So, we have to
+ * keep forked page as is until it can be freed.
+ *
+ * So, we check the forked pages periodically. And if all referencer
+ * are gone (checking page_count()), free forked buffer and page.
+ */
+
+#define buffer_link(x)		((struct link *)&(x)->b_end_io)
+#define buffer_link_entry(x)	__link_entry(x, struct buffer_head, b_end_io)
+
+/*
+ * Register forked buffer to free the page later.
+ * FIXME: we should replace the hack link by ->b_end_io with something
+ */
+static void forked_buffer_add(struct sb *sb, struct buffer_head *buffer)
+{
+	/* Pin buffer. This prevents try_to_free_buffers(). */
+	get_bh(buffer);
+
+	spin_lock(&sb->forked_buffers_lock);
+	link_add(buffer_link(buffer), &sb->forked_buffers);
+	spin_unlock(&sb->forked_buffers_lock);
+}
+
+static void forked_buffer_del(struct link *prev, struct buffer_head *buffer)
+{
+	link_del_next(prev);
+	/* Unpin buffer */
+	put_bh(buffer);
+}
+
+/* Cleaning and free forked page */
+static void free_forked_page(struct page *page)
+{
+	struct address_space *mapping = page->mapping;
+
+	assert(PageForked(page));
+
+	lock_page(page);
+	if (page_has_buffers(page)) {
+		int ret = try_to_free_buffers(page);
+		assert(ret);
+	}
+	/* Lock is to make sure end_page_writeback() was done completely */
+	spin_lock_irq(&mapping->tree_lock);
+	page->mapping = NULL;
+	spin_unlock_irq(&mapping->tree_lock);
+	unlock_page(page);
+
+	/* Drop the radix-tree reference */
+	page_cache_release(page);
+	/* Drop the final reference */
+	trace_on("page %p, count %u", page, page_count(page));
+	page_cache_release(page);
+}
+
+/* Use same bit with bufdelta though, this buffer never be dirty */
+#define buffer_freeable(x)	test_bit(BH_PrivateStart, &(x)->b_state)
+#define set_buffer_freeable(x)	set_bit(BH_PrivateStart, &(x)->b_state)
+#define clear_buffer_freeable(x) clear_bit(BH_PrivateStart, &(x)->b_state)
+
+static inline int buffer_busy(struct buffer_head *buffer, int refcount)
+{
+	assert(!buffer_dirty(buffer));
+	assert(!buffer_async_write(buffer));
+	assert(!buffer_async_read(buffer));
+
+	return atomic_read(&buffer->b_count) > refcount ||
+		buffer_locked(buffer);
+}
+
+/* There is no referencer? */
+static int is_freeable_forked(struct buffer_head *buffer, struct page *page)
+{
+	/*
+	 * There is no reference of buffers? Once reader released
+	 * buffer, it never grab again. So we don't need recheck it.
+	 */
+	if (!buffer_freeable(buffer)) {
+		struct buffer_head *tmp = buffer->b_this_page;
+		while (tmp != buffer) {
+			if (buffer_busy(tmp, 0))
+				return 0;
+			tmp = tmp->b_this_page;
+		}
+		/* we have the refcount of this buffer to pin */
+		if (buffer_busy(buffer, 1))
+			return 0;
+
+		set_buffer_freeable(buffer);
+	}
+
+	/* Page is freeable? (radix-tree + ->private + own) */
+	return page_count(page) == 3;
+}
+
+/*
+ * Try to free forked page. If it is called from umount, there should
+ * be no referencer. So we free forked page forcefully.
+ */
+void free_forked_buffers(struct sb *sb, int umount)
+{
+	struct link free_list, *node, *prev, *n;
+
+	init_link_circular(&free_list);
+
+	/* Move freeable forked page to free_list */
+	spin_lock(&sb->forked_buffers_lock);
+	link_for_each_safe(node, prev, n, &sb->forked_buffers) {
+		struct buffer_head *buffer = buffer_link_entry(node);
+		struct page *page = buffer->b_page;
+
+		trace_on("buffer %p, page %p, count %u",
+			 buffer, page, page_count(page));
+		assert(!PageDirty(page)); /* page should already be submitted */
+		assert(!umount || !PageWriteback(page));
+		/* I/O was done? */
+		if (!PageWriteback(page)) {
+			/* All users were gone or from umount? */
+			if (umount || is_freeable_forked(buffer, page)) {
+				clear_buffer_freeable(buffer);
+
+				link_del_next(prev);
+				link_add(buffer_link(buffer), &free_list);
+			}
+		}
+	}
+	spin_unlock(&sb->forked_buffers_lock);
+
+	/* Free forked pages */
+	while (!link_empty(&free_list)) {
+		struct buffer_head *buffer = buffer_link_entry(free_list.next);
+		struct page *page = buffer->b_page;
+
+		forked_buffer_del(&free_list, buffer);
+		free_forked_page(page);
+	}
+}
+
+/*
+ * Block fork core
+ */
+
 static struct buffer_head *page_buffer(struct page *page, unsigned which)
 {
 	struct buffer_head *buffer = page_buffers(page);
@@ -77,6 +226,12 @@ static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 	create_empty_buffers(newpage, blocksize, 0);
 
 	return newpage;
+}
+
+/* Try to remove from LRU list */
+static void oldpage_try_remove_from_lru(struct page *page)
+{
+	/* Required functions are not exported at 3.4.4 */
 }
 
 /* Schedule to add LRU list */
@@ -177,17 +332,20 @@ do_clone_page:
 	radix_tree_replace_slot(pslot, newpage);
 	__inc_zone_page_state(newpage, NR_FILE_PAGES);
 	__dec_zone_page_state(oldpage, NR_FILE_PAGES);
+
 	/*
-	 * Get refcount to oldpage.
-	 * FIXME: The refcount of the oldpage is taken here, the
-	 * refcount may not be needed actually. Because the oldpage is
-	 * the dirty. Well, so, the backend has to free the oldpage.
-	 * (page_cache_put(oldpage)).
+	 * Inherit reference count of radix-tree, so referencer are
+	 * radix-tree + ->private (plus other users and lru_cache).
+	 *
+	 * FIXME: We can't remove from LRU, because page can be on
+	 * per-cpu lru cache at here. So, vmscan will try to free
+	 * oldpage. We get refcount to pin oldpage to prevent vmscan
+	 * releases oldpage.
 	 */
-	/* Referencer are radix-tree and ->private (+ readers). */
 	trace("oldpage count %u", page_count(oldpage));
 	assert(page_count(oldpage) >= 2);
 	page_cache_get(oldpage);
+	oldpage_try_remove_from_lru(oldpage);
 	spin_unlock_irq(&mapping->tree_lock);
 #if 0 /* FIXME */
 	mem_cgroup_end_migration(mem, oldpage, newpage);
@@ -200,6 +358,9 @@ do_clone_page:
 	 */
 	SetPageForked(oldpage);
 	unlock_page(oldpage);
+
+	/* Register forked buffer to free forked page later */
+	forked_buffer_add(sb, buffer);
 
 	trace("cloned page %p, buffer %p", newpage, newbuf);
 	brelse(buffer);
@@ -225,22 +386,5 @@ out:
 static int check_forked(struct page *page)
 {
 	return PageForked(page);
-}
-
-static void free_forked_page(struct page *page)
-{
-	assert(PageForked(page));
-	/* vm may have refcount, so >= 3 (e.g. lru_add_pvecs) */
-	assert(page_count(page) >= 3);
-	lock_page(page);	/* try_to_free_buffers requires this */
-	if (page_has_buffers(page)) {
-		int ret = try_to_free_buffers(page);
-		assert(ret);
-	}
-	unlock_page(page);
-	page->mapping = NULL;
-	page_cache_release(page);
-	/* Drop the final reference */
-	page_cache_release(page);
 }
 #endif

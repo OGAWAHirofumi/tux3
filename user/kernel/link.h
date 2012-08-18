@@ -32,6 +32,11 @@ static inline void link_del_next(struct link *node)
 	node->next = node->next->next;
 }
 
+#define link_for_each_safe(pos, prev, n, head)			\
+        for (pos = (head)->next, prev = (head), n = pos->next;  \
+	     pos != (head);					\
+	     prev = ((prev->next == n) ? prev : pos), pos = n, n = pos->next)
+
 /* Single linked list support (FIFO order) */
 
 struct flink_head { struct link *tail; };

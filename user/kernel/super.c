@@ -8,6 +8,9 @@
 
 static void __tux3_put_super(struct sb *sbi)
 {
+	/* All forked buffers should be freed here */
+	free_forked_buffers(sbi, 1);
+
 	destroy_defer_bfree(&sbi->derollup);
 	destroy_defer_bfree(&sbi->defree);
 
@@ -26,6 +29,7 @@ static void __tux3_put_super(struct sb *sbi)
 
 	/* FIXME: add more sanity check */
 	assert(list_empty(&sbi->alloc_inodes));
+	assert(link_empty(&sbi->forked_buffers));
 }
 
 static struct inode *create_internal_inode(struct sb *sbi, inum_t inum,

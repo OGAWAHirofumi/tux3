@@ -150,6 +150,8 @@ int flush_list(struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
 
 /* block_fork.c */
+struct sb;
+void free_forked_buffers(struct sb *sb, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 #endif /* !__KERNEL__ */
 #endif /* !TUX3_BUFFER_H */

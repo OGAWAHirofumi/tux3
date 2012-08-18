@@ -246,6 +246,9 @@ struct sb {
 	spinlock_t dirty_inodes_lock;
 	struct list_head dirty_inodes;	/* dirty inodes list */
 	struct iowait *iowait;		/* helper for waiting I/O */
+
+	spinlock_t forked_buffers_lock;
+	struct link forked_buffers;	/* forked buffers list */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
