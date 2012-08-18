@@ -709,7 +709,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		ileaf_name,
 		gi->lname, gi->lname, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
-		ileaf->magic, icount(ileaf), ibase(ileaf));
+		from_be_u16(ileaf->magic), icount(ileaf), ibase(ileaf));
 
 	/* draw inode attributes */
 	for (at = 0; at < icount(ileaf); at++) {
