@@ -1,22 +1,100 @@
 #include "tux3user.h"
+#include "test.h"
 
-void tux_dump_entries(struct buffer_head *buffer);
-int tux_dir_is_empty(struct inode *dir);
-int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
-tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result);
-int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);
-int tux_readdir(struct file *file, void *state, filldir_t filldir);
+#ifndef trace
+#define trace trace_off
+#endif
 
-static int filldir(void *entry, const char *name, int namelen, loff_t offset, u64 inum, unsigned type)
+#include "kernel/dir.c"
+
+static void clean_main(struct sb *sb, struct inode *dir)
 {
-	printf("\"%.*s\"\n", namelen, name);
+	invalidate_buffers(dir->map);
+	free_map(dir->map);
+	put_super(sb);
+}
+
+/* Test basic dir operations */
+static void test01(struct sb *sb, struct inode *dir)
+{
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+	int err;
+
+	test_assert(tux_dir_is_empty(dir) == 0);
+
+	err = tux_create_dirent(dir, "hello", 5, 0x666, S_IFREG);
+	test_assert(!err);
+	err = tux_create_dirent(dir, "world", 5, 0x777, S_IFLNK);
+	test_assert(!err);
+
+	entry = tux_find_dirent(dir, "hello", 5, &buffer);
+	test_assert(!IS_ERR(entry));
+	test_assert(from_be_u64(entry->inum) == 0x666);
+	test_assert(from_be_u16(entry->rec_len) >= 5 + 2);
+	test_assert(entry->name_len == 5);
+	test_assert(entry->type == TUX_REG);
+
+	err = tux_delete_dirent(buffer, entry);
+	test_assert(!err);
+	entry = tux_find_dirent(dir, "hello", 5, &buffer);
+	test_assert(IS_ERR(entry));
+
+	entry = tux_find_dirent(dir, "world", 5, &buffer);
+	test_assert(!IS_ERR(entry));
+	test_assert(from_be_u64(entry->inum) == 0x777);
+	test_assert(from_be_u16(entry->rec_len) >= 5 + 2);
+	test_assert(entry->name_len == 5);
+	test_assert(entry->type == TUX_LNK);
+	blockput(buffer);
+
+	test_assert(tux_dir_is_empty(dir) == -ENOTEMPTY);
+
+	clean_main(sb, dir);
+}
+
+static int filldir(void *entry, const char *name, int namelen, loff_t offset,
+		   u64 inum, unsigned type)
+{
+	static int pos;
+
+	char orig[100];
+	sprintf(orig, "file%i", pos);
+	trace_on("%*s, %s", namelen, name, orig);
+	test_assert(memcmp(orig, name, strlen(orig)) == 0);
+	test_assert(inum == pos+99);
+	test_assert(type == DT_REG);
+
+	pos++;
+
 	return 0;
+}
+
+/* Test readdir */
+static void test02(struct sb *sb, struct inode *dir)
+{
+	struct file *file = &(struct file){ .f_inode = dir };
+	int err;
+
+	for (int i = 0; i < 10; i++) {
+		char name[100];
+		sprintf(name, "file%i", i);
+		err = tux_create_dirent(dir, name, strlen(name), i+99, S_IFREG);
+		test_assert(!err);
+	}
+
+	char dents[10000];
+	err = tux_readdir(file, dents, filldir);
+	test_assert(!err);
+
+	clean_main(sb, dir);
 }
 
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
-	init_buffers(dev, 1 << 20, 0);
+
+	init_buffers(dev, 1 << 20, 2);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 150);
 	struct sb *sb = rapid_sb(dev);
@@ -24,29 +102,17 @@ int main(int argc, char *argv[])
 	setup_sb(sb, &super);
 
 	struct inode *dir = rapid_open_inode(sb, NULL, S_IFDIR);
-	struct buffer_head *buffer;
-	printf("empty = %i\n", tux_dir_is_empty(dir));
-	tux_create_dirent(dir, "hello", 5, 0x666, S_IFREG);
-	tux_create_dirent(dir, "world", 5, 0x777, S_IFLNK);
-	tux_dirent *entry = tux_find_dirent(dir, "hello", 5, &buffer);
-	assert(!IS_ERR(entry));
-	hexdump(entry, entry->name_len);
-	tux_dump_entries(blockget(dir->map, 0));
 
-	if (!tux_delete_dirent(buffer, entry))
-		show_buffers(dir->map);
+	test_init(argv[0]);
 
-	printf("empty = %i\n", tux_dir_is_empty(dir));
-	tux_dump_entries(blockget(dir->map, 0));
-	struct file *file = &(struct file){ .f_inode = dir };
-	for (int i = 0; i < 10; i++) {
-		char name[100];
-		sprintf(name, "file%i", i);
-		tux_create_dirent(dir, name, strlen(name), 0x800 + i, S_IFREG);
-	}
-	tux_dump_entries(blockget(dir->map, 0));
-	char dents[10000];
-	tux_readdir(file, dents, filldir);
-	show_buffers(dir->map);
-	exit(0);
+	if (test_start("test01"))
+		test01(sb, dir);
+	test_end();
+
+	if (test_start("test02"))
+		test02(sb, dir);
+	test_end();
+
+	clean_main(sb, dir);
+	return test_failures();
 }
