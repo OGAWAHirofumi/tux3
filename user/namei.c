@@ -160,6 +160,24 @@ error_src:
 	return err;
 }
 
+int tuxreadlink(struct inode *dir, const char *name, unsigned len,
+		void *buf, unsigned bufsize)
+{
+	struct inode *inode;
+	int err;
+
+	inode = tuxopen(dir, name, len);
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+
+	err = -EINVAL;
+	if (S_ISLNK(inode->i_mode))
+		err = page_readlink(inode, buf, bufsize);
+	iput(inode);
+
+	return err;
+}
+
 struct inode *__tuxsymlink(struct inode *dir, const char *name, unsigned len,
 			   struct tux_iattr *iattr, const char *symname)
 {

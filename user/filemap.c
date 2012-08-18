@@ -175,3 +175,17 @@ int page_symlink(struct inode *inode, const char *symname, int len)
 		return -EIO;
 	return 0;
 }
+
+int page_readlink(struct inode *inode, void *buf, unsigned size)
+{
+	struct file file = { .f_inode = inode, };
+	unsigned len = min_t(loff_t, inode->i_size, size);
+	int ret;
+
+	ret = tuxread(&file, buf, len);
+	if (ret < 0)
+		return ret;
+	if (ret != len)
+		return -EIO;
+	return 0;
+}
