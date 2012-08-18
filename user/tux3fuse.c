@@ -430,6 +430,37 @@ static void tux3fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 	fuse_reply_err(req, -err);
 }
 
+static void tux3fuse_rename(fuse_req_t req,
+			    fuse_ino_t parent, const char *name,
+			    fuse_ino_t newparent, const char *newname)
+{
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct inode *olddir, *newdir;
+	int err;
+
+	trace("(%Lx, '%s', %Lx, '%s')", (L)parent, name, (L)newparent, newname);
+
+	olddir = tux3fuse_iget(sb, parent);
+	if (IS_ERR(olddir)) {
+		err = PTR_ERR(olddir);
+		goto error;
+	}
+	newdir = tux3fuse_iget(sb, parent);
+	if (IS_ERR(newdir)) {
+		err = PTR_ERR(newdir);
+		goto error_old;
+	}
+
+	err = tuxrename(olddir, name, strlen(name), newdir, newname,
+			strlen(newname));
+
+	iput(newdir);
+error_old:
+	iput(olddir);
+error:
+	fuse_reply_err(req, -err);
+}
+
 static void tux3fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			    mode_t mode, struct fuse_file_info *fi)
 {
@@ -617,14 +648,6 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 static void tux3fuse_symlink(fuse_req_t req, const char *link,
 			     fuse_ino_t parent, const char *name)
-{
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
-}
-
-static void tux3fuse_rename(fuse_req_t req,
-			    fuse_ino_t parent, const char *name,
-			    fuse_ino_t newparent, const char *newname)
 {
 	warn("not implemented");
 	fuse_reply_err(req, ENOSYS);
