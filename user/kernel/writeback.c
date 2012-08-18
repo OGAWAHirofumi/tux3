@@ -66,7 +66,7 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 
 static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 {
-	return 0;
+	return flush_list(dirty_head_when(inode_dirty_heads(inode), delta));
 }
 
 int tux3_flush_inode(struct inode *inode, unsigned delta)

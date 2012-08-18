@@ -475,22 +475,22 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 	return 0;
 }
 
-int flush_list(struct list_head *list)
+int flush_list(struct list_head *head)
 {
 	struct bufvec *bufvec;
 	struct buffer_head *buffer, *n;
 	int err = 0;
 
-	if (list_empty(list))
+	if (list_empty(head))
 		return 0;
 
 	bufvec = bufvec_alloc(MAX_EXTENT);
 	if (!bufvec)
 		return -ENOMEM;
 
-	list_sort(NULL, list, buffer_index_cmp);
+	list_sort(NULL, head, buffer_index_cmp);
 
-	list_for_each_entry_safe(buffer, n, list, link) {
+	list_for_each_entry_safe(buffer, n, head, link) {
 		assert(buffer_dirty(buffer));
 		while (!bufvec_add(bufvec, buffer)) {
 			err = bufvec_first_buf(bufvec)->map->io(bufvec, WRITE);
@@ -510,14 +510,9 @@ error:
 	return err;
 }
 
-int flush_buffers_when(map_t *map, unsigned delta)
-{
-	return flush_list(dirty_head_when(&map->dirty, delta));
-}
-
 int flush_buffers(map_t *map)
 {
-	return flush_buffers_when(map, DEFAULT_DIRTY_WHEN);
+	return flush_list(dirty_head(&map->dirty));
 }
 
 int flush_state(unsigned state)

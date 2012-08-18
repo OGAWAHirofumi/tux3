@@ -50,6 +50,11 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 	}
 }
 
+static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
+{
+	return flush_list(dirty_head_when(inode_dirty_heads(inode), delta));
+}
+
 int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
 	unsigned dirty = inode->i_state;
@@ -64,7 +69,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	if (inode->i_state & I_DIRTY_PAGES) {
 		/* To handle redirty, this clears before flushing */
 		inode->i_state &= ~I_DIRTY_PAGES;
-		err = flush_buffers_when(mapping(inode), delta);
+		err = tux3_flush_buffers(inode, delta);
 		if (err)
 			goto error;
 	}

@@ -42,5 +42,8 @@ void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head);
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);
 void init_dirty_buffers(struct dirty_buffers *dirty);
+
+/* buffer_writeback.c */
+int flush_list(struct list_head *head);
 #endif /* !__KERNEL__ */
 #endif /* !TUX3_BUFFER_H */

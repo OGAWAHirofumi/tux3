@@ -44,3 +44,5 @@ void init_dirty_buffers(struct dirty_buffers *dirty)
 	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)
 		INIT_LIST_HEAD(&dirty->heads[i]);
 }
+
+#include "buffer_writeback.c"
