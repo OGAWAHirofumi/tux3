@@ -350,7 +350,7 @@ static void level_redirect_blockput(struct cursor *cursor, int level, struct buf
 
 	/* If this level has ->next, update ->next to the clone buffer */
 	if (next)
-		next = bufdata(clone) + ((void *)next - bufdata(buffer));
+		next = ptr_redirect(next, bufdata(buffer), bufdata(clone));
 
 	memcpy(bufdata(clone), bufdata(buffer), bufsize(clone));
 	level_replace_blockput(cursor, level, clone, next);

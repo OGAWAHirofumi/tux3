@@ -414,14 +414,14 @@ void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst)
 	return;
 #endif
 	walk->leaf = dst;
-	walk->group = (void *)dst + ((void *)walk->group - (void *)src);
-	walk->gstop = (void *)dst + ((void *)walk->gstop - (void *)src);
-	walk->gdict = (void *)dst + ((void *)walk->gdict - (void *)src);
-	walk->entry = (void *)dst + ((void *)walk->entry - (void *)src);
-	walk->estop = (void *)dst + ((void *)walk->estop - (void *)src);
-	walk->exbase = (void *)dst + ((void *)walk->exbase - (void *)src);
-	walk->extent = (void *)dst + ((void *)walk->extent - (void *)src);
-	walk->exstop = (void *)dst + ((void *)walk->exstop - (void *)src);
+	walk->group = ptr_redirect(walk->group, src, dst);
+	walk->gstop = ptr_redirect(walk->gstop, src, dst);
+	walk->gdict = ptr_redirect(walk->gdict, src, dst);
+	walk->entry = ptr_redirect(walk->entry, src, dst);
+	walk->estop = ptr_redirect(walk->estop, src, dst);
+	walk->exbase = ptr_redirect(walk->exbase, src, dst);
+	walk->extent = ptr_redirect(walk->extent, src, dst);
+	walk->exstop = ptr_redirect(walk->exstop, src, dst);
 }
 
 /* FIXME: current code is assuming the entry has only one extent. */

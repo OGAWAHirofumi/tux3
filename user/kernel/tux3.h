@@ -692,6 +692,16 @@ struct delete_info {
 
 typedef int (*unstash_t)(struct sb *sb, u64 val);
 
+/* Redirect ptr which is pointing data of src from src to dst */
+static inline void *ptr_redirect(void *ptr, void *src, void *dst)
+{
+	if (ptr) {
+		assert(ptr >= src);
+		return dst + (ptr - src);
+	}
+	return NULL;
+}
+
 #ifdef __KERNEL__
 static inline struct timespec gettime(void)
 {
