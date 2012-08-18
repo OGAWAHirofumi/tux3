@@ -79,32 +79,37 @@ static void guess_region(struct buffer_head *buffer, block_t *start, unsigned *c
 	*count = ends[1] + 1 - ends[0];
 }
 
-int filemap_extent_io(struct buffer_head *buffer, int write)
+static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
 {
 	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = tux_sb(inode->i_sb);
-	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", tux_inode(inode)->inum, bufindex(buffer));
+
+	trace("%s inode 0x%Lx block 0x%Lx",
+	      (mode == MAP_READ) ? "read" :
+			(mode == MAP_WRITE) ? "write" : "redirect",
+	      tux_inode(inode)->inum, bufindex(buffer));
+
 	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 
-	if (write && buffer_empty(buffer))
+	if (mode != MAP_READ && buffer_empty(buffer))
 		warn("egad, writing an invalid buffer");
-	if (!write && buffer_dirty(buffer))
+	if (mode == MAP_READ && buffer_dirty(buffer))
 		warn("egad, reading a dirty buffer");
 
 	block_t start;
 	unsigned count;
-	guess_region(buffer, &start, &count, write);
-	printf("---- extent 0x%Lx/%x ----\n", start, count);
+	guess_region(buffer, &start, &count, mode != MAP_READ);
+	trace("---- extent 0x%Lx/%x ----\n", start, count);
 
 	struct seg map[10];
 
-	int segs = map_region(inode, start, count, map, ARRAY_SIZE(map), write);
+	int segs = map_region(inode, start, count, map, ARRAY_SIZE(map), mode);
 	if (segs < 0)
 		return segs;
 
 	if (!segs) {
-		if (!write) {
+		if (mode == MAP_READ) {
 			trace("unmapped block %Lx", bufindex(buffer));
 			memset(bufdata(buffer), 0, sb->blocksize);
 			set_buffer_clean(buffer);
@@ -117,24 +122,44 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	int err = 0;
 	for (int i = 0; !err && i < segs; i++) {
 		int hole = map[i].state == SEG_HOLE;
-		trace_on("extent 0x%Lx/%x => %Lx", index, map[i].count, map[i].block);
+
+		trace("extent 0x%Lx/%x => %Lx",
+		      index, map[i].count, map[i].block);
+
 		for (int j = 0; !err && j < map[i].count; j++) {
 			block_t block = map[i].block + j;
+			int rw = (mode == MAP_READ) ? READ : WRITE;
+
 			buffer = blockget(mapping(inode), index + j);
-			trace_on("block 0x%Lx => %Lx", bufindex(buffer), block);
-			if (write) {
-				err = blockio(WRITE, buffer, block);
-			} else {
-				if (hole)
-					memset(bufdata(buffer), 0, sb->blocksize);
-				else
-					err = blockio(READ, buffer, block);
+			if (!buffer) {
+				err = -ENOMEM;
+				break;
 			}
-			blockput(set_buffer_clean(buffer)); // leave empty if error ???
+
+			trace("block 0x%Lx => %Lx", bufindex(buffer), block);
+			if (mode == MAP_READ && hole)
+				memset(bufdata(buffer), 0, sb->blocksize);
+			else
+				err = blockio(rw, buffer, block);
+
+			/* FIXME: leave empty if error ??? */
+			blockput(set_buffer_clean(buffer));
 		}
 		index += map[i].count;
 	}
 	return err;
+}
+
+int filemap_overwrite_io(struct buffer_head *buffer, int write)
+{
+	enum map_mode mode = write ? MAP_WRITE : MAP_READ;
+	return filemap_extent_io(buffer, mode);
+}
+
+int filemap_redirect_io(struct buffer_head *buffer, int write)
+{
+	enum map_mode mode = write ? MAP_REDIRECT : MAP_READ;
+	return filemap_extent_io(buffer, mode);
 }
 
 /*

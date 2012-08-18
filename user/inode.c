@@ -204,20 +204,43 @@ static void tux_setup_inode(struct inode *inode)
 	struct sb *sb = tux_sb(inode->i_sb);
 
 	assert(inode->inum != TUX_INVALID_INO);
-	switch (inode->inum) {
-	case TUX_VOLMAP_INO:
-		/* use default handler */
-		break;
-	case TUX_LOGMAP_INO:
+	switch (inode->i_mode & S_IFMT) {
+	case S_IFSOCK:
+	case S_IFIFO:
+	case S_IFBLK:
+	case S_IFCHR:
 		inode->map->io = dev_errio;
 		break;
-	case TUX_BITMAP_INO:
-		/* set maximum bitmap size */
-		/* FIXME: should this, tuxtruncate();? */
-		inode->i_size = (sb->volblocks + 7) >> 3;
-		/* FALLTHRU */
+	case S_IFREG:
+		inode->map->io = filemap_overwrite_io;
+		break;
+	case S_IFDIR:
+	case S_IFLNK:
+		inode->map->io = filemap_redirect_io;
+		break;
+	case 0: /* internal inode */
+		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
+		switch (tux_inode(inode)->inum) {
+		case TUX_BITMAP_INO:
+			/* set maximum bitmap size */
+			/* FIXME: should this, tuxtruncate();? */
+			inode->i_size = (sb->volblocks + 7) >> 3;
+			/* FALLTHRU */
+		case TUX_ATABLE_INO:
+		case TUX_VTABLE_INO:
+			inode->map->io = filemap_redirect_io;
+			break;
+		case TUX_VOLMAP_INO:
+			/* use default handler */;
+			break;
+		case TUX_LOGMAP_INO:
+			inode->map->io = dev_errio;
+			break;
+		}
+		break;
 	default:
-		inode->map->io = filemap_extent_io;
+		error("Unknown mode: inum %Lx, mode %07ho",
+		      tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
 }
