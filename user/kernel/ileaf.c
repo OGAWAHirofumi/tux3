@@ -68,7 +68,7 @@ static void ileaf_btree_init(struct btree *btree)
 	btree->entries_per_leaf = 1 << (btree->sb->blockbits - 6);
 }
 
-static int ileaf_init(struct btree *btree, vleaf *leaf)
+static int ileaf_init(struct btree *btree, void *leaf)
 {
 	trace("initialize inode leaf %p", leaf);
 	*(struct ileaf *)leaf = (struct ileaf){
@@ -90,7 +90,7 @@ static int ileaf_free(struct btree *btree, struct ileaf *ileaf)
 		- ileaf_need(btree, ileaf) - sizeof(struct ileaf);
 }
 
-static int ileaf_sniff(struct btree *btree, vleaf *leaf)
+static int ileaf_sniff(struct btree *btree, void *leaf)
 {
 	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
 }
@@ -101,7 +101,7 @@ static int ileaf_can_free(struct btree *btree, void *leaf)
 	return icount(ileaf) == 0;
 }
 
-static void ileaf_dump(struct btree *btree, vleaf *vleaf)
+static void ileaf_dump(struct btree *btree, void *vleaf)
 {
 	if (!tux3_trace)
 		return;
@@ -195,7 +195,7 @@ static void ileaf_trim(struct btree *btree, struct ileaf *leaf)
 #define SPLIT_AT_INUM
 
 static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
-			    vleaf *from, vleaf *into)
+			    void *from, void *into)
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;

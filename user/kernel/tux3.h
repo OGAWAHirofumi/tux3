@@ -578,8 +578,6 @@ static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 	leaf->groups = to_be_u16(from_be_u16(leaf->groups) + n);
 }
 
-typedef void vleaf;
-
 struct btree_key_range {
 	tuxkey_t start;
 	unsigned len;
@@ -587,12 +585,12 @@ struct btree_key_range {
 
 struct btree_ops {
 	void (*btree_init)(struct btree *btree);
-	int (*leaf_init)(struct btree *btree, vleaf *leaf);
-	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into);
+	int (*leaf_init)(struct btree *btree, void *leaf);
+	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t hint, void *from, void *into);
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
-	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, vleaf *leaf);
+	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, void *leaf);
 	/* return value: 1 - merged, 0 - couldn't merge */
-	int (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
+	int (*leaf_merge)(struct btree *btree, void *into, void *from);
 	int (*leaf_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key, tuxkey_t *split_hint);
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
@@ -603,10 +601,10 @@ struct btree_ops {
 	/*
 	 * for debugging
 	 */
-	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
+	int (*leaf_sniff)(struct btree *btree, void *leaf);
 	/* return value: 1 - can free, 0 - can't free */
-	int (*leaf_can_free)(struct btree *btree, vleaf *leaf);
-	void (*leaf_dump)(struct btree *btree, vleaf *leaf);
+	int (*leaf_can_free)(struct btree *btree, void *leaf);
+	void (*leaf_dump)(struct btree *btree, void *leaf);
 };
 
 /*
@@ -698,12 +696,6 @@ static inline struct xattr *xcache_next(struct xattr *xattr)
 static inline struct xattr *xcache_limit(struct xcache *xcache)
 {
 	return (void *)xcache + xcache->size;
-}
-
-struct ileaf;
-static inline struct ileaf *to_ileaf(vleaf *leaf)
-{
-	return leaf;
 }
 
 /* Information for replay */
@@ -912,10 +904,10 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir);
 int tux_dir_is_empty(struct inode *dir);
 
 /* dtree.c */
-int dleaf_init(struct btree *btree, vleaf *leaf);
-unsigned dleaf_free(struct btree *btree, vleaf *leaf);
-void dleaf_dump(struct btree *btree, vleaf *vleaf);
-int dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
+int dleaf_init(struct btree *btree, void *leaf);
+unsigned dleaf_free(struct btree *btree, void *leaf);
+void dleaf_dump(struct btree *btree, void *vleaf);
+int dleaf_merge(struct btree *btree, void *vinto, void *vfrom);
 extern struct btree_ops dtree1_ops;
 
 void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst);
@@ -945,6 +937,7 @@ void *decode_kind(void *attrs, unsigned *kind, unsigned *version);
 extern struct ileaf_attr_ops iattr_ops;
 
 /* ileaf.c */
+struct ileaf;
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
 int ileaf_find_free(struct btree *btree, tuxkey_t key_bottom,
 		    tuxkey_t key_limit, void *leaf,

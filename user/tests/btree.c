@@ -38,39 +38,38 @@ struct uleaf_req {
 	u16 val;
 };
 
-static inline struct uleaf *to_uleaf(vleaf *leaf)
-{
-	return leaf;
-}
-
 static void uleaf_btree_init(struct btree *btree)
 {
 	struct sb *sb = btree->sb;
 	btree->entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct uentry);
 }
 
-static int uleaf_init(struct btree *btree, vleaf *leaf)
+static int uleaf_init(struct btree *btree, void *leaf)
 {
-	*to_uleaf(leaf) = (struct uleaf){ .magic = 0xc0de };
+	struct uleaf *uleaf = leaf;
+	*uleaf = (struct uleaf){ .magic = 0xc0de };
 	return 0;
 }
 
-static unsigned uleaf_free(struct btree *btree, vleaf *leaf)
+static unsigned uleaf_free(struct btree *btree, void *leaf)
 {
-	return btree->entries_per_leaf - to_uleaf(leaf)->count;
+	struct uleaf *uleaf = leaf;
+	return btree->entries_per_leaf - uleaf->count;
 }
 
-static int uleaf_sniff(struct btree *btree, vleaf *leaf)
+static int uleaf_sniff(struct btree *btree, void *leaf)
 {
-	return to_uleaf(leaf)->magic == 0xc0de;
+	struct uleaf *uleaf = leaf;
+	return uleaf->magic == 0xc0de;
 }
 
-static int uleaf_can_free(struct btree *btree, vleaf *leaf)
+static int uleaf_can_free(struct btree *btree, void *leaf)
 {
-	return to_uleaf(leaf)->count == 0;
+	struct uleaf *uleaf = leaf;
+	return uleaf->count == 0;
 }
 
-static void uleaf_dump(struct btree *btree, vleaf *data)
+static void uleaf_dump(struct btree *btree, void *data)
 {
 #if 0
 	struct uleaf *leaf = data;
@@ -82,19 +81,19 @@ static void uleaf_dump(struct btree *btree, vleaf *data)
 #endif
 }
 
-static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into)
+static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t hint, void *vfrom, void *vinto)
 {
-	test_assert(uleaf_sniff(btree, from));
-	struct uleaf *leaf = from;
-	unsigned at = leaf->count / 2;
-	if (leaf->count && hint > leaf->entries[leaf->count - 1].key) // binsearch!
-		at = leaf->count;
-	unsigned tail = leaf->count - at;
-	uleaf_init(btree, into);
-	veccopy(to_uleaf(into)->entries, leaf->entries + at, tail);
-	to_uleaf(into)->count = tail;
-	leaf->count = at;
-	return tail ? to_uleaf(into)->entries[0].key : hint;
+	test_assert(uleaf_sniff(btree, vfrom));
+	struct uleaf *from = vfrom, *into = vinto;
+	unsigned at = from->count / 2;
+	if (from->count && hint > from->entries[from->count - 1].key) // binsearch!
+		at = from->count;
+	unsigned tail = from->count - at;
+	uleaf_init(btree, vinto);
+	veccopy(into->entries, from->entries + at, tail);
+	into->count = tail;
+	from->count = at;
+	return tail ? into->entries[0].key : hint;
 }
 
 static unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)
@@ -105,7 +104,7 @@ static unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf
 	return at;
 }
 
-static int uleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
+static int uleaf_chop(struct btree *btree, tuxkey_t start, u64 len, void *vleaf)
 {
 	struct uleaf *leaf = vleaf;
 	unsigned start_at, stop_at, count;
@@ -122,7 +121,7 @@ static int uleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 	return 1;
 }
 
-static int uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
+static int uleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 {
 	struct uleaf *into = vinto;
 	struct uleaf *from = vfrom;

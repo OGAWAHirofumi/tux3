@@ -63,33 +63,31 @@
  * the entry list is stored in reverse.
  */
 
-static inline struct dleaf *to_dleaf(vleaf *leaf)
-{
-	return leaf;
-}
-
 static void dleaf_btree_init(struct btree *btree)
 {
 	btree->entries_per_leaf = 64; /* FIXME: should depend on blocksize */
 }
 
-int dleaf_init(struct btree *btree, vleaf *leaf)
+int dleaf_init(struct btree *btree, void *leaf)
 {
-	*to_dleaf(leaf) = (struct dleaf){
-		.magic = to_be_u16(TUX3_MAGIC_DLEAF),
-		.free = to_be_u16(sizeof(struct dleaf)),
-		.used = to_be_u16(btree->sb->blocksize) };
+	struct dleaf *dleaf = leaf;
+	*dleaf = (struct dleaf){
+		.magic	= to_be_u16(TUX3_MAGIC_DLEAF),
+		.free	= to_be_u16(sizeof(struct dleaf)),
+		.used	= to_be_u16(btree->sb->blocksize)
+	};
 	return 0;
 }
 
-unsigned dleaf_free(struct btree *btree, vleaf *leaf)
+unsigned dleaf_free(struct btree *btree, void *leaf)
 {
-	return from_be_u16(to_dleaf(leaf)->used) - from_be_u16(to_dleaf(leaf)->free);
+	struct dleaf *dleaf = leaf;
+	return from_be_u16(dleaf->used) - from_be_u16(dleaf->free);
 }
 
-static unsigned dleaf_need(struct btree *btree, vleaf *vleaf)
+static unsigned dleaf_need(struct btree *btree, void *vleaf)
 {
-	struct dleaf *leaf = to_dleaf(vleaf);
+	struct dleaf *leaf = vleaf;
 	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
 }
 
@@ -98,17 +96,18 @@ static inline tuxkey_t get_index(struct group *group, struct entry *entry)
 	return ((tuxkey_t)group_keyhi(group) << 24) | entry_keylo(entry);
 }
 
-static int dleaf_sniff(struct btree *btree, vleaf *leaf)
+static int dleaf_sniff(struct btree *btree, void *leaf)
 {
-	return to_dleaf(leaf)->magic == to_be_u16(TUX3_MAGIC_DLEAF);
+	struct dleaf *dleaf = leaf;
+	return dleaf->magic == to_be_u16(TUX3_MAGIC_DLEAF);
 }
 
-static int dleaf_can_free(struct btree *btree, vleaf *vleaf)
+static int dleaf_can_free(struct btree *btree, void *vleaf)
 {
 	return dleaf_need(btree, vleaf) == 0;
 }
 
-void dleaf_dump(struct btree *btree, vleaf *vleaf)
+void dleaf_dump(struct btree *btree, void *vleaf)
 {
 	if (!tux3_trace)
 		return;
@@ -211,7 +210,7 @@ eek:
 	return -1;
 }
 
-static int dleaf_split_at(vleaf *from, vleaf *into, int split, unsigned blocksize)
+static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 {
 	struct dleaf *leaf = from, *leaf2 = into;
 	unsigned groups = dleaf_groups(leaf), groups2;
@@ -280,9 +279,9 @@ static int dleaf_split_at(vleaf *from, vleaf *into, int split, unsigned blocksiz
  * Split dleaf at middle in terms of entries, may be unbalanced in extents.
  * Not used for now because we do the splits by hand in filemap.c
  */
-static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into)
+static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, void *from, void *into)
 {
-	struct dleaf *leaf = to_dleaf(from), *leaf2 = to_dleaf(into);
+	struct dleaf *leaf = from, *leaf2 = into;
 	assert(dleaf_sniff(btree, from));
 	unsigned blocksize = btree->sb->blocksize;
 	struct group *gdict = from + blocksize, *gbase = gdict - dleaf_groups(leaf);
@@ -303,9 +302,9 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, vleaf *from, vle
  * 0 - couldn't merge
  * 1 - merged
  */
-int dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
+int dleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 {
-	struct dleaf *leaf = to_dleaf(vinto), *from = to_dleaf(vfrom);
+	struct dleaf *leaf = vinto, *from = vfrom;
 	struct group *gdict = (void *)leaf + btree->sb->blocksize;
 	struct group *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (struct entry *)gstop;
@@ -838,10 +837,10 @@ static void dwalk_update(struct dwalk *walk, struct diskextent extent)
  *
  * But it does truncate so it is getting checked in just for now.
  */
-static int dleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
+static int dleaf_chop(struct btree *btree, tuxkey_t start, u64 len, void *vleaf)
 {
 	struct sb *sb = btree->sb;
-	struct dleaf *leaf = to_dleaf(vleaf);
+	struct dleaf *leaf = vleaf;
 	struct dwalk walk;
 
 	/* FIXME: range chop is unsupported for now */
