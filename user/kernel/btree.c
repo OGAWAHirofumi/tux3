@@ -548,11 +548,18 @@ static void bnode_remove_index(struct bnode *node, struct index_entry *p,
 	node->count = to_be_u32(total - count);
 }
 
-static void bnode_merge_nodes(struct bnode *into, struct bnode *from)
+static int bnode_merge_nodes(struct sb *sb, struct bnode *into,
+			     struct bnode *from)
 {
 	unsigned into_count = bcount(into), from_count = bcount(from);
+
+	if (from_count + into_count > sb->entries_per_node)
+		return 0;
+
 	veccopy(&into->entries[into_count], from->entries, from_count);
 	into->count = to_be_u32(into_count + from_count);
+
+	return 1;
 }
 
 static void adjust_parent_sep(struct cursor *cursor, int level, be_u64 newsep)
@@ -648,12 +655,9 @@ static int try_bnode_merge(struct sb *sb, struct buffer_head *intobuf,
 {
 	struct bnode *into = bufdata(intobuf);
 	struct bnode *from = bufdata(frombuf);
-	unsigned from_size = bcount(from);
 
 	/* Try to merge nodes */
-	if (from_size <= sb->entries_per_node - bcount(into)) {
-		if (from_size > 0)
-			bnode_merge_nodes(into, from);
+	if (bnode_merge_nodes(sb, into, from)) {
 		/*
 		 * We know frombuf is redirected and dirty. So, in
 		 * here, we can just cancel bnode_redirect by bfree(),
@@ -1356,7 +1360,7 @@ int replay_bnode_merge(struct replay *rp, block_t src, block_t dst)
 {
 	struct sb *sb = rp->sb;
 	struct buffer_head *srcbuf, *dstbuf;
-	int err = 0;
+	int err = 0, ret;
 
 	srcbuf = vol_getblk(sb, src);
 	if (IS_ERR(srcbuf)) {
@@ -1370,7 +1374,8 @@ int replay_bnode_merge(struct replay *rp, block_t src, block_t dst)
 		goto error_put_srcbuf;
 	}
 
-	bnode_merge_nodes(bufdata(dstbuf), bufdata(srcbuf));
+	ret = bnode_merge_nodes(sb, bufdata(dstbuf), bufdata(srcbuf));
+	assert(ret == 1);
 
 	mark_buffer_rollup_non(dstbuf);
 	mark_buffer_rollup_non(srcbuf);
