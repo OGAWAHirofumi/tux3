@@ -19,6 +19,8 @@ static const char *log_name[] = {
 	X(LOG_BNODE_SPLIT),
 	X(LOG_BNODE_ADD),
 	X(LOG_BNODE_UPDATE),
+	X(LOG_ROLLUP),
+	X(LOG_DELTA),
 #undef X
 };
 
@@ -155,6 +157,8 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_LEAF_REDIRECT:
+		case LOG_ROLLUP:
+		case LOG_DELTA:
 			data += log_size[code] - sizeof(code);
 			break;
 		default:
@@ -240,6 +244,8 @@ static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 		case LOG_BNODE_SPLIT:
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE:
+		case LOG_ROLLUP:
+		case LOG_DELTA:
 			data += log_size[code] - sizeof(code);
 			break;
 		default:

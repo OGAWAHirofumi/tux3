@@ -74,6 +74,8 @@ unsigned log_size[] = {
 	[LOG_BNODE_SPLIT]	= 15,
 	[LOG_BNODE_ADD]		= 19,
 	[LOG_BNODE_UPDATE]	= 19,
+	[LOG_ROLLUP]		= 1,
+	[LOG_DELTA]		= 1,
 };
 
 void log_next(struct sb *sb)
@@ -210,6 +212,23 @@ void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	log_bnode_entry(sb, LOG_BNODE_UPDATE, parent, child, key);
+}
+
+static void log_intent(struct sb *sb, u8 intent)
+{
+	unsigned char *data = log_begin(sb, 1);
+	*data++ = intent;
+	log_end(sb, data);
+}
+
+void log_rollup(struct sb *sb)
+{
+	log_intent(sb, LOG_ROLLUP);
+}
+
+void log_delta(struct sb *sb)
+{
+	log_intent(sb, LOG_DELTA);
 }
 
 /* Stash infrastructure (struct stash must be initialized by zero clear) */

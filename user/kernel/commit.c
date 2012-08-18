@@ -184,6 +184,8 @@ static int rollup_log(struct sb *sb)
 
 	/* this is starting the new rollup cycle of the log */
 	new_cycle_log(sb);	/* FIXME: error handling */
+	/* Add rollup log as mark of new rollup cycle. */
+	log_rollup(sb);
 
 	/* move deferred frees for rollup to delta deferred free list */
 	unstash(sb, &sb->derollup, move_deferred);
@@ -322,6 +324,9 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 		if (err)
 			return err;
 	}
+
+	/* Add delta log as an initial log for debugging. */
+	log_delta(sb);
 
 	err = call_reserve_blocks(sb);
 	if (err)

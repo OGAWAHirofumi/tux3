@@ -216,7 +216,14 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, (L)parent, (L)child, (L)key);
 			break;
 		}
+		case LOG_ROLLUP:
+			fprintf(gi->f, " | [LOG_ROLLUP] ");
+			break;
+		case LOG_DELTA:
+			fprintf(gi->f, " | [LOG_DELTA] ");
+			break;
 		default:
+			fprintf(stderr, "Unknown log code 0x%x!\n", code);
 			assert(0);
 			break;
 		}
