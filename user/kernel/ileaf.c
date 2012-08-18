@@ -9,6 +9,7 @@
  */
 
 #include "tux3.h"
+#include "ileaf.h"
 
 #ifndef trace
 #define trace trace_on
@@ -439,6 +440,39 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 	return attrs;
 }
 
+static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
+		       tuxkey_t key_limit,
+		       void *leaf, struct btree_key_range *key,
+		       tuxkey_t *split_hint)
+{
+	struct ileaf_req *rq = container_of(key, struct ileaf_req, key);
+	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
+	struct ileaf *ileaf = leaf;
+	void *attrs;
+	int size;
+
+	assert(key->len == 1);
+
+	size = attr_ops->encoded_size(btree, rq->data);
+	assert(size);
+
+	attrs = ileaf_resize(btree, key->start, ileaf, size);
+	if (attrs == NULL) {
+		/* There is no space to store */
+		unsigned at = icount(ileaf) / 2;
+		/* split at middle of inums. FIXME: better split position? */
+		*split_hint = ibase(ileaf) + at;
+		return -ENOSPC;
+	}
+
+	attr_ops->encode(btree, rq->data, attrs, size);
+
+	key->start++;
+	key->len--;
+
+	return 0;
+}
+
 struct btree_ops itable_ops = {
 	.btree_init	= ileaf_btree_init,
 	.leaf_init	= ileaf_init,
@@ -446,6 +480,7 @@ struct btree_ops itable_ops = {
 	.leaf_merge	= ileaf_merge,
 	.leaf_resize	= ileaf_resize,
 	.leaf_chop	= ileaf_chop,
+	.leaf_write	= ileaf_write,
 	.balloc		= balloc,
 
 	.leaf_sniff	= ileaf_sniff,

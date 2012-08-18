@@ -599,6 +599,9 @@ struct btree_ops {
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
 	int (*bfree)(struct sb *sb, block_t block, unsigned blocks);
+
+	void *private_ops;
+
 	/*
 	 * for debugging
 	 */
