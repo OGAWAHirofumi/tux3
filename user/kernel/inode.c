@@ -424,9 +424,7 @@ static int tux_can_truncate(struct inode *inode)
 static void __tux3_truncate(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct btree_chop_info chop_info = {
-		.key = (inode->i_size + sb->blockmask) >> sb->blockbits,
-	};
+	tuxkey_t index = (inode->i_size + sb->blockmask) >> sb->blockbits;
 	int err;
 
 	if (!tux_can_truncate(inode))
@@ -434,7 +432,7 @@ static void __tux3_truncate(struct inode *inode)
 	/* FIXME: must fix expand size */
 	WARN_ON(inode->i_size);
 	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
-	err = btree_chop(&tux_inode(inode)->btree, &del_info, 0);
+	err = btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
 	inode->i_blocks = ((inode->i_size + sb->blockmask)
 			   & ~(loff_t)sb->blockmask) >> 9;
 	inode->i_mtime = inode->i_ctime = gettime();

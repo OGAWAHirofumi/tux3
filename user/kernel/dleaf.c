@@ -808,19 +808,19 @@ static void dwalk_update(struct dwalk *walk, struct diskextent extent)
  *
  * But it does truncate so it is getting checked in just for now.
  */
-static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
+static int dleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 {
 	struct sb *sb = btree->sb;
 	struct dleaf *leaf = to_dleaf(vleaf);
 	struct dwalk walk;
 
-	if (!dwalk_probe(leaf, sb->blocksize, &walk, chop))
+	if (!dwalk_probe(leaf, sb->blocksize, &walk, start))
 		return 0;
 
 	/* Chop this extent partially */
-	if (dwalk_index(&walk) < chop) {
+	if (dwalk_index(&walk) < start) {
 		block_t block = dwalk_block(&walk);
-		unsigned count = chop - dwalk_index(&walk);
+		unsigned count = start - dwalk_index(&walk);
 
 		/* FIXME: should set buffer clean? */
 		defer_bfree(&sb->defree, block + count, dwalk_count(&walk) - count);

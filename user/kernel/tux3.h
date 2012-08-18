@@ -143,13 +143,17 @@ static inline void *decode48(void *at, u64 *val)
 #define TUX3_MAGIC_DLEAF	0x1eaf
 #define TUX3_MAGIC_ILEAF	0x90de
 
-#define MAX_INODES_BITS 48
-#define MAX_BLOCKS_BITS 48
-#define MAX_FILESIZE_BITS 60
-#define MAX_FILESIZE (1LL << MAX_FILESIZE_BITS)
-#define MAX_EXTENT (1 << 6)
-#define SB_LOC (1 << 12)
-#define SB_LEN (1 << 12)	/* this is maximum blocksize */
+#define MAX_INODES_BITS		48
+#define MAX_BLOCKS_BITS		48
+#define MAX_FILESIZE_BITS	60
+#define MAX_FILESIZE		(1LL << MAX_FILESIZE_BITS)
+#define MAX_EXTENT		(1 << 6)
+
+#define SB_LOC			(1 << 12)
+#define SB_LEN			(1 << 12)	/* this is maximum blocksize */
+
+#define MAX_TUXKEY		(((tuxkey_t)1 << 48) - 1)
+#define TUXKEY_LIMIT		(MAX_TUXKEY + 1)
 
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
@@ -568,7 +572,7 @@ struct btree_ops {
 	unsigned (*leaf_need)(struct btree *btree, vleaf *leaf);
 	unsigned (*leaf_free)(struct btree *btree, vleaf *leaf);
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
-	int (*leaf_chop)(struct btree *btree, tuxkey_t key, vleaf *leaf);
+	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, vleaf *leaf);
 	void (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
 	int (*bfree)(struct sb *sb, block_t block, unsigned blocks);
@@ -681,14 +685,6 @@ static inline int has_root(struct btree *btree)
 	return (btree->root.block != no_root.block) ||
 		(btree->root.depth != no_root.depth);
 }
-
-/* for btree_chop */
-struct btree_chop_info {
-	tuxkey_t key;
-	block_t blocks, freed;
-	block_t resume;
-	int create;
-};
 
 /* Redirect ptr which is pointing data of src from src to dst */
 static inline void *ptr_redirect(void *ptr, void *src, void *dst)
@@ -829,7 +825,7 @@ tuxkey_t cursor_next_key(struct cursor *cursor);
 tuxkey_t cursor_this_key(struct cursor *cursor);
 int cursor_advance(struct cursor *cursor);
 int btree_probe(struct cursor *cursor, tuxkey_t key);
-int btree_chop(struct btree *btree, struct btree_chop_info *info, millisecond_t deadline);
+int btree_chop(struct btree *btree, tuxkey_t start, u64 len);
 int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);
 void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);

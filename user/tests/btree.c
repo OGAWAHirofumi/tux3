@@ -98,10 +98,10 @@ static unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf
 	return at;
 }
 
-static int uleaf_chop(struct btree *btree, tuxkey_t key, vleaf *vleaf)
+static int uleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 {
 	struct uleaf *leaf = vleaf;
-	unsigned at = uleaf_seek(btree, key, leaf);
+	unsigned at = uleaf_seek(btree, start, leaf);
 	leaf->count = at;
 	return 1;
 }
@@ -240,12 +240,10 @@ static void test02(struct sb *sb, struct inode *inode)
 		release_cursor(cursor);
 	}
 	/* Delte all */
-	{
-		struct btree_chop_info info = { .key = 0 };
-		test_assert(btree_chop(btree, &info, 0) == 0);
-	}
+	test_assert(btree_chop(btree, 0, TUXKEY_LIMIT) == 0);
 	/* btree should have empty root */
 	test_assert(btree->root.depth == 1);
+
 	/* btree_probe() should return same path always */
 	test_assert(btree_probe(cursor, 0) == 0);
 	block_t root = bufindex(cursor->path[0].buffer);
@@ -298,8 +296,7 @@ static void test03(struct sb *sb, struct inode *inode)
 	/* Delete one by one for some keys from end */
 	int left = sb->entries_per_node * btree->entries_per_leaf * 80;
 	for (int key = keys - 1; key >= left; key--) {
-		struct btree_chop_info info = { .key = key };
-		test_assert(btree_chop(btree, &info, 0) == 0);
+		test_assert(btree_chop(btree, key, TUXKEY_LIMIT) == 0);
 
 		int ret, check = 0;
 
@@ -361,7 +358,7 @@ static void test04(struct sb *sb, struct inode *inode)
 	release_cursor(cursor2);
 	free_cursor(cursor);
 	free_cursor(cursor2);
-	test_assert(!btree_chop(btree, &(struct btree_chop_info){ .key = 0 }, 0));
+	test_assert(!btree_chop(btree, 0, TUXKEY_LIMIT));
 
 	clean_main(sb, inode);
 }

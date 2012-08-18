@@ -84,8 +84,8 @@ int main(int argc, char *argv[])
 		for (int i = 0; i < 10; i++)
 			segs = map_region(inode, 2*i, 1, map, 2, 1);
 		show_segs(map, segs);
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		err = unstash(sb, &sb->defree, apply_defered_bfree);
 		assert(!err);
@@ -98,8 +98,8 @@ int main(int argc, char *argv[])
 		segs = d_map_region(inode, 80, 10, map, 10, 2);
 		segs = d_map_region(inode, 0, 200, map, 10, 0);
 		invalidate_buffers(inode->map);
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		err = unstash(sb, &sb->defree, apply_defered_bfree);
 		assert(!err);
@@ -109,8 +109,8 @@ int main(int argc, char *argv[])
 	if (1) { /* create seg entirely inside existing */
 		segs = map_region(inode, 2, 5, map, 10, 1); show_segs(map, segs);
 		segs = map_region(inode, 4, 1, map, 10, 1); show_segs(map, segs);
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		err = unstash(sb, &sb->defree, apply_defered_bfree);
 		assert(!err);
@@ -121,8 +121,8 @@ int main(int argc, char *argv[])
 		segs = map_region(inode, 0x2, 0x1, map, 10, 1);
 		segs = map_region(inode, 0x6, 0x1, map, 10, 1);
 		segs = map_region(inode, 0x4, 0x1, map, 10, 1);
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		err = unstash(sb, &sb->defree, apply_defered_bfree);
 		assert(!err);
@@ -132,8 +132,8 @@ int main(int argc, char *argv[])
 		segs = map_region(inode, 0x1100000, 0x40, map, 10, 1);
 		segs = map_region(inode, 0x800000, 0x40, map, 10, 1);
 		segs = map_region(inode, 0x800040, 0x40, map, 10, 1);
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		err = unstash(sb, &sb->defree, apply_defered_bfree);
 		assert(!err);
@@ -160,8 +160,7 @@ int main(int argc, char *argv[])
 		/* btree_chop and dleaf_chop test */
 		int index = 31*2;
 		while (index--) {
-			struct btree_chop_info info = { .key = index, };
-			segs = btree_chop(&inode->btree, &info, 0);
+			segs = btree_chop(&inode->btree, index, TUXKEY_LIMIT);
 			assert(!segs);
 			for (int i = 0, j = 0; i < 30; i++, j++) {
 				if (index <= i*2)
@@ -195,8 +194,7 @@ int main(int argc, char *argv[])
 		}
 		show_tree_range(&inode->btree, 0, -1);
 		/* 0/2: 0 => 3/1; 2 => 2/1; */
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
@@ -222,8 +220,8 @@ int main(int argc, char *argv[])
 		}
 		/* 0/2: 38 => 3/1; 3a => 2/1; */
 		show_tree_range(&inode->btree, 0, -1);
-		struct btree_chop_info info = { .key = 0, };
-		segs = btree_chop(&inode->btree, &info, 0);
+
+		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
 		assert(!segs);
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);

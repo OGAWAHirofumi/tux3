@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 	struct btree *btree = &(struct btree){ .sb = sb, .ops = &dtree_ops };
 	struct dleaf *leaf = dleaf_create(btree);
 
-	dleaf_chop(btree, 0x14014LL, leaf);
+	dleaf_chop(btree, 0x14014LL, TUXKEY_LIMIT, leaf);
 
 	unsigned hi = 1 << 24, hi2 = 3 * hi/*, next = 0*/;
 	unsigned keys[] = { 0x11, 0x33, 0x22, hi2 + 0x44, hi2 + 0x55, hi2 + 0x44, hi + 0x33, hi + 0x44, hi + 0x99 };
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 	dleaf_dump(btree, dest);
 	dleaf_merge(btree, leaf, dest);
 	dleaf_dump(btree, leaf);
-	dleaf_chop(btree, 0x14014LL, leaf);
+	dleaf_chop(btree, 0x14014LL, TUXKEY_LIMIT, leaf);
 	dleaf_dump(btree, leaf);
 	dleaf_destroy(btree, leaf);
 	dleaf_destroy(btree, dest);
@@ -317,7 +317,7 @@ int main(int argc, char *argv[])
 			dwalk_next(walk1);
 		}
 		/* dleaf_chop test */
-		dleaf_chop(btree, 0x3001000008ULL, leaf1);
+		dleaf_chop(btree, 0x3001000008ULL, TUXKEY_LIMIT, leaf1);
 		dwalk_probe(leaf1, blocksize, walk1, 0);
 		nr = 0;
 		while (!dwalk_end(walk1)) {

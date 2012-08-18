@@ -280,7 +280,19 @@ tuxkey_t cursor_next_key(struct cursor *cursor)
 		if (!level_finished(cursor, level))
 			return from_be_u64(cursor->path[level].next->key);
 	}
-	return -1;
+	return TUXKEY_LIMIT;
+}
+
+static tuxkey_t cursor_level_next_key(struct cursor *cursor)
+{
+	int level = cursor->level;
+	assert(cursor->level < cursor->btree->root.depth);
+	while (level >= 0) {
+		if (!level_finished(cursor, level))
+			return from_be_u64(cursor->path[level].next->key);
+		level--;
+	}
+	return TUXKEY_LIMIT;
 }
 
 /* Return key of this leaf */
@@ -660,25 +672,31 @@ static int try_bnode_merge(struct sb *sb, struct buffer_head *intobuf,
  * FIXME: no re-distribute. so, we don't guarantee above than 50%
  * space efficiency. And if range is end of key (truncate() case), we
  * don't need to merge, and adjust_parent_sep().
+ *
+ * FIXME2: we may want to split chop work for each step. instead of
+ * blocking for a long time.
  */
-int btree_chop(struct btree *btree, struct btree_chop_info *info, millisecond_t deadline)
+int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 {
-	int suspend = 0;
 	struct sb *sb = btree->sb;
 	struct btree_ops *ops = btree->ops;
 	struct buffer_head **prev, *leafprev = NULL;
 	struct cursor *cursor;
-	int ret;
+	tuxkey_t limit;
+	int ret, done = 0;
 
 	if (!has_root(btree))
 		return 0;
+
+	/* Chop all range if len >= TUXKEY_LIMIT */
+	limit = (len >= TUXKEY_LIMIT) ? TUXKEY_LIMIT : start + len;
 
 	cursor = alloc_cursor(btree, 0);
 	prev = malloc(sizeof(*prev) * btree->root.depth);
 	memset(prev, 0, sizeof(*prev) * btree->root.depth);
 
 	down_write(&btree->lock);
-	btree_probe(cursor, info->key);	/* FIXME: info->resume? */
+	btree_probe(cursor, start);
 
 	/* Walk leaves */
 	while (1) {
@@ -688,7 +706,7 @@ int btree_chop(struct btree *btree, struct btree_chop_info *info, millisecond_t 
 			goto out;
 		leafbuf = cursor_pop(cursor);
 
-		ret = ops->leaf_chop(btree, info->key, bufdata(leafbuf));
+		ret = ops->leaf_chop(btree, start, len, bufdata(leafbuf));
 		if (ret) {
 			if (ret < 0) {
 				blockput(leafbuf);
@@ -711,15 +729,11 @@ int btree_chop(struct btree *btree, struct btree_chop_info *info, millisecond_t 
 		leafprev = leafbuf;
 
 keep_prev_leaf:
-		//nanosleep(&(struct timespec){ 0, 50 * 1000000 }, NULL);
-		//printf("time remaining: %Lx\n", deadline - gettime());
-//		if (deadline && gettime() > deadline)
-//			suspend = -1;
-		if (info->blocks && info->freed >= info->blocks)
-			suspend = -1;
 
+		if (cursor_level_next_key(cursor) >= limit)
+			done = 1;
 		/* Pop and try to merge finished nodes */
-		while (suspend || cursor_level_finished(cursor)) {
+		while (done || cursor_level_finished(cursor)) {
 			struct buffer_head *buf;
 			int level = cursor->level;
 
@@ -739,12 +753,6 @@ keep_prev_leaf:
 			}
 			prev[level] = buf;
 keep_prev_node:
-
-			/* deepest key in the cursor is the resume address */
-			if (suspend == -1 && !cursor_level_finished(cursor)) {
-				suspend = 1; /* only set resume once */
-				info->resume = from_be_u64((cursor->path[level].next)->key);
-			}
 
 			if (!level)
 				goto chop_root;
@@ -768,7 +776,7 @@ chop_root:
 		mark_btree_dirty(btree);
 		vecmove(prev, prev + 1, btree->root.depth);
 	}
-	ret = suspend;
+	ret = 0;
 
 out:
 	if (leafprev)
