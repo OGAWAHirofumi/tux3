@@ -80,6 +80,9 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 		/* Find latest rollup. */
 		if (code == LOG_ROLLUP && rp->rollup_index == -1) {
 			rp->rollup_pos = data;
+			/* FIXME: index is unnecessary to use. We just
+			 * want to know whether before or after rollup
+			 * mark. */
 			rp->rollup_index = bufindex(logbuf);
 		}
 
