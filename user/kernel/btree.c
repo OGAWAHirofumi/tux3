@@ -364,40 +364,59 @@ int cursor_redirect(struct cursor *cursor)
 	struct btree *btree = cursor->btree;
 	unsigned level = btree->root.depth;
 	struct sb *sb = btree->sb;
-	block_t child;
+	block_t uninitialized_var(child);
 
 	while (1) {
-		struct buffer_head *buffer = cursor->path[level].buffer;
-		if (buffer_dirty(buffer))
-			return 0;
+		struct buffer_head *buffer;
+		block_t uninitialized_var(oldblock);
+		block_t uninitialized_var(newblock);
+		int redirected = 0;
 
-		/* Redirect buffer before changing */
-		struct buffer_head *clone = new_block(btree);
-		if (IS_ERR(clone))
-			return PTR_ERR(clone);
-		block_t oldblock = bufindex(buffer), newblock = bufindex(clone);
-		trace("redirect block %Lx to %Lx", (L)oldblock, (L)newblock);
-		level_redirect_blockput(cursor, level, clone);
-		if (level == btree->root.depth) {
-			/* This is leaf buffer */
-			mark_buffer_dirty_atomic(clone);
-			log_leaf_redirect(sb, oldblock, newblock);
-			defer_bfree(&sb->defree, oldblock, 1);
-			goto parent_level;
+		buffer = cursor->path[level].buffer;
+		/* If buffer is not dirty, redirect it to modify */
+		if (!buffer_dirty(buffer)) {
+			redirected = 1;
+
+			/* Redirect buffer before changing */
+			struct buffer_head *clone = new_block(btree);
+			if (IS_ERR(clone))
+				return PTR_ERR(clone);
+			oldblock = bufindex(buffer);
+			newblock = bufindex(clone);
+			trace("redirect %Lx to %Lx", (L)oldblock, (L)newblock);
+			level_redirect_blockput(cursor, level, clone);
+			if (level == btree->root.depth) {
+				/* This is leaf buffer */
+				mark_buffer_dirty_atomic(clone);
+				log_leaf_redirect(sb, oldblock, newblock);
+				defer_bfree(&sb->defree, oldblock, 1);
+				goto parent_level;
+			}
+			/* This is bnode buffer */
+			mark_buffer_rollup_atomic(clone);
+			log_bnode_redirect(sb, oldblock, newblock);
+			defer_bfree(&sb->derollup, oldblock, 1);
+		} else {
+			if (level == btree->root.depth) {
+				/* This is leaf buffer */
+				goto parent_level;
+			}
 		}
-
-		/* This is bnode buffer */
-		mark_buffer_rollup_atomic(clone);
-		log_bnode_redirect(sb, oldblock, newblock);
-		defer_bfree(&sb->derollup, oldblock, 1);
 
 		/* Update entry for the redirected child block */
 		trace("update parent");
+		block_t block = bufindex(cursor->path[level].buffer);
 		struct index_entry *entry = cursor->path[level].next - 1;
 		entry->block = to_be_u64(child);
-		log_bnode_update(sb, newblock, child, from_be_u64(entry->key));
+		log_bnode_update(sb, block, child, from_be_u64(entry->key));
 
 parent_level:
+		/* If it is already redirected, ancestor is also redirected */
+		if (!redirected) {
+			cursor_check(cursor);
+			return 0;
+		}
+
 		if (!level--) {
 			trace("redirect root");
 			assert(oldblock == btree->root.block);
