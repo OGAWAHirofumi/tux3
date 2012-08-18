@@ -70,7 +70,8 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 	if (sb->logmap)
 		invalidate_buffers(sb->logmap->map);
 
-	assert(flink_empty(&sb->defree.head));
+	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
+	destroy_defer_bfree(&sb->defree);
 	assert(flink_empty(&sb->derollup.head));
 	assert(list_empty(&sb->pinned));
 #endif /* !ATOMIC */

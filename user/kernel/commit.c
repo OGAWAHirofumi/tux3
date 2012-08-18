@@ -243,7 +243,8 @@ static int write_log(struct sb *sb)
 	return 0;
 }
 
-static int apply_defered_bfree(struct sb *sb, u64 val)
+/* userland only */
+int apply_defered_bfree(struct sb *sb, u64 val)
 {
 	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
 }

@@ -106,6 +106,9 @@ int sync_inodes(struct sb *sb)
 	if (!list_empty(&sb->volmap->list))
 		list_move(&sb->volmap->list, &sb->dirty_inodes);
 #else
+	err = unstash(sb, &sb->defree, apply_defered_bfree);
+	if (err)
+		goto error;
 	err = sync_inode(sb->bitmap);
 	if (err)
 		goto error;
