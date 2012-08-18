@@ -224,6 +224,41 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 				name, (L)parent, (L)child, (L)key);
 			break;
 		}
+		case LOG_BNODE_MERGE:
+		{
+			u64 src, dst;
+			data = decode48(data, &src);
+			data = decode48(data, &dst);
+			fprintf(gi->f,
+				" | [LOG_BNODE_MERGE] src %llu, dst %llu ",
+				(L)src, (L)dst);
+			break;
+		}
+		case LOG_BNODE_DEL:
+		{
+			unsigned count;
+			u64 bnode, key;
+			data = decode16(data, &count);
+			data = decode48(data, &bnode);
+			data = decode48(data, &key);
+			fprintf(gi->f,
+				" | [LOG_BNODE_DEL] count %u, bnode %llu, "
+				"key %llu ",
+				count, (L)bnode, (L)key);
+			break;
+		}
+		case LOG_BNODE_ADJUST:
+		{
+			u64 node, from, to;
+			data = decode48(data, &node);
+			data = decode48(data, &from);
+			data = decode48(data, &to);
+			fprintf(gi->f,
+				" | [LOG_BNODE_ADJUST] node %llu, from %llu, "
+				"to %llu ",
+				(L)node, (L)from, (L)to);
+			break;
+		}
 		case LOG_FREEBLOCKS: {
 			u64 freeblocks;
 			data = decode48(data, &freeblocks);
