@@ -44,41 +44,39 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 }
 
 /*
- * Extrapolate from single buffer flush or blockread to opportunistic exent IO
+ * Extrapolate from single buffer blockread to opportunistic extent IO
  *
- * For write, try to include adjoining buffers above and below:
- *  - stop at first uncached or clean buffer in either direction
- *
- * For read (essentially readahead):
+ * Essentially readahead:
  *  - stop at first present buffer
  *  - stop at end of file
  *
- * For both, stop when extent is "big enough", whatever that means.
+ * Stop when extent is "big enough", whatever that means.
  */
-static void guess_region(struct buffer_head *buffer, block_t *start, unsigned *count, int write)
+static unsigned guess_readahead(struct buffer_head *buffer)
 {
 	struct inode *inode = buffer_inode(buffer);
-	block_t ends[2] = { bufindex(buffer), bufindex(buffer) };
-	for (int up = !write; up < 2; up++) {
-		while (ends[1] - ends[0] + 1 < MAX_EXTENT) {
-			block_t next = ends[up] + (up ? 1 : -1);
-			struct buffer_head *nextbuf = peekblk(buffer->map, next);
-			if (!nextbuf) {
-				if (write)
-					break;
-				if (next > inode->i_size >> tux_sb(inode->i_sb)->blockbits)
-					break;
-			} else {
-				unsigned stop = write ? !buffer_dirty(nextbuf) : !buffer_empty(nextbuf);
-				blockput(nextbuf);
-				if (stop)
-					break;
-			}
-			ends[up] = next; /* what happens to the beer you send */
+	struct sb *sb = inode->i_sb;
+	block_t limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
+	block_t index = bufindex(buffer);
+	unsigned count = 1;
+
+	while (count < MAX_EXTENT) {
+		block_t next = index + count;
+
+		if (next >= limit)
+			break;
+
+		struct buffer_head *nextbuf = peekblk(buffer->map, next);
+		if (nextbuf) {
+			unsigned stop = !buffer_empty(nextbuf);
+			blockput(nextbuf);
+			if (stop)
+				break;
 		}
+		count++;
 	}
-	*start = ends[0];
-	*count = ends[1] + 1 - ends[0];
+
+	return count;
 }
 
 static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
@@ -99,14 +97,16 @@ static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
 	if (mode == MAP_READ && buffer_dirty(buffer))
 		warn("egad, reading a dirty buffer");
 
-	block_t start;
-	unsigned count;
-	guess_region(buffer, &start, &count, mode != MAP_READ);
-	trace("---- extent 0x%Lx/%x ----\n", start, count);
+	block_t index = bufindex(buffer);
+	unsigned count = 1;
+	if (mode == MAP_READ)
+		count = guess_readahead(buffer);
+
+	trace("---- extent 0x%Lx/%x ----\n", index, count);
 
 	struct seg map[10];
 
-	int segs = map_region(inode, start, count, map, ARRAY_SIZE(map), mode);
+	int segs = map_region(inode, index, count, map, ARRAY_SIZE(map), mode);
 	if (segs < 0)
 		return segs;
 
@@ -120,8 +120,7 @@ static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
 		return -EIO;
 	}
 
-	block_t index = start;
-	int err = 0;
+	int err = 0, rw = (mode == MAP_READ) ? READ : WRITE;
 	for (int i = 0; !err && i < segs; i++) {
 		int hole = map[i].state == SEG_HOLE;
 
@@ -130,22 +129,26 @@ static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
 
 		for (int j = 0; !err && j < map[i].count; j++) {
 			block_t block = map[i].block + j;
-			int rw = (mode == MAP_READ) ? READ : WRITE;
 
-			buffer = blockget(mapping(inode), index + j);
-			if (!buffer) {
-				err = -ENOMEM;
-				break;
+			if (rw == READ) {
+				buffer = blockget(mapping(inode), index + j);
+				if (!buffer) {
+					err = -ENOMEM;
+					break;
+				}
 			}
 
 			trace("block 0x%Lx => %Lx", bufindex(buffer), block);
-			if (mode == MAP_READ && hole)
+			if (hole) {
+				assert(rw == READ);
 				memset(bufdata(buffer), 0, sb->blocksize);
-			else
+			} else
 				err = blockio(rw, buffer, block);
 
 			/* FIXME: leave empty if error ??? */
-			blockput(set_buffer_clean(buffer));
+			set_buffer_clean(buffer);
+			if (rw == READ)
+				blockput(buffer);
 		}
 		index += map[i].count;
 	}
