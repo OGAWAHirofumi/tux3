@@ -358,6 +358,11 @@ static inline tuxnode_t *tux_inode(struct inode *inode)
 	return container_of(inode, tuxnode_t, vfs_inode);
 }
 
+static inline struct inode *vfs_inode(tuxnode_t *tuxnode)
+{
+	return &tuxnode->vfs_inode;
+}
+
 static inline struct inode *btree_inode(struct btree *btree)
 {
 	return &container_of(btree, tuxnode_t, btree)->vfs_inode;
@@ -428,6 +433,11 @@ static inline struct sb *vfs_sb(struct sb *sb)
 }
 
 static inline struct inode *tux_inode(struct inode *inode)
+{
+	return inode;
+}
+
+static inline struct inode *vfs_inode(struct inode *inode)
 {
 	return inode;
 }

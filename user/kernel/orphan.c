@@ -292,10 +292,10 @@ void replay_iput_orphan_inodes(struct sb *sb,
 
 		if (!destroy) {
 			/* Set i_nlink = 1 prevent to destroy inode. */
-			set_nlink(&tuxnode->vfs_inode, 1);
+			set_nlink(vfs_inode(tuxnode), 1);
 			list_del_init(&tuxnode->orphan_list);
 		}
-		iput(&tuxnode->vfs_inode);
+		iput(vfs_inode(tuxnode));
 	}
 
 	/* orphan inodes in sb->otable */
@@ -309,9 +309,9 @@ void replay_iput_orphan_inodes(struct sb *sb,
 
 		if (!destroy) {
 			/* Set i_nlink = 1 prevent to destroy inode. */
-			set_nlink(&tuxnode->vfs_inode, 1);
+			set_nlink(vfs_inode(tuxnode), 1);
 		}
-		iput(&tuxnode->vfs_inode);
+		iput(vfs_inode(tuxnode));
 	}
 }
 
