@@ -6,55 +6,6 @@
 
 #include "tux3.h"
 
-static void d_instantiate(struct dentry *dentry, struct inode *inode)
-{
-	dentry->d_inode = inode;
-}
-
-static struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
-{
-	if (IS_ERR(inode))
-		return ERR_CAST(inode);
-	d_instantiate(dentry, inode);
-	return NULL;
-}
-
-static void inc_nlink(struct inode *inode)
-{
-	inode->i_nlink++;
-}
-
-static void drop_nlink(struct inode *inode)
-{
-	assert(inode->i_nlink > 0);
-	inode->i_nlink--;
-}
-
-static void clear_nlink(struct inode *inode)
-{
-	inode->i_nlink = 0;
-}
-
-static void set_nlink(struct inode *inode, unsigned int nlink)
-{
-	if (!nlink)
-		clear_nlink(inode);
-	else
-		inode->i_nlink = nlink;
-}
-
-static inline void inode_inc_link_count(struct inode *inode)
-{
-	inc_nlink(inode);
-	mark_inode_dirty(inode);
-}
-
-static inline void inode_dec_link_count(struct inode *inode)
-{
-	drop_nlink(inode);
-	mark_inode_dirty(inode);
-}
-
 int page_symlink(struct inode *inode, const char *symname, int len)
 {
 	return 0;
@@ -338,7 +289,7 @@ error:
 }
 
 void *a[] = {
-	set_nlink, tux3_symlink,
+	tux3_symlink,
 };
 
 #ifdef __KERNEL__

@@ -188,3 +188,40 @@ found_middle_swap:
 	return result + __ffs(ext2_swab(tmp));
 }
 #endif /* !__BIG_ENDIAN */
+
+void inc_nlink(struct inode *inode)
+{
+	inode->i_nlink++;
+}
+
+void drop_nlink(struct inode *inode)
+{
+	assert(inode->i_nlink > 0);
+	inode->i_nlink--;
+}
+
+void clear_nlink(struct inode *inode)
+{
+	inode->i_nlink = 0;
+}
+
+void set_nlink(struct inode *inode, unsigned int nlink)
+{
+	if (!nlink)
+		clear_nlink(inode);
+	else
+		inode->i_nlink = nlink;
+}
+
+void d_instantiate(struct dentry *dentry, struct inode *inode)
+{
+	dentry->d_inode = inode;
+}
+
+struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
+{
+	if (IS_ERR(inode))
+		return ERR_CAST(inode);
+	d_instantiate(dentry, inode);
+	return NULL;
+}

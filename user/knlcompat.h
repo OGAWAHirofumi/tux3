@@ -231,6 +231,27 @@ struct dentry {
 	struct inode *d_inode;
 };
 
+void d_instantiate(struct dentry *dentry, struct inode *inode);
+struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry);
+
+void inc_nlink(struct inode *inode);
+void drop_nlink(struct inode *inode);
+void clear_nlink(struct inode *inode);
+void set_nlink(struct inode *inode, unsigned int nlink);
+
+void mark_inode_dirty(struct inode *inode);
+static inline void inode_inc_link_count(struct inode *inode)
+{
+	inc_nlink(inode);
+	mark_inode_dirty(inode);
+}
+
+static inline void inode_dec_link_count(struct inode *inode)
+{
+	drop_nlink(inode);
+	mark_inode_dirty(inode);
+}
+
 #define S_IRWXUGO	(S_IRWXU|S_IRWXG|S_IRWXO)
 #define S_IALLUGO	(S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
 #define S_IRUGO		(S_IRUSR|S_IRGRP|S_IROTH)
