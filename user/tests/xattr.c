@@ -9,20 +9,272 @@
  */
 
 #include "tux3user.h"
+#include "test.h"
 
 #ifndef trace
-#define trace trace_on
+#define trace trace_off
 #endif
 
 #include "kernel/xattr.c"
 
+static void clean_main(struct sb *sb)
+{
+	put_super(sb);
+}
+
+struct xcache_data {
+	char buf[32];
+	int len;
+	atom_t atom;
+};
+
+static void __check_xcache(struct inode *inode, struct xcache_data *data,
+			   int nr_data)
+{
+	for (int i = 0; i < nr_data; i++) {
+		struct xattr *xattr;
+		xattr = xcache_lookup(tux_inode(inode)->xcache, data[i].atom);
+		if (data[i].len == -1)
+			test_assert(IS_ERR(xattr));
+		else {
+			test_assert(!IS_ERR(xattr));
+			test_assert(xattr->atom == data[i].atom);
+			test_assert(xattr->size == data[i].len);
+			test_assert(!memcmp(xattr->body, data[i].buf,
+					    xattr->size));
+		}
+	}
+}
+#define check_xcache(i, d)	__check_xcache(i, d, ARRAY_SIZE(d))
+
+/* Test basic low level functions */
+static void test01(struct sb *sb)
+{
+	char attrs[1000] = { };
+	struct xattr *xattr;
+	int err;
+
+	/* Test positive and negative refcount carry */
+	err = use_atom(sb->atable, 6, 1 << 15);
+	test_assert(!err);
+	err = use_atom(sb->atable, 6, 1 << 15);
+	test_assert(!err);
+	err = use_atom(sb->atable, 6, -(1 << 15));
+	test_assert(!err);
+	err = use_atom(sb->atable, 6, -(1 << 15));
+	test_assert(!err);
+
+	atom_t atom1, atom2, atom3;
+	/* Test atom table */
+	atom1 = make_atom(sb->atable, "foo", 3);
+	test_assert(atom1 != -1);
+	atom2 = make_atom(sb->atable, "foo", 3);
+	test_assert(atom2 != -1);
+	test_assert(atom1 == atom2);
+
+	atom1 = make_atom(sb->atable, "bar", 3);
+	test_assert(atom1 != -1);
+	atom2 = make_atom(sb->atable, "foo", 3);
+	test_assert(atom1 != atom2);
+	atom3 = make_atom(sb->atable, "bar", 3);
+	test_assert(atom1 != -1);
+	test_assert(atom1 == atom3);
+
+	struct inode *inode;
+	struct tux_iattr iattr = { .mode = S_IFREG, };
+	inode = tuxcreate(sb->rootdir, "foo", 3, &iattr);
+	test_assert(inode);
+
+	struct xcache_data data[] = {
+		{ .buf = "hello ", .len = strlen("hello "), .atom = 0x666, },
+		{ .buf = "world!", .len = strlen("world!"), .atom = 0x777, },
+		{ .buf = "class!", .len = strlen("class!"), .atom = 0x111, },
+		{ .buf = "booyah", .len = strlen("booyah"), .atom = 0x222, },
+	};
+
+	/* Test inode xcache */
+
+	/* Create xcache */
+	for (int i = 0; i < ARRAY_SIZE(data); i++) {
+		err = xcache_update(inode, data[i].atom, data[i].buf,
+				    data[i].len, 0);
+		test_assert(!err);
+	}
+	check_xcache(inode, data);
+
+	/* Remove xcache */
+	data[0].len = -1;
+	xattr = xcache_lookup(inode->xcache, data[0].atom);
+	test_assert(xattr);
+	int removed = remove_old(inode->xcache, xattr);
+	test_assert(removed);
+	check_xcache(inode, data);
+
+	/* Empty xcache */
+	data[1].len = 0;
+	err = xcache_update(inode, data[1].atom, "", data[1].len, 0);
+	test_assert(!err);
+	check_xcache(inode, data);
+
+	/* Test xattr inode table encode */
+	int xsize1 = encode_xsize(inode);
+	test_assert(xsize1);
+	char *top1 = encode_xattrs(inode, attrs, sizeof(attrs));
+	test_assert(top1);
+	test_assert(top1 - attrs == xsize1);
+
+	/* Remove all xcache by hand */
+	inode->xcache->size = sizeof(struct xcache);
+
+	/* Test xattr inode table decode */
+	char *top2 = decode_attrs(inode, attrs, xsize1);
+	test_assert(top2);
+	test_assert(top2 - attrs == xsize1);
+	test_assert(top2 == top1);
+
+	check_xcache(inode, data);
+
+	/* Free xcache by hand */
+	free(inode->xcache);
+	inode->xcache = NULL;
+
+	iput(inode);
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb);
+}
+
+struct xattr_data {
+	char name[32];
+	int len;
+	char buf[32];
+	int size;
+};
+
+static void __check_xattr(struct inode *inode, struct xattr_data *data,
+			  int nr_data)
+{
+	for (int i = 0; i < nr_data; i++) {
+		char buf[32];
+		int ret;
+		ret = get_xattr(inode, data[i].name, data[i].len,
+				buf, sizeof(buf));
+		if (data[i].len == -1)
+			test_assert(ret == -ENOATTR);
+		else {
+			test_assert(ret == data[i].size);
+			test_assert(!memcmp(buf, data[i].buf, ret));
+		}
+	}
+}
+#define check_xattr(i, d)	__check_xattr(i, d, ARRAY_SIZE(d));
+
+static void __check_listxattr(struct inode *inode, char *buf, int len,
+			      struct xattr_data *data, int nr_data)
+{
+	char *p = buf, *end = p + len;
+	int x_count = 0, d_count = 0, n_count = 0;
+
+	/* count not-found-entry */
+	for (int i = 0; i < nr_data; i++) {
+		if (data[i].len == -1)
+			n_count++;
+	}
+	/* count matched entry */
+	while (p < end) {
+		for (int i = 0; i < nr_data; i++) {
+			if (data[i].len == -1)
+				continue;
+			if (strcmp(data[i].name, p)) {
+				d_count++;
+				break;
+			}
+		}
+		x_count++;
+		p += strlen(p) + 1;
+	}
+	test_assert(x_count == d_count);
+	test_assert(d_count + n_count == nr_data);
+}
+#define check_listxattr(i, b, l, d)		\
+	__check_listxattr(i, b, l, d, ARRAY_SIZE(d))
+
+/* Test basic interfaces */
+static void test02(struct sb *sb)
+{
+	char attrs[1000] = { };
+	int err;
+
+	struct inode *inode;
+	struct tux_iattr iattr = { .mode = S_IFREG, };
+	inode = tuxcreate(sb->rootdir, "foo", 3, &iattr);
+	test_assert(inode);
+
+	struct xattr_data data[] = {
+		{
+			.name = "hello ", .len = strlen("hello "),
+			.buf = "world!", .size = strlen("world!"),
+		},
+		{
+			.name = "empty", .len = strlen("empty"),
+			.buf = "zot", .size = strlen("zot"),
+		},
+		{
+			.name = "foo", .len = strlen("foo"),
+			.buf = "foobar", .size = strlen("foobar"),
+		},
+		{
+			.name = "world!", .len = -1,
+			.buf = "", .size = -1,
+		},
+	};
+
+	/* Test create xattr */
+	for (int i = 0; i < ARRAY_SIZE(data); i++) {
+		if (data[i].len == -1)
+			continue;
+		err = set_xattr(inode, data[i].name, data[i].len,
+				data[i].buf, data[i].size, 0);
+		test_assert(!err);
+	}
+	check_xattr(inode, data);
+
+	/* Test list xattr */
+	int len = xattr_list(inode, attrs, sizeof(attrs));
+	test_assert(len);
+	check_listxattr(inode, attrs, len, data);
+
+	/* Delete xattr */
+	err = del_xattr(inode, data[0].name, data[0].len);
+	test_assert(!err);
+	data[0].len = -1;
+
+	check_xattr(inode, data);
+	len = xattr_list(inode, attrs, sizeof(attrs));
+	test_assert(len);
+	check_listxattr(inode, attrs, len, data);
+
+	iput(inode);
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
+	if (argc < 2) {
+		error("usage: %s <volname>", argv[0]);
+		exit(1);
+	}
+
 	size_t volsize = 1 << 24;
-	unsigned abits = DATA_BTREE_BIT|CTIME_SIZE_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	struct dev *dev = &(struct dev){ .bits = 8, .fd = open(argv[1], O_CREAT|O_RDWR, S_IRUSR|S_IWUSR) };
-	assert(!ftruncate(dev->fd, volsize));
-	init_buffers(dev, 1 << 20, 0);
+	int fd, err;
+
+	fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
+	assert(!ftruncate(fd, volsize));
+
+	struct dev *dev = &(struct dev){ .bits = 8, .fd = fd, };
+	init_buffers(dev, volsize, 2);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
 	struct sb *sb = rapid_sb(dev);
@@ -32,114 +284,24 @@ int main(int argc, char *argv[])
 	sb->atomref_base = 1 << 10;
 	sb->unatom_base = 1 << 11;
 
-	struct inode *inode = rapid_open_inode(sb, NULL, S_IFDIR | 0x666,
-		.present = abits, .i_uid = 0x12121212, .i_gid = 0x34343434,
-		.i_ctime = spectime(0xdec0debeadULL),
-		.i_mtime = spectime(0xbadfaced00dULL));
-	inode->btree = (struct btree){
-		.root = { .block = 0xcaba1f00dULL, .depth = 3 }
-	};
-	sb->atable = inode;
+	sb->volmap = tux_new_volmap(sb);
+	assert(sb->volmap);
+	sb->logmap = tux_new_logmap(sb);
+	assert(sb->logmap);
 
-	for (int i = 0; i < 2; i++) {
-		struct buffer_head *buffer = blockget(mapping(inode), tux_sb(inode->i_sb)->atomref_base + i);
-		memset(bufdata(buffer), 0, sb->blocksize);
-		blockput_dirty(buffer);
-	}
+	err = make_tux3(sb);
+	assert(!err);
 
-	if (1) {
-		warn("---- test positive and negative refcount carry ----");
-		use_atom(inode, 6, 1 << 15);
-		use_atom(inode, 6, (1 << 15));
-		use_atom(inode, 6, -(1 << 15));
-		use_atom(inode, 6, -(1 << 15));
-	}
+	test_init(argv[0]);
 
-	warn("---- test atom table ----");
-	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
-	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
-	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
-	printf("atom = %Lx\n", (L)make_atom(inode, "foo", 3));
-	printf("atom = %Lx\n", (L)make_atom(inode, "bar", 3));
+	if (test_start("test01"))
+		test01(sb);
+	test_end();
 
-	warn("---- test inode xattr cache ----");
-	int err;
-	err = xcache_update(inode, 0x666, "hello", 5, 0);
-	if (err)
-		printf("err %d\n", err);
-	err = xcache_update(inode, 0x777, "world!", 6, 0);
-	if (err)
-		printf("err %d\n", err);
-	xcache_dump(inode);
-	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, 0x777);
-	if (!IS_ERR(xattr))
-		printf("atom %x => %.*s\n", xattr->atom, xattr->size, xattr->body);
-	err = xcache_update(inode, 0x111, "class", 5, 0);
-	if (err)
-		printf("err %d\n", err);
-	err = xcache_update(inode, 0x666, NULL, 0, 0);
-	if (err)
-		printf("err %d\n", err);
-	err = xcache_update(inode, 0x222, "boooyah", 7, 0);
-	if (err)
-		printf("err %d\n", err);
-	xcache_dump(inode);
+	if (test_start("test02"))
+		test02(sb);
+	test_end();
 
-	warn("---- test xattr inode table encode and decode ----");
-	char attrs[1000] = { };
-	char *top = encode_xattrs(inode, attrs, sizeof(attrs));
-	hexdump(attrs, top - attrs);
-	printf("predicted size = %x, encoded size = %Lx\n", encode_xsize(inode), (L)(top - attrs));
-	inode->xcache->size = offsetof(struct xcache, xattrs);
-	char *newtop = decode_attrs(inode, attrs, top - attrs);
-	printf("predicted size = %x, xcache size = %x\n", decode_xsize(inode, attrs, top - attrs), inode->xcache->size);
-	assert(top == newtop);
-	xcache_dump(inode);
-	free(inode->xcache);
-	inode->xcache = NULL;
-	warn("---- xattr update ----");
-	set_xattr(inode, "hello", 5, "world!", 6, 0);
-	set_xattr(inode, "empty", 5, "zot", 0, 0);
-	set_xattr(inode, "foo", 3, "foobar", 6, 0);
-	xcache_dump(inode);
-	warn("---- xattr remove ----");
-//	del_xattr(inode, "hello", 5);
-	xcache_dump(inode);
-	warn("---- xattr lookup ----");
-	for (int i = 0, len; i < 3; i++) {
-		char *namelist[] = { "hello", "foo", "world" }, *name = namelist[i];
-		char data[100];
-		int size = get_xattr(inode, name, len = strlen(name), data, sizeof(data));
-		if (size < 0)
-			printf("xattr %.*s not found (%s)\n", len, name, strerror(-size));
-		else
-			printf("found xattr %.*s => %.*s\n", len, name, size, data);
-	}
-	warn("---- list xattrs ----");
-	int len = xattr_list(inode, attrs, sizeof(attrs));
-	printf("xattr list length = %i\n", xattr_list(inode, NULL, 0));
-	hexdump(attrs, len);
-
-	warn("---- atom reverse map ----");
-	for (int i = 0; i < 5; i++) {
-		unsigned atom = i, offset;
-		struct buffer_head *buffer = blockread_unatom(inode, atom, &offset);
-		loff_t where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-		blockput_dirty(buffer);
-		buffer = blockread(mapping(inode), where >> sb->blockbits);
-		printf("atom %.3Lx at dirent %.4Lx, ", (L)atom, (L)where);
-		hexdump(bufdata(buffer) + (where & sb->blockmask), 16);
-		blockput(buffer);
-	}
-	warn("---- atom recycle ----");
-	set_xattr(inode, "hello", 5, NULL, 0, 0);
-	show_freeatoms(sb);
-	printf("got free atom %x\n", get_freeatom(inode));
-	printf("got free atom %x\n", get_freeatom(inode));
-	printf("got free atom %x\n", get_freeatom(inode));
-
-	warn("---- dump atom table ----");
-	dump_atoms(inode);
-	show_buffers(inode->map);
-	exit(0);
+	clean_main(sb);
+	return test_failures();
 }
