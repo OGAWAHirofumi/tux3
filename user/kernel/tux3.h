@@ -897,8 +897,10 @@ int change_end(struct sb *sb);
 
 /* dir.c */
 void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *new_inode);
-int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, umode_t mode);
-tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result);
+int tux_create_dirent(struct inode *dir, const unsigned char *name,
+		      unsigned len, inum_t inum, umode_t mode);
+tux_dirent *tux_find_dirent(struct inode *dir, const unsigned char *name,
+			    unsigned len, struct buffer_head **result);
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
 int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);
 int tux_readdir(struct file *file, void *state, filldir_t filldir);

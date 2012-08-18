@@ -6,13 +6,65 @@
 
 #include "tux3.h"
 
-static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
+static struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
+{
+	return dentry;
+}
+
+static void d_instantiate(struct dentry *dentry, struct inode *inode)
+{
+}
+
+static void inc_nlink(struct inode *inode)
+{
+	inode->i_nlink++;
+}
+
+static void drop_nlink(struct inode *inode)
+{
+	assert(inode->i_nlink > 0);
+	inode->i_nlink--;
+}
+
+static void clear_nlink(struct inode *inode)
+{
+	inode->i_nlink = 0;
+}
+
+static void set_nlink(struct inode *inode, unsigned int nlink)
+{
+	if (!nlink)
+		clear_nlink(inode);
+	else
+		inode->i_nlink = nlink;
+}
+
+static inline void inode_inc_link_count(struct inode *inode)
+{
+	inc_nlink(inode);
+	mark_inode_dirty(inode);
+}
+
+static inline void inode_dec_link_count(struct inode *inode)
+{
+	drop_nlink(inode);
+	mark_inode_dirty(inode);
+}
+
+int page_symlink(struct inode *inode, const char *symname, int len)
+{
+	return 0;
+}
+
+static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
+				  struct nameidata *nd)
 {
 	struct buffer_head *buffer;
 	struct inode *inode;
 	tux_dirent *entry;
 
-	entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
+	entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len,
+				&buffer);
 	if (IS_ERR(entry)) {
 		if (PTR_ERR(entry) != -ENOENT)
 			return ERR_PTR(PTR_ERR(entry));
@@ -20,7 +72,7 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry, stru
 		goto out;
 	}
 	inode = tux3_iget(tux_sb(dir->i_sb), from_be_u64(entry->inum));
-	brelse(buffer);
+	blockput(buffer);
 	if (IS_ERR(inode))
 		return ERR_PTR(PTR_ERR(inode));
 out:
@@ -52,6 +104,11 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 static int tux3_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 		      dev_t rdev)
 {
+	struct tux_iattr iattr = {
+//		.uid	= current_fsuid(),
+//		.gid	= current_fsgid(),
+		.mode	= mode,
+	};
 	struct inode *inode;
 	int err;
 
@@ -59,7 +116,7 @@ static int tux3_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 		return -EINVAL;
 
 	change_begin(tux_sb(dir->i_sb));
-	inode = tux_create_inode(dir, mode, rdev);
+	inode = tux_create_inode(dir, &iattr, rdev);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = tux_add_dirent(dir, dentry, inode);
@@ -115,11 +172,16 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 			const char *symname)
 {
+	struct tux_iattr iattr = {
+//		.uid	= current_fsuid(),
+//		.gid	= current_fsgid(),
+		.mode	= S_IFLNK | S_IRWXUGO,
+	};
 	struct inode *inode;
 	int err;
 
 	change_begin(tux_sb(dir->i_sb));
-	inode = tux_create_inode(dir, S_IFLNK | S_IRWXUGO, 0);
+	inode = tux_create_inode(dir, &iattr, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = page_symlink(inode, symname, strlen(symname) + 1);
@@ -185,7 +247,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return PTR_ERR(old_entry);
 
 	/* FIXME: is this needed? */
-	BUG_ON(from_be_u64(old_entry->inum) != tux_inode(old_inode)->inum);
+	assert(from_be_u64(old_entry->inum) == tux_inode(old_inode)->inum);
 
 	change_begin(tux_sb(old_inode->i_sb));
 	if (new_inode) {
@@ -199,7 +261,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		new_entry = tux_find_dirent(new_dir, new_dentry->d_name.name,
 					new_dentry->d_name.len, &new_buffer);
 		if (IS_ERR(new_entry)) {
-			BUG_ON(PTR_ERR(new_entry) == -ENOENT);
+			assert(PTR_ERR(new_entry) != -ENOENT);
 			err = PTR_ERR(new_entry);
 			goto error;
 		}
@@ -228,8 +290,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	err = tux_delete_dirent(old_buffer, old_entry);
 	if (err) {
-		printk(KERN_ERR "TUX3: %s: couldn't delete old entry (%Lu)\n",
-		       __func__, (L)tux_inode(old_inode)->inum);
+//		printk(KERN_ERR "TUX3: %s: couldn't delete old entry (%Lu)\n",
+//		       __func__, (L)tux_inode(old_inode)->inum);
 		/* FIXME: now, we have hardlink even if it's dir. */
 		inode_inc_link_count(old_inode);
 	}
@@ -241,10 +303,16 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 error:
 	change_end(tux_sb(old_inode->i_sb));
-	brelse(old_buffer);
+	blockput(old_buffer);
 	return err;
 }
 
+void *a[] = {
+	set_nlink, tux3_lookup, tux3_create, tux3_mkdir, tux3_link,
+	tux3_symlink, tux3_unlink, tux3_rmdir, tux3_rename,
+};
+
+#ifdef __KERNEL__
 const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
@@ -272,3 +340,4 @@ const struct inode_operations tux_dir_iops = {
 //	.fallocate	= ext4_fallocate,
 //	.fiemap		= ext4_fiemap,
 };
+#endif /* !__KERNEL__ */

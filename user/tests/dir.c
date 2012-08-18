@@ -21,30 +21,33 @@ static void test01(struct sb *sb, struct inode *dir)
 	tux_dirent *entry;
 	int err;
 
+	struct qstr name1 = { .name = (unsigned char *)"hello", .len = 5, };
+	struct qstr name2 = { .name = (unsigned char *)"world", .len = 5, };
+
 	test_assert(tux_dir_is_empty(dir) == 0);
 
-	err = tux_create_dirent(dir, "hello", 5, 0x666, S_IFREG);
+	err = tux_create_dirent(dir, name1.name, name1.len, 0x666, S_IFREG);
 	test_assert(!err);
-	err = tux_create_dirent(dir, "world", 5, 0x777, S_IFLNK);
+	err = tux_create_dirent(dir, name2.name, name2.len, 0x777, S_IFLNK);
 	test_assert(!err);
 
-	entry = tux_find_dirent(dir, "hello", 5, &buffer);
+	entry = tux_find_dirent(dir, name1.name, name1.len, &buffer);
 	test_assert(!IS_ERR(entry));
 	test_assert(from_be_u64(entry->inum) == 0x666);
-	test_assert(from_be_u16(entry->rec_len) >= 5 + 2);
-	test_assert(entry->name_len == 5);
+	test_assert(from_be_u16(entry->rec_len) >= name1.len + 2);
+	test_assert(entry->name_len == name1.len);
 	test_assert(entry->type == TUX_REG);
 
 	err = tux_delete_dirent(buffer, entry);
 	test_assert(!err);
-	entry = tux_find_dirent(dir, "hello", 5, &buffer);
+	entry = tux_find_dirent(dir, name1.name, name1.len, &buffer);
 	test_assert(IS_ERR(entry));
 
-	entry = tux_find_dirent(dir, "world", 5, &buffer);
+	entry = tux_find_dirent(dir, name2.name, name2.len, &buffer);
 	test_assert(!IS_ERR(entry));
 	test_assert(from_be_u64(entry->inum) == 0x777);
-	test_assert(from_be_u16(entry->rec_len) >= 5 + 2);
-	test_assert(entry->name_len == 5);
+	test_assert(from_be_u16(entry->rec_len) >= name2.len + 2);
+	test_assert(entry->name_len == name2.len);
 	test_assert(entry->type == TUX_LNK);
 	blockput(buffer);
 
@@ -79,7 +82,12 @@ static void test02(struct sb *sb, struct inode *dir)
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
-		err = tux_create_dirent(dir, name, strlen(name), i+99, S_IFREG);
+
+		struct qstr qstr = {
+			.name = (unsigned char *)name,
+			.len = strlen(name),
+		};
+		err = tux_create_dirent(dir, qstr.name, qstr.len, i+99, S_IFREG);
 		test_assert(!err);
 	}
 

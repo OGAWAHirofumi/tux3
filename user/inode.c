@@ -326,10 +326,10 @@ out:
 	return err;
 }
 
-struct inode *tuxopen(struct inode *dir, const char *name, int len)
+struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, (unsigned char *)name, len, &buffer);
 	if (IS_ERR(entry))
 		return ERR_CAST(entry);
 	inum_t inum = from_be_u64(entry->inum);
@@ -339,10 +339,11 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	return inode;
 }
 
-struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
+struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
+			struct tux_iattr *iattr)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, (unsigned char *)name, len, &buffer);
 	if (!IS_ERR(entry)) {
 		blockput(buffer);
 		return ERR_PTR(-EEXIST); // should allow create of a file that already exists!!!
@@ -354,7 +355,8 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	if (IS_ERR(inode))
 		return inode;
 
-	int err = tux_create_dirent(dir, name, len, tux_inode(inode)->inum, iattr->mode);
+	int err = tux_create_dirent(dir, (unsigned char *)name, len,
+				    tux_inode(inode)->inum, iattr->mode);
 	if (err) {
 		purge_inode(inode);
 		iput(inode);
@@ -364,12 +366,12 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	return inode;
 }
 
-int tuxunlink(struct inode *dir, const char *name, int len)
+int tuxunlink(struct inode *dir, const char *name, unsigned len)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
 	struct buffer_head *buffer;
 	int err;
-	tux_dirent *entry = tux_find_dirent(dir, name, len, &buffer);
+	tux_dirent *entry = tux_find_dirent(dir, (unsigned char *)name, len, &buffer);
 	if (IS_ERR(entry)) {
 		err = PTR_ERR(entry);
 		goto error;

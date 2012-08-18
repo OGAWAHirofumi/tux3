@@ -68,7 +68,8 @@ static inline int is_deleted(tux_dirent *entry)
 	return !entry->name_len; /* ext2 uses !inum for this */
 }
 
-static inline int tux_match(tux_dirent *entry, const char *const name, int len)
+static inline int tux_match(tux_dirent *entry, const char *const name,
+			    unsigned len)
 {
 	if (len != entry->name_len)
 		return 0;
@@ -128,7 +129,7 @@ void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct ino
 	mark_inode_dirty(dir);
 }
 
-loff_t tux_create_entry(struct inode *dir, const char *name, int len,
+loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 			inum_t inum, umode_t mode, loff_t *size)
 {
 	tux_dirent *entry;
@@ -182,12 +183,12 @@ create:
 	return (block << blockbits) + offset; /* only needed for xattr create */
 }
 
-int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum,
-		      umode_t mode)
+int tux_create_dirent(struct inode *dir, const unsigned char *name,
+		      unsigned len, inum_t inum, umode_t mode)
 {
 	loff_t where;
 
-	where = tux_create_entry(dir, name, len, inum, mode, &dir->i_size);
+	where = tux_create_entry(dir, (char *)name, len, inum, mode, &dir->i_size);
 	if (where < 0)
 		return where;
 
@@ -197,7 +198,8 @@ int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum,
 	return 0;
 }
 
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, int len, struct buffer_head **result, loff_t size)
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
+			   struct buffer_head **result, loff_t size)
 {
 	unsigned reclen = TUX_REC_LEN(len);
 	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
@@ -232,9 +234,10 @@ error:
 	return ERR_PTR(err);
 }
 
-tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result)
+tux_dirent *tux_find_dirent(struct inode *dir, const unsigned char *name,
+			    unsigned len, struct buffer_head **result)
 {
-	return tux_find_entry(dir, name, len, result, dir->i_size);
+	return tux_find_entry(dir, (char *)name, len, result, dir->i_size);
 }
 
 static unsigned char filetype[TUX_TYPES] = {

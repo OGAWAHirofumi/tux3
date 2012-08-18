@@ -66,7 +66,7 @@ static void check_dirty(struct sb *sb)
 
 struct open_result {
 	char name[PATH_MAX];
-	int namelen;
+	unsigned namelen;
 	int err;
 	inum_t inum;
 };
