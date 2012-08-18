@@ -654,22 +654,12 @@ keep_prev_node:
 		}
 
 		/* push back down to leaf level */
-		while (level < depth - 1) {
-			struct buffer_head *buffer = vol_bread(sb, from_be_u64(cursor->path[level++].next++->block));
-			if (!buffer) {
-				ret = -EIO;
+		do {
+			ret = cursor_advance_down(cursor);
+			if (ret < 0)
 				goto out;
-			}
-			level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
-			trace_off(printf("push to level %i, block %Lx, %i nodes\n", level, bufindex(buffer), bcount(cursor_node(cursor, level))););
-		}
-		//dirty_buffer_count_check(sb);
-		/* go to next leaf */
-		if (!(leafbuf = vol_bread(sb, from_be_u64(cursor->path[level].next++->block)))) {
-			ret = -EIO;
-			goto out;
-		}
-		level_push(cursor, leafbuf, NULL);
+		} while (ret);
+		level = cursor->len - 2;
 	}
 
 error_leaf_chop:
