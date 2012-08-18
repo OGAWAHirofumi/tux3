@@ -90,7 +90,7 @@ static struct buffer_head *new_node(struct btree *btree)
  * for the leaf, which has its own specialized traversal algorithms.
  */
 
-static inline struct bnode *cursor_node(struct cursor *cursor, int level)
+static inline struct bnode *level_node(struct cursor *cursor, int level)
 {
 	return bufdata(cursor->path[level].buffer);
 }
@@ -101,8 +101,8 @@ struct buffer_head *cursor_leafbuf(struct cursor *cursor)
 	return cursor->path[cursor->level].buffer;
 }
 
-static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
-			   struct index_entry *next)
+static void cursor_root_add(struct cursor *cursor, struct buffer_head *buffer,
+			    struct index_entry *next)
 {
 #ifdef CURSOR_DEBUG
 	assert(cursor->level < cursor->maxlevel);
@@ -128,7 +128,7 @@ static void level_replace_blockput(struct cursor *cursor, int level, struct buff
 	cursor->path[level].next = next;
 }
 
-void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next)
+void cursor_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next)
 {
 	cursor->level++;
 #ifdef CURSOR_DEBUG
@@ -140,7 +140,7 @@ void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_
 	cursor->path[cursor->level].next = next;
 }
 
-static struct buffer_head *level_pop(struct cursor *cursor)
+static struct buffer_head *cursor_pop(struct cursor *cursor)
 {
 	struct buffer_head *buffer;
 
@@ -156,15 +156,15 @@ static struct buffer_head *level_pop(struct cursor *cursor)
 	return buffer;
 }
 
-static void level_pop_blockput(struct cursor *cursor)
+static inline void cursor_pop_blockput(struct cursor *cursor)
 {
-	blockput(level_pop(cursor));
+	blockput(cursor_pop(cursor));
 }
 
 /* There is no next entry? */
 static inline int level_finished(struct cursor *cursor, int level)
 {
-	struct bnode *node = cursor_node(cursor, level);
+	struct bnode *node = level_node(cursor, level);
 	return cursor->path[level].next == node->entries + bcount(node);
 }
 // also write level_beginning!!!
@@ -172,7 +172,7 @@ static inline int level_finished(struct cursor *cursor, int level)
 void release_cursor(struct cursor *cursor)
 {
 	while (cursor->level >= 0)
-		level_pop_blockput(cursor);
+		cursor_pop_blockput(cursor);
 }
 
 /* unused */
@@ -196,7 +196,7 @@ static void cursor_check(struct cursor *cursor)
 		if (i == cursor->level)
 			break;
 
-		struct bnode *node = cursor_node(cursor, i);
+		struct bnode *node = level_node(cursor, i);
 		assert(node->entries < cursor->path[i].next);
 		assert(cursor->path[i].next <= node->entries + bcount(node));
 		assert(from_be_u64((cursor->path[i].next - 1)->key) >= key);
@@ -272,7 +272,7 @@ static int cursor_read_root(struct cursor *cursor)
 	buffer = vol_bread(btree->sb, btree->root.block);
 	if (!buffer)
 		return -EIO; /* FIXME: stupid, it might have been NOMEM */
-	level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
+	cursor_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 	return 0;
 }
 
@@ -284,7 +284,7 @@ static int cursor_read_root(struct cursor *cursor)
 static int cursor_advance_up(struct cursor *cursor)
 {
 	assert(cursor->level >= 0);
-	level_pop_blockput(cursor);
+	cursor_pop_blockput(cursor);
 	return cursor->level >= 0;
 }
 
@@ -310,13 +310,13 @@ static int cursor_advance_down(struct cursor *cursor)
 
 	if (cursor->level < btree->root.depth - 1) {
 		struct bnode *node = bufdata(buffer);
-		level_push(cursor, buffer, node->entries);
+		cursor_push(cursor, buffer, node->entries);
 		cursor_check(cursor);
 		return 1;
 	}
 
 	assert(btree->ops->leaf_sniff(btree, bufdata(buffer)));
-	level_push(cursor, buffer, NULL);
+	cursor_push(cursor, buffer, NULL);
 	cursor_check(cursor);
 	return 0;
 }
@@ -512,7 +512,7 @@ parent_level:
 static void remove_index(struct cursor *cursor)
 {
 	int level = cursor->level;
-	struct bnode *node = cursor_node(cursor, level);
+	struct bnode *node = level_node(cursor, level);
 	int count = bcount(node), i;
 
 	/* stomps the node count (if 0th key holds count) */
@@ -534,7 +534,7 @@ static void remove_index(struct cursor *cursor)
 	 */
 	if (cursor->path[level].next == node->entries && level) {
 		be_u64 sep = (cursor->path[level].next)->key;
-		for (i = level - 1; cursor->path[i].next - 1 == cursor_node(cursor, i)->entries; i--)
+		for (i = level - 1; cursor->path[i].next - 1 == level_node(cursor, i)->entries; i--)
 			if (!i)
 				return;
 		(cursor->path[i].next - 1)->key = sep;
@@ -589,7 +589,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	while (1) {
 		if ((ret = cursor_redirect(cursor)))
 			goto out;
-		leafbuf = level_pop(cursor);
+		leafbuf = cursor_pop(cursor);
 
 		ret = (ops->leaf_chop)(btree, info->key, bufdata(leafbuf));
 		if (ret) {
@@ -630,7 +630,7 @@ keep_prev_leaf:
 			int level = cursor->level;
 
 			/* Get merge src buffer, and go parent level */
-			buf = level_pop(cursor);
+			buf = cursor_pop(cursor);
 			/* try to merge node with prev */
 			if (prev[level]) {
 				assert(level);
@@ -747,8 +747,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	if (keep)
 		blockput(leafbuf);
 	else {
-		level_pop_blockput(cursor);
-		level_push(cursor, leafbuf, NULL);
+		cursor_pop_blockput(cursor);
+		cursor_push(cursor, leafbuf, NULL);
 	}
 	while (level--) {
 		struct path_level *at = &cursor->path[level];
@@ -819,7 +819,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	block_t oldrootblock = btree->root.block;
 	int left_node = bufindex(cursor->path[0].buffer) != childblock;
 	bnode_init_root(newroot, 2, oldrootblock, childblock, childkey);
-	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
+	cursor_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
 	log_bnode_root(sb, newrootblock, 2, oldrootblock, childblock, childkey);
 
 	/* Change btree to point the new root */

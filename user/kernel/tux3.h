@@ -819,7 +819,7 @@ struct buffer_head *cursor_leafbuf(struct cursor *cursor);
 void release_cursor(struct cursor *cursor);
 struct cursor *alloc_cursor(struct btree *btree, int);
 void free_cursor(struct cursor *cursor);
-void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
+void cursor_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next);
 
 void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
 int alloc_empty_btree(struct btree *btree);
