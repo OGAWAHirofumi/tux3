@@ -585,6 +585,9 @@ struct btree_ops {
  * Tux3 times are 32.32 fixed point while time attributes are stored in 32.16
  * format, trading away some precision to compress time fields by two bytes
  * each.  It is not clear whether the saved space is worth the lower precision.
+ *
+ * FIXME: 32.32 and 32.16 difference is bad. It means, if inode cache
+ * was reclaimed, next read for inode will show different timestamp.
  */
 #define TIME_ATTR_SHIFT 16
 
