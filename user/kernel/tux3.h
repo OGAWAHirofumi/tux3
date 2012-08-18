@@ -810,8 +810,6 @@ extern const struct address_space_operations tux_blk_aops;
 extern const struct address_space_operations tux_vol_aops;
 
 /* inode.c */
-void tux3_delete_inode(struct inode *inode);
-void tux3_clear_inode(struct inode *inode);
 int tux3_write_inode(struct inode *inode, int do_sync);
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat);
 int tux3_setattr(struct dentry *dentry, struct iattr *iattr);
@@ -980,6 +978,7 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 			       dev_t rdev);
 struct inode *tux3_iget(struct sb *sb, inum_t inum);
+void tux3_evict_inode(struct inode *inode);
 
 /* log.c */
 extern unsigned log_size[];

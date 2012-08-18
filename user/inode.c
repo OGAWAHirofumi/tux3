@@ -185,6 +185,11 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 	return 0;
 }
 
+static void end_writeback(struct inode *inode)
+{
+	clear_inode(inode);
+}
+
 #include "kernel/inode.c"
 
 static void tux_setup_inode(struct inode *inode)
@@ -210,42 +215,6 @@ static void tux_setup_inode(struct inode *inode)
 	}
 }
 
-static int evict_inode(struct inode *inode)
-{
-	int err = 0;
-
-	if (inode->i_nlink > 0 || is_bad_inode(inode)) {
-		truncate_inode_pages(mapping(inode), 0);
-		assert(!(inode->i_state & I_DIRTY));
-	} else {
-		/*
-		 * FIXME: since in-core inode is freed, we should do
-		 * something for freeing inode even if error happened.
-		 */
-
-		err = tuxtruncate(inode, 0);
-		if (err)
-			goto error;
-		/* FIXME: we have to free dtree-root, atable entry, etc too */
-		free_empty_btree(&tux_inode(inode)->btree);
-		clear_inode(inode);
-
-		err = tux3_clear_inode_orphan(inode);
-		if (err)
-			goto error;
-
-		err = purge_inode(inode);
-		if (err)
-			goto error;
-	}
-
-error:
-	if (inode->xcache)
-		free(inode->xcache);
-
-	return err;
-}
-
 /*
  * NOTE: iput() must not be called inside of change_begin/end() if
  * i_nlink == 0.  Otherwise, it will become cause of deadlock.
@@ -259,7 +228,7 @@ void iput(struct inode *inode)
 		}
 
 		inode->i_state |= I_FREEING;
-		evict_inode(inode);
+		tux3_evict_inode(inode);
 
 		remove_inode_hash(inode);
 		free_inode(inode);

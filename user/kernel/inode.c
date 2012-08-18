@@ -536,10 +536,7 @@ error:
 	return err;
 }
 
-/*
- * NOTE: clear_inode() for this inode is already done. This shouldn't
- * use generic part of inode basically.
- */
+/* Remove inode from itable */
 static int purge_inode(struct inode *inode)
 {
 	struct btree *itable = itable_btree(tux_sb(inode->i_sb));
@@ -556,36 +553,78 @@ static int purge_inode(struct inode *inode)
 	return btree_chop(itable, tux_inode(inode)->inum, 1);
 }
 
+/*
+ * In-core inode is going to be freed, do job for it.
+ */
+void tux3_evict_inode(struct inode *inode)
+{
 #ifdef __KERNEL__
-void tux3_delete_inode(struct inode *inode)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-
-	change_begin(sb);
+	/* Block device special file is still overwriting i_mapping */
 	truncate_inode_pages(&inode->i_data, 0);
-	if (is_bad_inode(inode)) {
-		clear_inode(inode);
+#else
+	truncate_inode_pages(mapping(inode), 0);
+#endif
+
+	if (inode->i_nlink > 0 || is_bad_inode(inode))
+		end_writeback(inode);
+	else {
+		/*
+		 * FIXME: since in-core inode is freed, we should do
+		 * something for freeing inode even if error happened.
+		 *
+		 * truncate might take long time, we should do
+		 * something to prevent it.
+		 */
+		struct sb *sb = tux_sb(inode->i_sb);
+		int err;
+
+		change_begin(sb);
+
+		/*
+		 * FIXME: i_blocks (if implemented) would be better way
+		 * than inode->i_size to know whether we have to
+		 * traverse btree. (Or another better info?)
+		 *
+		 * inode->i_size = 0;
+		 * if (inode->i_blocks)
+		 */
+		if (inode->i_size) {
+			inode->i_size = 0;
+			err = tux3_truncate_blocks(inode, 0);
+			if (err)
+				goto error;
+		}
+		/* FIXME: we have to free dtree-root, atable entry, etc too */
+		err = free_empty_btree(&tux_inode(inode)->btree);
+		if (err)
+			goto error;
+
+		/*
+		 * Orphan is cleared. We can't call change_end()
+		 * anymore until inode was removed.
+		 */
+		err = tux3_clear_inode_orphan(inode);
+		if (err)
+			goto error;
+
+		err = purge_inode(inode);
+error:
+		/*
+		 * Clean inode (clear I_DIRTY) before change_end() to
+		 * prevent to flush removed inode. (Since this is
+		 * protected by change_begin/end(), there shouldn't be
+		 * no writeback process for this inode)
+		 */
+		end_writeback(inode);
+
 		change_end(sb);
-		return;
 	}
-	inode->i_size = 0;
-	if (inode->i_blocks)
-		__tux3_truncate(inode);
-	/* FIXME: we have to free dtree-root, atable entry, etc too */
-	free_empty_btree(&tux_inode(inode)->btree);
 
-	/* clear_inode() before freeing this ino. */
-	clear_inode(inode);
-	purge_inode(inode);
-	change_end(sb);
-}
-
-void tux3_clear_inode(struct inode *inode)
-{
 	if (tux_inode(inode)->xcache)
-		kfree(tux_inode(inode)->xcache);
+		free(tux_inode(inode)->xcache);
 }
 
+#ifdef __KERNEL__
 int tux3_write_inode(struct inode *inode, int do_sync)
 {
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
