@@ -117,3 +117,4 @@ void init_dirty_buffers(struct dirty_buffers *dirty)
 }
 
 #include "buffer_writeback.c"
+#include "buffer_fork.c"

@@ -661,12 +661,6 @@ int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 struct buffer_head *peekblk(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
-
-static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
-{
-	mark_buffer_dirty(buffer);
-	return buffer;
-}
 #endif /* !__KERNEL__ */
 
 /* balloc.c */

@@ -144,5 +144,8 @@ void tux3_iowait_wait(struct iowait *iowait);
 int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count);
 int flush_list(struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
+
+/* block_fork.c */
+struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 #endif /* !__KERNEL__ */
 #endif /* !TUX3_BUFFER_H */
