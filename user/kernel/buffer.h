@@ -104,44 +104,48 @@ struct iowait {
 };
 
 /* Helper for buffer vector I/O */
+#define BUFS_PER_PAGE_CACHE	(PAGE_CACHE_SIZE / 512)
 struct bufvec {
-	struct list_head buffers;	/* The buffers added to the bio */
-	unsigned count;			/* in-use count */
+	struct list_head *buffers;	/* The dirty buffers for this delta */
+	struct list_head contig;	/* One logical contiguous range */
+	unsigned contig_count;		/* Count of contiguous buffers */
+
+	struct {
+		struct buffer_head *buffer;
+		block_t block;
+	} on_page[BUFS_PER_PAGE_CACHE];
+	unsigned on_page_idx;
+
 	struct bio *bio;
+	struct buffer_head *bio_lastbuf;
 };
 
-static inline unsigned bufvec_count(struct bufvec *bufvec)
+static inline unsigned bufvec_contig_count(struct bufvec *bufvec)
 {
-	return bufvec->count;
+	return bufvec->contig_count;
 }
 
-static inline struct buffer_head *bufvec_first_buf(struct bufvec *bufvec)
+static inline struct buffer_head *bufvec_contig_buf(struct bufvec *bufvec)
 {
-	struct list_head *first = bufvec->buffers.next;
-	assert(!list_empty(&bufvec->buffers));
+	struct list_head *first = bufvec->contig.next;
+	assert(!list_empty(&bufvec->contig));
 	return list_entry(first, struct buffer_head, b_assoc_buffers);
 }
 
-static inline struct buffer_head *bufvec_last_buf(struct bufvec *bufvec)
+static inline block_t bufvec_contig_index(struct bufvec *bufvec)
 {
-	struct list_head *last = bufvec->buffers.prev;
-	assert(!list_empty(&bufvec->buffers));
-	return list_entry(last, struct buffer_head, b_assoc_buffers);
+	return bufindex(bufvec_contig_buf(bufvec));
 }
 
-static inline block_t bufvec_first_index(struct bufvec *bufvec)
+static inline block_t bufvec_contig_last_index(struct bufvec *bufvec)
 {
-	return bufindex(bufvec_first_buf(bufvec));
-}
-
-static inline block_t bufvec_last_index(struct bufvec *bufvec)
-{
-	return bufindex(bufvec_last_buf(bufvec));
+	return bufvec_contig_index(bufvec) + bufvec_contig_count(bufvec) - 1;
 }
 
 void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
-int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count);
+int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
+int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
 int flush_list(struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
 

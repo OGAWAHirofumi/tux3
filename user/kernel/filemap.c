@@ -546,10 +546,10 @@ int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
 
 static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
-	struct inode *inode = buffer_inode(bufvec_first_buf(bufvec));
-	block_t block, index = bufvec_first_index(bufvec);
+	struct inode *inode = buffer_inode(bufvec_contig_buf(bufvec));
+	block_t block, index = bufvec_contig_index(bufvec);
+	unsigned count = bufvec_contig_count(bufvec);
 	int err, rw = (mode == MAP_READ) ? READ : WRITE;
-	unsigned count = bufvec_count(bufvec);
 	struct seg map[10];
 
 	/* FIXME: For now, this is only for write */

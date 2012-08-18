@@ -69,28 +69,7 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
  */
 int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count)
 {
-	int ret = 0;
-
-	while (ret == 0 && count > 0) {
-		ret = bufvec_prepare_io(bufvec, block, count);
-		if (ret > 0) {
-			struct bio *bio = bufvec->bio;
-			bufvec->bio = NULL;
-			block += ret;
-			count -= ret;
-			ret = 0;
-
-			bio_get(bio);
-			submit_bio(rw, bio);
-
-			if (bio_flagged(bio, BIO_EOPNOTSUPP))
-				ret = -EOPNOTSUPP;
-
-			bio_put(bio);
-		}
-	}
-
-	return ret;
+	return bufvec_io(rw, bufvec, block, count);
 }
 
 void hexdump(void *data, unsigned size)
