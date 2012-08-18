@@ -350,6 +350,37 @@ out:
 	return err;
 }
 
+static int tux_test(struct inode *inode, void *data)
+{
+	return tux_inode(inode)->inum == *(inum_t *)data;
+}
+
+static int tux_set(struct inode *inode, void *data)
+{
+	tux_set_inum(inode, *(inum_t *)data);
+	return 0;
+}
+
+struct inode *tux3_iget(struct sb *sb, inum_t inum)
+{
+	struct inode *inode;
+	int err;
+
+	inode = iget5_locked(vfs_sb(sb), inum, tux_test, tux_set, &inum);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+	if (!(inode->i_state & I_NEW))
+		return inode;
+
+	err = open_inode(inode);
+	if (err) {
+		iget_failed(inode);
+		return ERR_PTR(err);
+	}
+	unlock_new_inode(inode);
+	return inode;
+}
+
 static int save_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -678,37 +709,6 @@ struct inode *tux_create_inode(struct inode *dir, umode_t mode, dev_t rdev)
 	 */
 	mark_inode_dirty(inode);
 
-	return inode;
-}
-
-static int tux_test(struct inode *inode, void *data)
-{
-	return tux_inode(inode)->inum == *(inum_t *)data;
-}
-
-static int tux_set(struct inode *inode, void *data)
-{
-	tux_set_inum(inode, *(inum_t *)data);
-	return 0;
-}
-
-struct inode *tux3_iget(struct sb *sb, inum_t inum)
-{
-	struct inode *inode;
-	int err;
-
-	inode = iget5_locked(vfs_sb(sb), inum, tux_test, tux_set, &inum);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
-	if (!(inode->i_state & I_NEW))
-		return inode;
-
-	err = open_inode(inode);
-	if (err) {
-		iget_failed(inode);
-		return ERR_PTR(err);
-	}
-	unlock_new_inode(inode);
 	return inode;
 }
 #endif /* !__KERNEL__ */

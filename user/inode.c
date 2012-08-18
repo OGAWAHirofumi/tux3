@@ -85,6 +85,59 @@ static int is_bad_inode(struct inode *inode)
 	return inode->i_state & I_BAD;
 }
 
+static void unlock_new_inode(struct inode *inode)
+{
+	inode->i_state &= ~I_NEW;
+}
+
+static void iget_failed(struct inode *inode)
+{
+	make_bad_inode(inode);
+	unlock_new_inode(inode);
+	iput(inode);
+}
+
+void __iget(struct inode *inode)
+{
+	assert(!(inode->i_state & I_FREEING));
+	if (atomic_read(&inode->i_count)) {
+		atomic_inc(&inode->i_count);
+		return;
+	}
+	/* i_count == 0 should happen only dirty inode */
+	assert(inode->i_state & I_DIRTY);
+	atomic_inc(&inode->i_count);
+}
+
+struct inode *iget5_locked(struct sb *sb, inum_t inum,
+			   int (*test)(struct inode *, void *),
+			   int (*set)(struct inode *, void *), void *data)
+{
+	struct hlist_head *head = inode_hashtable + hash(inum);
+	struct hlist_node *node;
+	struct inode *inode;
+
+	hlist_for_each_entry(inode, node, head, i_hash) {
+		if (test(inode, data)) {
+			__iget(inode);
+			return inode;
+		}
+	}
+
+	inode = new_inode(sb);
+	if (!inode)
+		return NULL;
+	if (set(inode, data)) {
+		free_inode(inode);
+		return NULL;
+	}
+
+	inode->i_state = I_NEW;
+	hlist_add_head(&inode->i_hash, head);
+
+	return inode;
+}
+
 #include "kernel/inode.c"
 
 static void tux_setup_inode(struct inode *inode)
@@ -160,53 +213,6 @@ void iput(struct inode *inode)
 		remove_inode_hash(inode);
 		free_inode(inode);
 	}
-}
-
-void __iget(struct inode *inode)
-{
-	assert(!(inode->i_state & I_FREEING));
-	if (atomic_read(&inode->i_count)) {
-		atomic_inc(&inode->i_count);
-		return;
-	}
-	/* i_count == 0 should happen only dirty inode */
-	assert(inode->i_state & I_DIRTY);
-	atomic_inc(&inode->i_count);
-}
-
-static struct inode *find_inode(struct sb *sb, inum_t inum)
-{
-	struct hlist_head *head = inode_hashtable + hash(inum);
-	struct hlist_node *node;
-	struct inode *inode;
-
-	hlist_for_each_entry(inode, node, head, i_hash) {
-		if (inode->inum == inum) {
-			__iget(inode);
-			return inode;
-		}
-	}
-	return NULL;
-}
-
-struct inode *tux3_iget(struct sb *sb, inum_t inum)
-{
-	struct inode *inode = find_inode(sb, inum);
-	if (!inode) {
-		inode = new_inode(sb);
-		if (!inode)
-			return ERR_PTR(-ENOMEM);
-		tux_set_inum(inode, inum);
-		insert_inode_hash(inode);
-
-		int err = open_inode(inode);
-		if (err) {
-			make_bad_inode(inode);
-			iput(inode);
-			return ERR_PTR(err);
-		}
-	}
-	return inode;
 }
 
 static int tuxio(struct file *file, char *data, unsigned len, int write)
