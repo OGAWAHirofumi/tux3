@@ -284,7 +284,7 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 		"}\n\n");
 }
 
-static void draw_bnode(struct graph_info *gi, int depth, int level,
+static void draw_bnode(struct graph_info *gi, int child_is_leaf,
 		       struct buffer_head *buffer)
 {
 	struct bnode *bnode = bufdata(buffer);
@@ -311,7 +311,7 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 		"];\n",
 		buffer_dirty(buffer) ? "color = red\n" : "");
 
-	if (level == depth - 1) {
+	if (child_is_leaf) {
 		for (n = 0; n < bcount(bnode); n++) {
 			fprintf(gi->f,
 				"%s_bnode_%llu:f%u -> %s_%llu:%s0;\n",
@@ -329,41 +329,47 @@ static void draw_bnode(struct graph_info *gi, int depth, int level,
 	}
 }
 
-static void draw_cursor(struct graph_info *gi, struct cursor *cursor)
+static void walk_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t draw_leaf)
 {
-	struct btree *btree = cursor->btree;
-	int level;
-	for (level = 0; level < btree->root.depth; level++)
-		draw_bnode(gi, btree->root.depth, level, cursor->path[level].buffer);
-}
+	struct cursor *cursor;
+	struct buffer_head *buffer;
+	int child_is_leaf;
 
-static int draw_advance(struct graph_info *gi, struct cursor *cursor)
-{
-	int ret, depth = cursor->btree->root.depth;
-	do {
-		if (!cursor_advance_up(cursor))
-			return 0;
-	} while (cursor_level_finished(cursor));
-	do {
-		ret = cursor_advance_down(cursor);
-		if (ret < 0) {
-			release_cursor(cursor);
-			return ret;
-		}
+	cursor = alloc_cursor(btree, 0);
+	if (!cursor)
+		error("out of memory");
+
+	if (cursor_read_root(cursor) < 0)
+		error("cursor_read_root() error");
+
+	buffer = cursor->path[cursor->len - 1].buffer;
+	child_is_leaf = btree->root.depth - 1 == cursor->len - 1;
+	draw_bnode(gi, child_is_leaf, buffer);
+
+	while (1) {
+		int ret = cursor_advance_down(cursor);
+		if (ret < 0)
+			error("cursor_advance_down() error");
 		if (ret) {
-			int level = cursor->len - 1;
-			struct buffer_head *buffer = cursor->path[level].buffer;
-			draw_bnode(gi, depth, level, buffer);
+			buffer = cursor->path[cursor->len - 1].buffer;
+			child_is_leaf = btree->root.depth - 1 == cursor->len - 1;
+			draw_bnode(gi, child_is_leaf, buffer);
+			continue;
 		}
-	} while (ret);
-	return 1;
+		buffer = cursor_leafbuf(cursor);
+		draw_leaf(gi, btree, buffer);
+
+		do {
+			if (!cursor_advance_up(cursor)) {
+				free_cursor(cursor);
+				return;
+			}
+		} while (cursor_level_finished(cursor));
+	}
 }
 
 static void draw_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t draw_leaf)
 {
-	struct cursor *cursor;
-	struct buffer_head *buffer;
-
 	if (!has_root(btree))
 		return;
 
@@ -373,21 +379,7 @@ static void draw_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t d
 		"label = \"%s\"\n",
 		gi->subgraph, gi->bname);
 
-	cursor = alloc_cursor(btree, 0);
-	if (!cursor)
-		error("out of memory");
-
-	if (probe(cursor, 0))
-		error("tell me why!!!");
-
-	draw_cursor(gi, cursor);
-
-	do {
-		buffer = cursor_leafbuf(cursor);
-		draw_leaf(gi, btree, buffer);
-	} while (draw_advance(gi, cursor));
-
-	free_cursor(cursor);
+	walk_btree(gi, btree, draw_leaf);
 
 	fprintf(gi->f, "}\n");
 
