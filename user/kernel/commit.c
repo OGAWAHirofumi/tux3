@@ -12,7 +12,9 @@
 static void setup_roots(struct sb *sb, struct disksuper *super)
 {
 	u64 iroot_val = from_be_u64(super->iroot);
+	u64 oroot_val = from_be_u64(sb->super.oroot);
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
+	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &itable_ops);
 }
 
 /* Allow frontend modify backend buffers */
@@ -23,6 +25,7 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	init_rwsem(&sb->delta_lock);
 	mutex_init(&sb->loglock);
 	INIT_LIST_HEAD(&sb->alloc_inodes);
+	INIT_LIST_HEAD(&sb->orphan_add);
 #ifndef __KERNEL__
 	INIT_LIST_HEAD(&sb->dirty_inodes);
 #endif
@@ -91,6 +94,7 @@ int save_sb(struct sb *sb)
 	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
 	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
 	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
+	super->oroot = to_be_u64(pack_root(&otable_btree(sb)->root));
 	super->logchain = to_be_u64(sb->logchain);
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
 }

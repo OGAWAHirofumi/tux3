@@ -8,6 +8,7 @@ clean:
 else
 obj-$(CONFIG_TUX3) += tux3.o
 tux3-objs += balloc.o btree.o dir.o dleaf.o filemap.o iattr.o ileaf.o \
-	inode.o namei.o xattr.o super.o log.o commit.o replay.o utility.o
+	inode.o namei.o orphan.o xattr.o super.o log.o commit.o replay.o \
+	utility.o
 EXTRA_CFLAGS += -Werror -std=gnu99 -Wno-declaration-after-statement
 endif

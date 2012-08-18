@@ -72,6 +72,8 @@ unsigned log_size[] = {
 	[LOG_BNODE_DEL]		= 15,
 	[LOG_BNODE_ADJUST]	= 19,
 	[LOG_BNODE_FREE]	= 7,
+	[LOG_ORPHAN_ADD]	= 9,
+	[LOG_ORPHAN_DEL]	= 9,
 	[LOG_FREEBLOCKS]	= 7,
 	[LOG_ROLLUP]		= 1,
 	[LOG_DELTA]		= 1,
@@ -164,6 +166,14 @@ static void log_u8_u48(struct sb *sb, u8 intent, u8 v1, u64 v2)
 	unsigned char *data = log_begin(sb, log_size[intent]);
 	*data++ = intent;
 	*data++ = v1;
+	log_end(sb, encode48(data, v2));
+}
+
+static void log_u16_u48(struct sb *sb, u8 intent, u16 v1, u64 v2)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	data = encode16(data, v1);
 	log_end(sb, encode48(data, v2));
 }
 
@@ -329,6 +339,24 @@ void log_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to)
 void log_bnode_free(struct sb *sb, block_t bnode)
 {
 	log_u48(sb, LOG_BNODE_FREE, bnode);
+}
+
+/*
+ * Handle inum as orphan inode
+ * (this is log of frontend operation)
+ */
+void log_orphan_add(struct sb *sb, unsigned version, tuxkey_t inum)
+{
+	log_u16_u48(sb, LOG_ORPHAN_ADD, version, inum);
+}
+
+/*
+ * Handle inum as destroyed
+ * (this is log of frontend operation)
+ */
+void log_orphan_del(struct sb *sb, unsigned version, tuxkey_t inum)
+{
+	log_u16_u48(sb, LOG_ORPHAN_DEL, version, inum);
 }
 
 /* Current freeblocks on rollup */

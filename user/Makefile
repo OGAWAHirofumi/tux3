@@ -65,7 +65,7 @@ TUX3_LIB	= libtux3.a
 COMMON_OBJS	= dir.o filemap.o inode.o super.o utility.o writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
 	kernel/dleaf.o kernel/iattr.o kernel/ileaf.o kernel/log.o \
-	kernel/replay.o kernel/xattr.o
+	kernel/orphan.o kernel/replay.o kernel/xattr.o
 
 OBJS		= tux3.o tux3graph.o
 FUSE_OBJS	= tux3fuse.o

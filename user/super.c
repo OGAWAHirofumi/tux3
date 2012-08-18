@@ -53,6 +53,9 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 	}
 	clean_dirty_buffer("pinned", &sb->pinned);
 
+	/* orphan_add should be empty */
+	assert(&sb->orphan_add);
+
 	/* defree must be flushed for each delta */
 	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
 	destroy_defer_bfree(&sb->derollup);

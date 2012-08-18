@@ -62,6 +62,7 @@ error:
 static void free_inode(struct inode *inode)
 {
 	assert(list_empty(&inode->alloc_list));
+	assert(list_empty(&inode->orphan_list));
 	assert(hlist_unhashed(&inode->i_hash));
 	assert(list_empty(&inode->list));
 	assert(inode->i_state == I_FREEING);
@@ -115,6 +116,10 @@ static int evict_inode(struct inode *inode)
 		/* FIXME: we have to free dtree-root, atable entry, etc too */
 		free_empty_btree(&tux_inode(inode)->btree);
 		clear_inode(inode);
+
+		err = tux3_clear_inode_orphan(inode);
+		if (err)
+			goto error;
 
 		err = purge_inum(inode);
 		if (err)
@@ -389,8 +394,16 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	err = tux_delete_dirent(buffer, entry);
 	if (err)
 		goto error_open;
+
 	inode->i_ctime = dir->i_ctime;
 	inode->i_nlink--;
+	if (inode->i_nlink == 0) {
+		/* FIXME: what to do if error? */
+		err = tux3_mark_inode_orphan(inode);
+		if (err)
+			goto error_open;
+	}
+
 	/* FIXME: we shouldn't write inode for i_nlink = 0? */
 	mark_inode_dirty_sync(inode);
 	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */

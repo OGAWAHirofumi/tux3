@@ -26,6 +26,7 @@ static void tux3_inode_init_once(void *mem)
 	tuxnode_t *tuxi = mem;
 
 	INIT_LIST_HEAD(&tuxi->alloc_list);
+	INIT_LIST_HEAD(&tuxi->orphan_list);
 	inode_init_once(&tuxi->vfs_inode);
 }
 
@@ -67,6 +68,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 static void tux3_destroy_inode(struct inode *inode)
 {
 	BUG_ON(!list_empty(&tux_inode(inode)->alloc_list));
+	BUG_ON(!list_empty(&tux_inode(inode)->orphan_list));
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 

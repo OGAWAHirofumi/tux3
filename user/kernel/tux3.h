@@ -170,6 +170,7 @@ struct disksuper {
 	be_u64 birthdate;	/* Volume creation date */
 	be_u64 flags;		/* Need to assign some flags */
 	be_u64 iroot;		/* Root of the inode table btree */
+	be_u64 oroot;		/* Root of the orphan table btree */
 	be_u16 blockbits;	/* Shift to get volume block size */
 	be_u16 unused[3];	/* Padding for alignment */
 	be_u64 volblocks;	/* Volume size */
@@ -237,8 +238,8 @@ struct sb {
 		char thisbig[SB_LEN];
 	};
 	struct btree itable;	/* Inode table btree */
-	struct inode *volmap;	/* Volume metadata cache (like blockdev).
-				 * Note, ->btree is the btree for itable. */
+	struct btree otable;	/* Orphan table btree */
+	struct inode *volmap;	/* Volume metadata cache (like blockdev). */
 	struct inode *bitmap;	/* allocation bitmap special file */
 	struct inode *rootdir;	/* root directory special file */
 	struct inode *vtable;	/* version table special file */
@@ -263,6 +264,8 @@ struct sb {
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
+
+	struct list_head orphan_add; /* defered orphan inode add list */
 
 	struct stash defree;	/* defer extent frees until after delta */
 	struct stash derollup;	/* defer extent frees until after rollup */
@@ -305,6 +308,8 @@ enum {
 	LOG_BNODE_DEL,		/* Log of deleting bnode index */
 	LOG_BNODE_ADJUST,	/* Log of bnode index ->key adjust */
 	LOG_BNODE_FREE,		/* Log of freeing bnode */
+	LOG_ORPHAN_ADD,		/* Log of adding orphan inode */
+	LOG_ORPHAN_DEL,		/* Log of deleting orphan inode */
 	LOG_FREEBLOCKS,		/* Log of freeblocks in bitmap on rollup */
 	LOG_ROLLUP,		/* Log of marking rollup */
 	LOG_DELTA,		/* just for debugging */
@@ -328,6 +333,7 @@ typedef struct {
 	unsigned present;	/* Attributes decoded from or to be encoded to inode table */
 	struct xcache *xcache;	/* Extended attribute cache */
 	struct list_head alloc_list; /* link for deferred inum allocation */
+	struct list_head orphan_list; /* link for orphan inode list */
 	struct inode vfs_inode;	/* Generic kernel inode */
 } tuxnode_t;
 
@@ -380,6 +386,7 @@ typedef struct inode {
 	unsigned present;
 	struct xcache *xcache;
 	struct list_head alloc_list; /* link for deferred inum allocation */
+	struct list_head orphan_list; /* link for orphan inode list */
 
 	/* generic part of inode */
 	struct sb *i_sb;
@@ -437,6 +444,11 @@ static inline struct dev *sb_dev(struct sb *sb)
 static inline struct btree *itable_btree(struct sb *sb)
 {
 	return &sb->itable;
+}
+
+static inline struct btree *otable_btree(struct sb *sb)
+{
+	return &sb->otable;
 }
 
 #define TUX_LINK_MAX (1 << 15) /* arbitrary limit, increase it */
@@ -930,6 +942,8 @@ void log_bnode_merge(struct sb *sb, block_t src, block_t dst);
 void log_bnode_del(struct sb *sb, block_t node, tuxkey_t key, unsigned count);
 void log_bnode_adjust(struct sb *sb, block_t node, tuxkey_t from, tuxkey_t to);
 void log_bnode_free(struct sb *sb, block_t bnode);
+void log_orphan_add(struct sb *sb, unsigned version, tuxkey_t inum);
+void log_orphan_del(struct sb *sb, unsigned version, tuxkey_t inum);
 void log_freeblocks(struct sb *sb, block_t freeblocks);
 void log_delta(struct sb *sb);
 void log_rollup(struct sb *sb);
@@ -941,6 +955,10 @@ int unstash(struct sb *sb, struct stash *defree, unstash_t actor);
 int stash_walk(struct sb *sb, struct stash *stash, unstash_t actor);
 int defer_bfree(struct stash *defree, block_t block, unsigned count);
 void destroy_defer_bfree(struct stash *defree);
+
+/* orphan.c */
+int tux3_mark_inode_orphan(struct inode *inode);
+int tux3_clear_inode_orphan(struct inode *inode);
 
 /* replay.c */
 void *replay_stage1(struct sb *sb);
@@ -972,7 +990,8 @@ static inline void blockput_dirty(struct buffer_head *buffer)
 
 static inline void mark_btree_dirty(struct btree *btree)
 {
-	if (btree != itable_btree(btree->sb))
+	if (btree != itable_btree(btree->sb) &&
+	    btree != otable_btree(btree->sb))
 		__mark_inode_dirty(btree_inode(btree), I_DIRTY_DATASYNC);
 }
 

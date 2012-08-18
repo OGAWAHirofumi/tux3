@@ -107,6 +107,7 @@ struct tux_iattr {
 	.birthdate	= 0,					\
 	.flags		= 0,					\
 	.iroot		= to_be_u64(pack_root(&no_root)),	\
+	.oroot		= to_be_u64(pack_root(&no_root)),	\
 	.blockbits	= to_be_u16(_bits),			\
 	.volblocks	= to_be_u64(_blocks),			\
 	.freeatom	= 0,					\
@@ -125,6 +126,7 @@ struct tux_iattr {
 	.i_nlink = 1,						\
 	.i_count = ATOMIC_INIT(1),				\
 	.alloc_list = LIST_HEAD_INIT((inode).alloc_list),	\
+	.orphan_list = LIST_HEAD_INIT((inode).orphan_list),	\
 	.list = LIST_HEAD_INIT((inode).list)
 
 #define rapid_open_inode(sb, io, mode, init_defs...) ({		\
