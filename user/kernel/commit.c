@@ -198,7 +198,7 @@ static int rollup_log(struct sb *sb)
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", rollup);
-	sync_inode(sb->bitmap, rollup);
+	tux3_flush_inode(sb->bitmap, rollup);
 	trace("< done bitmap %u", rollup);
 #endif
 	trace("> apply orphan inodes %u", rollup);
@@ -233,7 +233,7 @@ static int rollup_log(struct sb *sb)
 static int stage_delta(struct sb *sb, unsigned delta)
 {
 	/* flush inodes */
-	return sync_inodes(sb, delta);
+	return tux3_flush_inodes(sb, delta);
 }
 
 static int write_btree(struct sb *sb, unsigned delta)
@@ -243,7 +243,7 @@ static int write_btree(struct sb *sb, unsigned delta)
 	 * FIXME: Now we are using DEFAULT_DIRTY_WHEN for leaves. Do
 	 * we need to per delta dirty buffers?
 	 */
-	return sync_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
+	return tux3_flush_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
 }
 
 /* allocate and write log blocks */

@@ -37,7 +37,7 @@ void mark_buffer_dirty(struct buffer_head *buffer)
 	}
 }
 
-int sync_inode(struct inode *inode, unsigned delta)
+int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
 	unsigned dirty = inode->i_state;
 	int err;
@@ -74,7 +74,7 @@ error:
 	return err;
 }
 
-int sync_inodes(struct sb *sb, unsigned delta)
+int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
 	struct inode *inode, *safe;
 	LIST_HEAD(dirty_inodes);
@@ -84,8 +84,8 @@ int sync_inodes(struct sb *sb, unsigned delta)
 
 	list_for_each_entry_safe(inode, safe, &dirty_inodes, list) {
 		/*
-		 * FIXME: this is hack. those inodes is dirtied by
-		 * sync_inode() of other inodes, so it should be
+		 * FIXME: this is hack. those inodes can be dirtied by
+		 * tux3_flush_inode() of other inodes, so it should be
 		 * flushed after other inodes.
 		 */
 		switch (inode->inum) {
@@ -94,7 +94,7 @@ int sync_inodes(struct sb *sb, unsigned delta)
 			continue;
 		}
 
-		err = sync_inode(inode, delta);
+		err = tux3_flush_inode(inode, delta);
 		if (err)
 			goto error;
 	}
@@ -108,10 +108,10 @@ int sync_inodes(struct sb *sb, unsigned delta)
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)
 		goto error;
-	err = sync_inode(sb->bitmap, DEFAULT_DIRTY_WHEN);
+	err = tux3_flush_inode(sb->bitmap, DEFAULT_DIRTY_WHEN);
 	if (err)
 		goto error;
-	err = sync_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
+	err = tux3_flush_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
 	if (err)
 		goto error;
 #endif
@@ -132,7 +132,7 @@ int sync_super(struct sb *sb)
 	int err;
 
 	trace("sync inodes");
-	if ((err = sync_inodes(sb, DEFAULT_DIRTY_WHEN)))
+	if ((err = tux3_flush_inodes(sb, DEFAULT_DIRTY_WHEN)))
 		return err;
 	trace("sync super");
 	if ((err = save_sb(sb)))

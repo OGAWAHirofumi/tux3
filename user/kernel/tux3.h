@@ -214,7 +214,7 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 
 #ifdef __KERNEL__
 /* FIXME */
-static inline int sync_inodes(struct sb *sb, unsigned delta)
+static inline int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
 	return 0;
 }
