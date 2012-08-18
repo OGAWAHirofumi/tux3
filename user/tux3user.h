@@ -157,9 +157,8 @@ int tuxwrite(struct file *file, const char *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);
 int tuxtruncate(struct inode *inode, loff_t size);
 struct inode *tuxopen(struct inode *dir, const char *name, int len);
-struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
-				 struct tux_iattr *iattr, dev_t rdev);
-struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr);
+struct inode *tuxcreate(struct inode *dir, const char *name, int len,
+			struct tux_iattr *iattr);
 int tuxunlink(struct inode *dir, const char *name, int len);
 int write_inode(struct inode *inode);
 

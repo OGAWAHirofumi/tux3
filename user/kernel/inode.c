@@ -266,6 +266,37 @@ error:
 	return err;
 }
 
+struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
+				 struct tux_iattr *iattr, dev_t rdev)
+{
+	struct inode *inode;
+
+	inode = tux_new_inode(dir, iattr, rdev);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	int err = alloc_inum(inode, goal);
+	if (err) {
+		make_bad_inode(inode);
+		iput(inode);
+		return ERR_PTR(err);
+	}
+	insert_inode_hash(inode);
+	/*
+	 * The unhashed inode ignores mark_inode_dirty(), so it should
+	 * be called after insert_inode_hash().
+	 */
+	mark_inode_dirty(inode);
+
+	return inode;
+}
+
+struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
+			       dev_t rdev)
+{
+	return __tux_create_inode(dir, alloc_inum_goal(dir), iattr, rdev);
+}
+
 static int check_present(struct inode *inode)
 {
 	tuxnode_t *tuxnode = tux_inode(inode);
@@ -681,34 +712,5 @@ static void tux_setup_inode(struct inode *inode)
 		      (L)tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
-}
-
-struct inode *tux_create_inode(struct inode *dir, umode_t mode, dev_t rdev)
-{
-	struct tux_iattr iattr = {
-		.uid	= current_fsuid(),
-		.gid	= current_fsgid(),
-		.mode	= mode,
-	};
-	struct inode *inode;
-
-	inode = tux_new_inode(dir, &iattr, rdev);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
-
-	int err = alloc_inum(inode, alloc_inum_goal(dir));
-	if (err) {
-		make_bad_inode(inode);
-		iput(inode);
-		return ERR_PTR(err);
-	}
-	insert_inode_hash(inode);
-	/*
-	 * The unhashed inode ignores mark_inode_dirty(), so it should
-	 * be called after insert_inode_hash().
-	 */
-	mark_inode_dirty(inode);
-
-	return inode;
 }
 #endif /* !__KERNEL__ */

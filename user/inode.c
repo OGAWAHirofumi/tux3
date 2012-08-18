@@ -339,30 +339,6 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 	return inode;
 }
 
-struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
-				 struct tux_iattr *iattr, dev_t rdev)
-{
-	struct inode *inode = tux_new_inode(dir, iattr, rdev);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
-
-	int err = alloc_inum(inode, goal);
-	if (err) {
-		iput(inode);
-		return ERR_PTR(err);
-	}
-	insert_inode_hash(inode);
-
-	mark_inode_dirty(inode);
-
-	return inode;
-}
-
-static struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev)
-{
-	return __tux_create_inode(dir, alloc_inum_goal(dir), iattr, rdev);
-}
-
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)
 {
 	struct buffer_head *buffer;

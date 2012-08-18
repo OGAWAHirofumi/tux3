@@ -800,7 +800,6 @@ void tux3_clear_inode(struct inode *inode);
 int tux3_write_inode(struct inode *inode, int do_sync);
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat);
 int tux3_setattr(struct dentry *dentry, struct iattr *iattr);
-struct inode *tux_create_inode(struct inode *dir, umode_t mode, dev_t rdev);
 
 /* symlink.c */
 extern const struct inode_operations tux_symlink_iops;
@@ -959,6 +958,10 @@ extern struct btree_ops otable_ops;
 struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
 void del_defer_alloc_inum(struct inode *inode);
+struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
+				 struct tux_iattr *iattr, dev_t rdev);
+struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
+			       dev_t rdev);
 struct inode *tux3_iget(struct sb *sb, inum_t inum);
 
 /* log.c */
