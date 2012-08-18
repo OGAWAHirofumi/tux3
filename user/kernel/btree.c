@@ -630,6 +630,16 @@ out:
 	return ret;
 }
 
+/* root must be initialized by zero */
+static void bnode_init_root(struct bnode *root, unsigned count, block_t left,
+			    block_t right, tuxkey_t rkey)
+{
+	root->count		= to_be_u32(count);
+	root->entries[0].block	= to_be_u64(left);
+	root->entries[1].block	= to_be_u64(right);
+	root->entries[1].key	= to_be_u64(rkey);
+}
+
 /* Insertion */
 
 static void add_child(struct bnode *node, struct index_entry *p, block_t child, u64 childkey)
@@ -727,12 +737,10 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	block_t newrootblock = bufindex(newbuf);
 	block_t oldrootblock = btree->root.block;
 	int left_node = bufindex(cursor->path[0].buffer) != childblock;
-	newroot->count = to_be_u32(2);
-	newroot->entries[0].block = to_be_u64(oldrootblock);
-	newroot->entries[1].key = to_be_u64(childkey);
-	newroot->entries[1].block = to_be_u64(childblock);
+	bnode_init_root(newroot, 2, oldrootblock, childblock, childkey);
 	level_root_add(cursor, newbuf, newroot->entries + 1 + !left_node);
 	log_bnode_root(sb, newrootblock, 2, oldrootblock, childblock, childkey);
+
 	/* Change btree to point the new root */
 	btree->root.block = newrootblock;
 	btree->root.depth++;
@@ -821,10 +829,7 @@ int alloc_empty_btree(struct btree *btree)
 	block_t leafblock = bufindex(leafbuf);
 	trace("root at %Lx", (L)rootblock);
 	trace("leaf at %Lx", (L)leafblock);
-	rootnode->entries[0].block = to_be_u64(leafblock);
-	rootnode->count = to_be_u32(1);
-	btree->root = (struct root){ .block = rootblock, .depth = 1 };
-
+	bnode_init_root(rootnode, 1, leafblock, 0, 0);
 	log_bnode_root(sb, rootblock, 1, leafblock, 0, 0);
 	log_balloc(sb, leafblock, 1);
 
@@ -833,6 +838,7 @@ int alloc_empty_btree(struct btree *btree)
 	mark_buffer_dirty_non(leafbuf);
 	blockput(leafbuf);
 
+	btree->root = (struct root){ .block = rootblock, .depth = 1 };
 	mark_btree_dirty(btree);
 
 	return 0;
@@ -897,18 +903,13 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey)
 {
 	struct buffer_head *rootbuf;
-	struct bnode *newroot;
 
 	rootbuf = vol_getblk(sb, root);
 	if (!rootbuf)
 		return -ENOMEM;
 	memset(bufdata(rootbuf), 0, bufsize(rootbuf));
 
-	newroot = bufdata(rootbuf);
-	newroot->count = to_be_u32(count);
-	newroot->entries[0].block = to_be_u64(left);
-	newroot->entries[1].block = to_be_u64(right);
-	newroot->entries[1].key = to_be_u64(rkey);
+	bnode_init_root(bufdata(rootbuf), count, left, right, rkey);
 
 	mark_buffer_rollup_atomic(rootbuf);
 	blockput(rootbuf);
