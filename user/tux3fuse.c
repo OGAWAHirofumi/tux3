@@ -279,6 +279,12 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	fuse_reply_attr(req, &stbuf, 0.0);
 }
 
+static void tux3fuse_readlink(fuse_req_t req, fuse_ino_t ino)
+{
+	warn("not implemented");
+	fuse_reply_err(req, ENOSYS);
+}
+
 static struct inode *__tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent,
 				      const char *name, mode_t mode, dev_t rdev)
 {
@@ -342,6 +348,46 @@ static void tux3fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 	iput(inode);
 
 	fuse_reply_entry(req, &ep);
+}
+
+static void tux3fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct inode *dir;
+	int err;
+
+	trace("(%Lx, '%s')", (L)parent, name);
+
+	dir = tux3fuse_iget(sb, parent);
+	err = PTR_ERR(dir);
+	if (!IS_ERR(dir)) {
+		err = tuxunlink(dir, name, strlen(name));
+		iput(dir);
+	}
+	if (err)
+		warn("Eek! %s", strerror(-err));
+
+	fuse_reply_err(req, -err);
+}
+
+static void tux3fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct inode *dir;
+	int err;
+
+	trace("(%Lx, '%s')", (L)parent, name);
+
+	dir = tux3fuse_iget(sb, parent);
+	err = PTR_ERR(dir);
+	if (!IS_ERR(dir)) {
+		err = tuxrmdir(dir, name, strlen(name));
+		iput(dir);
+	}
+	if (err)
+		warn("Eek! %s", strerror(-err));
+
+	fuse_reply_err(req, -err);
 }
 
 static void tux3fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -527,37 +573,6 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	fuse_reply_buf(req, NULL, 0);
 	free(buf);
-}
-
-static void tux3fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
-{
-	trace("(%Lx, '%s')", (L)parent, name);
-	struct sb *sb = tux3fuse_get_sb(req);
-	struct inode *dir;
-	int err;
-
-	dir = tux3fuse_iget(sb, parent);
-	err = PTR_ERR(dir);
-	if (!IS_ERR(dir)) {
-		err = tuxunlink(dir, name, strlen(name));
-		iput(dir);
-	}
-	if (err)
-		warn("Eek! %s", strerror(-err));
-
-	fuse_reply_err(req, -err);
-}
-
-static void tux3fuse_readlink(fuse_req_t req, fuse_ino_t ino)
-{
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
-}
-
-static void tux3fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
-{
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3fuse_link(fuse_req_t req, fuse_ino_t ino,
