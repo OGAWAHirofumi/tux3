@@ -906,9 +906,10 @@ void del_defer_alloc_inum(struct inode *inode);
 
 /* log.c */
 extern unsigned log_size[];
-void log_next(struct sb *sb);
+void log_next(struct sb *sb, int pin);
 void log_drop(struct sb *sb);
 void log_finish(struct sb *sb);
+int log_finish_cycle(struct sb *sb);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count);

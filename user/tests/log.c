@@ -14,6 +14,7 @@
 /* cleanup bitmap of main() */
 static void clean_main(struct sb *sb)
 {
+	log_finish_cycle(sb);
 	put_super(sb);
 }
 

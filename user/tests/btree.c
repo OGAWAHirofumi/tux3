@@ -22,6 +22,7 @@
 static void clean_main(struct sb *sb, struct inode *inode)
 {
 	log_finish(sb);
+	log_finish_cycle(sb);
 	free_map(inode->map);
 	destroy_defer_bfree(&sb->derollup);
 	destroy_defer_bfree(&sb->defree);

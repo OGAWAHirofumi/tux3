@@ -335,6 +335,7 @@ int main(int argc, char *argv[])
 	}
 
 	log_finish(sb);
+	log_finish_cycle(sb);
 	destroy_defer_bfree(&sb->derollup);
 	destroy_defer_bfree(&sb->defree);
 	put_super(sb);

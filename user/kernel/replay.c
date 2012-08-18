@@ -137,19 +137,9 @@ error:
 /* Unpin log blocks, and prepare for future logging. */
 static void replay_done(struct sb *sb, struct replay_info *info)
 {
-	unsigned i = from_be_u32(sb->super.logcount);
-
 	free(info);
-
-	while (i-- > 0) {
-		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
-		assert(buffer != NULL);
-		blockput(buffer);
-		blockput(buffer);
-	}
-
-	/* Update for future logblock position */
-	sb->lognext = 0;
+	sb->lognext = from_be_u32(sb->super.logcount);
+	log_finish_cycle(sb);
 }
 
 typedef int (*replay_log_func_t)(struct sb *, struct buffer_head *,
@@ -466,7 +456,7 @@ static int replay_logblocks(struct sb *sb, struct replay_info *info,
 	sb->lognext = 0;
 	while (sb->lognext < logcount) {
 		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, (L)info->blocknrs[sb->lognext], (L)info->rollup_index);
-		log_next(sb);
+		log_next(sb, 0);
 		err = replay_log_func(sb, sb->logbuf, info);
 		log_drop(sb);
 

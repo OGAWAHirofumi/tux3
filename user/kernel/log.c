@@ -77,12 +77,14 @@ unsigned log_size[] = {
 	[LOG_DELTA]		= 1,
 };
 
-void log_next(struct sb *sb)
+void log_next(struct sb *sb, int pin)
 {
 	/* FIXME: error handling of blockget() */
 	sb->logbuf = blockget(mapping(sb->logmap), sb->lognext++);
 	sb->logpos = bufdata(sb->logbuf) + sizeof(struct logblock);
 	sb->logtop = bufdata(sb->logbuf) + sb->blocksize;
+	if (pin)
+		get_bh(sb->logbuf);
 }
 
 void log_drop(struct sb *sb)
@@ -103,12 +105,31 @@ void log_finish(struct sb *sb)
 	}
 }
 
+int log_finish_cycle(struct sb *sb)
+{
+	struct buffer_head *logbuf;
+	unsigned count = sb->lognext;
+
+	/* ->logbuf must be finished */
+	assert(sb->logbuf == NULL);
+
+	for (int i = 0; i < count; i++) {
+		logbuf = blockget(mapping(sb->logmap), i);
+		blockput(logbuf);
+		blockput(logbuf); /* unpin */
+	}
+	/* Initialize for new delta cycle */
+	sb->lognext = 0;
+
+	return count;
+}
+
 static void *log_begin(struct sb *sb, unsigned bytes)
 {
 	mutex_lock(&sb->loglock);
 	if (sb->logpos + bytes > sb->logtop) {
 		log_finish(sb);
-		log_next(sb);
+		log_next(sb, 1);
 		*(struct logblock *)bufdata(sb->logbuf) = (struct logblock){
 			.magic = to_be_u16(TUX3_MAGIC_LOG) };
 	}
