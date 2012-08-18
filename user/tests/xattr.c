@@ -240,9 +240,15 @@ static void test02(struct sb *sb)
 	}
 	check_xattr(inode, data);
 
+	/* Test list xattr length */
+	int checklen = xattr_list(inode, NULL, 0);
+	/* Test -ERANGE */
+	err = xattr_list(inode, attrs, checklen - 1);
+	test_assert(err == -ERANGE);
+
 	/* Test list xattr */
 	int len = xattr_list(inode, attrs, sizeof(attrs));
-	test_assert(len);
+	test_assert(len == checklen);
 	check_listxattr(inode, attrs, len, data);
 
 	/* Delete xattr */
