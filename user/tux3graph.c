@@ -247,13 +247,20 @@ struct draw_data_ops {
 	void (*draw_end)(struct graph_info *gi, struct btree *btree);
 };
 
+static void draw_subdata_start(struct graph_info *gi, struct btree *btree,
+			       const char *postfix)
+{
+	fprintf(gi->f, "%s%s [\n", gi->lname, postfix);
+}
+
 static void draw_data_start(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"subgraph cluster_%s {\n"
-		"label = \"%s\"\n"
-		"%s [\n",
-		gi->lname, gi->lname, gi->lname);
+		"label = \"%s\"\n",
+		gi->lname, gi->lname);
+
+	draw_subdata_start(gi, btree, "");
 }
 
 static void draw_data(struct graph_info *gi, struct btree *btree,
@@ -261,12 +268,18 @@ static void draw_data(struct graph_info *gi, struct btree *btree,
 {
 }
 
-static void draw_data_end(struct graph_info *gi, struct btree *btree)
+static void draw_subdata_end(struct graph_info *gi, struct btree *btree)
 {
 	fprintf(gi->f,
 		"shape = record\n"
-		"];\n"
-		"}\n");
+		"];\n");
+}
+
+static void draw_data_end(struct graph_info *gi, struct btree *btree)
+{
+	draw_subdata_end(gi, btree);
+
+	fprintf(gi->f, "}\n");
 }
 
 static void draw_bitmap_start(struct graph_info *gi, struct btree *btree)
@@ -353,13 +366,150 @@ struct draw_data_ops draw_vtable = {
 static void draw_atable_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f, "label = \"xattr table\"\n");
+	fprintf(gi->f, "label = \"{ dump of atable");
+}
+
+static void draw_atable_dirent(struct graph_info *gi, struct btree *btree,
+			       struct buffer_head *buffer)
+{
+	struct sb *sb = btree->sb;
+	tux_dirent *entry = bufdata(buffer);
+	tux_dirent *limit = (void *)entry + sb->blocksize;
+
+	while (entry < limit) {
+		fprintf(gi->f,
+			" | inum %llu, rec_len %hu, name_len %u,"
+			" type %u, '%.*s'",
+			from_be_u64(entry->inum), from_be_u16(entry->rec_len),
+			entry->name_len, entry->type,
+			(int)entry->name_len, entry->name);
+
+		entry = (void *)entry + from_be_u16(entry->rec_len);
+	}
+}
+
+static void draw_atable_atomref(struct graph_info *gi, struct btree *btree,
+				struct buffer_head *low_buf,
+				struct buffer_head *hi_buf)
+{
+	static int prev_atomref = 1;
+
+	struct sb *sb = btree->sb;
+	unsigned shift = sb->blockbits - 1; /* atomref size is (1 << 1) bytes */
+	unsigned atom_base = (bufindex(low_buf) - sb->atomref_base) << shift;
+	be_u16 *limit, *base, *low = bufdata(low_buf), *hi = bufdata(hi_buf);
+
+	base = low;
+	limit = (void *)low + sb->blocksize;
+	while (low < limit) {
+		unsigned atom = atom_base + (low - base);
+		unsigned ref = (u32)from_be_u16(*hi) << 16 | from_be_u16(*low);
+
+		if (ref) {
+			if (!prev_atomref)
+				fprintf(gi->f, " | ...");
+
+			fprintf(gi->f,
+				" | low 0x%04hx, hi 0x%04hx"
+				" (atom %u, refcnt %u)",
+				from_be_u16(*low), from_be_u16(*hi), atom, ref);
+
+			prev_atomref = 1;
+		} else
+			prev_atomref = 0;
+
+		low++;
+		hi++;
+	}
+}
+
+static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
+			       struct buffer_head *buffer)
+{
+	struct sb *sb = btree->sb;
+	unsigned shift = sb->blockbits - 3; /* unatom size is (1 << 3) bytes */
+	unsigned atom_base = (bufindex(buffer) - sb->unatom_base) << shift;
+	be_u64 *limit, *base, *ptr = bufdata(buffer);
+
+	base = ptr;
+	limit = (void *)ptr + sb->blocksize;
+	while (ptr < limit) {
+		unsigned atom = atom_base + (ptr - base);
+
+		if (atom < sb->atomgen) {
+			fprintf(gi->f,
+				" | where 0x%08llx (atom %u)",
+				(u64)from_be_u64(*ptr), atom);
+
+		}
+
+		ptr++;
+	}
+}
+
+static void draw_atable_data(struct graph_info *gi, struct btree *btree,
+			     block_t index, unsigned count)
+{
+	static int start_atomref = 1, start_unatom = 1;
+
+	struct sb *sb = btree->sb;
+	struct buffer_head *buffer, *hi_buf;
+
+	for (unsigned i = 0; i < count; i++) {
+		buffer = blockread(mapping(sb->atable), index + i);
+		assert(buffer);
+
+		if (index < sb->atomref_base) {
+			/* atom name table */
+			draw_atable_dirent(gi, btree, buffer);
+		} else if (index < sb->unatom_base) {
+			/* atom refcount table */
+			if (start_atomref) {
+				start_atomref = 0;
+				fprintf(gi->f, " }\"\n");
+				draw_subdata_end(gi, btree);
+				draw_subdata_start(gi, btree, "_atomref");
+				fprintf(gi->f, "label = \"{ dump of atomref");
+			}
+
+			/* Dump low and high at once */
+			if ((index + i) & 1)
+				goto next;
+
+			hi_buf = blockread(mapping(sb->atable), index + i + 1);
+			assert(hi_buf);
+
+			draw_atable_atomref(gi, btree, buffer, hi_buf);
+
+			blockput(hi_buf);
+		} else {
+			/* unatom table */
+			if (start_unatom) {
+				start_unatom = 0;
+				fprintf(gi->f, " }\"\n");
+				draw_subdata_end(gi, btree);
+				draw_subdata_start(gi, btree, "_unatom");
+				fprintf(gi->f, "label = \"{ dump of unatom");
+			}
+
+			draw_atable_unatom(gi, btree, buffer);
+		}
+
+next:
+		blockput(buffer);
+	}
+}
+
+static void draw_atable_end(struct graph_info *gi, struct btree *btree)
+{
+	fprintf(gi->f, " }\"\n");
+	draw_data_end(gi, btree);
 }
 
 struct draw_data_ops draw_atable = {
 	.draw_start	= draw_atable_start,
-	.draw_data	= draw_data,
-	.draw_end	= draw_data_end,
+	.draw_data	= draw_atable_data,
+	.draw_end	= draw_atable_end,
 };
 
 static void draw_dir_start(struct graph_info *gi, struct btree *btree)
