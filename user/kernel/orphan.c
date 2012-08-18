@@ -141,3 +141,165 @@ int tux3_clear_inode_orphan(struct inode *inode)
 
 	return err;
 }
+
+/*
+ * On replay, we collects orphan logs at first. Then, we reconstruct
+ * infos for orphan at end of replay.
+ */
+struct orphan {
+	inum_t inum;
+	struct list_head list;
+};
+
+static struct orphan *alloc_orphan(inum_t inum)
+{
+	struct orphan *orphan = malloc(sizeof(struct orphan));
+	if (!orphan)
+		return ERR_PTR(-ENOMEM);
+
+	INIT_LIST_HEAD(&orphan->list);
+	orphan->inum = inum;
+	return orphan;
+}
+
+static void free_orphan(struct orphan *orphan)
+{
+	free(orphan);
+}
+
+void clean_orphan_list(struct list_head *head)
+{
+	while (!list_empty(head)) {
+		struct orphan *orphan =
+			list_entry(head->next, struct orphan, list);
+		list_del(&orphan->list);
+		free_orphan(orphan);
+	}
+}
+
+static struct orphan *replay_find_orphan(struct list_head *head, inum_t inum)
+{
+	struct orphan *orphan;
+	list_for_each_entry(orphan, head, list) {
+		if (orphan->inum == inum)
+			return orphan;
+	}
+	return NULL;
+}
+
+int replay_orphan_add(struct replay *rp, unsigned version, inum_t inum)
+{
+	struct sb *sb = rp->sb;
+	struct orphan *orphan;
+
+	if (sb->version != version)
+		return 0;
+
+	orphan = alloc_orphan(inum);
+	if (IS_ERR(orphan))
+		return PTR_ERR(orphan);
+
+	assert(!replay_find_orphan(&rp->log_orphan_add, inum));
+	/* Remember LOG_ORPHAN_ADD */
+	list_add(&orphan->list, &rp->log_orphan_add);
+
+	return 0;
+}
+
+int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum)
+{
+	struct sb *sb = rp->sb;
+	struct orphan *orphan;
+
+	if (sb->version != version)
+		return 0;
+
+	orphan = replay_find_orphan(&rp->log_orphan_add, inum);
+	assert(orphan);
+	list_del(&orphan->list);
+	free_orphan(orphan);
+
+	return 0;
+}
+
+/* Free orphan inodes of destroy candidate (without destroy) */
+void replay_iput_orphan_without_destroy(struct sb *sb)
+{
+	struct list_head *head = &sb->orphan_add;
+
+	while (!list_empty(head)) {
+		struct inode *inode;
+		inode = list_entry(head->next, struct inode, orphan_list);
+
+		/* Set i_nlink = 1 prevent to destroy inode. */
+		inode->i_nlink = 1;
+		list_del_init(&inode->orphan_list);
+		iput(inode);
+	}
+}
+
+static int load_orphan_inode(struct sb *sb, inum_t inum)
+{
+	struct inode *inode = iget(sb, inum);
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+
+	/* List inode up, then caller will decide what to do */
+	list_add(&inode->orphan_list, &sb->orphan_add);
+
+	return 0;
+}
+
+static int load_otable_orphan_inode(struct sb *sb)
+{
+	struct btree *otable = otable_btree(sb);
+	int err;
+
+	if (!has_root(&sb->otable))
+		return 0;
+
+	struct cursor *cursor = alloc_cursor(otable, 0);
+	if (!cursor)
+		return -ENOMEM;
+
+	down_write(&cursor->btree->lock);
+	err = btree_probe(cursor, 0);
+	if (err)
+		goto error;
+	release_cursor(cursor);
+error:
+	up_write(&cursor->btree->lock);
+	free_cursor(cursor);
+
+	return err;
+}
+
+int replay_load_orphan_inodes(struct replay *rp)
+{
+	struct sb *sb = rp->sb;
+	struct list_head *head;
+	int err;
+
+	head = &rp->log_orphan_add;
+	while (!list_empty(head)) {
+		struct orphan *orphan =
+			list_entry(head->next, struct orphan, list);
+
+		err = load_orphan_inode(sb, orphan->inum);
+		if (err)
+			goto error;
+
+		list_del(&orphan->list);
+		free_orphan(orphan);
+	}
+
+	err = load_otable_orphan_inode(sb);
+	if (err)
+		goto error;
+
+	return 0;
+
+error:
+	replay_iput_orphan_without_destroy(sb);
+	return err;
+}
