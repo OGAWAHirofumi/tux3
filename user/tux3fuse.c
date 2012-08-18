@@ -172,8 +172,7 @@ static void tux3fuse_fill_stat(struct stat *stat, struct inode *inode)
 		/* FIXME: might be better to use ->i_blkbits? */
 		.st_blksize	= sb->blocksize,
 		/* FIXME: need to implement ->i_blocks? */
-		.st_blocks	=
-			((inode->i_size + sb->blockmask) & ~(loff_t)sb->blockmask) >> 9,
+		.st_blocks	= ALIGN(inode->i_size, sb->blocksize) >> 9,
 		.st_atim	= inode->i_atime,
 		.st_mtim	= inode->i_mtime,
 		.st_ctim	= inode->i_ctime,

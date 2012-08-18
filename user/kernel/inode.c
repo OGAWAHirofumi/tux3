@@ -526,7 +526,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	}
 
 	/* FIXME: implement i_blocks */
-	inode->i_blocks = ((newsize+sb->blockmask) & ~(loff_t)sb->blockmask)>>9;
+	inode->i_blocks = ALIGN(newsize, sb->blocksize) >> 9;
 
 	inode->i_mtime = inode->i_ctime = gettime();
 	mark_inode_dirty(inode);
@@ -723,8 +723,7 @@ static void tux_setup_inode(struct inode *inode)
 
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 
-	inode->i_blocks = ((inode->i_size + sbi->blockmask)
-			   & ~(loff_t)sbi->blockmask) >> 9;
+	inode->i_blocks = ALIGN(inode->i_size, sbi->blocksize) >> 9;
 //	inode->i_generation = 0;
 //	inode->i_flags = 0;
 

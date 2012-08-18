@@ -40,10 +40,10 @@
 
 #include "tux3.h"
 
-#define TUX_DIR_PAD (sizeof(inum_t) - 1)
-#define TUX_DIR_HEAD (offsetof(tux_dirent, name))
-#define TUX_REC_LEN(name_len) (((name_len) + TUX_DIR_HEAD + TUX_DIR_PAD) & ~TUX_DIR_PAD)
-#define TUX_MAX_REC_LEN ((1<<16)-1)
+#define TUX_DIR_ALIGN		sizeof(inum_t)
+#define TUX_DIR_HEAD		(offsetof(tux_dirent, name))
+#define TUX_REC_LEN(name_len)	ALIGN((name_len) + TUX_DIR_HEAD, TUX_DIR_ALIGN)
+#define TUX_MAX_REC_LEN		((1 << 16) - 1)
 
 static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
 {
