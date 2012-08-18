@@ -126,6 +126,12 @@ static int flush_buffer_list(struct sb *sb, struct list_head *head)
 	return 0;
 }
 
+static int relog_frontend_defer_as_bfree(struct sb *sb, u64 val)
+{
+	log_bfree_relog(sb, val & ~(-1ULL << 48), val >> 48);
+	return 0;
+}
+
 static int relog_as_bfree(struct sb *sb, u64 val)
 {
 	log_bfree_relog(sb, val & ~(-1ULL << 48), val >> 48);
@@ -166,7 +172,16 @@ static int rollup_log(struct sb *sb)
 	log_rollup(sb);
 	/* Log to store freeblocks for flushing bitmap data */
 	log_freeblocks(sb, sb->freeblocks);
-
+#if 1
+	/*
+	 * If frontend made defered bfree (i.e. it is not applied to
+	 * bitmap yet), we have to re-log it on this cycle. Because we
+	 * obsolete all logs in past.
+	 * FIXME: if frontend can delay modification until backend,
+	 * this is unnecessary.
+	 */
+	stash_walk(sb, &sb->defree, relog_frontend_defer_as_bfree);
+#endif
 	/*
 	 * Re-logging defered bfree blocks after rollup as defered
 	 * bfree (LOG_BFREE_RELOG) after delta.  With this, we can
