@@ -171,6 +171,11 @@ static int rollup_log(struct sb *sb)
 		if (err)
 			return err;
 	}
+	{
+		int err = write_inode(sb->bitmap);
+		if (err)
+			return err;
+	}
 	assert(list_empty(&io_buffers));
 #endif
 
@@ -179,8 +184,20 @@ static int rollup_log(struct sb *sb)
 
 static int stage_delta(struct sb *sb)
 {
+	int err;
+
+	/* flush inodes */
+	err = sync_inodes(sb);
+	if (err)
+		return err;
+#if 1
+	/* flush leaf blocks */
+	return sync_inode(sb->volmap);
+#else
+	/* what is this? */
 	/* leaf blocks */
 	return flush_buffer_list(sb, &sb->commit);
+#endif
 }
 
 /* allocate and write log blocks */

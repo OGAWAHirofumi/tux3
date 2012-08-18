@@ -75,7 +75,7 @@ error:
 	return err;
 }
 
-static int sync_inodes(struct sb *sb)
+int sync_inodes(struct sb *sb)
 {
 	struct inode *inode, *safe;
 	LIST_HEAD(dirty_inodes);
@@ -99,12 +99,20 @@ static int sync_inodes(struct sb *sb)
 		if (err)
 			goto error;
 	}
+#ifdef ATOMIC
+	/* If atomic-commit, bitmap and volmap is handled in the delta */
+	if (!list_empty(&sb->bitmap->list))
+		list_move(&sb->bitmap->list, &sb->dirty_inodes);
+	if (!list_empty(&sb->volmap->list))
+		list_move(&sb->volmap->list, &sb->dirty_inodes);
+#else
 	err = sync_inode(sb->bitmap);
 	if (err)
 		goto error;
 	err = sync_inode(sb->volmap);
 	if (err)
 		goto error;
+#endif
 	assert(list_empty(&dirty_inodes)); /* someone redirtied own inode? */
 
 	return 0;
@@ -116,18 +124,18 @@ error:
 
 int sync_super(struct sb *sb)
 {
+#ifdef ATOMIC
+	return force_delta(sb);
+#else
 	int err;
 
 	trace("sync inodes");
 	if ((err = sync_inodes(sb)))
 		return err;
-#ifdef ATOMIC
-	if ((err = force_delta(sb)))
-		return err;
-#else
 	trace("sync super");
 	if ((err = save_sb(sb)))
 		return err;
-#endif /* !ATOMIC */
+
 	return 0;
+#endif /* !ATOMIC */
 }

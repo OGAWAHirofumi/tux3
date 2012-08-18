@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
 		goto out;
 	}
 
-	sb->bitmap = iget(sb, TUX_BITMAP_INO);
+	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
 		errno = -PTR_ERR(sb->bitmap);
 		goto eek;

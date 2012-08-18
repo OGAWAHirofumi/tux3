@@ -76,6 +76,8 @@ static void free_inode(struct inode *inode)
 
 static void tux_setup_inode(struct inode *inode)
 {
+	struct sb *sb = tux_sb(inode->i_sb);
+
 	assert(inode->inum != TUX_INVALID_INO);
 	switch (inode->inum) {
 	case TUX_VOLMAP_INO:
@@ -84,6 +86,11 @@ static void tux_setup_inode(struct inode *inode)
 	case TUX_LOGMAP_INO:
 		inode->map->io = dev_errio;
 		break;
+	case TUX_BITMAP_INO:
+		/* set maximum bitmap size */
+		/* FIXME: should this, tuxtruncate();? */
+		inode->i_size = (sb->volblocks + 7) >> 3;
+		/* FALLTHRU */
 	default:
 		inode->map->io = filemap_extent_io;
 		break;

@@ -174,6 +174,7 @@ int blockio(int rw, struct buffer_head *buffer, block_t block);
 
 /* super.c */
 int put_super(struct sb *sb);
+struct inode *iget_or_create_inode(struct sb *sb, inum_t inum);
 int make_tux3(struct sb *sb);
 
 #endif /* !TUX3_USER_H */
