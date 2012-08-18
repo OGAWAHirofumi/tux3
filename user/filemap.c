@@ -163,6 +163,75 @@ int write_bitmap(struct buffer_head *buffer)
 	return 0;
 }
 
+
+static int tuxio(struct file *file, void *data, unsigned len, int write)
+{
+	int err = 0;
+	struct inode *inode = file->f_inode;
+	loff_t pos = file->f_pos;
+	trace("%s %u bytes at %Lu, isize = 0x%Lx", write ? "write" : "read", len, (s64)pos, (s64)inode->i_size);
+	if (write && pos + len > MAX_FILESIZE)
+		return -EFBIG;
+	if (!write && pos + len > inode->i_size) {
+		if (pos >= inode->i_size)
+			return 0;
+		len = inode->i_size - pos;
+	}
+
+	if (write)
+		inode->i_mtime = inode->i_ctime = gettime();
+
+	unsigned bbits = tux_sb(inode->i_sb)->blockbits;
+	unsigned bsize = tux_sb(inode->i_sb)->blocksize;
+	unsigned bmask = tux_sb(inode->i_sb)->blockmask;
+	loff_t tail = len;
+	while (tail) {
+		unsigned from = pos & bmask;
+		unsigned some = from + tail > bsize ? bsize - from : tail;
+		int full = write && some == bsize;
+		struct buffer_head *buffer = (full ? blockget : blockread)(mapping(inode), pos >> bbits);
+		if (!buffer) {
+			err = -EIO;
+			break;
+		}
+		if (write){
+			mark_buffer_dirty(buffer);
+			memcpy(bufdata(buffer) + from, data, some);
+		}
+		else
+			memcpy(data, bufdata(buffer) + from, some);
+		trace_off("transfer %u bytes, block 0x%Lx, buffer %p", some, bufindex(buffer), buffer);
+		//hexdump(bufdata(buffer) + from, some);
+		blockput(buffer);
+		tail -= some;
+		data += some;
+		pos += some;
+	}
+	file->f_pos = pos;
+	if (write) {
+		if (inode->i_size < pos)
+			inode->i_size = pos;
+		mark_inode_dirty(inode);
+	}
+	return err ? err : len - tail;
+}
+
+int tuxread(struct file *file, void *data, unsigned len)
+{
+	return tuxio(file, data, len, 0);
+}
+
+int tuxwrite(struct file *file, const void *data, unsigned len)
+{
+	return tuxio(file, (void *)data, len, 1);
+}
+
+void tuxseek(struct file *file, loff_t pos)
+{
+	warn("seek to 0x%Lx", (s64)pos);
+	file->f_pos = pos;
+}
+
 int page_symlink(struct inode *inode, const char *symname, int len)
 {
 	struct file file = { .f_inode = inode, };

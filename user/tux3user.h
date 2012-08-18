@@ -152,6 +152,9 @@ void tux_dump_entries(struct buffer_head *buffer);
 /* filemap.c */
 int filemap_extent_io(struct buffer_head *buffer, int write);
 int write_bitmap(struct buffer_head *buffer);
+int tuxread(struct file *file, void *data, unsigned len);
+int tuxwrite(struct file *file, const void *data, unsigned len);
+void tuxseek(struct file *file, loff_t pos);
 int page_symlink(struct inode *inode, const char *symname, int len);
 int page_readlink(struct inode *inode, void *buf, unsigned size);
 
@@ -162,9 +165,6 @@ void ihold(struct inode *inode);
 void iput(struct inode *inode);
 int tuxtruncate(struct inode *inode, loff_t size);
 int write_inode(struct inode *inode);
-int tuxread(struct file *file, char *data, unsigned len);
-int tuxwrite(struct file *file, const char *data, unsigned len);
-void tuxseek(struct file *file, loff_t pos);
 
 /* namei.c */
 struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
