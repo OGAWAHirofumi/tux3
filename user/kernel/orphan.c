@@ -78,6 +78,7 @@ static void oattr_encode(struct btree *btree, void *data, void *attrs, int size)
 }
 
 struct ileaf_attr_ops oattr_ops = {
+	.magic		= to_be_u16(TUX3_MAGIC_OLEAF),
 	.encoded_size	= oattr_encoded_size,
 	.encode		= oattr_encode,
 };

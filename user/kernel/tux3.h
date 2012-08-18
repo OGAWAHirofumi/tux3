@@ -150,6 +150,7 @@ static inline void *decode48(void *at, u64 *val)
 #define TUX3_MAGIC_DLEAF	0x1eaf
 #define TUX3_MAGIC_DLEAF2	0xbeaf
 #define TUX3_MAGIC_ILEAF	0x90de
+#define TUX3_MAGIC_OLEAF	0x6eaf
 
 #define MAX_INODES_BITS		48
 #define MAX_BLOCKS_BITS		48

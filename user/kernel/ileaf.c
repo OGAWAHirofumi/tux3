@@ -70,9 +70,10 @@ static void ileaf_btree_init(struct btree *btree)
 
 static int ileaf_init(struct btree *btree, void *leaf)
 {
+	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
 	trace("initialize inode leaf %p", leaf);
 	*(struct ileaf *)leaf = (struct ileaf){
-		.magic = to_be_u16(TUX3_MAGIC_ILEAF),
+		.magic = attr_ops->magic,
 	};
 	return 0;
 }
@@ -92,7 +93,8 @@ static int ileaf_free(struct btree *btree, struct ileaf *ileaf)
 
 static int ileaf_sniff(struct btree *btree, void *leaf)
 {
-	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
+	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
+	return ((struct ileaf *)leaf)->magic == attr_ops->magic;
 }
 
 static int ileaf_can_free(struct btree *btree, void *leaf)
@@ -166,10 +168,11 @@ static int isinorder(struct btree *btree, struct ileaf *leaf)
 /* userland only */
 int ileaf_check(struct btree *btree, struct ileaf *leaf)
 {
+	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
 	char *why;
 
 	why = "not an inode table leaf";
-	if (leaf->magic != to_be_u16(TUX3_MAGIC_ILEAF))
+	if (leaf->magic != attr_ops->magic)
 		goto eek;
 	why = "dict out of order";
 	if (!isinorder(btree, leaf))
