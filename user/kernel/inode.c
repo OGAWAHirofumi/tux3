@@ -147,8 +147,8 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
-	int err = 0, depth = itable->root.depth;
 	struct cursor *cursor;
+	int err = 0;
 
 	cursor = alloc_cursor(itable, 1); /* +1 for now depth */
 	if (!cursor)
@@ -167,12 +167,12 @@ retry:
 	/* FIXME: inum allocation should check min and max */
 	trace("create inode 0x%Lx", (L)goal);
 	assert(!tux_inode(inode)->btree.root.depth);
-	assert(goal < next_key(cursor, depth));
+	assert(goal < cursor_next_key(cursor));
 	while (1) {
 		trace_off("find empty inode in [%Lx] base %Lx", (L)bufindex(cursor_leafbuf(cursor)), (L)ibase(leaf));
 		goal = find_empty_inode(itable, bufdata(cursor_leafbuf(cursor)), goal);
-		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)next_key(cursor, depth));
-		if (goal < next_key(cursor, depth))
+		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)cursor_next_key(cursor));
+		if (goal < cursor_next_key(cursor))
 			break;
 		int more = cursor_advance(cursor);
 		if (more < 0) {

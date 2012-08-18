@@ -150,10 +150,12 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 	}
 
 	block_t limit = start + count;
-	//assert(start >= this_key(cursor, btree->root.depth))
-	/* do not overlap next leaf */
-	if (limit > next_key(cursor, btree->root.depth))
-		limit = next_key(cursor, btree->root.depth);
+	if (cursor) {
+		assert(start >= cursor_this_key(cursor));
+		/* do not overlap next leaf */
+		if (limit > cursor_next_key(cursor))
+			limit = cursor_next_key(cursor);
+	}
 	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
 
 	block_t index = start, seg_start, block;

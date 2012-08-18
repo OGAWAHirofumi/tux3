@@ -268,6 +268,29 @@ static int cursor_level_finished(struct cursor *cursor)
 }
 
 /*
+ * Climb up the cursor until we find the first level where we have not yet read
+ * all the way to the end of the index block, there we find the key that
+ * separates the subtree we are in (a leaf) from the next subtree to the right.
+ */
+tuxkey_t cursor_next_key(struct cursor *cursor)
+{
+	int level = cursor->level;
+	assert(cursor->level == cursor->btree->root.depth);
+	while (level--) {
+		if (!level_finished(cursor, level))
+			return from_be_u64(cursor->path[level].next->key);
+	}
+	return -1;
+}
+
+/* Return key of this leaf */
+tuxkey_t cursor_this_key(struct cursor *cursor)
+{
+	assert(cursor->level == cursor->btree->root.depth);
+	return from_be_u64((cursor->path[cursor->level - 1].next - 1)->key);
+}
+
+/*
  * Cursor read root node.
  * < 0 - error
  *   0 - success
@@ -382,27 +405,6 @@ error:
 	release_cursor(cursor);
 	return ret;
 }
-
-/*
- * Climb up the cursor until we find the first level where we have not yet read
- * all the way to the end of the index block, there we find the key that
- * separates the subtree we are in (a leaf) from the next subtree to the right.
- */
-static be_u64 *next_keyp(struct cursor *cursor, int depth)
-{
-	for (int level = depth; level--;)
-		if (!level_finished(cursor, level))
-			return &cursor->path[level].next->key;
-	return NULL;
-}
-
-tuxkey_t next_key(struct cursor *cursor, int depth)
-{
-	be_u64 *keyp = next_keyp(cursor, depth);
-
-	return keyp ? from_be_u64(*keyp) : -1;
-}
-// also write this_key!!!
 
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
