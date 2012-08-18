@@ -949,6 +949,7 @@ int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
 		    int (*func)(struct btree *, inum_t, void *, u16, void *),
 		    void *func_data);
 extern struct btree_ops itable_ops;
+extern struct btree_ops otable_ops;
 
 /* inode.c */
 struct inode *tux_new_volmap(struct sb *sb);
@@ -994,6 +995,7 @@ void destroy_defer_bfree(struct stash *defree);
 
 /* orphan.c */
 void clean_orphan_list(struct list_head *head);
+extern struct ileaf_attr_ops oattr_ops;
 int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add);
 int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del);
 int tux3_mark_inode_orphan(struct inode *inode);

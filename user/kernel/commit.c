@@ -14,7 +14,7 @@ static void setup_roots(struct sb *sb, struct disksuper *super)
 	u64 iroot_val = from_be_u64(super->iroot);
 	u64 oroot_val = from_be_u64(sb->super.oroot);
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
-	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &itable_ops);
+	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
 }
 
 /* Allow frontend modify backend buffers */

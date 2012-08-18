@@ -16,6 +16,7 @@
  */
 
 #include "tux3.h"
+#include "ileaf.h"
 
 #ifndef trace
 #define trace trace_on
@@ -66,27 +67,20 @@ static unsigned orphan_asize[] = {
 	[ORPHAN_ATTR] = 0,
 };
 
-static void *orphan_encode_attrs(struct inode *inode, void *attrs)
+static int oattr_encoded_size(struct btree *btree, void *data)
 {
-	return encode_kind(attrs, ORPHAN_ATTR, tux_sb(inode->i_sb)->version);
+	return orphan_asize[ORPHAN_ATTR] + 2;
 }
 
-static int store_orphan_inum(struct inode *inode, struct cursor *cursor)
+static void oattr_encode(struct btree *btree, void *data, void *attrs, int size)
 {
-	unsigned size;
-	void *base;
-
-	size = orphan_asize[ORPHAN_ATTR] + 2;
-
-	base = btree_expand(cursor, tux_inode(inode)->inum, size);
-	if (IS_ERR(base))
-		return PTR_ERR(base);
-
-	orphan_encode_attrs(inode, base);
-	mark_buffer_dirty_non(cursor_leafbuf(cursor));
-
-	return 0;
+	encode_kind(attrs, ORPHAN_ATTR, btree->sb->version);
 }
+
+struct ileaf_attr_ops oattr_ops = {
+	.encoded_size	= oattr_encoded_size,
+	.encode		= oattr_encode,
+};
 
 /* Add inum into sb->otable */
 int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
@@ -120,7 +114,14 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 		if (err)
 			goto out;
 
-		err = store_orphan_inum(inode, cursor);
+		/* Write orphan inum into orphan btree */
+		struct ileaf_req rq = {
+			.key = {
+				.start	= inode->inum,
+				.len	= 1,
+			},
+		};
+		err = btree_write(cursor, &rq.key);
 		release_cursor(cursor);
 		if (err)
 			goto out;

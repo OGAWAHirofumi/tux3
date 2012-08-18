@@ -491,3 +491,18 @@ struct btree_ops itable_ops = {
 	.leaf_sniff	= ileaf_sniff,
 	.leaf_dump	= ileaf_dump,
 };
+
+struct btree_ops otable_ops = {
+	.btree_init	= ileaf_btree_init,
+	.leaf_init	= ileaf_init,
+	.leaf_split	= ileaf_split,
+	.leaf_merge	= ileaf_merge,
+	.leaf_resize	= ileaf_resize,
+	.leaf_chop	= ileaf_chop,
+	.leaf_write	= ileaf_write,
+	.balloc		= balloc,
+	.private_ops	= &oattr_ops,
+
+	.leaf_sniff	= ileaf_sniff,
+	.leaf_dump	= ileaf_dump,
+};
