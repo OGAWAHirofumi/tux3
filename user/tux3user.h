@@ -18,7 +18,6 @@
 #include "trace.h"
 
 #include "knlcompat.h"
-#include "utility.h"
 #include "writeback.h"
 
 /* Endian support */

@@ -62,7 +62,8 @@ TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
 TUX3_LIB	= libtux3.a
-COMMON_OBJS	= dir.o filemap.o inode.o super.o utility.o writeback.o
+COMMON_OBJS	= dir.o filemap.o inode.o knlcompat.o super.o utility.o \
+	writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
 	kernel/dleaf.o kernel/dleaf2.o kernel/iattr.o kernel/ileaf.o \
 	kernel/log.o kernel/orphan.o kernel/replay.o kernel/xattr.o

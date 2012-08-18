@@ -1,9 +1,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <errno.h>
-#ifdef BUFFER_FOR_TUX3
-#include "utility.h"
-#else
+#ifndef BUFFER_FOR_TUX3
 #include "diskio.h"
 #endif
 #include "buffer.h"
