@@ -61,6 +61,15 @@ static void test01(struct sb *sb)
 	log_bnode_update(sb, 1, 2, 3);
 	check(sb, LOG_BNODE_UPDATE);
 
+	log_bnode_merge(sb, 1, 2);
+	check(sb, LOG_BNODE_MERGE);
+
+	log_bnode_del(sb, 1, 2, 3);
+	check(sb, LOG_BNODE_DEL);
+
+	log_bnode_adjust(sb, 1, 2, 3);
+	check(sb, LOG_BNODE_ADJUST);
+
 	log_freeblocks(sb, 1);
 	check(sb, LOG_FREEBLOCKS);
 
