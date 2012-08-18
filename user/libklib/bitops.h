@@ -14,6 +14,9 @@
 #include <libklib/bitops/__ffs.h>
 #include <libklib/bitops/ffz.h>
 #include <libklib/bitops/find.h>
+
+#include <libklib/bitops/atomic.h>
+#include <libklib/bitops/non-atomic.h>
 #include <libklib/bitops/le.h>
 
 #endif /* !LIBKLIB_BITOPS_H */

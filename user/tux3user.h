@@ -79,26 +79,6 @@ static inline struct timespec gettime(void)
 
 #include "kernel/dirty-buffer.h"	/* remove this after atomic commit */
 
-/* Bitmaps */
-
-// !!! change to bit zero at high end of byte, consistent with big endian !!! //
-// Careful about bitops on kernel port - need to reverse on le arch, maybe some be too.
-
-static inline int get_bit(unsigned char *bitmap, unsigned bit)
-{
-	return bitmap[bit >> 3] & (1 << (bit & 7));
-}
-
-static inline void set_bit(unsigned char *bitmap, unsigned bit)
-{
-	bitmap[bit >> 3] |= 1 << (bit & 7);
-}
-
-static inline void reset_bit(unsigned char *bitmap, unsigned bit)
-{
-	bitmap[bit >> 3] &= ~(1 << (bit & 7));
-}
-
 #ifdef ATOMIC
 #define INIT_DISKSB_FREEBLOCKS(_blocks)
 #else

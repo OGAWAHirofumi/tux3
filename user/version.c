@@ -44,6 +44,7 @@ void hexdump(void *data, unsigned size)
 }
 #endif
 
+/* Careful about bitops on kernel port - need to use *_bit_le(). */
 bool get_bit(unsigned char *bitmap, unsigned i)
 {
 	return (bitmap[i >> 3] >> (i & 7)) & 1;
