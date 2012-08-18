@@ -313,8 +313,9 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	}
 
-	sb->s_root = d_alloc_root(sbi->rootdir);
+	sb->s_root = d_make_root(sbi->rootdir);
 	if (!sb->s_root) {
+		sbi->rootdir = NULL;
 		err = -ENOMEM;
 		goto error;
 	}
