@@ -167,16 +167,22 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 	set_buffer_state_list(buffer, state, buffers + state);
 }
 
-struct buffer_head *set_buffer_dirty_when(struct buffer_head *buffer, int delta)
+void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
+				struct list_head *head)
+{
+	set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(delta), head);
+}
+
+void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 {
 	struct list_head *head = dirty_head_when(&buffer->map->dirty, delta);
-	set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(delta), head);
-	return buffer;
+	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)
 {
-	return set_buffer_dirty_when(buffer, DEFAULT_DIRTY_WHEN);
+	tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
+	return buffer;
 }
 
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer)

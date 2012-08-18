@@ -192,10 +192,12 @@ void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
 void show_active_buffers(map_t *map);
 void show_dirty_buffers(map_t *map);
-void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list);
 void show_buffers_state(unsigned state);
+void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list);
+void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
+				struct list_head *head);
+void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer);
-struct buffer_head *set_buffer_dirty_when(struct buffer_head *buffer, int delta);
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
 void get_bh(struct buffer_head *buffer);

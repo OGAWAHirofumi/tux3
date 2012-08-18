@@ -33,7 +33,7 @@ void mark_inode_dirty_sync(struct inode *inode)
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
 	if (!buffer_dirty(buffer)) {
-		set_buffer_dirty(buffer);
+		tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
 		__mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
 	}
 }
@@ -44,7 +44,7 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 	if (!buffer_dirty(buffer)) {
 		struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 		unsigned rollup = sb->rollup;
-		set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(rollup),
+		tux3_set_buffer_dirty_list(buffer, rollup,
 				      dirty_head_when(&sb->pinned, rollup));
 	}
 }
