@@ -130,7 +130,6 @@ int tuxrename(struct inode *old_dir, const char *old_name, unsigned old_len,
 
 /* super.c */
 int put_super(struct sb *sb);
-struct inode *iget_or_create_inode(struct sb *sb, inum_t inum);
 int make_tux3(struct sb *sb);
 
 /* utility.c */

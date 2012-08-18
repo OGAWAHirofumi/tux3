@@ -28,6 +28,38 @@ static void __tux3_put_super(struct sb *sbi)
 	assert(list_empty(&sbi->alloc_inodes));
 }
 
+static struct inode *create_internal_inode(struct sb *sbi, inum_t inum,
+					   struct tux_iattr *iattr)
+{
+	static struct tux_iattr null_iattr;
+	struct inode *dir = &(struct inode){
+		.i_sb = vfs_sb(sbi),
+		.i_mode = S_IFDIR | 0755,
+	};
+	struct inode *inode;
+
+	if (iattr == NULL)
+		iattr = &null_iattr;
+
+	inode = __tux_create_inode(dir, inum, iattr, 0);
+	assert(IS_ERR(inode) || tux_inode(inode)->inum == inum);
+	return inode;
+}
+
+/*
+ * Internal inode (e.g. bitmap inode) yet may not be written. So, if
+ * there is no inode, create inode instead.
+ */
+static struct inode *iget_or_create_inode(struct sb *sbi, inum_t inum)
+{
+	struct inode *inode;
+
+	inode = tux3_iget(sbi, inum);
+	if (IS_ERR(inode) && PTR_ERR(inode) == -ENOENT)
+		inode = create_internal_inode(sbi, inum, NULL);
+	return inode;
+}
+
 struct replay *tux3_init_fs(struct sb *sbi)
 {
 	struct replay *rp = NULL;
