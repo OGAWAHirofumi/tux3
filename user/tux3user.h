@@ -144,7 +144,7 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 	__inode;						\
 	})
 
-#define rapid_sb(dev)	(&(struct sb){ .dev = dev })
+#define rapid_sb(x)	(&(struct sb){ .dev = x })
 
 /* dir.c */
 void tux_dump_entries(struct buffer_head *buffer);
