@@ -145,7 +145,8 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 		struct orphan *orphan =
 			list_entry(orphan_del->next, struct orphan, list);
 
-		err = purge_inum(otable, orphan->inum);
+		/* Remove inum from orphan btree */
+		err = btree_chop(otable, orphan->inum, 1);
 		if (err)
 			return err;
 

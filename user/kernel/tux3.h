@@ -946,14 +946,12 @@ inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal);
 int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
 		    int (*func)(struct btree *, inum_t, void *, u16, void *),
 		    void *func_data);
-void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf);
 extern struct btree_ops itable_ops;
 
 /* inode.c */
 struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
 void del_defer_alloc_inum(struct inode *inode);
-int purge_inum(struct btree *btree, inum_t inum);
 
 /* log.c */
 extern unsigned log_size[];

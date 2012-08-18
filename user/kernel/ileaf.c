@@ -333,25 +333,6 @@ int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
 	return 0;
 }
 
-void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
-{
-	assert(inum >= ibase(leaf));
-	assert(inum - ibase(leaf) < btree->entries_per_leaf);
-	be_u16 *dict = ileaf_dict(btree, leaf);
-	unsigned at = inum - ibase(leaf);
-	unsigned offset = atdict(dict, at);
-	unsigned size = __atdict(dict, at + 1) - offset;
-
-	trace("delete inode %Lx from %p[%x/%x]", (L)inum, leaf, at, size);
-	assert(size);
-	unsigned free = __atdict(dict, icount(leaf)), tail = free - offset - size;
-	assert(offset + size + tail <= free);
-	memmove(leaf->table + offset, leaf->table + offset + size, tail);
-	for (int i = at + 1; i <= icount(leaf); i++)
-		add_idict(dict - i, -size);
-	ileaf_trim(btree, leaf);
-}
-
 /*
  * Chop inums
  * return value:
