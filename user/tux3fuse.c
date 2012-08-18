@@ -738,15 +738,19 @@ static void tux3fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
 static void tux3fuse_fsyncdir(fuse_req_t req, fuse_ino_t ino,
 			      int datasync, struct fuse_file_info *fi)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	struct sb *sb = tux3fuse_get_sb(req);
+	/* FIXME: we should flush only this dir */
+	sync_super(sb);
+	fuse_reply_err(req, 0);
 }
 
 static void tux3fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 			   struct fuse_file_info *fi)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	struct sb *sb = tux3fuse_get_sb(req);
+	/* FIXME: we should flush only this file */
+	sync_super(sb);
+	fuse_reply_err(req, 0);
 }
 
 /* FIXME: xattr should check prefix like 'user.' */
