@@ -97,6 +97,11 @@ void dump_attrs(struct inode *inode)
 	printf("\n");
 }
 
+void *encode_kind(void *attrs, unsigned kind, unsigned version)
+{
+	return encode16(attrs, (kind << 12) | version);
+}
+
 void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	trace_off("encode %u attr bytes", size);
@@ -136,6 +141,15 @@ void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 	return attrs;
 }
 
+void *decode_kind(void *attrs, unsigned *kind, unsigned *version)
+{
+	unsigned head;
+	attrs = decode16(attrs, &head);
+	*version = head & 0xfff;
+	*kind = head >> 12;
+	return attrs;
+}
+
 void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	trace_off("decode %u attr bytes", size);
@@ -147,9 +161,8 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	u32 v32;
 
 	while (attrs < limit - 1) {
-		unsigned head;
-		attrs = decode16(attrs, &head);
-		unsigned version = head & 0xfff, kind = head >> 12;
+		unsigned version, kind;
+		attrs = decode_kind(attrs, &kind, &version);
 		if (version != sb->version) {
 			attrs += atsize[kind];
 			continue;

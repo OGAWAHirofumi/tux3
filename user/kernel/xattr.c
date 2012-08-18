@@ -519,16 +519,16 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 	void *limit = attrs + size;
 
 	while (attrs < limit - 1) {
-		unsigned head, kind;
-		attrs = decode16(attrs, &head);
-		switch ((kind = head >> 12)) {
+		unsigned kind, version;
+		attrs = decode_kind(attrs, &kind, &version);
+		switch (kind) {
 		case XATTR_ATTR:
 		case IDATA_ATTR:
 			// immediate data: kind+version:16, bytes:16, data[bytes]
 			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
 			attrs = decode16(attrs, &bytes);
 			attrs += bytes;
-			if ((head & 0xfff) == sb->version)
+			if (version == sb->version)
 				total += sizeof(struct xattr) + bytes - 2;
 			continue;
 		}
