@@ -8,6 +8,10 @@
  * the right to distribute those changes under any license.
  */
 
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 #include "tux3user.h"
 #include "diskio.h"
 #include "test.h"
@@ -67,7 +71,7 @@ struct open_result {
 	inum_t inum;
 };
 
-static void check_files(struct sb *sb, struct open_result *results, int nr)
+static struct replay *check_replay(struct sb *sb)
 {
 	/* Replay, and read file back */
 	test_assert(load_sb(sb) == 0);
@@ -88,6 +92,13 @@ static void check_files(struct sb *sb, struct open_result *results, int nr)
 	sb->vtable = NULL;
 
 	test_assert(replay_stage2(rp) == 0);
+
+	return rp;
+}
+
+static void check_files(struct sb *sb, struct open_result *results, int nr)
+{
+	struct replay *rp = check_replay(sb);
 	test_assert(replay_stage3(rp, 0) == 0);
 
 	for (int i = 0; i < nr; i++) {
@@ -316,6 +327,68 @@ static void test03(struct sb *sb)
 	clean_main(sb);
 }
 
+/* Test for orphan inodes */
+static void test04(struct sb *sb)
+{
+	struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
+
+	test_assert(make_tux3(sb) == 0);
+	test_assert(force_rollup(sb) == 0);
+
+	/* Create on disk image to test lived orphan */
+	pid_t pid = fork();
+	assert(pid >= 0);
+	if (pid == 0) {
+		struct inode *inode;
+		struct file *file;
+		char data[1024] = {};
+		int err, size;
+
+		char name[] = "filename";
+
+		/* Create inode and write data without flush */
+		inode = tuxcreate(sb->rootdir, name, strlen(name), &iattr);
+		test_assert(!IS_ERR(inode));
+
+		file = &(struct file){ .f_inode = inode };
+		size = tuxwrite(file, data, sizeof(data));
+		test_assert(size == sizeof(data));
+
+		err = tuxunlink(sb->rootdir, name, strlen(name));
+		assert(!err);
+		/* This adds orphan inode to sb->otable */
+		test_assert(force_rollup(sb) == 0);
+		/* iput(inode); */
+
+		/* Create inode and write data without flush */
+		inode = tuxcreate(sb->rootdir, name, strlen(name), &iattr);
+		test_assert(!IS_ERR(inode));
+
+		file = &(struct file){ .f_inode = inode };
+		size = tuxwrite(file, data, sizeof(data));
+		test_assert(size == sizeof(data));
+
+		err = tuxunlink(sb->rootdir, name, strlen(name));
+		assert(!err);
+		/* This adds log for orphan inode */
+		test_assert(force_delta(sb) == 0);
+		/* iput(inode); */
+
+		clean_main(sb);
+		/* Simulate crash */
+		raise(SIGKILL);
+		exit(1);
+	}
+	waitpid(pid, NULL, 0);
+	clean_main(sb);
+
+	/* Replay */
+	struct replay *rp = check_replay(sb);
+	test_assert(replay_stage3(rp, 0) == 0);
+
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -352,6 +425,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test03"))
 		test03(sb);
+	test_end();
+
+	if (test_start("test04"))
+		test04(sb);
 	test_end();
 
 	clean_main(sb);
