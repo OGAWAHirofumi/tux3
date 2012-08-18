@@ -692,12 +692,12 @@ static int tux_set(struct inode *inode, void *data)
 	return 0;
 }
 
-struct inode *tux3_iget(struct super_block *sb, inum_t inum)
+struct inode *tux3_iget(struct sb *sb, inum_t inum)
 {
 	struct inode *inode;
 	int err;
 
-	inode = iget5_locked(sb, inum, tux_test, tux_set, &inum);
+	inode = iget5_locked(vfs_sb(sb), inum, tux_test, tux_set, &inum);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 	if (!(inode->i_state & I_NEW))

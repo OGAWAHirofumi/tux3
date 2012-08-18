@@ -151,8 +151,7 @@ int write_bitmap(struct buffer_head *buffer);
 
 /* inode.c */
 void iput(struct inode *inode);
-void __iget(struct inode *inode);//
-struct inode *iget(struct sb *sb, inum_t inum);
+void __iget(struct inode *inode);
 int tuxread(struct file *file, char *data, unsigned len);
 int tuxwrite(struct file *file, const char *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);

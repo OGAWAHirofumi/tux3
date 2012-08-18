@@ -148,7 +148,7 @@ struct inode *iget_or_create_inode(struct sb *sb, inum_t inum)
 {
 	struct inode *inode;
 
-	inode = iget(sb, inum);
+	inode = tux3_iget(sb, inum);
 	if (IS_ERR(inode) && PTR_ERR(inode) == -ENOENT)
 		inode = create_internal_inode(sb, inum, NULL);
 	return inode;

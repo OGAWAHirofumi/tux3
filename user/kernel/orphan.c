@@ -314,7 +314,7 @@ void replay_iput_orphan_inodes(struct sb *sb,
 
 static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 {
-	struct inode *inode = iget(sb, inum);
+	struct inode *inode = tux3_iget(sb, inum);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 	assert(inode->i_nlink == 0);

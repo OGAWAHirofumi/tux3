@@ -103,12 +103,12 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 		errno = -PTR_ERR(sb->bitmap);
 		goto error;
 	}
-	sb->rootdir = iget(sb, TUX_ROOTDIR_INO);
+	sb->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
 	if (IS_ERR(sb->rootdir)) {
 		errno = -PTR_ERR(sb->rootdir);
 		goto error;
 	}
-	sb->atable = iget(sb, TUX_ATABLE_INO);
+	sb->atable = tux3_iget(sb, TUX_ATABLE_INO);
 	if (IS_ERR(sb->atable)) {
 		errno = -PTR_ERR(sb->atable);
 		goto error;
@@ -153,7 +153,7 @@ static struct inode *tux3fuse_iget(struct sb *sb, fuse_ino_t ino)
 	if (ino == FUSE_ROOT_ID)
 		ino = TUX_ROOTDIR_INO;
 
-	return iget(sb, ino);
+	return tux3_iget(sb, ino);
 }
 
 static void tux3fuse_fill_stat(struct stat *stat, struct inode *inode)

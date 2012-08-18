@@ -85,9 +85,9 @@ static struct replay *check_replay(struct sb *sb)
 
 	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
 	test_assert(!IS_ERR(sb->bitmap));
-	sb->rootdir = iget(sb, TUX_ROOTDIR_INO);
+	sb->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
 	test_assert(!IS_ERR(sb->rootdir));
-	sb->atable = iget(sb, TUX_ATABLE_INO);
+	sb->atable = tux3_iget(sb, TUX_ATABLE_INO);
 	test_assert(!IS_ERR(sb->atable));
 	sb->vtable = NULL;
 

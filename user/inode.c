@@ -176,7 +176,7 @@ static struct inode *find_inode(struct sb *sb, inum_t inum)
 	return NULL;
 }
 
-struct inode *iget(struct sb *sb, inum_t inum)
+struct inode *tux3_iget(struct sb *sb, inum_t inum)
 {
 	struct inode *inode = find_inode(sb, inum);
 	if (!inode) {
@@ -314,7 +314,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len)
 		return ERR_CAST(entry);
 	inum_t inum = from_be_u64(entry->inum);
 	blockput(buffer);
-	struct inode *inode = iget(dir->i_sb, inum);
+	struct inode *inode = tux3_iget(dir->i_sb, inum);
 	assert(PTR_ERR(inode) != -ENOENT);
 	return inode;
 }
@@ -379,7 +379,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 		goto error;
 	}
 	inum_t inum = from_be_u64(entry->inum);
-	struct inode *inode = iget(sb, inum);
+	struct inode *inode = tux3_iget(sb, inum);
 	assert(PTR_ERR(inode) != -ENOENT);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);

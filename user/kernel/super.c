@@ -156,7 +156,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		goto error;
 	}
 
-	if ((err = load_sb(tux_sb(sb)))) {
+	if ((err = load_sb(sbi))) {
 		if (!silent) {
 			if (err == -EINVAL)
 				warn("invalid superblock [%Lx]",
@@ -176,26 +176,26 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	warn("s_blocksize %lu", sb->s_blocksize);
 
 	err = -ENOMEM;
-	sbi->volmap = tux_new_volmap(tux_sb(sb));
+	sbi->volmap = tux_new_volmap(sbi);
 	if (!sbi->volmap)
 		goto error;
 
-	sbi->logmap = tux_new_logmap(tux_sb(sb));
+	sbi->logmap = tux_new_logmap(sbi);
 	if (!sbi->logmap)
 		goto error_logmap;
 
 //	struct inode *vtable;
-	sbi->bitmap = tux3_iget(sb, TUX_BITMAP_INO);
+	sbi->bitmap = tux3_iget(sbi, TUX_BITMAP_INO);
 	err = PTR_ERR(sbi->bitmap);
 	if (IS_ERR(sbi->bitmap))
 		goto error_bitmap;
 
-	sbi->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
+	sbi->rootdir = tux3_iget(sbi, TUX_ROOTDIR_INO);
 	err = PTR_ERR(sbi->rootdir);
 	if (IS_ERR(sbi->rootdir))
 		goto error_rootdir;
 
-	sbi->atable = tux3_iget(sb, TUX_ATABLE_INO);
+	sbi->atable = tux3_iget(sbi, TUX_ATABLE_INO);
 	err = PTR_ERR(sbi->atable);
 	if (IS_ERR(sbi->atable))
 		goto error_atable;

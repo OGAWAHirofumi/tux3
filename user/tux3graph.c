@@ -665,7 +665,7 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 			    inum_t inum, u16 size)
 {
-	struct inode *inode = iget(btree->sb, inum);
+	struct inode *inode = tux3_iget(btree->sb, inum);
 	if (IS_ERR(inode))
 		error("inode couldn't get: inum %Lu", (L)inum);
 
@@ -823,7 +823,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 			continue;
 
 		inum_t inum = ibase(ileaf) + at;
-		struct inode *inode = iget(btree->sb, inum);
+		struct inode *inode = tux3_iget(btree->sb, inum);
 		if (IS_ERR(inode))
 			error("inode couldn't get: inum %Lu", (L)inum);
 
@@ -1242,12 +1242,12 @@ int main(int argc, char *argv[])
 		errno = -PTR_ERR(sb->bitmap);
 		goto eek;
 	}
-	sb->rootdir = iget(sb, TUX_ROOTDIR_INO);
+	sb->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
 	if (IS_ERR(sb->rootdir)) {
 		errno = -PTR_ERR(sb->rootdir);
 		goto eek;
 	}
-	sb->atable = iget(sb, TUX_ATABLE_INO);
+	sb->atable = tux3_iget(sb, TUX_ATABLE_INO);
 	if (IS_ERR(sb->atable)) {
 		errno = -PTR_ERR(sb->atable);
 		goto eek;
