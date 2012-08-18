@@ -96,7 +96,7 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 /* Prepare log info for replay and pin logblocks. */
 static struct replay *replay_prepare(struct sb *sb)
 {
-	block_t logchain = sb->logchain;
+	block_t logchain = from_be_u64(sb->super.logchain);
 	unsigned j, i, logcount = from_be_u32(sb->super.logcount);
 	struct replay *rp;
 	struct buffer_head *buffer;

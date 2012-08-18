@@ -36,15 +36,16 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	stash_init(&sb->derollup);
 
 	sb->blockbits = from_be_u16(super->blockbits);
+	sb->volblocks = from_be_u64(super->volblocks);
+	sb->version = 0;	/* FIXME: not yet implemented */
+
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
-	/* FIXME: those should be initialized based on blocksize. */
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
-	sb->max_inodes_per_block = sb->blocksize / 64;
-//	sb->version;
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
-	sb->volblocks = from_be_u64(super->volblocks);
+
+	/* Probably does not belong here (maybe metablock) */
 #ifdef ATOMIC
 	sb->freeblocks = sb->volblocks;
 #else
@@ -54,14 +55,13 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
 	sb->dictsize = from_be_u64(super->dictsize);
-	sb->logchain = from_be_u64(super->logchain);
+	/* logchain and logcount are read from super directly */
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
 	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
 	      (L)sb->volblocks, (L)sb->freeblocks, (L)sb->nextalloc);
 	trace("freeatom %u, atomgen %u", sb->freeatom, sb->atomgen);
 	trace("dictsize %Lu", (L)sb->dictsize);
-	trace("logchain %Lu", (L)sb->logchain);
 
 	setup_roots(sb, super);
 }
@@ -87,16 +87,19 @@ int save_sb(struct sb *sb)
 
 	super->blockbits = to_be_u16(sb->blockbits);
 	super->volblocks = to_be_u64(sb->volblocks);
-#ifndef ATOMIC
-	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
-#endif
-	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
-	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
-	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
-	super->dictsize = to_be_u64(sb->dictsize); // probably does not belong here
+
+	/* Probably does not belong here (maybe metablock) */
 	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
 	super->oroot = to_be_u64(pack_root(&otable_btree(sb)->root));
-	super->logchain = to_be_u64(sb->logchain);
+#ifndef ATOMIC
+	super->freeblocks = to_be_u64(sb->freeblocks);
+#endif
+	super->nextalloc = to_be_u64(sb->nextalloc);
+	super->freeatom = to_be_u32(sb->freeatom);
+	super->atomgen = to_be_u32(sb->atomgen);
+	super->dictsize = to_be_u64(sb->dictsize);
+	/* logchain and logcount are written to super directly */
+
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
 }
 
@@ -288,7 +291,7 @@ static int write_log(struct sb *sb)
 		assert(buffer);
 		struct logblock *log = bufdata(buffer);
 		assert(log->magic == to_be_u16(TUX3_MAGIC_LOG));
-		log->logchain = to_be_u64(sb->logchain);
+		log->logchain = sb->super.logchain;
 		err = blockio(WRITE, buffer, block);
 		if (err) {
 			blockput(buffer);
@@ -304,7 +307,7 @@ static int write_log(struct sb *sb)
 
 		blockput(buffer);
 		trace("logchain %lld", (L)block);
-		sb->logchain = block;
+		sb->super.logchain = to_be_u64(block);
 	}
 
 	/* Add count of log on this delta to rollup logcount */

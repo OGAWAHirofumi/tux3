@@ -70,7 +70,6 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 	log_finish(sb);
 	log_finish_cycle(sb);
 
-	sb->logchain = 0;
 	if (sb->logmap)
 		invalidate_buffers(sb->logmap->map);
 

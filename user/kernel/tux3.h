@@ -171,12 +171,13 @@ struct disksuper {
 	char magic[8];		/* Contains TUX3_LABEL magic string */
 	be_u64 birthdate;	/* Volume creation date */
 	be_u64 flags;		/* Need to assign some flags */
-	be_u64 iroot;		/* Root of the inode table btree */
-	be_u64 oroot;		/* Root of the orphan table btree */
 	be_u16 blockbits;	/* Shift to get volume block size */
 	be_u16 unused[3];	/* Padding for alignment */
 	be_u64 volblocks;	/* Volume size */
+
 	/* The rest should be moved to a "metablock" that is updated frequently */
+	be_u64 iroot;		/* Root of the inode table btree */
+	be_u64 oroot;		/* Root of the orphan table btree */
 #ifndef ATOMIC /* Obsoleted by LOG_FREEBLOCKS */
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
 #endif
@@ -252,14 +253,11 @@ struct sb {
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
-	unsigned max_inodes_per_block; /* get rid of this and use entries per leaf */
 	unsigned version;	/* Currently mounted volume version view */
 	unsigned atomref_base, unatom_base; /* layout of atom table */
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 	loff_t dictsize;	/* Atom dictionary size */
-
-	block_t logchain;	/* Previous log block physical address */
 
 	struct inode *logmap;	/* Log block cache */
 	unsigned lognext;	/* Index of next log block in log map */
