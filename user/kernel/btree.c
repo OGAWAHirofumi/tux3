@@ -1045,32 +1045,6 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key, tuxkey_t hint)
 	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
-void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
-{
-	struct btree *btree = cursor->btree;
-	int err;
-
-	/* This redirects for the both of changing and spliting the leaf */
-	err = cursor_redirect(cursor);
-	if (err)
-		goto error;
-
-	for (int i = 0; i < 2; i++) {
-		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
-		void *space = (btree->ops->leaf_resize)(btree, key, bufdata(leafbuf), newsize);
-		if (space)
-			return space;
-		assert(!i);
-		err = btree_leaf_split(cursor, key, key);
-		if (err) {
-			warn("insert_node failed (%d)", err);
-			break;
-		}
-	}
-error:
-	return ERR_PTR(err);
-}
-
 int btree_write(struct cursor *cursor, struct btree_key_range *key)
 {
 	struct btree *btree = cursor->btree;

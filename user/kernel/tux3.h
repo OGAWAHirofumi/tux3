@@ -590,7 +590,6 @@ struct btree_ops {
 	void (*btree_init)(struct btree *btree);
 	int (*leaf_init)(struct btree *btree, vleaf *leaf);
 	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into);
-	void *(*leaf_resize)(struct btree *btree, tuxkey_t key, vleaf *leaf, unsigned size);
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, vleaf *leaf);
 	/* return value: 1 - merged, 0 - couldn't merge */
