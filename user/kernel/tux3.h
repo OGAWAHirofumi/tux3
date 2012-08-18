@@ -692,6 +692,18 @@ static inline struct ileaf *to_ileaf(vleaf *leaf)
 	return leaf;
 }
 
+/* Information for replay */
+struct replay {
+	struct sb *sb;
+
+	/* For others of replay.c */
+
+	/* For replay.c */
+	void *rollup_pos;	/* position of rollup log in a log block */
+	block_t rollup_index;	/* index of a log block including rollup log */
+	block_t blocknrs[];	/* block address of log blocks */
+};
+
 /* Does this btree have root bnode/leaf? */
 extern struct root no_root;
 static inline int has_root(struct btree *btree)
@@ -822,7 +834,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
 block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks);
 int balloc(struct sb *sb, unsigned blocks, block_t *block);
 int bfree(struct sb *sb, block_t start, unsigned blocks);
-int replay_update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
+int replay_update_bitmap(struct replay *rp, block_t start, unsigned count, int set);
 
 /* btree.c */
 unsigned calc_entries_per_node(unsigned blocksize);
@@ -846,15 +858,15 @@ void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 void show_tree(struct btree *btree);
 int cursor_redirect(struct cursor *cursor);
-int replay_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock);
-int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
+int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock);
+int replay_bnode_root(struct replay *rp, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey);
-int replay_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst);
-int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
-int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
-int replay_bnode_merge(struct sb *sb, block_t src, block_t dst);
-int replay_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count);
-int replay_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to);
+int replay_bnode_split(struct replay *rp, block_t src, unsigned pos, block_t dst);
+int replay_bnode_add(struct replay *rp, block_t parent, block_t child, tuxkey_t key);
+int replay_bnode_update(struct replay *rp, block_t parent, block_t child, tuxkey_t key);
+int replay_bnode_merge(struct replay *rp, block_t src, block_t dst);
+int replay_bnode_del(struct replay *rp, block_t bnode, tuxkey_t key, unsigned count);
+int replay_bnode_adjust(struct replay *rp, block_t bnode, tuxkey_t from, tuxkey_t to);
 
 /* commit.c */
 void setup_sb(struct sb *sb, struct disksuper *super);
@@ -960,8 +972,8 @@ int tux3_mark_inode_orphan(struct inode *inode);
 int tux3_clear_inode_orphan(struct inode *inode);
 
 /* replay.c */
-void *replay_stage1(struct sb *sb);
-int replay_stage2(struct sb *sb, void *info);
+struct replay *replay_stage1(struct sb *sb);
+int replay_stage2(struct replay *rp);
 
 /* utility.c */
 void hexdump(void *data, unsigned size);

@@ -76,8 +76,8 @@ static void check_files(struct sb *sb, struct open_result *results, int nr)
 	sb->logmap = tux_new_logmap(sb);
 	test_assert(sb->logmap);
 
-	void *replay_handle = replay_stage1(sb);
-	test_assert(!IS_ERR(replay_handle));
+	struct replay *rp = replay_stage1(sb);
+	test_assert(!IS_ERR(rp));
 
 	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
 	test_assert(!IS_ERR(sb->bitmap));
@@ -87,7 +87,7 @@ static void check_files(struct sb *sb, struct open_result *results, int nr)
 	test_assert(!IS_ERR(sb->atable));
 	sb->vtable = NULL;
 
-	test_assert(replay_stage2(sb, replay_handle) == 0);
+	test_assert(replay_stage2(rp) == 0);
 
 	for (int i = 0; i < nr; i++) {
 		struct open_result *r = &results[i];

@@ -1147,8 +1147,9 @@ int free_empty_btree(struct btree *btree)
 	return 0;
 }
 
-int replay_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
+int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock)
 {
+	struct sb *sb = rp->sb;
 	struct buffer_head *newbuf, *oldbuf;
 	int err = 0;
 
@@ -1173,9 +1174,10 @@ error:
 	return err;
 }
 
-int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
+int replay_bnode_root(struct replay *rp, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey)
 {
+	struct sb *sb = rp->sb;
 	struct buffer_head *rootbuf;
 
 	rootbuf = vol_getblk(sb, root);
@@ -1195,8 +1197,10 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
  * Before this replay, replay should already dirty the buffer of src.
  * (e.g. by redirect)
  */
-int replay_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
+int replay_bnode_split(struct replay *rp, block_t src, unsigned pos,
+		       block_t dst)
 {
+	struct sb *sb = rp->sb;
 	struct buffer_head *srcbuf, *dstbuf;
 	int err = 0;
 
@@ -1254,9 +1258,10 @@ static void add_func(struct bnode *bnode, u64 child, u64 key)
 	bnode_add_index(bnode, entry, child, key);
 }
 
-int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
+int replay_bnode_add(struct replay *rp, block_t parent, block_t child,
+		     tuxkey_t key)
 {
-	return replay_bnode_change(sb, parent, child, key, add_func);
+	return replay_bnode_change(rp->sb, parent, child, key, add_func);
 }
 
 static void update_func(struct bnode *bnode, u64 child, u64 key)
@@ -1266,13 +1271,15 @@ static void update_func(struct bnode *bnode, u64 child, u64 key)
 	entry->block = to_be_u64(child);
 }
 
-int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
+int replay_bnode_update(struct replay *rp, block_t parent, block_t child,
+			tuxkey_t key)
 {
-	return replay_bnode_change(sb, parent, child, key, update_func);
+	return replay_bnode_change(rp->sb, parent, child, key, update_func);
 }
 
-int replay_bnode_merge(struct sb *sb, block_t src, block_t dst)
+int replay_bnode_merge(struct replay *rp, block_t src, block_t dst)
 {
+	struct sb *sb = rp->sb;
 	struct buffer_head *srcbuf, *dstbuf;
 	int err = 0;
 
@@ -1307,9 +1314,10 @@ static void del_func(struct bnode *bnode, u64 key, u64 count)
 	bnode_remove_index(bnode, entry, count);
 }
 
-int replay_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
+int replay_bnode_del(struct replay *rp, block_t bnode, tuxkey_t key,
+		     unsigned count)
 {
-	return replay_bnode_change(sb, bnode, key, count, del_func);
+	return replay_bnode_change(rp->sb, bnode, key, count, del_func);
 }
 
 static void adjust_func(struct bnode *bnode, u64 from, u64 to)
@@ -1319,7 +1327,8 @@ static void adjust_func(struct bnode *bnode, u64 from, u64 to)
 	entry->key = to_be_u64(to);
 }
 
-int replay_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to)
+int replay_bnode_adjust(struct replay *rp, block_t bnode, tuxkey_t from,
+			tuxkey_t to)
 {
-	return replay_bnode_change(sb, bnode, from, to, adjust_func);
+	return replay_bnode_change(rp->sb, bnode, from, to, adjust_func);
 }

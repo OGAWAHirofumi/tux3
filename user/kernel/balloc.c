@@ -232,8 +232,10 @@ error:
 	return -EIO; // error???
 }
 
-int replay_update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
+int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
+			 int set)
 {
+	struct sb *sb = rp->sb;
 	unsigned shift = sb->blockbits + 3, mask = (1 << shift) - 1;
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), start >> shift);
 

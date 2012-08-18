@@ -33,15 +33,30 @@ static const char *log_name[] = {
 #undef X
 };
 
-struct replay_info {
-	void *rollup_pos;	/* position of rollup log in a log block */
-	block_t rollup_index;	/* index of a log block including rollup log */
-	block_t blocknrs[];	/* block address of log blocks */
-};
-
-static int replay_check_log(struct sb *sb, struct buffer_head *logbuf,
-			    struct replay_info *info)
+static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 {
+	struct replay *rp;
+
+	rp = malloc(sizeof(*rp) + logcount * sizeof(block_t));
+	if (!rp)
+		return ERR_PTR(-ENOMEM);
+
+	rp->sb = sb;
+	rp->rollup_pos = NULL;
+	rp->rollup_index = -1;
+	memset(rp->blocknrs, 0, logcount * sizeof(block_t));
+
+	return rp;
+}
+
+static void free_replay(struct replay *rp)
+{
+	free(rp);
+}
+
+static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
+{
+	struct sb *sb = rp->sb;
 	struct logblock *log = bufdata(logbuf);
 	unsigned char *data = log->data;
 
@@ -58,9 +73,9 @@ static int replay_check_log(struct sb *sb, struct buffer_head *logbuf,
 		u8 code = *data;
 
 		/* Find latest rollup. */
-		if (code == LOG_ROLLUP && info->rollup_index == -1) {
-			info->rollup_pos = data;
-			info->rollup_index = bufindex(logbuf);
+		if (code == LOG_ROLLUP && rp->rollup_index == -1) {
+			rp->rollup_pos = data;
+			rp->rollup_index = bufindex(logbuf);
 		}
 
 		if (log_size[code] == 0) {
@@ -74,22 +89,19 @@ static int replay_check_log(struct sb *sb, struct buffer_head *logbuf,
 }
 
 /* Prepare log info for replay and pin logblocks. */
-static struct replay_info *replay_prepare(struct sb *sb)
+static struct replay *replay_prepare(struct sb *sb)
 {
 	block_t logchain = sb->logchain;
 	unsigned j, i, logcount = from_be_u32(sb->super.logcount);
-	struct replay_info *info;
+	struct replay *rp;
 	struct buffer_head *buffer;
 	int err;
 
 	/* FIXME: this address array is quick hack. Rethink about log
 	 * block management and log block address. */
-	info = malloc(sizeof(struct replay_info) + logcount * sizeof(block_t));
-	if (!info)
-		return ERR_PTR(-ENOMEM);
-	info->rollup_pos = NULL;
-	info->rollup_index = -1;
-	memset(info->blocknrs, 0, logcount * sizeof(block_t));
+	rp = alloc_replay(sb, logcount);
+	if (IS_ERR(rp))
+		return rp;
 
 	trace("load %u logblocks", logcount);
 	i = logcount;
@@ -108,23 +120,23 @@ static struct replay_info *replay_prepare(struct sb *sb)
 			goto error;
 		}
 
-		err = replay_check_log(sb, buffer, info);
+		err = replay_check_log(rp, buffer);
 		if (err) {
 			blockput(buffer);
 			goto error;
 		}
 
 		/* Store index => blocknr map */
-		info->blocknrs[bufindex(buffer)] = logchain;
+		rp->blocknrs[bufindex(buffer)] = logchain;
 
 		log = bufdata(buffer);
 		logchain = from_be_u64(log->logchain);
 	}
 
-	return info;
+	return rp;
 
 error:
-	free(info);
+	free_replay(rp);
 
 	j = logcount;
 	while (--j > i) {
@@ -137,19 +149,18 @@ error:
 }
 
 /* Unpin log blocks, and prepare for future logging. */
-static void replay_done(struct sb *sb, struct replay_info *info)
+static void replay_done(struct replay *rp)
 {
-	free(info);
+	struct sb *sb = rp->sb;
+
+	free_replay(rp);
 	sb->lognext = from_be_u32(sb->super.logcount);
 	log_finish_cycle(sb);
 }
 
-typedef int (*replay_log_func_t)(struct sb *, struct buffer_head *,
-				 struct replay_info *);
+typedef int (*replay_log_t)(struct replay *, struct buffer_head *);
 
-/* Replay physical update like bnode, etc. */
-static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
-			     struct replay_info *info)
+static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 {
 	struct logblock *log = bufdata(logbuf);
 	unsigned char *data = log->data;
@@ -159,12 +170,12 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
 
 	/* If log is before latest rollup, those were already applied to FS. */
-	if (bufindex(logbuf) < info->rollup_index) {
+	if (bufindex(logbuf) < rp->rollup_index) {
 //		assert(0);	/* older logs should already be freed */
 		return 0;
 	}
-	if (bufindex(logbuf) == info->rollup_index)
-		data = info->rollup_pos;
+	if (bufindex(logbuf) == rp->rollup_index)
+		data = rp->rollup_pos;
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
@@ -176,7 +187,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &newblock);
 			trace("%s: oldblock %Lx, newblock %Lx",
 			      log_name[code], (L)oldblock, (L)newblock);
-			err = replay_bnode_redirect(sb, oldblock, newblock);
+			err = replay_bnode_redirect(rp, oldblock, newblock);
 			if (err)
 				return err;
 			break;
@@ -193,7 +204,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			trace("%s: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx",
 			      log_name[code], count, (L)root, (L)left, (L)right, (L)rkey);
 
-			err = replay_bnode_root(sb, root, count, left, right, rkey);
+			err = replay_bnode_root(rp, root, count, left, right, rkey);
 			if (err)
 				return err;
 			break;
@@ -207,7 +218,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &dst);
 			trace("%s: pos %x, src %Lx, dst %Lx",
 			      log_name[code], pos, (L)src, (L)dst);
-			err = replay_bnode_split(sb, src, pos, dst);
+			err = replay_bnode_split(rp, src, pos, dst);
 			if (err)
 				return err;
 			break;
@@ -222,9 +233,9 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			trace("%s: parent 0x%Lx, child 0x%Lx, key 0x%Lx",
 			      log_name[code], (L)parent, (L)child, (L)key);
 			if (code == LOG_BNODE_UPDATE)
-				err = replay_bnode_update(sb, parent, child, key);
+				err = replay_bnode_update(rp, parent, child, key);
 			else
-				err = replay_bnode_add(sb, parent, child, key);
+				err = replay_bnode_add(rp, parent, child, key);
 			if (err)
 				return err;
 			break;
@@ -236,7 +247,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &dst);
 			trace("%s: src 0x%Lx, dst 0x%Lx",
 			      log_name[code], (L)src, (L)dst);
-			err = replay_bnode_merge(sb, src, dst);
+			err = replay_bnode_merge(rp, src, dst);
 			if (err)
 				return err;
 			break;
@@ -250,7 +261,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &key);
 			trace("%s: bnode 0x%Lx, count 0x%x, key 0x%Lx",
 			      log_name[code], (L)bnode, count, (L)key);
-			err = replay_bnode_del(sb, bnode, key, count);
+			err = replay_bnode_del(rp, bnode, key, count);
 			if (err)
 				return err;
 			break;
@@ -263,7 +274,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &to);
 			trace("%s: bnode 0x%Lx, from 0x%Lx, to 0x%Lx",
 			      log_name[code], (L)bnode, (L)from, (L)to);
-			err = replay_bnode_adjust(sb, bnode, from, to);
+			err = replay_bnode_adjust(rp, bnode, from, to);
 			if (err)
 				return err;
 			break;
@@ -291,22 +302,21 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 	return 0;
 }
 
-/* Replay logical update like bitmap data pages, etc. */
-static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
-			     struct replay_info *info)
+static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 {
+	struct sb *sb = rp->sb;
 	struct logblock *log = bufdata(logbuf);
-	block_t blocknr = info->blocknrs[bufindex(logbuf)];
+	block_t blocknr = rp->blocknrs[bufindex(logbuf)];
 	unsigned char *data = log->data;
 	int err;
 
 	/* If log is before latest rollup, those were already applied to FS. */
-	if (bufindex(logbuf) < info->rollup_index) {
+	if (bufindex(logbuf) < rp->rollup_index) {
 //		assert(0);	/* older logs should already be freed */
 		return 0;
 	}
-	if (bufindex(logbuf) == info->rollup_index)
-		data = info->rollup_pos;
+	if (bufindex(logbuf) == rp->rollup_index)
+		data = rp->rollup_pos;
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
@@ -325,11 +335,11 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 
 			err = 0;
 			if (code == LOG_BALLOC)
-				err = replay_update_bitmap(sb, block, count, 1);
+				err = replay_update_bitmap(rp, block, count, 1);
 			else if (code == LOG_BFREE_ON_ROLLUP)
 				defer_bfree(&sb->derollup, block, count);
 			else
-				err = replay_update_bitmap(sb, block, count, 0);
+				err = replay_update_bitmap(rp, block, count, 0);
 			if (err)
 				return err;
 			break;
@@ -342,11 +352,11 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &newblock);
 			trace("%s: oldblock %Lx, newblock %Lx",
 			      log_name[code], (L)oldblock, (L)newblock);
-			err = replay_update_bitmap(sb, newblock, 1, 1);
+			err = replay_update_bitmap(rp, newblock, 1, 1);
 			if (err)
 				return err;
 			if (code == LOG_LEAF_REDIRECT) {
-				err = replay_update_bitmap(sb, oldblock, 1, 0);
+				err = replay_update_bitmap(rp, oldblock, 1, 0);
 				if (err)
 					return err;
 			} else {
@@ -361,7 +371,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			u64 block;
 			data = decode48(data, &block);
 			trace("%s: block %Lx", log_name[code], (L)block);
-			err = replay_update_bitmap(sb, block, 1, 0);
+			err = replay_update_bitmap(rp, block, 1, 0);
 			if (err)
 				return err;
 
@@ -381,7 +391,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			trace("%s: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx",
 			      log_name[code], count, (L)root, (L)left, (L)right, (L)rkey);
 
-			err = replay_update_bitmap(sb, root, 1, 1);
+			err = replay_update_bitmap(rp, root, 1, 1);
 			if (err)
 				return err;
 			break;
@@ -395,7 +405,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &dst);
 			trace("%s: pos %x, src %Lx, dst %Lx",
 			      log_name[code], pos, (L)src, (L)dst);
-			err = replay_update_bitmap(sb, dst, 1, 1);
+			err = replay_update_bitmap(rp, dst, 1, 1);
 			if (err)
 				return err;
 			break;
@@ -407,7 +417,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			data = decode48(data, &dst);
 			trace("%s: src 0x%Lx, dst 0x%Lx",
 			      log_name[code], (L)src, (L)dst);
-			err = replay_update_bitmap(sb, src, 1, 0);
+			err = replay_update_bitmap(rp, src, 1, 0);
 			if (err)
 				return err;
 
@@ -444,7 +454,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 	 * after LOG_FREEBLOCKS replay if there is it.)
 	 */
 	trace("LOG BLOCK: logblock %Lx", (L)blocknr);
-	err = replay_update_bitmap(sb, blocknr, 1, 1);
+	err = replay_update_bitmap(rp, blocknr, 1, 1);
 	if (err)
 		return err;
 	/* Mark log block as derollup block */
@@ -453,17 +463,17 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 	return 0;
 }
 
-static int replay_logblocks(struct sb *sb, struct replay_info *info,
-			    replay_log_func_t replay_log_func)
+static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 {
+	struct sb *sb = rp->sb;
 	unsigned logcount = from_be_u32(sb->super.logcount);
 	int err;
 
 	sb->lognext = 0;
 	while (sb->lognext < logcount) {
-		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, (L)info->blocknrs[sb->lognext], (L)info->rollup_index);
+		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, (L)rp->blocknrs[sb->lognext], (L)rp->rollup_index);
 		log_next(sb, 0);
-		err = replay_log_func(sb, sb->logbuf, info);
+		err = replay_log_func(rp, sb->logbuf);
 		log_drop(sb);
 
 		if (err)
@@ -473,22 +483,24 @@ static int replay_logblocks(struct sb *sb, struct replay_info *info,
 	return 0;
 }
 
-void *replay_stage1(struct sb *sb)
+/* Replay physical update like bnode, etc. */
+struct replay *replay_stage1(struct sb *sb)
 {
-	struct replay_info *info = replay_prepare(sb);
-	if (!IS_ERR(info)) {
-		int err = replay_logblocks(sb, info, replay_log_stage1);
+	struct replay *rp = replay_prepare(sb);
+	if (!IS_ERR(rp)) {
+		int err = replay_logblocks(rp, replay_log_stage1);
 		if (err) {
-			replay_done(sb, info);
+			replay_done(rp);
 			return ERR_PTR(err);
 		}
 	}
-	return info;
+	return rp;
 }
 
-int replay_stage2(struct sb *sb, void *info)
+/* Replay logical update like bitmap data pages, etc. */
+int replay_stage2(struct replay *rp)
 {
-	int err = replay_logblocks(sb, info, replay_log_stage2);
-	replay_done(sb, info);
+	int err = replay_logblocks(rp, replay_log_stage2);
+	replay_done(rp);
 	return err;
 }

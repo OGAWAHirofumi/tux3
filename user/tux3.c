@@ -122,9 +122,9 @@ int main(int argc, char *argv[])
 		goto eek;
 	}
 
-	void *replay_handle = replay_stage1(sb);
-	if (IS_ERR(replay_handle)) {
-		errno = -PTR_ERR(replay_handle);
+	struct replay *rp = replay_stage1(sb);
+	if (IS_ERR(rp)) {
+		errno = -PTR_ERR(rp);
 		goto eek;
 	}
 
@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
 
-	if ((errno = -replay_stage2(sb, replay_handle)))
+	if ((errno = -replay_stage2(rp)))
 		goto eek;
 
 	if (!strcmp(command, "delta")) {
