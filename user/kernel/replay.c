@@ -81,6 +81,9 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 			data = decode48(data, &newblock);
 			trace("%s: oldblock %Lx, newblock %Lx",
 			      log_name[code], (L)oldblock, (L)newblock);
+			err = replay_bnode_redirect(sb, oldblock, newblock);
+			if (err)
+				return err;
 			break;
 		}
 		case LOG_BNODE_ROOT:
@@ -182,10 +185,12 @@ static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 			if (err)
 				return err;
 			if (code == LOG_LEAF_REDIRECT) {
-				/* leaf was already flushed */
 				err = replay_update_bitmap(sb, oldblock, 1, 0);
 				if (err)
 					return err;
+			} else {
+				/* newblock is not flushing yet */
+				defer_bfree(&sb->derollup, oldblock, 1);
 			}
 			break;
 		}

@@ -842,6 +842,32 @@ int free_empty_btree(struct btree *btree)
 	return 0;
 }
 
+int replay_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
+{
+	struct buffer_head *newbuf, *oldbuf;
+	int err = 0;
+
+	newbuf = vol_getblk(sb, newblock);
+	if (IS_ERR(newbuf)) {
+		err = PTR_ERR(newbuf);
+		goto error;
+	}
+	oldbuf = vol_bread(sb, oldblock);
+	if (IS_ERR(oldbuf)) {
+		err = PTR_ERR(oldbuf);
+		goto error_put_newbuf;
+	}
+
+	memcpy(bufdata(newbuf), bufdata(oldbuf), bufsize(newbuf));
+	mark_buffer_rollup_atomic(newbuf);
+
+	blockput(oldbuf);
+error_put_newbuf:
+	blockput(newbuf);
+error:
+	return err;
+}
+
 int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey)
 {

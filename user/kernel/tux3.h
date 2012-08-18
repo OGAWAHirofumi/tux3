@@ -822,6 +822,7 @@ void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
 void show_tree(struct btree *btree);
 int cursor_redirect(struct cursor *cursor);
+int replay_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey);
 
