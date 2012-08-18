@@ -382,6 +382,14 @@ static inline void dleaf2_init_sentinel(struct sb *sb, struct dleaf2 *dleaf,
 	}
 }
 
+/* Return split key of center for split hint */
+static tuxkey_t dleaf2_split_at_center(struct dleaf2 *dleaf)
+{
+	struct extent ex;
+	get_extent(dleaf->table + from_be_u16(dleaf->count) / 2, &ex);
+	return ex.logical;
+}
+
 /* Write extents */
 static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 			tuxkey_t key_limit,
@@ -467,8 +475,8 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		rest_segs = need - btree->entries_per_leaf;
 		/* Can we write 1 seg at least? */
 		if (rest_segs >= write_segs) {
-			/* FIXME: is there better split position? */
-			if (dex_start + 1 < dex_limit) {
+			/* FIXME: use better split position */
+			if (dex_start + 1 < dex_limit - 1) {
 				get_extent(dex_start + 1, &ex);
 				*split_hint = ex.logical;
 			} else
@@ -478,7 +486,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		/* We can write partially segs and temporary hole */
 		write_segs -= rest_segs;
 #if 1
-		/* Just for debugging */
+		/* Just for debugging below assert() */
 		need -= rest_segs;
 #endif
 		/* Reserve space for temporary hole */
@@ -506,8 +514,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		dex_start++;
 
 		/* Split at half. FIXME: better split position? */
-		get_extent(dleaf->table + from_be_u16(dleaf->count) / 2, &ex);
-		*split_hint = ex.logical;
+		*split_hint = dleaf2_split_at_center(dleaf);
 	}
 	/* Fill sentinel */
 	put_extent(dex_start, sb->version, limit, end_physical);
