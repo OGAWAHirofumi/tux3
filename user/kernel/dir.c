@@ -80,7 +80,7 @@ static inline int tux_match(tux_dirent *entry, const char *const name,
 
 static inline tux_dirent *next_entry(tux_dirent *entry)
 {
-	return (tux_dirent *)((char *)entry + tux_rec_len_from_disk(entry->rec_len));
+	return (void *)entry + tux_rec_len_from_disk(entry->rec_len);
 }
 
 enum {
@@ -156,7 +156,7 @@ loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 				goto create;
 			if (rec_len >= name_len + reclen)
 				goto create;
-			entry = (tux_dirent *)((char *)entry + rec_len);
+			entry = (void *)entry + rec_len;
 		}
 		blockput(buffer);
 	}
@@ -169,7 +169,7 @@ loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 	*size += blocksize;
 create:
 	if (!is_deleted(entry)) {
-		tux_dirent *newent = (tux_dirent *)((char *)entry + name_len);
+		tux_dirent *newent = (void *)entry + name_len;
 		newent->rec_len = tux_rec_len_to_disk(rec_len - name_len);
 		entry->rec_len = tux_rec_len_to_disk(name_len);
 		entry = newent;
@@ -326,8 +326,7 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 		this = next_entry(this);
 	}
 	if (prev)
-		prev->rec_len = tux_rec_len_to_disk((void *)entry +
-		tux_rec_len_from_disk(entry->rec_len) - (void *)prev);
+		prev->rec_len = tux_rec_len_to_disk((void *)next_entry(entry) - (void *)prev);
 	memset(entry->name, 0, entry->name_len);
 	entry->name_len = entry->type = 0;
 	entry->inum = 0;
