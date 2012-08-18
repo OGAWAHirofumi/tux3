@@ -13,7 +13,9 @@
 #define __packed	__attribute__((packed))
 #define __weak		__attribute__((weak))
 
+#ifndef __attribute_const__
 #define __attribute_const__		__attribute__((__const__))
+#endif
 
 #if __GNUC__ < 3
 /* gcc 2.x */
