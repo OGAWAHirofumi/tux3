@@ -19,16 +19,6 @@
 
 #include "trace.h"
 #include "buffer.h"
-
-/*
- * Choose carefully:
- * loff_t can be "long" or "long long" in userland. (not printf friendly)
- * sector_t can be "unsigned long" or "u64". (not printf friendly, and
- * would be hard to control on 32bits arch)
- *
- * we want 48bits for tux3, and error friendly. (FIXME: what is best?)
- */
-typedef signed long long	block_t;
 #endif /* !__KERNEL__ */
 
 #include "link.h"
@@ -624,16 +614,6 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 	return buffer->b_page->mapping->host;
 }
 
-static inline void *bufdata(struct buffer_head *buffer)
-{
-	return buffer->b_data;
-}
-
-static inline size_t bufsize(struct buffer_head *buffer)
-{
-	return buffer->b_size;
-}
-
 static inline block_t bufindex(struct buffer_head *buffer)
 {
 	/*
@@ -646,16 +626,6 @@ static inline block_t bufindex(struct buffer_head *buffer)
 	assert(inode == tux_sb(inode->i_sb)->volmap ||
 	       inode == tux_sb(inode->i_sb)->logmap);
 	return (page_offset(page) + bh_offset(buffer)) >> inode->i_blkbits;
-}
-
-static inline int bufcount(struct buffer_head *buffer)
-{
-	return atomic_read(&buffer->b_count);
-}
-
-static inline int buffer_clean(struct buffer_head *buffer)
-{
-	return !buffer_dirty(buffer) || buffer_uptodate(buffer);
 }
 
 /* dir.c */
@@ -691,29 +661,6 @@ int blockio(int rw, struct buffer_head *buffer, block_t block);
 struct buffer_head *peekblk(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
-
-static inline void blockput(struct buffer_head *buffer)
-{
-	put_bh(buffer);
-}
-
-static inline void blockput_free(struct buffer_head *buffer)
-{
-	/* Untested */
-	WARN_ON(1);
-	bforget(buffer);
-	blockput(buffer);
-}
-
-static inline int buffer_empty(struct buffer_head *buffer)
-{
-	return 1;
-}
-
-static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
-{
-	return buffer;
-}
 
 static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
