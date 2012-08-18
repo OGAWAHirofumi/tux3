@@ -132,7 +132,7 @@ $(TUX3_LIB): $(COMMON_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS)
 $(TEST_BIN) $(TUX3_BIN):
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-$(FUSE_BIN): $(TUX3_LIB) $(MISSING_DEP_DIRS)
+$(FUSE_BIN): tux3fuse.c $(TUX3_LIB) $(MISSING_DEP_DIRS)
 	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c -lfuse -o tux3fuse $(TUX3_LIB)
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
