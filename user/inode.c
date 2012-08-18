@@ -380,6 +380,7 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 	}
 	inum_t inum = from_be_u64(entry->inum);
 	struct inode *inode = iget(sb, inum);
+	assert(PTR_ERR(inode) != -ENOENT);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto error_iget;
