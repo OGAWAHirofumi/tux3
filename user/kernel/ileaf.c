@@ -132,7 +132,6 @@ static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= ibase(leaf));
-	assert(inum < ibase(leaf) + btree->entries_per_leaf);
 	unsigned at = inum - ibase(leaf), size = 0;
 	void *attrs = NULL;
 
@@ -288,10 +287,8 @@ static int ileaf_merge(struct btree *btree, void *vinto, void *vfrom)
 
 inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 {
-	assert(goal >= ibase(leaf));
-	if (goal - ibase(leaf) >= btree->entries_per_leaf)
-		return goal;
 	unsigned at = goal - ibase(leaf);
+	assert(goal >= ibase(leaf));
 
 	if (at < icount(leaf)) {
 		be_u16 *dict = ileaf_dict(btree, leaf);
@@ -388,13 +385,6 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 
 	assert(inum >= ibase(ileaf));
 
-	/*
-	 * Restrict number of inum on a leaf.
-	 * FIXME: we might want more flexible format.
-	 */
-	if (at >= btree->entries_per_leaf)
-		return NULL;
-
 	/* Get existent attributes, and calculate expand/shrink size */
 	if (at + 1 > count) {
 		/* Need to extend dict */
@@ -449,10 +439,11 @@ static tuxkey_t ileaf_split_hint(struct btree *btree, struct ileaf *ileaf,
 	 */
 
 	tuxkey_t base = ibase(ileaf);
-	if (key > base + btree->entries_per_leaf)
+	unsigned count = icount(ileaf);
+	if (key >= base + count)
 		return key & ~(btree->entries_per_leaf - 1);
 
-	return base + icount(ileaf) / 2;
+	return base + count / 2;
 }
 
 static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
