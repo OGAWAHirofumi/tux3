@@ -277,8 +277,44 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 static void tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 			   mode_t mode, dev_t rdev)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct tux_iattr iattr = {
+		.uid	= ctx->uid,
+		.gid	= ctx->gid,
+		.mode	= mode,
+	};
+	struct inode *dir, *inode;
+
+	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o, rdev %llx)",
+	      (L)parent, name, ctx->uid, ctx->gid, mode, (L)rdev);
+
+	dir = tux3fuse_iget(sb, parent);
+	if (IS_ERR(dir)) {
+		inode = dir;
+		goto error;
+	}
+
+	inode = __tuxmknod(dir, name, strlen(name), &iattr, rdev);
+	iput(dir);
+	if (IS_ERR(inode))
+		goto error;
+	assert(inode);
+
+	struct fuse_entry_param ep = {
+		.ino = inode->inum,
+		.generation = 1,
+		.attr_timeout = 0.0,
+		.entry_timeout = 0.0,
+	};
+	tux3fuse_fill_stat(&ep.attr, inode);
+	iput(inode);
+
+	fuse_reply_entry(req, &ep);
+	return;
+
+error:
+	fuse_reply_err(req, -PTR_ERR(inode));
 }
 
 static void tux3fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,

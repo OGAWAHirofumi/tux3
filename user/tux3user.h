@@ -162,6 +162,8 @@ int write_inode(struct inode *inode);
 
 /* namei.c */
 struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
+struct inode *__tuxmknod(struct inode *dir, const char *name, unsigned len,
+			 struct tux_iattr *iattr, dev_t rdev);
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr);
 int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,

@@ -59,8 +59,8 @@ static int tux_check_exist(struct inode *dir, struct qstr *qstr)
 	return 0;
 }
 
-struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
-			struct tux_iattr *iattr)
+struct inode *__tuxmknod(struct inode *dir, const char *name, unsigned len,
+			 struct tux_iattr *iattr, dev_t rdev)
 {
 	struct dentry dentry = {
 		.d_name.name = (unsigned char *)name,
@@ -68,11 +68,27 @@ struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 	};
 	int err;
 
+	err = __tux3_mknod(dir, &dentry, iattr, rdev);
+	if (err)
+		return ERR_PTR(err);
+
+	return dentry.d_inode;
+}
+
+struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
+			struct tux_iattr *iattr)
+{
+	struct qstr qstr = {
+		.name = (unsigned char *)name,
+		.len = len,
+	};
+	int err;
+
 	/*
 	 * FIXME: we can find space with existent check
 	 */
 
-	err = tux_check_exist(dir, &dentry.d_name);
+	err = tux_check_exist(dir, &qstr);
 	if (err) {
 		if (err == -EEXIST) {
 			// should allow create of a file that already exists!!!
@@ -80,11 +96,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 		return ERR_PTR(err);
 	}
 
-	err = __tux3_mknod(dir, &dentry, iattr, 0);
-	if (err)
-		return ERR_PTR(err);
-
-	return dentry.d_inode;
+	return __tuxmknod(dir, name, len, iattr, 0);
 }
 
 int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
