@@ -820,13 +820,15 @@ static int tux3_da_write_begin(struct file *file, struct address_space *mapping,
 	return ret;
 }
 
+#include "filemap_blocklib.c"
+
 static int tux3_da_write_end(struct file *file, struct address_space *mapping,
 			     loff_t pos, unsigned len, unsigned copied,
 			     struct page *page, void *fsdata)
 {
 	int ret;
 
-	ret = generic_write_end(file, mapping, pos, len, copied, page, fsdata);
+	ret = tux3_write_end(file, mapping, pos, len, copied, page, fsdata);
 	if (ret < len)
 		tux3_write_failed(mapping, pos + len);
 	return ret;
