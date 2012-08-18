@@ -32,17 +32,38 @@ struct replay_info {
 	block_t blocknrs[];	/* block address of log blocks */
 };
 
-static void *find_log_rollup(struct logblock *log)
+static int replay_check_log(struct sb *sb, struct buffer_head *logbuf,
+			    struct replay_info *info)
 {
+	struct logblock *log = bufdata(logbuf);
 	unsigned char *data = log->data;
+
+	if (log->magic != to_be_u16(TUX3_MAGIC_LOG)) {
+		warn("bad log magic %x", from_be_u16(log->magic));
+		return -EINVAL;
+	}
+	if (from_be_u16(log->bytes) + sizeof(*log) > sb->blocksize) {
+		warn("log bytes is too big");
+		return -EINVAL;
+	}
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data;
-		if (code == LOG_ROLLUP)
-			return data;
+
+		/* Find latest rollup. */
+		if (code == LOG_ROLLUP && info->rollup_index == -1) {
+			info->rollup_pos = data;
+			info->rollup_index = bufindex(logbuf);
+		}
+
+		if (log_size[code] == 0) {
+			warn("invalid log code: 0x%02x", code);
+			return -EINVAL;
+		}
 		data += log_size[code];
 	}
-	return NULL;
+
+	return 0;
 }
 
 /* Prepare log info for replay and pin logblocks. */
@@ -66,6 +87,8 @@ static struct replay_info *replay_prepare(struct sb *sb)
 	trace("load %u logblocks", logcount);
 	i = logcount;
 	while (i-- > 0) {
+		struct logblock *log;
+
 		buffer = blockget(mapping(sb->logmap), i);
 		if (!buffer) {
 			err = -ENOMEM;
@@ -78,23 +101,16 @@ static struct replay_info *replay_prepare(struct sb *sb)
 			goto error;
 		}
 
-		struct logblock *log = bufdata(buffer);
-		if (log->magic != to_be_u16(TUX3_MAGIC_LOG)) {
-			warn("bad log magic %x", from_be_u16(log->magic));
+		err = replay_check_log(sb, buffer, info);
+		if (err) {
 			blockput(buffer);
-			err = -EINVAL;
 			goto error;
 		}
 
-		/* Find latest rollup (Note: LOG_ROLLUP is first record). */
-		if (info->rollup_index == -1) {
-			info->rollup_pos = find_log_rollup(log);
-			if (info->rollup_pos)
-				info->rollup_index = bufindex(buffer);
-		}
 		/* Store index => blocknr map */
 		info->blocknrs[bufindex(buffer)] = logchain;
 
+		log = bufdata(buffer);
 		logchain = from_be_u64(log->logchain);
 	}
 
