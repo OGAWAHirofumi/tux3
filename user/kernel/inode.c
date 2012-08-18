@@ -594,8 +594,11 @@ void tux3_evict_inode(struct inode *inode)
 			if (err)
 				goto error;
 		}
-		/* FIXME: we have to free dtree-root, atable entry, etc too */
 		err = free_empty_btree(&tux_inode(inode)->btree);
+		if (err)
+			goto error;
+
+		err = xcache_remove_all(inode);
 		if (err)
 			goto error;
 

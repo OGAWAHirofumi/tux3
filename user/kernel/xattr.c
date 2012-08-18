@@ -584,6 +584,34 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data,
 	return 0;
 }
 
+/* Inode is going to purge, remove xattrs */
+int xcache_remove_all(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct xcache *xcache = tux_inode(inode)->xcache;
+
+	if (xcache) {
+		struct xattr *xattr = xcache->xattrs;
+		struct xattr *limit = xcache_limit(xcache);
+		while (xattr < limit) {
+			/*
+			 * FIXME: Inode is going to purse, what to do
+			 * if error ?
+			 */
+			int err = atomref(sb->atable, xattr->atom, -1);
+			if (err)
+				return err;
+
+			xattr = xcache_next(xattr);
+		}
+		assert(xattr == limit);
+	}
+
+	free_xcache(inode);
+
+	return 0;
+}
+
 int get_xattr(struct inode *inode, const char *name, unsigned len, void *data,
 	      unsigned size)
 {

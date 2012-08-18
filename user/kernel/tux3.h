@@ -1037,6 +1037,7 @@ void atable_init_base(struct sb *sb);
 int xcache_dump(struct inode *inode);
 void free_xcache(struct inode *inode);
 int new_xcache(struct inode *inode, unsigned size);
+int xcache_remove_all(struct inode *inode);
 int get_xattr(struct inode *inode, const char *name, unsigned len,
 	      void *data, unsigned size);
 int set_xattr(struct inode *inode, const char *name, unsigned len,
