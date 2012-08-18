@@ -63,10 +63,11 @@ static int replay_load_logblocks(struct sb *sb)
 	return 0;
 }
 
+typedef int (*replay_log_func_t)(struct sb *, struct logblock *, block_t);
+
 /* Replay physical update like bnode, etc. */
-static int replay_log_stage1(struct sb *sb)
+static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 {
-	struct logblock *log = bufdata(sb->logbuf);
 	unsigned char *data = log->data;
 	int err;
 
@@ -137,11 +138,18 @@ static int replay_log_stage1(struct sb *sb)
 }
 
 /* Replay logical update like bitmap data pages, etc. */
-static int replay_log_stage2(struct sb *sb)
+static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 {
-	struct logblock *log = bufdata(sb->logbuf);
 	unsigned char *data = log->data;
 	int err;
+
+	/* log block address itself works as balloc log */
+	trace("LOG BLOCK: logblock %Lx", (L)blknr);
+	err = replay_update_bitmap(sb, blknr, 1, 1);
+	if (err)
+		return err;
+	/* FIXME: make defree entires for logblock */
+	/* defer_bfree(&sb->new_decycle, blknr, 1); */
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
@@ -195,20 +203,46 @@ static int replay_log_stage2(struct sb *sb)
 	return 0;
 }
 
-static int replay_logblocks(struct sb *sb, int (*replay_log_func)(struct sb *))
+static int replay_logblocks(struct sb *sb, replay_log_func_t replay_log_func)
 {
-	unsigned logcount = from_be_u32(sb->super.logcount);
+	unsigned i, logcount = from_be_u32(sb->super.logcount);
+	block_t logchain, *array;
 	int err = 0;
 
+	/* FIXME: this address array is quick hack. Rethink about log
+	 * block management and log block address. */
+	array = malloc(logcount * sizeof(block_t));
+	if (!array)
+		return -ENOMEM;
+
+	logchain = sb->logchain;
+	i = logcount;
+	while (i--) {
+		array[i] = logchain;
+
+		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
+		if (!buffer) {
+			err = -ENOMEM;
+			goto out;
+		}
+		struct logblock *log = bufdata(buffer);
+		logchain = from_be_u64(log->logchain);
+		blockput(buffer);
+	}
+
 	for (sb->lognext = 0; sb->lognext < logcount;) {
-		trace("log block %i", sb->lognext);
+		block_t blocknr = array[sb->lognext];
+		trace("log block %i, blocknr %Lx", sb->lognext, (L)blocknr);
 		log_next(sb);
-		err = replay_log_func(sb);
+		err = replay_log_func(sb, bufdata(sb->logbuf), blocknr);
 		log_drop(sb);
 
 		if (err)
 			break;
 	}
+
+out:
+	free(array);
 
 	return err;
 }
