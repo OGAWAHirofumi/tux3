@@ -451,7 +451,6 @@ int flush_list(struct list_head *list)
 		assert(buffer_dirty(buffer));
 		if ((err = buffer->map->io(buffer, 1)))
 			break;
-		assert(buffer_clean(buffer));
 	}
 	return err;
 }
