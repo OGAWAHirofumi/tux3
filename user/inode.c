@@ -121,7 +121,7 @@ static int evict_inode(struct inode *inode)
 		if (err)
 			goto error;
 
-		err = purge_inum(inode);
+		err = purge_inode(inode);
 		if (err)
 			goto error;
 	}
@@ -367,7 +367,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 
 	int err = tux_create_dirent(dir, name, len, tux_inode(inode)->inum, iattr->mode);
 	if (err) {
-		purge_inum(inode);
+		purge_inode(inode);
 		iput(inode);
 		return ERR_PTR(err);
 	}

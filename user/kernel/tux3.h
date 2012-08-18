@@ -915,6 +915,7 @@ extern struct btree_ops itable_ops;
 struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
 void del_defer_alloc_inum(struct inode *inode);
+int purge_inum(struct btree *btree, inum_t inum);
 
 /* log.c */
 extern unsigned log_size[];

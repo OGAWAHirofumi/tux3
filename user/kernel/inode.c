@@ -370,11 +370,38 @@ out:
 	return err;
 }
 
+int purge_inum(struct btree *btree, inum_t inum)
+{
+	struct cursor *cursor;
+	int err;
+
+	cursor = alloc_cursor(btree, 0);
+	if (!cursor)
+		return -ENOMEM;
+
+	down_write(&cursor->btree->lock);
+	err = btree_probe(cursor, inum);
+	if (!err) {
+		err = cursor_redirect(cursor);
+		if (!err) {
+			struct ileaf *ileaf;
+			/* FIXME: truncate the bnode and leaf if empty. */
+			ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
+			ileaf_purge(btree, inum, ileaf);
+			mark_buffer_dirty_non(cursor_leafbuf(cursor));
+		}
+		release_cursor(cursor);
+	}
+	up_write(&cursor->btree->lock);
+	free_cursor(cursor);
+	return err;
+}
+
 /*
  * NOTE: clear_inode() for this inode is already done. This shouldn't
  * use generic part of inode basically.
  */
-static int purge_inum(struct inode *inode)
+static int purge_inode(struct inode *inode)
 {
 	struct btree *itable = itable_btree(tux_sb(inode->i_sb));
 
@@ -386,25 +413,7 @@ static int purge_inum(struct inode *inode)
 	}
 	up_write(&itable->lock);
 
-	struct cursor *cursor = alloc_cursor(itable, 0);
-	if (!cursor)
-		return -ENOMEM;
-
-	inum_t inum = tux_inode(inode)->inum;
-	int err;
-	down_write(&cursor->btree->lock);
-	if (!(err = btree_probe(cursor, inum))) {
-		if (!(err = cursor_redirect(cursor))) {
-			/* FIXME: truncate the bnode and leaf if empty. */
-			struct ileaf *ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
-			ileaf_purge(itable, inum, ileaf);
-			mark_buffer_dirty_non(cursor_leafbuf(cursor));
-		}
-		release_cursor(cursor);
-	}
-	up_write(&cursor->btree->lock);
-	free_cursor(cursor);
-	return err;
+	return purge_inum(itable, tux_inode(inode)->inum);
 }
 
 #ifdef __KERNEL__
@@ -467,7 +476,7 @@ void tux3_delete_inode(struct inode *inode)
 
 	/* clear_inode() before freeing this ino. */
 	clear_inode(inode);
-	purge_inum(inode);
+	purge_inode(inode);
 	change_end(sb);
 }
 
