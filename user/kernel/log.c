@@ -137,21 +137,25 @@ static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
 	log_end(sb, encode48(data, block));
 }
 
+/* balloc() until next rollup */
 void log_balloc(struct sb *sb, block_t block, unsigned count)
 {
 	log_extent(sb, LOG_BALLOC, block, count);
 }
 
+/* Defered bfree() */
 void log_bfree(struct sb *sb, block_t block, unsigned count)
 {
 	log_extent(sb, LOG_BFREE, block, count);
 }
 
+/* Defered bfree() until after next rollup */
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 {
 	log_extent(sb, LOG_BFREE_ON_ROLLUP, block, count);
 }
 
+/* Same with log_bfree() (re-logged log_bfree_on_rollup() on rollup) */
 void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
 {
 	log_extent(sb, LOG_BFREE_RELOG, block, count);
@@ -166,16 +170,29 @@ static void log_redirect(struct sb *sb, u8 intent, block_t oldblock, block_t new
 	log_end(sb, encode48(data, newblock));
 }
 
+/*
+ * 1. balloc(newblock) until next rollup
+ * 2. Defered bfree(oldblock)
+ */
 void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
 	log_redirect(sb, LOG_LEAF_REDIRECT, oldblock, newblock);
 }
 
+/*
+ * 1. Redirect from oldblock to newblock
+ * 2. balloc(newblock) until next rollup
+ * 2. Defered bfree(oldblock) until after next rollup
+ */
 void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
 	log_redirect(sb, LOG_BNODE_REDIRECT, oldblock, newblock);
 }
 
+/*
+ * 1. Construct root buffer until next rollup
+ * 2. balloc(root) until next rollup
+ */
 /* The left key should always be 0 on new root */
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 		    block_t left, block_t right, tuxkey_t rkey)
@@ -191,6 +208,11 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 	log_end(sb, encode48(data, rkey));
 }
 
+/*
+ * 1. Split bnode from src to dest until next rollup
+ * 2. balloc(dest) until next rollup
+ * (src buffer must be dirty already)
+ */
 void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest)
 {
 	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_SPLIT]);
@@ -211,16 +233,25 @@ static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t ch
 	log_end(sb, encode48(data, key));
 }
 
+/*
+ * Insert new record (child, key) to parent until next rollup
+ * (parent buffer must be dirty already)
+ */
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	log_bnode_entry(sb, LOG_BNODE_ADD, parent, child, key);
 }
 
+/*
+ * Update block of "key" entry by child on parent until next rollup
+ * (parent buffer must be dirty already)
+ */
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	log_bnode_entry(sb, LOG_BNODE_UPDATE, parent, child, key);
 }
 
+/* Current freeblocks on rollup */
 void log_freeblocks(struct sb *sb, block_t freeblocks)
 {
 	unsigned char *data = log_begin(sb, log_size[LOG_FREEBLOCKS]);
@@ -235,11 +266,13 @@ static void log_intent(struct sb *sb, u8 intent)
 	log_end(sb, data);
 }
 
+/* Log to know where is new rollup cycle  */
 void log_rollup(struct sb *sb)
 {
 	log_intent(sb, LOG_ROLLUP);
 }
 
+/* Just add log record as delta mark (for debugging) */
 void log_delta(struct sb *sb)
 {
 	log_intent(sb, LOG_DELTA);
