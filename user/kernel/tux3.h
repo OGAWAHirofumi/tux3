@@ -659,6 +659,7 @@ int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs,
 int devio(int rw, struct block_device *dev, loff_t offset, void *data,
 	  unsigned len);
 int blockio(int rw, struct buffer_head *buffer, block_t block);
+int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 
 /* temporary hack for buffer */
 struct buffer_head *peekblk(struct address_space *mapping, block_t iblock);

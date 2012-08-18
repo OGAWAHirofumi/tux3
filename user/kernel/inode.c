@@ -778,9 +778,10 @@ static void tux_setup_inode(struct inode *inode)
 		gfp_t gfp_mask = GFP_USER;
 
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
-		if (inum == TUX_VOLMAP_INO)
+		if (inum == TUX_VOLMAP_INO) {
 			inode->i_mapping->a_ops = &tux_vol_aops;
-		else {
+			tux_inode(inode)->io = tux3_volmap_io;
+		} else {
 			/* set fake i_size to escape the check of block_* */
 			inode->i_size = MAX_LFS_FILESIZE;
 			inode->i_mapping->a_ops = &tux_blk_aops;

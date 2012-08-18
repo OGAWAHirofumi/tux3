@@ -256,3 +256,17 @@ error:
 
 	return err;
 }
+
+/*
+ * I/O helper for physical index buffers (e.g. buffers on volmap)
+ */
+int tux3_volmap_io(int rw, struct bufvec *bufvec)
+{
+	block_t physical = bufvec_first_index(bufvec);
+	unsigned count = bufvec_count(bufvec);
+
+	/* FIXME: For now, this is only for write */
+	assert(rw == WRITE);
+
+	return blockio_vec(rw, bufvec, physical, count);
+}

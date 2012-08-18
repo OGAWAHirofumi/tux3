@@ -140,5 +140,6 @@ static inline block_t bufvec_last_index(struct bufvec *bufvec)
 
 int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count);
 int flush_list(struct list_head *head);
+int tux3_volmap_io(int rw, struct bufvec *bufvec);
 #endif /* !__KERNEL__ */
 #endif /* !TUX3_BUFFER_H */

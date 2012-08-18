@@ -60,6 +60,39 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 	return syncio(rw, sb_dev(sb), block << sb->blockbits, 1, &vec);
 }
 
+/*
+ * bufvec based I/O.  This takes the bufvec has contiguous range, and
+ * will submit the count of buffers to block (physical address).
+ *
+ * If there was I/O error, it would be handled in ->bi_end_bio()
+ * completion.
+ */
+int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count)
+{
+	int ret = 0;
+
+	while (ret == 0 && count > 0) {
+		ret = bufvec_prepare_io(bufvec, block, count);
+		if (ret > 0) {
+			struct bio *bio = bufvec->bio;
+			bufvec->bio = NULL;
+			block += ret;
+			count -= ret;
+			ret = 0;
+
+			bio_get(bio);
+			submit_bio(rw, bio);
+
+			if (bio_flagged(bio, BIO_EOPNOTSUPP))
+				ret = -EOPNOTSUPP;
+
+			bio_put(bio);
+		}
+	}
+
+	return ret;
+}
+
 void hexdump(void *data, unsigned size)
 {
 	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_ADDRESS, 16, 1, data, size, 1);
