@@ -180,6 +180,17 @@ static void tux3fuse_fill_stat(struct stat *stat, struct inode *inode)
 	};
 }
 
+static void tux3fuse_fill_ep(struct fuse_entry_param *ep, struct inode *inode)
+{
+	*ep = (struct fuse_entry_param){
+		.ino		= inode->inum,
+		.generation	= 1,
+		.attr_timeout	= 0.0,
+		.entry_timeout	= 0.0,
+	};
+	tux3fuse_fill_stat(&ep->attr, inode);
+}
+
 static void tux3fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	trace("(%Lx, '%s')", (L)parent, name);
@@ -199,14 +210,8 @@ static void tux3fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		return;
 	}
 
-	struct fuse_entry_param ep = {
-		.ino = inode->inum,
-		.generation = 1,
-		.attr_timeout = 0.0,
-		.entry_timeout = 0.0,
-	};
-	tux3fuse_fill_stat(&ep.attr, inode);
-
+	struct fuse_entry_param ep;
+	tux3fuse_fill_ep(&ep, inode);
 	iput(inode);
 
 	fuse_reply_entry(req, &ep);
@@ -274,8 +279,8 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	fuse_reply_attr(req, &stbuf, 0.0);
 }
 
-static void tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
-			   mode_t mode, dev_t rdev)
+static struct inode *__tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent,
+				      const char *name, mode_t mode, dev_t rdev)
 {
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct sb *sb = tux3fuse_get_sb(req);
@@ -286,74 +291,56 @@ static void tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 	};
 	struct inode *dir, *inode;
 
-	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o, rdev %llx)",
-	      (L)parent, name, ctx->uid, ctx->gid, mode, (L)rdev);
-
 	dir = tux3fuse_iget(sb, parent);
-	if (IS_ERR(dir)) {
-		inode = dir;
-		goto error;
-	}
+	if (IS_ERR(dir))
+		return dir;
 
 	inode = __tuxmknod(dir, name, strlen(name), &iattr, rdev);
 	iput(dir);
-	if (IS_ERR(inode))
-		goto error;
-	assert(inode);
+	return inode;
+}
 
-	struct fuse_entry_param ep = {
-		.ino = inode->inum,
-		.generation = 1,
-		.attr_timeout = 0.0,
-		.entry_timeout = 0.0,
-	};
-	tux3fuse_fill_stat(&ep.attr, inode);
+static void tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+			   mode_t mode, dev_t rdev)
+{
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	struct inode *inode;
+
+	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o, rdev %llx)",
+	      (L)parent, name, ctx->uid, ctx->gid, mode, (L)rdev);
+
+	inode = __tux3fuse_mknod(req, parent, name, mode, rdev);
+	if (IS_ERR(inode)) {
+		fuse_reply_err(req, -PTR_ERR(inode));
+		return;
+	}
+
+	struct fuse_entry_param ep;
+	tux3fuse_fill_ep(&ep, inode);
 	iput(inode);
 
 	fuse_reply_entry(req, &ep);
-	return;
-
-error:
-	fuse_reply_err(req, -PTR_ERR(inode));
 }
 
 static void tux3fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 			   mode_t mode)
 {
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
-	struct sb *sb = tux3fuse_get_sb(req);
-	struct inode *dir, *inode;
-	struct tux_iattr iattr = {
-		.uid	= ctx->uid,
-		.gid	= ctx->gid,
-		.mode	= S_IFDIR | mode,
-	};
+	struct inode *inode;
 
 	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o)",
 	      (L)parent, name, ctx->uid, ctx->gid, mode);
 
-	dir = tux3fuse_iget(sb, parent);
-	if (IS_ERR(dir)) {
-		fuse_reply_err(req, -PTR_ERR(dir));
-		return;
-	}
-
-	inode = tuxcreate(dir, name, strlen(name), &iattr);
-	iput(dir);
+	inode = __tux3fuse_mknod(req, parent, name, S_IFDIR | mode, 0);
 	if (IS_ERR(inode)) {
 		fuse_reply_err(req, -PTR_ERR(inode));
 		return;
 	}
 
-	struct fuse_entry_param ep = {
-		.ino = inode->inum,
-		.generation = 1,
-		.attr_timeout = 0.0,
-		.entry_timeout = 0.0,
-	};
-	tux3fuse_fill_stat(&ep.attr, inode);
-
+	struct fuse_entry_param ep;
+	tux3fuse_fill_ep(&ep, inode);
 	iput(inode);
+
 	fuse_reply_entry(req, &ep);
 }
 
@@ -361,37 +348,19 @@ static void tux3fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			    mode_t mode, struct fuse_file_info *fi)
 {
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
-	struct sb *sb = tux3fuse_get_sb(req);
-	struct inode *dir, *inode;
-	struct tux_iattr iattr = {
-		.uid	= ctx->uid,
-		.gid	= ctx->gid,
-		.mode	= mode,
-	};
+	struct inode *inode;
 
 	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o)",
 	      (L)parent, name, ctx->uid, ctx->gid, mode);
 
-	dir = tux3fuse_iget(sb, parent);
-	if (IS_ERR(dir)) {
-		fuse_reply_err(req, -PTR_ERR(dir));
-		return;
-	}
-
-	inode = tuxcreate(dir, name, strlen(name), &iattr);
-	iput(dir);
+	inode = __tux3fuse_mknod(req, parent, name, mode, 0);
 	if (IS_ERR(inode)) {
 		fuse_reply_err(req, -PTR_ERR(inode));
 		return;
 	}
 
-	struct fuse_entry_param ep = {
-		.ino = inode->inum,
-		.generation = 1,
-		.attr_timeout = 0.0,
-		.entry_timeout = 0.0,
-	};
-	tux3fuse_fill_stat(&ep.attr, inode);
+	struct fuse_entry_param ep;
+	tux3fuse_fill_ep(&ep, inode);
 
 	fi->fh = (uint64_t)(unsigned long)inode;
 	fuse_reply_create(req, &ep, fi);
