@@ -249,13 +249,25 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 				return err;
 			break;
 		}
+		case LOG_BNODE_ADJUST:
+		{
+			u64 bnode, from, to;
+			data = decode48(data, &bnode);
+			data = decode48(data, &from);
+			data = decode48(data, &to);
+			trace("%s: bnode 0x%Lx, from 0x%Lx, to 0x%Lx",
+			      log_name[code], (L)bnode, (L)from, (L)to);
+			err = replay_bnode_adjust(sb, bnode, from, to);
+			if (err)
+				return err;
+			break;
+		}
 		case LOG_BALLOC:
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
 		case LOG_BNODE_MERGE:
-		case LOG_BNODE_ADJUST:
 		case LOG_FREEBLOCKS:
 		case LOG_ROLLUP:
 		case LOG_DELTA:

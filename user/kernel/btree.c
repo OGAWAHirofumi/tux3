@@ -1238,3 +1238,15 @@ int replay_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
 {
 	return replay_bnode_change(sb, bnode, key, count, del_func);
 }
+
+static void adjust_func(struct bnode *bnode, u64 from, u64 to)
+{
+	struct index_entry *entry = bnode_lookup(bnode, from);
+	assert(from_be_u64(entry->key) == from);
+	entry->key = to_be_u64(to);
+}
+
+int replay_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to)
+{
+	return replay_bnode_change(sb, bnode, from, to, adjust_func);
+}
