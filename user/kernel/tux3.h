@@ -826,6 +826,7 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey);
 
 /* commit.c */
+extern int (*reserve_blocks_callback)(struct sb *sb);
 int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
 int load_itable(struct sb *sb);

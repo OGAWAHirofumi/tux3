@@ -135,6 +135,22 @@ struct inode *iget_or_create_inode(struct sb *sb, inum_t inum)
 	return inode;
 }
 
+static int reserve_superblock(struct sb *sb)
+{
+	trace("reserve superblock");
+	/* Always 8K regardless of blocksize */
+	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
+	for (int i = 0; i < reserve; i++) {
+		block_t block = balloc_from_range(sb, i, 1, 1);
+		if (block == -1)
+			return -ENOSPC; // fix error code ???
+		log_balloc(sb, block, 1);
+		trace("reserve %Lx", (L)block);
+	}
+
+	return 0;
+}
+
 int make_tux3(struct sb *sb)
 {
 	int err;
@@ -153,15 +169,12 @@ int make_tux3(struct sb *sb)
 		goto eek;
 	}
 
-	trace("reserve superblock");
-	/* Always 8K regardless of blocksize */
-	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
-	for (int i = 0; i < reserve; i++) {
-		block_t block = balloc_from_range(sb, i, 1, 1);
-		if (block == -1)
-			goto eek;
-		trace("reserve %Lx", (L)block); // error ???
-	}
+#ifdef ATOMIC
+	reserve_blocks_callback = reserve_superblock;
+#else
+	if (reserve_superblock(sb) < 0)
+		goto eek;
+#endif
 
 	trace("create version table");
 	sb->vtable = create_internal_inode(sb, TUX_VTABLE_INO, NULL);

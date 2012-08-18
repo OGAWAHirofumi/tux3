@@ -9,6 +9,32 @@
 #define trace trace_on
 #endif
 
+/*
+ * Reserving blocks is a bit tricky. We want to reserve the blocks
+ * early before being grabbed by others.  But allocating blocks for
+ * this delta must be after sb->delta (or ->rollup) increment.
+ * Otherwise, rollup and delta may write the both of bitmap data and
+ * balloc log in this commit.
+ *
+ * So, this provide the callback to do it.
+ */
+#if !defined(__KERNEL__) && defined(ATOMIC)
+int (*reserve_blocks_callback)(struct sb *sb) = NULL;
+#endif
+
+static int call_reserve_blocks(struct sb *sb)
+{
+#if !defined(__KERNEL__) && defined(ATOMIC)
+	if (reserve_blocks_callback) {
+		int err = reserve_blocks_callback(sb);
+		if (err)
+			return err;
+		reserve_blocks_callback = NULL;
+	}
+#endif
+	return 0;
+}
+
 int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
@@ -161,6 +187,10 @@ static int rollup_log(struct sb *sb)
 	/* move deferred frees for rollup to delta deferred free list */
 	unstash(sb, &sb->derollup, move_deferred);
 
+	int err = call_reserve_blocks(sb);
+	if (err)
+		return err;
+
 	/* bnode blocks */
 	flush_buffer_list(sb, &sb->pinned);
 
@@ -281,6 +311,11 @@ static int do_commit(struct sb *sb, int can_rollup)
 		if (err)
 			return err;
 	}
+
+	err = call_reserve_blocks(sb);
+	if (err)
+		return err;
+
 	stage_delta(sb);
 	write_log(sb);
 	commit_delta(sb);
