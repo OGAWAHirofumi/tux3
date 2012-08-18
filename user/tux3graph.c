@@ -655,11 +655,6 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree,
 typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
 				  inum_t, u16);
 
-static inline be_u16 *ileaf_dict(struct btree *btree, struct ileaf *ileaf)
-{
-	return (void *)ileaf + btree->sb->blocksize;
-}
-
 static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 {
 	int size = __atdict(dict, at + 1) - atdict(dict, at);

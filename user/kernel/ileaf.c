@@ -31,6 +31,11 @@ struct ileaf {
  * leaf->ibase, the base inum of the table block.
  */
 
+static inline be_u16 *ileaf_dict(struct btree *btree, struct ileaf *ileaf)
+{
+	return (void *)ileaf + btree->sb->blocksize;
+}
+
 static inline unsigned __atdict(be_u16 *dict, unsigned at)
 {
 	assert(at);
@@ -76,11 +81,11 @@ static int ileaf_sniff(struct btree *btree, vleaf *leaf)
 	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
 }
 
-static unsigned ileaf_need(struct btree *btree, vleaf *vleaf)
+static unsigned ileaf_need(struct btree *btree, void *vleaf)
 {
-	be_u16 *dict = vleaf + btree->sb->blocksize;
-	unsigned count = icount(to_ileaf(vleaf));
-
+	struct ileaf *ileaf = vleaf;
+	be_u16 *dict = ileaf_dict(btree, ileaf);
+	unsigned count = icount(ileaf);
 	return atdict(dict, count) + count * sizeof(*dict);
 }
 
@@ -93,10 +98,9 @@ static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 {
 	if (!tux3_trace)
 		return;
-	struct sb *sb = btree->sb;
 	struct ileaf *leaf = vleaf;
 	inum_t inum = ibase(leaf);
-	be_u16 *dict = vleaf + sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, leaf);
 	unsigned offset = 0;
 
 	printf("inode table block 0x%Lx/%i (%x bytes free)\n", (L)ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
@@ -133,7 +137,7 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 
 	trace("lookup inode 0x%Lx, %Lx + %x", (L)inum, (L)ibase(leaf), at);
 	if (at < icount(leaf)) {
-		be_u16 *dict = (void *)leaf + btree->sb->blocksize;
+		be_u16 *dict = ileaf_dict(btree, leaf);
 		unsigned offset = atdict(dict, at);
 		if ((size = __atdict(dict, at + 1) - offset))
 			attrs = leaf->table + offset;
@@ -144,7 +148,7 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 
 static int isinorder(struct btree *btree, struct ileaf *leaf)
 {
-	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, leaf);
 
 	for (int i = 0, offset = 0, limit; i < icount(leaf); i++, offset = limit)
 		if ((limit = __atdict(dict, i + 1)) < offset)
@@ -171,7 +175,7 @@ eek:
 
 static void ileaf_trim(struct btree *btree, struct ileaf *leaf)
 {
-	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, leaf);
 	unsigned count = icount(leaf);
 
 	while (count > 1 && *(dict - count) == *(dict - count + 1))
@@ -188,7 +192,8 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
-	be_u16 *dict = from + btree->sb->blocksize, *destdict = into + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, from);
+	be_u16 *destdict = ileaf_dict(btree, into);
 
 #ifdef SPLIT_AT_INUM
 	/*
@@ -248,8 +253,8 @@ static int ileaf_merge(struct btree *btree, void *vinto, void *vfrom)
 	unsigned count = icount(into);
 	int hole = fromibase - ibase(into) + count;
 
-	be_u16 *dict = (void *)into + btree->sb->blocksize;
-	be_u16 *fromdict = (void *)from + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, into);
+	be_u16 *fromdict = ileaf_dict(btree, from);
 	int need_size = hole * sizeof(*dict) + ileaf_need(btree, from);
 
 	if (ileaf_free(btree, into) < need_size)
@@ -288,7 +293,7 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsig
 	if (inum - ibase(leaf) >= btree->entries_per_leaf)
 		return NULL;
 
-	be_u16 *dict = base + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, leaf);
 	unsigned at = inum - ibase(leaf);
 	unsigned count = icount(leaf);
 	unsigned extend_empty = at < count ? 0 : at - count + 1;
@@ -321,7 +326,7 @@ inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 	unsigned at = goal - ibase(leaf);
 
 	if (at < icount(leaf)) {
-		be_u16 *dict = (void *)leaf + btree->sb->blocksize;
+		be_u16 *dict = ileaf_dict(btree, leaf);
 		unsigned offset = atdict(dict, at);
 		for (; at < icount(leaf); at++) {
 			unsigned limit = __atdict(dict, at + 1);
@@ -337,7 +342,7 @@ int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
 		    int (*func)(struct btree *, inum_t, void *, u16, void *),
 		    void *func_data)
 {
-	be_u16 *dict = (void *)ileaf + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, ileaf);
 	int at, offset;
 
 	offset = 0;
@@ -365,7 +370,7 @@ void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 {
 	assert(inum >= ibase(leaf));
 	assert(inum - ibase(leaf) < btree->entries_per_leaf);
-	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
+	be_u16 *dict = ileaf_dict(btree, leaf);
 	unsigned at = inum - ibase(leaf);
 	unsigned offset = atdict(dict, at);
 	unsigned size = __atdict(dict, at + 1) - offset;
