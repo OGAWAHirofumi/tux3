@@ -148,6 +148,7 @@ void tux_dump_entries(struct buffer_head *buffer);
 /* filemap.c */
 int filemap_extent_io(struct buffer_head *buffer, int write);
 int write_bitmap(struct buffer_head *buffer);
+int page_symlink(struct inode *inode, const char *symname, int len);
 
 /* inode.c */
 void __iget(struct inode *inode);

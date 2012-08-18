@@ -161,3 +161,17 @@ int write_bitmap(struct buffer_head *buffer)
 		clean_buffer(buffer);
 	return 0;
 }
+
+int page_symlink(struct inode *inode, const char *symname, int len)
+{
+	struct file file = { .f_inode = inode, };
+	int ret;
+
+	assert(inode->i_size == 0);
+	ret = tuxwrite(&file, symname, len);
+	if (ret < 0)
+		return ret;
+	if (len != ret)
+		return -EIO;
+	return 0;
+}

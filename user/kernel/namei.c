@@ -6,11 +6,6 @@
 
 #include "tux3.h"
 
-int page_symlink(struct inode *inode, const char *symname, int len)
-{
-	return 0;
-}
-
 static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 				  struct nameidata *nd)
 {
