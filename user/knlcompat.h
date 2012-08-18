@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <limits.h>
+#include <endian.h>
 #include "list.h"
 #include "err.h"
 #include "lockdebug.h"
@@ -90,8 +91,6 @@ typedef uint64_t u64;
 
 #define BITS_PER_LONG		LONG_BIT	/* SuS define this */
 #define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
-#define find_first_bit(addr, size) find_next_bit((addr), (size), 0)
-#define find_first_zero_bit(addr, size) find_next_zero_bit((addr), (size), 0)
 
 /**
  * __ffs - find first bit in word.
@@ -133,8 +132,31 @@ static __always_inline unsigned long __ffs(unsigned long word)
 
 unsigned long find_next_bit(const unsigned long *addr, unsigned long size,
 			    unsigned long offset);
+#define find_first_bit(addr, size) find_next_bit((addr), (size), 0)
 unsigned long find_next_zero_bit(const unsigned long *addr, unsigned long size,
 				 unsigned long offset);
+#define find_first_zero_bit(addr, size) find_next_zero_bit((addr), (size), 0)
+
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define BITOP_LE_SWIZZLE	0
+static inline unsigned long find_next_zero_bit_le(const void *addr,
+		unsigned long size, unsigned long offset)
+{
+	return find_next_zero_bit(addr, size, offset);
+}
+
+static inline unsigned long find_next_bit_le(const void *addr,
+		unsigned long size, unsigned long offset)
+{
+	return find_next_bit(addr, size, offset);
+}
+#elif __BYTE_ORDER == __BIG_ENDIAN
+#define BITOP_LE_SWIZZLE	((BITS_PER_LONG-1) & ~0x7)
+extern unsigned long find_next_zero_bit_le(const void *addr,
+		unsigned long size, unsigned long offset);
+extern unsigned long find_next_bit_le(const void *addr,
+		unsigned long size, unsigned long offset);
+#endif /* !__BIG_ENDIAN */
 
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL

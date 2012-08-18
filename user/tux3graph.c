@@ -295,12 +295,12 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 		assert(buffer);
 		data = bufdata(buffer);
 
-		idx = find_first_bit(data, size);
+		idx = find_next_bit_le(data, size, 0);
 		while (idx < size) {
 			block_t start, end;
 
 			start = offset + idx;
-			idx = find_next_zero_bit(data, size, idx + 1);
+			idx = find_next_zero_bit_le(data, size, idx + 1);
 			end = offset + idx - 1;
 
 			if (start != end)
@@ -310,7 +310,7 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 
 			if (idx >= size)
 				break;
-			idx = find_next_bit(data, size, idx + 1);
+			idx = find_next_bit_le(data, size, idx + 1);
 			if (idx >= size)
 				break;
 		}
