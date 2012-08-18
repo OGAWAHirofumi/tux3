@@ -158,13 +158,21 @@ static int rollup_log(struct sb *sb)
 	sb->rollup++;
 
 #ifndef __KERNEL__
+	LIST_HEAD(io_buffers);
+	LIST_HEAD(orphan_add);
 	/*
 	 * sb->rollup was incremented, so block fork may occur from here,
 	 * so before block fork was occured, cleans map->dirty list.
 	 * [If we have two lists per map for dirty, we may not need this.]
 	 */
-	LIST_HEAD(io_buffers);
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
+	/*
+	 * Orphan inodes are still living. And logs will be obsoleted,
+	 * so, we store those to sb->otable.
+	 * [If we may want to have two orphan_add lists for frontend
+	 * and backend.]
+	 */
+	list_splice_init(&sb->orphan_add, &orphan_add);
 
 	/* This is starting the new rollup cycle of the log */
 	new_cycle_log(sb);
@@ -211,6 +219,20 @@ static int rollup_log(struct sb *sb)
 	}
 	trace("< done bitmap inode %u", sb->rollup);
 	assert(list_empty(&io_buffers));
+
+	trace("> apply orphan inodes %u", sb->rollup);
+	/*
+	 * This apply orphan inodes to sb->otable after flushed
+	 * bitmap. So, we will flush only leaf in this delta to
+	 * minimize data size of sb->otable for flushing.
+	 */
+	{
+		int err = tux3_rollup_orphan_add(sb, &orphan_add);
+		if (err)
+			return err;
+	}
+	trace("< apply orphan inodes %u", sb->rollup);
+	assert(list_empty(&orphan_add));
 #endif
 	trace("<<<<<<<<< commit rollup done %u", sb->rollup - 1);
 

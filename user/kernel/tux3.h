@@ -955,6 +955,7 @@ int defer_bfree(struct stash *defree, block_t block, unsigned count);
 void destroy_defer_bfree(struct stash *defree);
 
 /* orphan.c */
+int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add);
 int tux3_mark_inode_orphan(struct inode *inode);
 int tux3_clear_inode_orphan(struct inode *inode);
 

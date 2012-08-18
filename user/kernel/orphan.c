@@ -21,15 +21,86 @@
 #define trace trace_on
 #endif
 
-int tux3_rollup_orphan_add(struct inode *inode)
+/* FIXME: maybe, we can share code more with inode.c and iattr.c. */
+enum { ORPHAN_ATTR, };
+static unsigned orphan_asize[] = {
+	/* Fixed size attrs */
+	[ORPHAN_ATTR] = 0,
+};
+
+static void *orphan_encode_attrs(struct inode *inode, void *attrs)
 {
-	list_del_init(&inode->orphan_list);
+	return encode_kind(attrs, ORPHAN_ATTR, tux_sb(inode->i_sb)->version);
+}
+
+static int store_orphan_inum(struct inode *inode, struct cursor *cursor)
+{
+	unsigned size;
+	void *base;
+
+	size = orphan_asize[ORPHAN_ATTR] + 2;
+
+	base = btree_expand(cursor, tux_inode(inode)->inum, size);
+	if (IS_ERR(base))
+		return PTR_ERR(base);
+
+	orphan_encode_attrs(inode, base);
+	mark_buffer_dirty_non(cursor_leafbuf(cursor));
+
 	return 0;
 }
 
+/* Add inum into sb->otable */
+int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
+{
+	struct btree *otable = otable_btree(sb);
+	struct cursor *cursor;
+	int err = 0;
+
+	if (list_empty(orphan_add))
+		return 0;
+
+	down_write(&otable->lock);
+	if (!has_root(otable))
+		err = alloc_empty_btree(otable);
+	up_write(&otable->lock);
+	if (err)
+		return err;
+
+	/* FIXME: +1 may not be enough to add multiple */
+	cursor = alloc_cursor(otable, 1); /* +1 for new depth */
+	if (!cursor)
+		return -ENOMEM;
+
+	down_write(&cursor->btree->lock);
+	while (!list_empty(orphan_add)) {
+		struct inode *inode;
+		inode = list_entry(orphan_add->next, struct inode, orphan_list);
+
+		/* FIXME: what to do if error? */
+		err = btree_probe(cursor, inode->inum);
+		if (err)
+			goto out;
+
+		err = store_orphan_inum(inode, cursor);
+		release_cursor(cursor);
+		if (err)
+			goto out;
+
+		list_del_init(&inode->orphan_list);
+	}
+out:
+	up_write(&cursor->btree->lock);
+	free_cursor(cursor);
+
+	return err;
+}
+
+/* Delete inum from sb->otable */
 int tux3_rollup_orphan_del(struct inode *inode)
 {
-	return 0;
+	struct btree *otable = otable_btree(tux_sb(inode->i_sb));
+	return purge_inum(otable, tux_inode(inode)->inum);
 }
 
 /*
