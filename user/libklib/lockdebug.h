@@ -19,7 +19,7 @@ typedef struct {
 	(spinlock_t){ }
 #endif
 #define DEFINE_SPINLOCK(x) spinlock_t x = __SPIN_LOCK_UNLOCKED
-#define spin_lock_init(lock) do { *(lock) = SPIN_LOCK_UNLOCKED; } while (0)
+#define spin_lock_init(lock) do { *(lock) = __SPIN_LOCK_UNLOCKED; } while (0)
 
 static inline void spin_lock(spinlock_t *lock)
 {
