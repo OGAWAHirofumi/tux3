@@ -128,37 +128,18 @@ static int flush_buffer_list(struct sb *sb, struct list_head *head)
 	return 0;
 }
 
-static int move_deferred(struct sb *sb, u64 val)
+static int relog_as_bfree(struct sb *sb, u64 val)
 {
+	log_bfree_relog(sb, val & ~(-1ULL << 48), val >> 48);
 	return stash_value(&sb->defree, val);
 }
 
-static int defree_logblocks(struct sb *sb, u64 val)
-{
-	log_bfree(sb, val & ~(-1ULL << 48), val >> 48);
-	return move_deferred(sb, val);
-}
-
-static int new_cycle_log(struct sb *sb)
+static void new_cycle_log(struct sb *sb)
 {
 	/* log must be empty, otherwise, sb->lognext points the next log */
 	assert(sb->logbuf == NULL);
-	/* empty the log of old cycle, then start the log of new cycle */
-	sb->logbase = sb->next_logbase;
-	sb->next_logbase = sb->lognext;
-
-	/* Log the obsoleted log blocks, and add defree entries */
-	unstash(sb, &sb->decycle, defree_logblocks);
-
-	/*
-	 * prepare ->new_decycle/decyle for next cycle. (->new_decycle
-	 * become ->decycle, then use empty ->decycle as ->new_decycle)
-	 */
-	struct stash tmp = sb->decycle;
-	sb->decycle = sb->new_decycle;
-	sb->new_decycle = tmp;
-
-	return 0;
+	/* Obsolete the old rollup, then start the log of new rollup */
+	sb->logbase = sb->lognext;
 }
 
 /*
@@ -182,13 +163,17 @@ static int rollup_log(struct sb *sb)
 	LIST_HEAD(io_buffers);
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
 
-	/* this is starting the new rollup cycle of the log */
-	new_cycle_log(sb);	/* FIXME: error handling */
+	/* This is starting the new rollup cycle of the log */
+	new_cycle_log(sb);
 	/* Add rollup log as mark of new rollup cycle. */
 	log_rollup(sb);
 
-	/* move deferred frees for rollup to delta deferred free list */
-	unstash(sb, &sb->derollup, move_deferred);
+	/*
+	 * Re-logging defered bfree blocks after rollup as defered
+	 * bfree (LOG_BFREE_RELOG) after delta.  With this, we can
+	 * obsolete log records on previous rollup.
+	 */
+	unstash(sb, &sb->derollup, relog_as_bfree);
 
 	int err = call_reserve_blocks(sb);
 	if (err)
@@ -266,7 +251,11 @@ static int write_log(struct sb *sb)
 			return err;
 		}
 
-		defer_bfree(&sb->new_decycle, block, 1);
+		/*
+		 * We can obsolete the log blocks after next rollup
+		 * by LOG_BFREE_RELOG.
+		 */
+		defer_bfree(&sb->derollup, block, 1);
 
 		blockput(buffer);
 		trace("logchain %lld", (L)block);
@@ -287,7 +276,6 @@ static int commit_delta(struct sb *sb)
 	trace("commit %i logblocks", sb->lognext - sb->logbase);
 	/* FIXME: Move to save_sb()? Handle wraparound of lognext, etc */
 	sb->super.logcount = to_be_u32(sb->lognext - sb->logbase);
-	sb->super.next_logcount = to_be_u32(sb->lognext - sb->next_logbase);
 
 	int err = save_sb(sb);
 	if (err)

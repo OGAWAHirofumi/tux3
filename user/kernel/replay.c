@@ -145,8 +145,10 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
 
 	/* If log is before latest rollup, those were already applied to FS. */
-	if (bufindex(logbuf) < info->rollup_index)
+	if (bufindex(logbuf) < info->rollup_index) {
+		assert(0);	/* older logs should already be freed */
 		return 0;
+	}
 	if (bufindex(logbuf) == info->rollup_index)
 		data = info->rollup_pos;
 
@@ -236,8 +238,10 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 	int err;
 
 	/* If log is before latest rollup, those were already applied to FS. */
-	if (bufindex(logbuf) < info->rollup_index)
+	if (bufindex(logbuf) < info->rollup_index) {
+		assert(0);	/* older logs should already be freed */
 		return 0;
+	}
 	if (bufindex(logbuf) == info->rollup_index)
 		data = info->rollup_pos;
 

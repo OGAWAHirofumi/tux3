@@ -86,8 +86,6 @@ static void tux3_put_super(struct super_block *sb)
 	/* FIXME: remove this, then use sb->s_dirt instead */
 	tux3_write_super(sb);
 
-	destroy_defer_bfree(&sbi->new_decycle);
-	destroy_defer_bfree(&sbi->decycle);
 	destroy_defer_bfree(&sbi->derollup);
 	destroy_defer_bfree(&sbi->defree);
 	iput(sbi->atable);

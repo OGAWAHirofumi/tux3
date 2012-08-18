@@ -100,7 +100,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | freeblocks %llu | nextalloc %llu"
 		" | freeatom %u | atomgen %u"
 		" | <logchain_%llu> logchain %llu | logcount %u"
-		" | next_logcount %u }\"\n"
+		" }\"\n"
 		"shape = record\n"
 		"];\n"
 		"}\n\n",
@@ -117,7 +117,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(L)from_be_u64(txsb->nextalloc),
 		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen),
 		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain),
-		from_be_u32(txsb->logcount), from_be_u32(txsb->next_logcount));
+		from_be_u32(txsb->logcount));
 
 	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
 		gi->bname, (L)itable_btree(sb)->root.block);

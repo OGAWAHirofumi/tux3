@@ -48,15 +48,13 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 	log_finish(sb);
 
 	sb->logchain = 0;
-	sb->logbase = sb->next_logbase = 0;
+	sb->logbase = 0;
 	sb->logthis = sb->lognext = 0;
 	if (sb->logmap)
 		invalidate_buffers(sb->logmap->map);
 
 	assert(flink_empty(&sb->defree.head));
 	assert(flink_empty(&sb->derollup.head));
-	assert(flink_empty(&sb->decycle.head));
-	assert(flink_empty(&sb->new_decycle.head));
 	assert(list_empty(&sb->pinned));
 #endif /* !ATOMIC */
 }

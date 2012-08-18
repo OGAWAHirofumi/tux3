@@ -61,8 +61,6 @@ int main(int argc, char *argv[])
 		replay_stage2(sb, replay_handle);
 
 		/* free stash for valgrind */
-		destroy_defer_bfree(&sb->new_decycle);
-		destroy_defer_bfree(&sb->decycle);
 		destroy_defer_bfree(&sb->derollup);
 		destroy_defer_bfree(&sb->defree);
 	}

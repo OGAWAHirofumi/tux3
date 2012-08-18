@@ -177,7 +177,6 @@ struct disksuper {
 	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
 	be_u64 logchain;	/* Most recent delta commit block pointer */
 	be_u32 logcount;	/* Count of log blocks in the current log chain */
-	be_u32 next_logcount;	/* sb->logcount for the next rollup cycle */
 } __packed;
 
 struct root {
@@ -251,19 +250,18 @@ struct sb {
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 	loff_t dictsize;	/* Atom dictionary size */
 
-	struct inode *logmap;	/* Log block cache */
 	block_t logchain;	/* Previous log block physical address */
-	unsigned logbase;	/* Index of oldest log block in log map */
-	unsigned next_logbase;	/* ->logbase for the next cycle */
+	unsigned logbase;	/* Index of oldest log block in this rollup */
+
+	struct inode *logmap;	/* Log block cache */
 	unsigned logthis;	/* Index of first log block in delta */
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
-	struct stash defree;	/* defer extent frees until after commit */
-	struct stash derollup;	/* defer extent frees until after log rollup */
-	struct stash decycle;	/* defer extent frees until this new cycle */
-	struct stash new_decycle;/* defer extent frees until next new cycle */
+
+	struct stash defree;	/* defer extent frees until after delta */
+	struct stash derollup;	/* defer extent frees until after rollup */
 
 	struct list_head pinned; /* dirty metadata not flushed per delta */
 	struct list_head commit; /* dirty metadata flushed per delta */
