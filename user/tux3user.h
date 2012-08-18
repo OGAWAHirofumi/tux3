@@ -18,6 +18,7 @@
 #include "trace.h"
 
 #include "libklib/libklib.h"
+#include "libklib/lockdebug.h"
 #include "libklib/mm.h"
 #include "writeback.h"
 

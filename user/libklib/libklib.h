@@ -1,13 +1,15 @@
 #ifndef LIBKLIB_H
 #define LIBKLIB_H
 
-#include <stdint.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <limits.h>
 #include <endian.h>
+#include <sys/types.h>
 
 #include <libklib/list.h>
 #include <libklib/err.h>
-#include <libklib/lockdebug.h>
+#include <libklib/bitops.h>
 
 #ifdef __CHECKER__
 #define __force		__attribute__((force))
@@ -56,6 +58,19 @@ extern int __build_bug_on_failed;
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /*
+ * This looks more complex than it should be. But we need to
+ * get the type for the ~ right in round_down (it needs to be
+ * as wide as the result!), and we want to evaluate the macro
+ * arguments just once each.
+ */
+#define __round_mask(x, y) ((__typeof__(x))((y)-1))
+#define round_up(x, y) ((((x)-1) | __round_mask(x, y))+1)
+#define round_down(x, y) ((x) & ~__round_mask(x, y))
+
+#define FIELD_SIZEOF(t, f) (sizeof(((t*)0)->f))
+#define DIV_ROUND_UP(n,d) (((n) + (d) - 1) / (d))
+
+/*
  * min()/max()/clamp() macros that also do
  * strict type-checking.. See the
  * "unnecessary" pointer comparison.
@@ -98,75 +113,6 @@ typedef signed long long	s64;
 typedef unsigned long long	u64;
 
 typedef unsigned short		umode_t;
-
-#define BITS_PER_LONG		LONG_BIT	/* SuS define this */
-#define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
-
-/**
- * __ffs - find first bit in word.
- * @word: The word to search
- *
- * Undefined if no bit exists, so code should check against 0 first.
- */
-static __always_inline unsigned long __ffs(unsigned long word)
-{
-	int num = 0;
-
-#if BITS_PER_LONG == 64
-	if ((word & 0xffffffff) == 0) {
-		num += 32;
-		word >>= 32;
-	}
-#endif
-	if ((word & 0xffff) == 0) {
-		num += 16;
-		word >>= 16;
-	}
-	if ((word & 0xff) == 0) {
-		num += 8;
-		word >>= 8;
-	}
-	if ((word & 0xf) == 0) {
-		num += 4;
-		word >>= 4;
-	}
-	if ((word & 0x3) == 0) {
-		num += 2;
-		word >>= 2;
-	}
-	if ((word & 0x1) == 0)
-		num += 1;
-	return num;
-}
-#define ffz(x)			__ffs(~(x))
-
-unsigned long find_next_bit(const unsigned long *addr, unsigned long size,
-			    unsigned long offset);
-#define find_first_bit(addr, size) find_next_bit((addr), (size), 0)
-unsigned long find_next_zero_bit(const unsigned long *addr, unsigned long size,
-				 unsigned long offset);
-#define find_first_zero_bit(addr, size) find_next_zero_bit((addr), (size), 0)
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define BITOP_LE_SWIZZLE	0
-static inline unsigned long find_next_zero_bit_le(const void *addr,
-		unsigned long size, unsigned long offset)
-{
-	return find_next_zero_bit(addr, size, offset);
-}
-
-static inline unsigned long find_next_bit_le(const void *addr,
-		unsigned long size, unsigned long offset)
-{
-	return find_next_bit(addr, size, offset);
-}
-#elif __BYTE_ORDER == __BIG_ENDIAN
-#define BITOP_LE_SWIZZLE	((BITS_PER_LONG-1) & ~0x7)
-extern unsigned long find_next_zero_bit_le(const void *addr,
-		unsigned long size, unsigned long offset);
-extern unsigned long find_next_bit_le(const void *addr,
-		unsigned long size, unsigned long offset);
-#endif /* !__BIG_ENDIAN */
 
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
