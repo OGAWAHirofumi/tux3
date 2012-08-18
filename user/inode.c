@@ -326,13 +326,6 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	/*
-	 * For now the inum allocation goal is the same as the block allocation
-	 * goal.  This allows a maximum inum density of one per block and should
-	 * give pretty good spacial correlation between inode table blocks and
-	 * file data belonging to those inodes provided somebody sets the block
-	 * allocation goal based on the directory the file will be in.
-	 */
 	int err = alloc_inum(inode, goal);
 	if (err) {
 		iput(inode);
@@ -347,7 +340,7 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 
 static struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev)
 {
-	return __tux_create_inode(dir, dir->i_sb->nextalloc, iattr, rdev);
+	return __tux_create_inode(dir, alloc_inum_goal(dir), iattr, rdev);
 }
 
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr)

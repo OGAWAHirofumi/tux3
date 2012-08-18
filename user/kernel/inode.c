@@ -162,6 +162,11 @@ static int find_free_inum(struct cursor *cursor, inum_t goal, inum_t *allocated)
 
 	/* FIXME: need better allocation policy */
 
+	/*
+	 * Find free inum from goal, and wrapped to TUX_NORMAL_INO if
+	 * not found. This prevent to use less than TUX_NORMAL_INO if
+	 * reserved ino was not specified explicitly.
+	 */
 	ret = btree_traverse(cursor, goal, TUXKEY_LIMIT, ileaf_find_free,
 			     allocated);
 	if (ret < 0)
@@ -172,13 +177,18 @@ static int find_free_inum(struct cursor *cursor, inum_t goal, inum_t *allocated)
 		goto out;
 	}
 
-	ret = btree_traverse(cursor, 0, goal, ileaf_find_free, allocated);
-	if (ret < 0)
-		goto out;
-	if (ret > 0) {
-		/* Found free inum */
-		ret = 0;
-		goto out;
+	if (TUX_NORMAL_INO < goal) {
+		u64 len = goal - TUX_NORMAL_INO;
+
+		ret = btree_traverse(cursor, TUX_NORMAL_INO, len,
+				     ileaf_find_free, allocated);
+		if (ret < 0)
+			goto out;
+		if (ret > 0) {
+			/* Found free inum */
+			ret = 0;
+			goto out;
+		}
 	}
 
 	/* Couldn't find free inum */
@@ -188,6 +198,28 @@ out:
 	release_cursor(cursor);
 
 	return ret;
+}
+
+/*
+ * Choose preferable inode number
+ *
+ * For now the inum allocation goal is the same as the block allocation
+ * goal.  This allows a maximum inum density of one per block and should
+ * give pretty good spacial correlation between inode table blocks and
+ * file data belonging to those inodes provided somebody sets the block
+ * allocation goal based on the directory the file will be in.
+ *
+ * FIXME: better allocation algorithm?
+ */
+static inum_t alloc_inum_goal(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	inum_t goal = sb->nextalloc;
+
+	/* Don't choose reserved ino */
+	if (goal < TUX_NORMAL_INO)
+		goal = TUX_NORMAL_INO;
+	return goal;
 }
 
 static int alloc_inum(struct inode *inode, inum_t goal)
@@ -606,7 +638,6 @@ static void tux_setup_inode(struct inode *inode)
 		switch (inum) {
 		case TUX_VOLMAP_INO:
 		case TUX_BITMAP_INO:
-		/* FIXME: kill this, this means logmap for now */
 		case TUX_LOGMAP_INO:
 			gfp_mask &= ~__GFP_FS;
 			break;
@@ -634,7 +665,7 @@ struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	int err = alloc_inum(inode, tux_sb(dir->i_sb)->nextalloc);
+	int err = alloc_inum(inode, alloc_inum_goal(dir));
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);

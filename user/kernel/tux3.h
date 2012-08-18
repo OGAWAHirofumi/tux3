@@ -158,12 +158,13 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
-#define TUX_VOLMAP_INO		1	/* FIXME: reserve this */
-#define TUX_VTABLE_INO		2
-#define TUX_INVALID_INO		3	/* FIXME: reserve this */
-#define TUX_LOGMAP_INO		4	/* FIXME: reserve this */
-#define TUX_ATABLE_INO		10
-#define TUX_ROOTDIR_INO		13
+#define TUX_VTABLE_INO		1
+#define TUX_ATABLE_INO		2
+#define TUX_ROOTDIR_INO		3
+#define TUX_VOLMAP_INO		61	/* This doesn't have entry in ileaf */
+#define TUX_LOGMAP_INO		62	/* FIXME: remove this */
+#define TUX_INVALID_INO		63	/* FIXME: just for debugging */
+#define TUX_NORMAL_INO		64	/* until this ino, reserved ino */
 
 struct disksuper {
 	/* Update magic on any incompatible format change */
