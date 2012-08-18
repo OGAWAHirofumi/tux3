@@ -134,6 +134,6 @@ int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
 int devio_vec(int rw, struct dev *dev, loff_t offset, struct iovec *iov,
 	      unsigned iovcnt);
 int blockio(int rw, struct buffer_head *buffer, block_t block);
-int blockio_vec(int rw, struct bufvec *bufvec, unsigned count, block_t block);
+int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 
 #endif /* !TUX3_USER_H */

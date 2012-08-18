@@ -393,14 +393,13 @@ struct buffer_head *blockread(map_t *map, block_t block)
 {
 	struct buffer_head *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
-		struct iovec iov[1];
-		struct buffer_head *bufv[1];
-		struct bufvec bufvec = {
-			.bufv = bufv,
-			.iov = iov,
-			.max_count = 1,
-		};
-		bufvec_add(&bufvec, buffer);
+		struct bufvec bufvec;
+		int ret;
+
+		bufvec_init(&bufvec, NULL);
+		ret = bufvec_contig_add(&bufvec, buffer);
+		assert(ret == 1);
+
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
 		int err = buffer->map->io(READ, &bufvec);
 		if (err) {
@@ -460,64 +459,6 @@ void invalidate_buffers(map_t *map)
 			}
 		}
 	}
-}
-
-static int buffer_index_cmp(void *priv, struct list_head *a,
-			    struct list_head *b)
-{
-	struct buffer_head *buf_a = list_entry(a, struct buffer_head, link);
-	struct buffer_head *buf_b = list_entry(b, struct buffer_head, link);
-
-	if (bufindex(buf_a) < bufindex(buf_b))
-		return -1;
-	else if (bufindex(buf_a) > bufindex(buf_b))
-		return 1;
-	return 0;
-}
-
-int flush_list(struct list_head *head)
-{
-	struct bufvec *bufvec;
-	struct buffer_head *buffer, *n;
-	int err = 0;
-
-	if (list_empty(head))
-		return 0;
-
-	bufvec = bufvec_alloc(MAX_EXTENT);
-	if (!bufvec)
-		return -ENOMEM;
-
-	list_sort(NULL, head, buffer_index_cmp);
-
-	list_for_each_entry_safe(buffer, n, head, link) {
-		assert(buffer_dirty(buffer));
-		while (!bufvec_add(bufvec, buffer)) {
-			err = bufvec_first_buf(bufvec)->map->io(WRITE, bufvec);
-			if (err)
-				goto error;
-		}
-	}
-	while (bufvec_inuse(bufvec)) {
-		err = bufvec_first_buf(bufvec)->map->io(WRITE, bufvec);
-		if (err)
-			goto error;
-	}
-
-error:
-	bufvec_free(bufvec);
-
-	return err;
-}
-
-int flush_buffers(map_t *map)
-{
-	return flush_list(dirty_head(&map->dirty));
-}
-
-int flush_state(unsigned state)
-{
-	return flush_list(buffers + state);
 }
 
 #ifdef BUFFER_PARANOIA_DEBUG
@@ -637,27 +578,27 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 #endif
 }
 
+static void dev_blockio_endio(struct buffer_head *buffer, int err)
+{
+	if (err) {
+		/* FIXME: What to do? Hack: This re-link to state from bufvec */
+		assert(0);
+		set_buffer_empty(buffer);
+	} else
+		set_buffer_clean(buffer);
+}
+
 static int dev_blockio(int rw, struct bufvec *bufvec)
 {
-	block_t block = bufvec_first_index(bufvec);
-	unsigned count = bufvec_inuse(bufvec);
-	int err;
+	block_t block = bufvec_contig_index(bufvec);
+	unsigned count = bufvec_contig_count(bufvec);
 
-	assert(bufvec_first_buf(bufvec)->map->dev->bits >= 6 &&
-	       bufvec_first_buf(bufvec)->map->dev->fd);
+	assert(bufvec_contig_buf(bufvec)->map->dev->bits >= 6 &&
+	       bufvec_contig_buf(bufvec)->map->dev->fd);
 
-#ifdef BUFFER_FOR_TUX3
-	err = blockio_vec(rw, bufvec, count, block);
-#else
-	err = iovabs(bufvec_first_buf(bufvec)->map->dev->fd, bufvec->iov,
-		     count, rw, block << dev->bits);
-#endif
-	if (!err) {
-		for (unsigned i = 0; i < count; i++)
-			set_buffer_clean(bufvec_bufv(bufvec)[i]);
-		bufvec_io_done(bufvec, count);
-	}
-	return err;
+	bufvec->end_io = dev_blockio_endio;
+
+	return blockio_vec(rw, bufvec, block, count);
 }
 
 int dev_errio(int rw, struct bufvec *bufvec)
@@ -700,83 +641,4 @@ void free_map(map_t *map)
 	free(map);
 }
 
-/*
- * Helper for waiting I/O (stub)
- */
-
-void tux3_iowait_init(struct iowait *iowait)
-{
-}
-
-void tux3_iowait_wait(struct iowait *iowait)
-{
-}
-
-/*
- * Buffer I/O vector
- */
-
-void bufvec_free(struct bufvec *bufvec)
-{
-	free(bufvec);
-}
-
-struct bufvec *bufvec_alloc(unsigned max_count)
-{
-	struct bufvec *bufvec;
-	unsigned bufv_size = max_count * sizeof(struct buffer_head *);
-	unsigned iovec_size = max_count * sizeof(struct iovec);
-
-	bufvec = malloc(sizeof(*bufvec) + iovec_size + bufv_size);
-	if (!bufvec)
-		return ERR_PTR(-ENOMEM);
-
-	memset(bufvec, 0, sizeof(*bufvec) + bufv_size + iovec_size);
-	bufvec->bufv = (void *)bufvec + sizeof(*bufvec);
-	bufvec->iov = (void *)bufvec->bufv + bufv_size;
-	bufvec->max_count = max_count;
-
-	return bufvec;
-}
-
-/*
- * Add buffer to bufvec. If there is no space or buffer is not
- * logically contiguous, return 0 and fail to add.
- */
-int bufvec_add(struct bufvec *bufvec, struct buffer_head *buffer)
-{
-	/* Check if buffer is logically contiguous */
-	if (bufvec_inuse(bufvec)) {
-		block_t prev = bufvec_last_index(bufvec);
-		if (prev != bufindex(buffer) - 1)
-			return 0;
-	}
-
-	if (bufvec->count == bufvec->max_count) {
-		if (bufvec->pos == 0)
-			return 0;
-
-		unsigned size;
-		/* If there is space already done, use it */
-		size = bufvec_inuse(bufvec) * sizeof(struct buffer_head *);
-		memmove(bufvec->bufv, bufvec_bufv(bufvec), size);
-		size = bufvec_inuse(bufvec) * sizeof(struct iovec);
-		memmove(bufvec->iov, bufvec_iov(bufvec), size);
-
-		bufvec->count -= bufvec->pos;
-		bufvec->pos = 0;
-	}
-
-	bufvec->bufv[bufvec->count] = buffer;
-	bufvec->iov[bufvec->count].iov_base = bufdata(buffer);
-	bufvec->iov[bufvec->count].iov_len = bufsize(buffer);
-	bufvec->count++;
-
-	return 1;
-}
-
-void bufvec_io_done(struct bufvec *bufvec, unsigned done_count)
-{
-	assert(bufvec_inuse(bufvec) >= done_count);
-	bufvec->pos += done_count;
-}
+#include "buffer_writeback.c"

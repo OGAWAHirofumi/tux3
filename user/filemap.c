@@ -45,18 +45,18 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
 {
+	struct buffer_head *buffer;
+
 	trace("%s inode 0x%Lx block 0x%Lx",
 	      (mode == MAP_READ) ? "read" :
 			(mode == MAP_WRITE) ? "write" : "redirect",
-	      buffer_inode(bufvec->bufv[bufvec->pos])->inum,
-	      bufvec_first_index(bufvec));
+	      buffer_inode(bufvec_contig_buf(bufvec))->inum,
+	      bufvec_contig_index(bufvec));
 
-	if (bufvec_last_index(bufvec) & (-1LL << MAX_BLOCKS_BITS))
+	if (bufvec_contig_last_index(bufvec) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 
-	for (unsigned i = 0; i < bufvec_inuse(bufvec); i++) {
-		struct buffer_head *buffer = bufvec_bufv(bufvec)[i];
-
+	list_for_each_entry(buffer, &bufvec->contig, link) {
 		if (mode != MAP_READ && buffer_empty(buffer))
 			warn("egad, writing an invalid buffer");
 		if (mode == MAP_READ && buffer_dirty(buffer))
@@ -75,18 +75,20 @@ static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
  *
  * Stop when extent is "big enough", whatever that means.
  */
-static struct bufvec *guess_readahead(struct inode *inode, block_t index)
+static int guess_readahead(struct bufvec *bufvec, struct inode *inode,
+			   block_t index)
 {
 	struct sb *sb = inode->i_sb;
-	block_t limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
-	struct bufvec *bufvec;
 	struct buffer_head *buffer;
+	block_t limit;
 	int ret;
 
+	bufvec_init(bufvec, NULL);
+
+	limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
 	/* FIXME: MAX_EXTENT is not true for dleaf2 */
-	bufvec = bufvec_alloc(MAX_EXTENT);
-	if (!bufvec)
-		return NULL;
+	if (limit > index + MAX_EXTENT)
+		limit = index + MAX_EXTENT;
 
 	/*
 	 * FIXME: pin buffers early may be inefficient. We can delay to
@@ -94,14 +96,11 @@ static struct bufvec *guess_readahead(struct inode *inode, block_t index)
 	 */
 	buffer = blockget(mapping(inode), index++);
 	if (!buffer)
-		return NULL;
-	ret = bufvec_add(bufvec, buffer);
+		return -EIO;
+	ret = bufvec_contig_add(bufvec, buffer);
 	assert(ret);
 
-	while (bufvec_space(bufvec)) {
-		if (index >= limit)
-			break;
-
+	while (index < limit) {
 		struct buffer_head *nextbuf = peekblk(buffer->map, index);
 		if (nextbuf) {
 			unsigned stop = !buffer_empty(nextbuf);
@@ -114,50 +113,91 @@ static struct bufvec *guess_readahead(struct inode *inode, block_t index)
 			if (!nextbuf)
 				break;
 		}
-		ret = bufvec_add(bufvec, nextbuf);
+		ret = bufvec_contig_add(bufvec, nextbuf);
 		assert(ret);
 
 		index++;
 	}
 
-	return bufvec;
+	return 0;
 }
 
-static void clean_buffer(struct buffer_head *buffer)
+/* For read end I/O */
+static void filemap_read_endio(struct buffer_head *buffer, int err)
 {
-	/* Is this forked buffer? */
-	if (hlist_unhashed(&buffer->hashlink)) {
-		/* We have to unpin forked buffer to free. See blockdirty() */
+	if (err) {
+		/* FIXME: What to do? Hack: This re-link to state from bufvec */
+		assert(0);
+		set_buffer_empty(buffer);
+	} else {
 		set_buffer_clean(buffer);
-		blockput(buffer);
+	}
+	/* This drops refcount for bufvec of guess_readahead() */
+	blockput(buffer);
+}
+
+/* For hole region */
+static void filemap_hole_endio(struct buffer_head *buffer, int err)
+{
+	assert(err == 0);
+	memset(bufdata(buffer), 0, bufsize(buffer));
+	set_buffer_clean(buffer);
+	/* This drops refcount for bufvec of guess_readahead() */
+	blockput(buffer);
+}
+
+/* For readahead cleanup */
+static void filemap_clean_endio(struct buffer_head *buffer, int err)
+{
+	assert(err == 0);
+	set_buffer_empty(buffer);
+	/* This drops refcount for bufvec of guess_readahead() */
+	blockput(buffer);
+}
+
+/* For write end I/O */
+static void filemap_write_endio(struct buffer_head *buffer, int err)
+{
+	int forked = hlist_unhashed(&buffer->hashlink);
+
+	if (err) {
+		/* FIXME: What to do? Hack: This re-link to state from bufvec */
+		assert(0);
+		set_buffer_empty(buffer);
 	} else
 		set_buffer_clean(buffer);
+
+	/* Is this forked buffer? */
+	if (forked) {
+		/* We have to unpin forked buffer to free. See blockdirty() */
+		blockput(buffer);
+	}
 }
 
 static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
-	struct inode *inode = buffer_inode(bufvec_first_buf(bufvec));
-	struct sb *sb = tux_sb(inode->i_sb);
-	block_t block, index = bufvec_first_index(bufvec);
+	struct inode *inode = buffer_inode(bufvec_contig_buf(bufvec));
+	block_t block, index = bufvec_contig_index(bufvec);
 	int err, rw = (mode == MAP_READ) ? READ : WRITE;
 
 	/* FIXME: now assuming buffer is only 1 for MAP_READ */
-	assert(mode != MAP_READ || bufvec_inuse(bufvec) == 1);
+	assert(mode != MAP_READ || bufvec_contig_count(bufvec) == 1);
 	err = filemap_bufvec_check(bufvec, mode);
 	if (err)
 		return err;
 
-	struct bufvec *bufvec_io;
+	struct bufvec *bufvec_io, bufvec_ahead;
 	unsigned count;
 	if (rw == READ) {
 		/* In the case of read, use new bufvec for readahead */
-		bufvec_io = guess_readahead(inode, index);
-		if (!bufvec_io)
-			return -ENOMEM;
+		err = guess_readahead(&bufvec_ahead, inode, index);
+		if (err)
+			return err;
+		bufvec_io = &bufvec_ahead;
 	} else {
 		bufvec_io = bufvec;
 	}
-	count = bufvec_inuse(bufvec_io);
+	count = bufvec_contig_count(bufvec_io);
 
 	struct seg map[10];
 
@@ -170,30 +210,23 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 		block = map[i].block;
 		count = map[i].count;
 
-		assert(rw == READ || map[i].state != SEG_HOLE);
 		trace("extent 0x%Lx/%x => %Lx", index, count, block);
 
 		if (map[i].state != SEG_HOLE) {
-			err = blockio_vec(rw, bufvec_io, count, block);
+			if (rw == READ)
+				bufvec_io->end_io = filemap_read_endio;
+			else
+				bufvec_io->end_io = filemap_write_endio;
+
+			err = blockio_vec(rw, bufvec_io, block, count);
 			if (err)
 				break;
+		} else {
+			assert(rw == READ);
+			bufvec_io->end_io = filemap_hole_endio;
+			bufvec_complete_without_io(bufvec_io, count);
 		}
 
-		for (unsigned j = 0; j < count; j++) {
-			struct buffer_head *buffer = bufvec_bufv(bufvec_io)[j];
-
-			if (map[i].state == SEG_HOLE)
-				memset(bufdata(buffer), 0, sb->blocksize);
-
-			/* FIXME: leave empty if error ??? */
-			if (rw == READ) {
-				set_buffer_clean(buffer);
-				blockput(buffer);
-			} else
-				clean_buffer(buffer);
-		}
-
-		bufvec_io_done(bufvec_io, count);
 		index += count;
 	}
 
@@ -204,8 +237,11 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 	 */
 	if (rw == READ) {
 		/* Clean buffers was not mapped in this time */
-		for (unsigned i = 0; i < bufvec_inuse(bufvec_io); i++)
-			blockput(bufvec_bufv(bufvec_io)[i]);
+		count = bufvec_contig_count(bufvec_io);
+		if (count) {
+			bufvec_io->end_io = filemap_clean_endio;
+			bufvec_complete_without_io(bufvec_io, count);
+		}
 		bufvec_free(bufvec_io);
 	}
 

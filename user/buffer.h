@@ -138,59 +138,6 @@ static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 	return 0;
 }
 
-/* Helper for waiting I/O (stub) */
-struct iowait {
-};
-
-/* Vector for I/O */
-struct bufvec {
-	struct buffer_head **bufv;
-	struct iovec *iov;
-	unsigned pos;			/* next position for I/O */
-	unsigned count;			/* in-use count of array */
-	unsigned max_count;		/* maximum count of array */
-};
-
-static inline unsigned bufvec_inuse(struct bufvec *bufvec)
-{
-	return bufvec->count - bufvec->pos;
-}
-
-static inline unsigned bufvec_space(struct bufvec *bufvec)
-{
-	return bufvec->max_count - bufvec_inuse(bufvec);
-}
-
-static inline struct buffer_head **bufvec_bufv(struct bufvec *bufvec)
-{
-	return &bufvec->bufv[bufvec->pos];
-}
-
-static inline struct buffer_head *bufvec_first_buf(struct bufvec *bufvec)
-{
-	return bufvec->bufv[bufvec->pos];
-}
-
-static inline struct buffer_head *bufvec_last_buf(struct bufvec *bufvec)
-{
-	return bufvec->bufv[bufvec->count - 1];
-}
-
-static inline struct iovec *bufvec_iov(struct bufvec *bufvec)
-{
-	return &bufvec->iov[bufvec->pos];
-}
-
-static inline block_t bufvec_first_index(struct bufvec *bufvec)
-{
-	return bufindex(bufvec_first_buf(bufvec));
-}
-
-static inline block_t bufvec_last_index(struct bufvec *bufvec)
-{
-	return bufindex(bufvec_last_buf(bufvec));
-}
-
 struct buffer_head *new_buffer(map_t *map);
 void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
@@ -213,9 +160,6 @@ struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
 void insert_buffer_hash(struct buffer_head *buffer);
 void remove_buffer_hash(struct buffer_head *buffer);
-int flush_list(struct list_head *head);
-int flush_buffers(map_t *map);
-int flush_state(unsigned state);
 void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
@@ -224,10 +168,55 @@ void init_dirty_buffers(struct dirty_buffers *dirty);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
 
+/* buffer_writeback.c */
+/* Helper for waiting I/O (stub) */
+struct iowait {
+};
+
+/* I/O completion callback */
+typedef void (*bufvec_end_io_t)(struct buffer_head *buffer, int err);
+
+/* Helper for buffer vector I/O */
+struct bufvec {
+	struct list_head *buffers;	/* The dirty buffers for this delta */
+	struct list_head contig;	/* One logical contiguous range */
+	unsigned contig_count;		/* Count of contiguous buffers */
+
+	struct list_head for_io;	/* The buffers in iovec */
+
+	bufvec_end_io_t end_io;
+};
+
+static inline unsigned bufvec_contig_count(struct bufvec *bufvec)
+{
+	return bufvec->contig_count;
+}
+
+static inline struct buffer_head *bufvec_contig_buf(struct bufvec *bufvec)
+{
+	struct list_head *first = bufvec->contig.next;
+	assert(!list_empty(&bufvec->contig));
+	return list_entry(first, struct buffer_head, link);
+}
+
+static inline block_t bufvec_contig_index(struct bufvec *bufvec)
+{
+	return bufindex(bufvec_contig_buf(bufvec));
+}
+
+static inline block_t bufvec_contig_last_index(struct bufvec *bufvec)
+{
+	return bufvec_contig_index(bufvec) + bufvec_contig_count(bufvec) - 1;
+}
+
 void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
+void bufvec_init(struct bufvec *bufvec, struct list_head *head);
 void bufvec_free(struct bufvec *bufvec);
-struct bufvec *bufvec_alloc(unsigned max_count);
-int bufvec_add(struct bufvec *bufvec, struct buffer_head *buffer);
-void bufvec_io_done(struct bufvec *bufvec, unsigned done_count);
+int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
+int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
+void bufvec_complete_without_io(struct bufvec *bufvec, unsigned count);
+int flush_list(struct list_head *head);
+int flush_buffers(map_t *map);
+int flush_state(unsigned state);
 #endif

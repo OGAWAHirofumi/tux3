@@ -90,11 +90,17 @@ static void test01(void)
 }
 
 /* Test for bufvec */
+static void test02_endio(struct buffer_head *buffer, int err)
+{
+	assert(!err);
+	blockput(buffer);
+}
+
 static void test02(void)
 {
 #define BUFFER_COUNT	100
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	struct bufvec *bufvec;
+	struct bufvec bufvec;
 	struct buffer_head *buffer;
 	unsigned count, index = 0;
 
@@ -103,46 +109,42 @@ static void test02(void)
 	map_t *map = new_map(dev, NULL);
 	test_assert(map);
 
-	bufvec = bufvec_alloc(BUFFER_COUNT);
-	test_assert(bufvec);
+	bufvec_init(&bufvec, NULL);
 
-	/* Add buffer until maximum */
+	/* Add buffer until BUFFER_COUNT again */
 	count = 0;
-	while (bufvec_space(bufvec)) {
+	for (unsigned i = 0; i < BUFFER_COUNT; i++) {
 		buffer = blockget(map, index++);
 		test_assert(buffer);
-		int ret = bufvec_add(bufvec, buffer);
+		int ret = bufvec_contig_add(&bufvec, buffer);
 		test_assert(ret);
 		count++;
 	}
 	test_assert(count == BUFFER_COUNT);
-	test_assert(bufvec_inuse(bufvec) == BUFFER_COUNT);
+	test_assert(bufvec_contig_count(&bufvec) == BUFFER_COUNT);
 
 	/* Partially done */
-	for (unsigned i = 0; i < 20; i++)
-		blockput(bufvec_bufv(bufvec)[i]);
-	bufvec_io_done(bufvec, 20);
-	test_assert(bufvec_inuse(bufvec) == BUFFER_COUNT - 20);
+	bufvec.end_io = test02_endio;
+	bufvec_complete_without_io(&bufvec, 20);
+	test_assert(bufvec_contig_count(&bufvec) == BUFFER_COUNT - 20);
 
-	/* Add buffer until maximum again */
+	/* Add buffer until BUFFER_COUNT again */
 	count = 0;
-	while (bufvec_space(bufvec)) {
+	for (unsigned i = 0; i < 20; i++) {
 		buffer = blockget(map, index++);
 		test_assert(buffer);
-		int ret = bufvec_add(bufvec, buffer);
+		int ret = bufvec_contig_add(&bufvec, buffer);
 		test_assert(ret);
 		count++;
 	}
 	test_assert(count == 20);	/* Can add 20 was done I/O */
-	test_assert(bufvec_inuse(bufvec) == BUFFER_COUNT);
+	test_assert(bufvec_contig_count(&bufvec) == BUFFER_COUNT);
 
 	/* Done */
-	for (unsigned i = 0; i < bufvec_inuse(bufvec); i++)
-		blockput(bufvec_bufv(bufvec)[i]);
-	bufvec_io_done(bufvec, BUFFER_COUNT);
-	test_assert(bufvec_inuse(bufvec) == 0);
+	bufvec_complete_without_io(&bufvec, BUFFER_COUNT);
+	test_assert(bufvec_contig_count(&bufvec) == 0);
 
-	bufvec_free(bufvec);
+	bufvec_free(&bufvec);
 
 	free_map(map);
 }

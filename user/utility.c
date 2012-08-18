@@ -30,14 +30,9 @@ int blockio(int rw, struct buffer_head *buffer, block_t block)
 		     sb->blocksize);
 }
 
-int blockio_vec(int rw, struct bufvec *bufvec, unsigned count, block_t block)
+int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count)
 {
 	trace("%s: bufvec %p, count %u, block %Lx", rw ? "write" : "read",
 	      bufvec, count, block);
-	assert(count <= bufvec_inuse(bufvec));
-
-	struct sb *sb = tux_sb(buffer_inode(bufvec_first_buf(bufvec))->i_sb);
-	struct iovec *iov = bufvec_iov(bufvec);
-
-	return devio_vec(rw, sb_dev(sb), block << sb->blockbits, iov, count);
+	return bufvec_io(rw, bufvec, block, count);
 }
