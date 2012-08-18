@@ -236,6 +236,19 @@ void free_cursor(struct cursor *cursor)
 	free(cursor);
 }
 
+/* Lookup the index entry contains key */
+static struct index_entry *bnode_lookup(struct bnode *node, tuxkey_t key)
+{
+	struct index_entry *next = node->entries, *top = next + bcount(node);
+	assert(bcount(node) > 0);
+	/* binary search goes here */
+	while (++next < top) {
+		if (from_be_u64(next->key) > key)
+			break;
+	}
+	return next - 1;
+}
+
 int probe(struct cursor *cursor, tuxkey_t key)
 {
 	struct btree *btree = cursor->btree;
@@ -249,13 +262,9 @@ int probe(struct cursor *cursor, tuxkey_t key)
 	struct bnode *node = bufdata(buffer);
 
 	for (i = 0; i < depth; i++) {
-		struct index_entry *next = node->entries, *top = next + bcount(node);
-		while (++next < top) /* binary search goes here */
-			if (from_be_u64(next->key) > key)
-				break;
-		trace("probe level %i, %ti of %i", i, next - node->entries, bcount(node));
-		level_push(cursor, buffer, next);
-		if (!(buffer = vol_bread(btree->sb, from_be_u64((next - 1)->block))))
+		struct index_entry *entry = bnode_lookup(node, key);
+		level_push(cursor, buffer, entry + 1);
+		if (!(buffer = vol_bread(btree->sb, from_be_u64(entry->block))))
 			goto eek;
 		node = (struct bnode *)bufdata(buffer);
 	}
@@ -986,15 +995,7 @@ static int replay_bnode_change(struct sb *sb, block_t parent, block_t child,
 
 static void add_func(struct bnode *bnode, block_t child, tuxkey_t key)
 {
-	struct index_entry *entry = bnode->entries;
-	struct index_entry *top = entry + bcount(bnode);
-
-	while (entry < top) { /* binary search goes here */
-		if (from_be_u64(entry->key) > key)
-			break;
-		entry++;
-	}
-
+	struct index_entry *entry = bnode_lookup(bnode, key) + 1;
 	bnode_add_index(bnode, entry, child, key);
 }
 
@@ -1005,16 +1006,8 @@ int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 
 static void update_func(struct bnode *bnode, block_t child, tuxkey_t key)
 {
-	struct index_entry *entry = bnode->entries;
-	struct index_entry *top = entry + bcount(bnode);
-
-	while (entry < top) { /* binary search goes here */
-		if (from_be_u64(entry->key) == key)
-			break;
-		entry++;
-	}
-	assert(entry < top);
-
+	struct index_entry *entry = bnode_lookup(bnode, key);
+	assert(from_be_u64(entry->key) == key);
 	entry->block = to_be_u64(child);
 }
 
