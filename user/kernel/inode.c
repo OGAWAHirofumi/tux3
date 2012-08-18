@@ -624,16 +624,20 @@ error:
 }
 
 #ifdef __KERNEL__
+/* FIXME: we might want to share with userland's write_inode() */
 int tux3_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
-	BUG_ON(tux_inode(inode)->inum == TUX_BITMAP_INO ||
-	       tux_inode(inode)->inum == TUX_VOLMAP_INO ||
-	       tux_inode(inode)->inum == TUX_VTABLE_INO ||
-	       tux_inode(inode)->inum == TUX_LOGMAP_INO ||
-	       tux_inode(inode)->inum == TUX_INVALID_INO ||
-	       tux_inode(inode)->inum == TUX_ATABLE_INO);
-	/* this should not update the bitmap/vtable/atable except btree root */
+	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
+	       tux_inode(inode)->inum != TUX_LOGMAP_INO &&
+	       tux_inode(inode)->inum != TUX_INVALID_INO);
+	switch (tux_inode(inode)->inum) {
+	case TUX_BITMAP_INO:
+	case TUX_VTABLE_INO:
+	case TUX_ATABLE_INO:
+		/* FIXME: assert(only btree should be changed); */
+		break;
+	}
 	return save_inode(inode);
 }
 
