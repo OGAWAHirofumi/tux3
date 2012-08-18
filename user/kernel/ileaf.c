@@ -234,21 +234,50 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
 	return ibase(dest);
 }
 
-/* userland only */
-void ileaf_merge(struct btree *btree, struct ileaf *leaf, struct ileaf *from)
+static int ileaf_merge(struct btree *btree, void *vinto, void *vfrom)
 {
-	if (!icount(from))
-		return;
-	be_u16 *dict = (void *)leaf + btree->sb->blocksize;
-	be_u16 *fromdict = (void *)from + btree->sb->blocksize;
-	unsigned at = icount(leaf), free = atdict(dict, at), size = atdict(fromdict, icount(from));
+	struct ileaf *into = vinto, *from = vfrom;
+	unsigned fromcount = icount(from);
 
-	trace("copy in %i bytes", size);
-	memcpy(leaf->table + free, from->table, size);
-	leaf->count = to_be_u16(at + icount(from));
-	veccopy(dict - icount(leaf), fromdict - icount(from), icount(from));
-	for (int i = at + 1; at && i <= at + icount(from); i++)
-		add_idict(dict - i, __atdict(dict, at));
+	/* If "from" is empty, does nothing */
+	if (!fromcount)
+		return 1;
+
+	assert(ibase(from) > ibase(into));
+	tuxkey_t fromibase = ibase(from);
+	unsigned count = icount(into);
+	int hole = fromibase - ibase(into) + count;
+
+	be_u16 *dict = (void *)into + btree->sb->blocksize;
+	be_u16 *fromdict = (void *)from + btree->sb->blocksize;
+	int need_size = hole * sizeof(*dict) + ileaf_need(btree, from);
+
+	if (ileaf_free(btree, into) < need_size)
+		return 0;
+
+	/* Fill hole of dict until from_ibase */
+	unsigned limit = atdict(dict, count);
+	be_u16 __limit = to_be_u16(limit);
+	while (hole--) {
+		count++;
+		*(dict - count) = __limit;
+	}
+
+	/* Copy data from "from" */
+	unsigned fromlimit = atdict(fromdict, fromcount);
+	memcpy(into->table + limit, from->table, fromlimit);
+
+	/* Adjust copying fromdict */
+	if (limit) {
+		int i;
+		for (i = 1; i <= fromcount; i++)
+			add_idict(dict - i, limit);
+	}
+	veccopy(dict - count - fromcount, fromdict - fromcount, fromcount);
+
+	into->count = to_be_u16(count + fromcount);
+
+	return 1;
 }
 
 static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsigned newsize)
@@ -357,6 +386,7 @@ struct btree_ops itable_ops = {
 	.leaf_sniff = ileaf_sniff,
 	.leaf_init = ileaf_init,
 	.leaf_split = ileaf_split,
+	.leaf_merge = ileaf_merge,
 	.leaf_resize = ileaf_resize,
 	.balloc = balloc,
 };
