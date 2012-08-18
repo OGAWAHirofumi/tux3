@@ -199,7 +199,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		case LOG_BNODE_SPLIT: {
 			u64 src, dest;
 			unsigned pos;
-			data = decode32(data, &pos);
+			data = decode16(data, &pos);
 			data = decode48(data, &src);
 			data = decode48(data, &dest);
 			fprintf(gi->f,

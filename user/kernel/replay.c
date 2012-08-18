@@ -203,9 +203,9 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 		}
 		case LOG_BNODE_SPLIT:
 		{
-			u32 pos;
+			unsigned pos;
 			u64 src, dest;
-			data = decode32(data, &pos);
+			data = decode16(data, &pos);
 			data = decode48(data, &src);
 			data = decode48(data, &dest);
 			trace("%s: pos %x, src %Lx, dest %Lx",

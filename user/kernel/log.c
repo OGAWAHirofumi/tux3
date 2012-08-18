@@ -209,18 +209,18 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 }
 
 /*
- * 1. Split bnode from src to dest until next rollup
- * 2. balloc(dest) until next rollup
+ * 1. Split bnode from src to dst until next rollup
+ * 2. balloc(dst) until next rollup
  * (src buffer must be dirty already)
  */
-void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest)
+void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
 {
 	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_SPLIT]);
 
 	*data++ = LOG_BNODE_SPLIT;
-	data = encode32(data, pos);
+	data = encode16(data, pos);
 	data = encode48(data, src);
-	log_end(sb, encode48(data, dest));
+	log_end(sb, encode48(data, dst));
 }
 
 static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t child, tuxkey_t key)

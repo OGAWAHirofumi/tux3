@@ -912,7 +912,7 @@ void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 		    block_t left, block_t right, tuxkey_t rkey);
-void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest);
+void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst);
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 void log_bnode_update(struct sb *sb, block_t parent, block_t child,
 		      tuxkey_t key);
