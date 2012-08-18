@@ -143,10 +143,11 @@ static void draw_bnode(struct graph_info *gi, int child_is_leaf,
 
 	fprintf(gi->f,
 		"%s_bnode_%llu [\n"
-		"label = \"{ <bnode0> [bnode] (blocknr %llu%s) | count %u |",
+		"label = \"{ <bnode0> [bnode] (blocknr %llu%s)"
+		" | magic 0x%04x, count %u |",
 		gi->bname, blocknr, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
-		bcount(bnode));
+		from_be_u16(bnode->magic), bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
 		fprintf(gi->f,
 			" %c <f%u> key %llu, block %lld",

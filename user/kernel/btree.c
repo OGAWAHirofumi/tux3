@@ -21,11 +21,15 @@ struct root no_root = {
 	.depth	= 0,
 };
 
-struct bnode
-{
-	be_u32 count, unused;
-	struct index_entry { be_u64 key; be_u64 block; } __packed entries[];
-} __packed;
+struct bnode {
+	be_u16 magic;
+	be_u16 unused;
+	be_u32 count;
+	struct index_entry {
+		be_u64 key;
+		be_u64 block;
+	} entries[];
+};
 
 /*
  * Note that the first key of an index block is never accessed.  This is
@@ -71,12 +75,24 @@ struct buffer_head *new_leaf(struct btree *btree)
 	return buffer;
 }
 
+static inline void bnode_buffer_init(struct buffer_head *buffer)
+{
+	struct bnode *bnode = bufdata(buffer);
+	memset(bnode, 0, bufsize(buffer));
+	bnode->magic = to_be_u16(TUX3_MAGIC_BNODE);
+}
+
+static inline int bnode_sniff(struct bnode *bnode)
+{
+	return bnode->magic == to_be_u16(TUX3_MAGIC_BNODE);
+}
+
 static struct buffer_head *new_node(struct btree *btree)
 {
 	struct buffer_head *buffer = new_block(btree);
 
 	if (!IS_ERR(buffer)) {
-		memset(bufdata(buffer), 0, bufsize(buffer));
+		bnode_buffer_init(buffer);
 		mark_buffer_rollup_atomic(buffer);
 	}
 	return buffer;
@@ -323,6 +339,7 @@ static int cursor_read_root(struct cursor *cursor)
 	buffer = vol_bread(btree->sb, btree->root.block);
 	if (!buffer)
 		return -EIO; /* FIXME: stupid, it might have been NOMEM */
+	assert(bnode_sniff(bufdata(buffer)));
 	cursor_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 	return 0;
 }
@@ -361,6 +378,7 @@ static int cursor_advance_down(struct cursor *cursor)
 
 	if (cursor->level < btree->root.depth - 1) {
 		struct bnode *node = bufdata(buffer);
+		assert(bnode_sniff(node));
 		cursor_push(cursor, buffer, node->entries);
 		cursor_check(cursor);
 		return 1;
@@ -1204,6 +1222,7 @@ int free_empty_btree(struct btree *btree)
 	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
 	if (!rootbuf)
 		return -EIO;
+	assert(bnode_sniff(bufdata(rootbuf)));
 	/* Make btree has no root */
 	btree->root = no_root;
 	mark_btree_dirty(btree);
@@ -1266,6 +1285,7 @@ int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock)
 		err = PTR_ERR(oldbuf);
 		goto error_put_newbuf;
 	}
+	assert(bnode_sniff(bufdata(oldbuf)));
 
 	memcpy(bufdata(newbuf), bufdata(oldbuf), bufsize(newbuf));
 	mark_buffer_rollup_atomic(newbuf);
@@ -1286,7 +1306,7 @@ int replay_bnode_root(struct replay *rp, block_t root, unsigned count,
 	rootbuf = vol_getblk(sb, root);
 	if (!rootbuf)
 		return -ENOMEM;
-	memset(bufdata(rootbuf), 0, bufsize(rootbuf));
+	bnode_buffer_init(rootbuf);
 
 	bnode_init_root(bufdata(rootbuf), count, left, right, rkey);
 
@@ -1318,7 +1338,7 @@ int replay_bnode_split(struct replay *rp, block_t src, unsigned pos,
 		err = -ENOMEM;
 		goto error_put_srcbuf;
 	}
-	memset(bufdata(dstbuf), 0, bufsize(dstbuf));
+	bnode_buffer_init(dstbuf);
 
 	bnode_split(bufdata(srcbuf), pos, bufdata(dstbuf));
 
