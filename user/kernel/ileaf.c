@@ -65,7 +65,9 @@ static void ileaf_btree_init(struct btree *btree)
 static int ileaf_init(struct btree *btree, vleaf *leaf)
 {
 	trace("initialize inode leaf %p", leaf);
-	*(struct ileaf *)leaf = (struct ileaf){ to_be_u16(TUX3_MAGIC_ILEAF) };
+	*(struct ileaf *)leaf = (struct ileaf){
+		.magic = to_be_u16(TUX3_MAGIC_ILEAF),
+	};
 	return 0;
 }
 
