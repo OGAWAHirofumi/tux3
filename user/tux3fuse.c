@@ -787,7 +787,7 @@ out:
 
 static void tux3fuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	trace("(%Lx/%zu)", (L)ino, size);
+	trace("(%Lx, %zu)", (L)ino, size);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -797,19 +797,31 @@ static void tux3fuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 		return;
 	}
 
-	char *buf = malloc(size);
-	if (!buf) {
-		fuse_reply_err(req, ENOMEM);
-		iput(inode);
-		return;
+	char *buf = NULL;
+	if (size) {
+		buf = malloc(size);
+		if (!buf) {
+			fuse_reply_err(req, ENOMEM);
+			iput(inode);
+			return;
+		}
 	}
 
 	int len = xattr_list(inode, buf, size);
-	trace("listxattr-buffer:%s", buf);
+	trace("listxattr-buffer: %s", buf);
 	iput(inode);
 
-	fuse_reply_buf(req, buf, len);
-	free(buf);
+	if (len < 0)
+		fuse_reply_err(req, -len);
+	else {
+		if (size)
+			fuse_reply_buf(req, buf, len);
+		else
+			fuse_reply_xattr(req, len);
+	}
+
+	if (buf)
+		free(buf);
 }
 
 static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,

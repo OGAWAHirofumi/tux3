@@ -463,28 +463,42 @@ int xattr_list(struct inode *inode, char *text, size_t size)
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
 	char *base = text, *top = text + size;
+	int err;
 
 	while (xattr < limit) {
 		atom_t atom = xattr->atom;
 		if (size) {
+			/* FIXME: check error code for POSIX */
 			int tail = top - text;
 			int len = unatom(atable, atom, text, tail);
-			if (len < 0 || len == tail)
-				goto full;
+			if (len < 0) {
+				err = len;
+				goto error;
+			}
+			if (len == tail) {
+				err = -ERANGE;
+				goto error;
+			}
+
 			*(text += len) = 0;
 			text++;
 		} else
 			text += unatom(atable, atom, NULL, 0) + 1;
-		if ((xattr = xcache_next(xattr)) > limit)
-			goto fail;
+
+		if ((xattr = xcache_next(xattr)) > limit) {
+			error("xcache bug");
+			err = -EIO;
+			goto error;
+		}
 	}
 	assert(xattr == limit);
-full:
 	mutex_unlock(&atable->i_mutex);
+
 	return text - base;
-fail:
+
+error:
 	mutex_unlock(&atable->i_mutex);
-	return -EINVAL;
+	return err;
 }
 
 /* Xattr encode/decode */
