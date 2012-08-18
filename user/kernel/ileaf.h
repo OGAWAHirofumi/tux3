@@ -4,6 +4,7 @@
 struct ileaf_attr_ops {
 	int (*encoded_size)(struct btree *btree, void *data);
 	void (*encode)(struct btree *btree, void *data, void *attrs, int size);
+	int (*decode)(struct btree *btree, void *data, void *attrs, int size);
 };
 
 struct ileaf_req {

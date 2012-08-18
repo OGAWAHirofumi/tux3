@@ -99,30 +99,31 @@ static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 {
 	if (!tux3_trace)
 		return;
+
+	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
 	struct ileaf *leaf = vleaf;
 	inum_t inum = ibase(leaf);
 	be_u16 *dict = ileaf_dict(btree, leaf);
 	unsigned offset = 0;
 
-	printf("inode table block 0x%Lx/%i (%x bytes free)\n", (L)ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
+	trace_on("inode table block 0x%Lx/%i (%x bytes free)",
+		 (L)ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
+
 	for (int i = 0; i < icount(leaf); i++, inum++) {
 		int limit = __atdict(dict, i + 1), size = limit - offset;
 		if (!size)
 			continue;
-		printf("  0x%Lx: ", (L)inum);
-		//printf("[%x] ", offset);
 		if (size < 0)
-			printf("<corrupt>\n");
+			trace_on("  0x%Lx: <corrupt>\n", (L)inum);
 		else if (!size)
-			printf("<empty>\n");
-		else {
+			trace_on("  0x%Lx: <empty>\n", (L)inum);
+		else if (attr_ops == &iattr_ops) {
 			/* FIXME: this doesn't work in kernel */
 			struct inode inode = { .i_sb = vfs_sb(btree->sb) };
-			unsigned xsize = decode_xsize(&inode, leaf->table + offset, size);
-			tux_inode(&inode)->xcache = xsize ? new_xcache(xsize) : NULL;
-			decode_attrs(&inode, leaf->table + offset, size);
-			dump_attrs(&inode);
-			xcache_dump(&inode);
+			void *attrs = leaf->table + offset;
+
+			attr_ops->decode(btree, &inode, attrs, size);
+
 			free(tux_inode(&inode)->xcache);
 		}
 		offset = limit;
@@ -477,6 +478,23 @@ static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 	return 0;
 }
 
+static int ileaf_read(struct btree *btree, tuxkey_t key_bottom,
+		      tuxkey_t key_limit,
+		      void *leaf, struct btree_key_range *key)
+{
+	struct ileaf_req *rq = container_of(key, struct ileaf_req, key);
+	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
+	struct ileaf *ileaf = leaf;
+	void *attrs;
+	unsigned size;
+
+	attrs = ileaf_lookup(btree, key->start, ileaf, &size);
+	if (attrs == NULL)
+		return -ENOENT;
+
+	return attr_ops->decode(btree, rq->data, attrs, size);
+}
+
 struct btree_ops itable_ops = {
 	.btree_init	= ileaf_btree_init,
 	.leaf_init	= ileaf_init,
@@ -484,6 +502,7 @@ struct btree_ops itable_ops = {
 	.leaf_merge	= ileaf_merge,
 	.leaf_chop	= ileaf_chop,
 	.leaf_write	= ileaf_write,
+	.leaf_read	= ileaf_read,
 	.balloc		= balloc,
 	.private_ops	= &iattr_ops,
 
@@ -498,6 +517,7 @@ struct btree_ops otable_ops = {
 	.leaf_merge	= ileaf_merge,
 	.leaf_chop	= ileaf_chop,
 	.leaf_write	= ileaf_write,
+	.leaf_read	= ileaf_read,
 	.balloc		= balloc,
 	.private_ops	= &oattr_ops,
 
