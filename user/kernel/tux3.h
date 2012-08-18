@@ -924,7 +924,7 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
 inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal);
 int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
-		    int (*func)(struct btree *, inum_t, void *),
+		    int (*func)(struct btree *, inum_t, void *, u16, void *),
 		    void *func_data);
 void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf);
 extern struct btree_ops itable_ops;

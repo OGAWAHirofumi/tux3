@@ -53,7 +53,13 @@ void clean_orphan_list(struct list_head *head)
 	}
 }
 
-/* FIXME: maybe, we can share code more with inode.c and iattr.c. */
+/*
+ * FIXME: maybe, we can share code more with inode.c and iattr.c.
+ *
+ * And this is supporting ORPHAN_ATTR only, and assuming there is only
+ * ORPHAN_ATTR. We are better to support multiple attributes in
+ * otable.
+ */
 enum { ORPHAN_ATTR, };
 static unsigned orphan_asize[] = {
 	/* Fixed size attrs */
@@ -317,10 +323,17 @@ static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 	return 0;
 }
 
-static int load_enum_inode(struct btree *btree, inum_t inum, void *data)
+static int load_enum_inode(struct btree *btree, inum_t inum, void *attrs,
+			   u16 size, void *data)
 {
 	struct replay *rp = data;
 	struct sb *sb = rp->sb;
+	unsigned kind, version;
+
+	assert(size == 2);
+	decode_kind(attrs, &kind, &version);
+	if (version != sb->version || kind != ORPHAN_ATTR)
+		return 0;
 
 	/* If inum is in orphan_del, it was dead already */
 	if (replay_find_orphan(&sb->orphan_del, inum))
