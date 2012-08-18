@@ -472,14 +472,18 @@ static int bitmap_has_dirty;
 static void walk_dleaf_bitmap(struct graph_info *gi, struct btree *btree,
 			      struct dwalk *walk)
 {
-	struct inode *bitmap = btree->sb->bitmap;
+	struct sb *sb = btree->sb;
+	struct inode *bitmap = sb->bitmap;
 	block_t index = dwalk_index(walk);
 	unsigned count = dwalk_count(walk);
 	void *data;
 
 	for (unsigned i = 0; i < count; i++) {
-		unsigned idx, size = btree->sb->blocksize * 8;
+		unsigned idx, size = sb->blocksize * 8;
 		struct buffer_head *buffer;
+
+		/* bit offset from index 0 and bit 0 */
+		block_t offset = (index + i) * size;
 
 		fprintf(gi->f, " | index %llu: ", (L)(index + i));
 		buffer = blockread(mapping(bitmap), index + i);
@@ -488,15 +492,24 @@ static void walk_dleaf_bitmap(struct graph_info *gi, struct btree *btree,
 
 		idx = find_first_bit(data, size);
 		while (idx < size) {
-			fprintf(gi->f, "%u-", idx);
+			block_t start, end;
+
+			start = offset + idx;
 			idx = find_next_zero_bit(data, size, idx + 1);
-			fprintf(gi->f, "%u, ", idx - 1);
+			end = offset + idx - 1;
+
+			if (start != end)
+				fprintf(gi->f, "%llu-%llu, ", (L)start, (L)end);
+			else
+				fprintf(gi->f, "%llu, ", (L)start);
+
 			if (idx >= size)
 				break;
 			idx = find_next_bit(data, size, idx + 1);
 			if (idx >= size)
 				break;
 		}
+		fprintf(gi->f, "\\l "); /* left align */
 
 		if (buffer_dirty(buffer))
 			bitmap_has_dirty = 1;
