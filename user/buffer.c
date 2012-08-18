@@ -192,11 +192,16 @@ struct buffer_head *set_buffer_clean(struct buffer_head *buffer)
 	return buffer;
 }
 
+struct buffer_head *__set_buffer_empty(struct buffer_head *buffer)
+{
+	set_buffer_state(buffer, BUFFER_EMPTY);
+	return buffer;
+}
+
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 {
 	assert(!buffer_empty(buffer));
-	set_buffer_state(buffer, BUFFER_EMPTY);
-	return buffer;
+	return __set_buffer_empty(buffer);
 }
 
 #ifdef BUFFER_PARANOIA_DEBUG
@@ -402,7 +407,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 
 		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
 		int err = buffer->map->io(READ, &bufvec);
-		if (err) {
+		if (err || !buffer_clean(buffer)) {
 			blockput(buffer);
 			return NULL; // ERR_PTR me!!!
 		}
@@ -583,7 +588,7 @@ static void dev_blockio_endio(struct buffer_head *buffer, int err)
 	if (err) {
 		/* FIXME: What to do? Hack: This re-link to state from bufvec */
 		assert(0);
-		set_buffer_empty(buffer);
+		__set_buffer_empty(buffer);
 	} else
 		set_buffer_clean(buffer);
 }

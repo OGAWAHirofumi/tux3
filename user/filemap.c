@@ -128,7 +128,7 @@ static void filemap_read_endio(struct buffer_head *buffer, int err)
 	if (err) {
 		/* FIXME: What to do? Hack: This re-link to state from bufvec */
 		assert(0);
-		set_buffer_empty(buffer);
+		__set_buffer_empty(buffer);
 	} else {
 		set_buffer_clean(buffer);
 	}
@@ -150,7 +150,7 @@ static void filemap_hole_endio(struct buffer_head *buffer, int err)
 static void filemap_clean_endio(struct buffer_head *buffer, int err)
 {
 	assert(err == 0);
-	set_buffer_empty(buffer);
+	__set_buffer_empty(buffer);
 	/* This drops refcount for bufvec of guess_readahead() */
 	blockput(buffer);
 }
