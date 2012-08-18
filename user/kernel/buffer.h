@@ -97,6 +97,12 @@ void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);
 void init_dirty_buffers(struct dirty_buffers *dirty);
 
 /* buffer_writeback.c */
+/* Helper for waiting I/O */
+struct iowait {
+	atomic_t inflight;		/* In-flight I/O count */
+	struct completion done;		/* completion for in-flight I/O */
+};
+
 /* Helper for buffer vector I/O */
 struct bufvec {
 	struct list_head buffers;	/* The buffers added to the bio */
@@ -133,6 +139,8 @@ static inline block_t bufvec_last_index(struct bufvec *bufvec)
 	return bufindex(bufvec_last_buf(bufvec));
 }
 
+void tux3_iowait_init(struct iowait *iowait);
+void tux3_iowait_wait(struct iowait *iowait);
 int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count);
 int flush_list(struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);

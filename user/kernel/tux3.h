@@ -245,6 +245,7 @@ struct sb {
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 	spinlock_t dirty_inodes_lock;
 	struct list_head dirty_inodes;	/* dirty inodes list */
+	struct iowait *iowait;		/* helper for waiting I/O */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else

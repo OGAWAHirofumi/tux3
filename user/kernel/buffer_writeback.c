@@ -5,6 +5,38 @@
 #include <linux/list_sort.h>
 
 /*
+ * Helper for waiting I/O
+ */
+
+static void iowait_inflight_inc(struct iowait *iowait)
+{
+	atomic_inc(&iowait->inflight);
+}
+
+static void iowait_inflight_dec(struct iowait *iowait)
+{
+	if (atomic_dec_and_test(&iowait->inflight))
+		complete(&iowait->done);
+}
+
+void tux3_iowait_init(struct iowait *iowait)
+{
+	/*
+	 * Grab 1 to prevent the partial complete until all I/O is
+	 * submitted
+	 */
+	init_completion(&iowait->done);
+	atomic_set(&iowait->inflight, 1);
+}
+
+void tux3_iowait_wait(struct iowait *iowait)
+{
+	/* All I/O was submitted, release initial 1, then wait I/O */
+	iowait_inflight_dec(iowait);
+	wait_for_completion(&iowait->done);
+}
+
+/*
  * Helper for buffer vector I/O.
  */
 
@@ -84,15 +116,26 @@ static struct buffer_head *bufvec_bio_del_buffer(struct bio *bio)
 	return buffer;
 }
 
+static struct sb *bufvec_bio_sb(struct bio *bio)
+{
+	struct buffer_head *buffer = bio->bi_private;
+	assert(buffer);
+	return tux_sb(buffer_inode(buffer)->i_sb);
+}
+
 /*
  * bio completion for bufvec based I/O
  */
 static void bufvec_end_io(struct bio *bio, int err)
 {
 	const int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
+	struct sb *sb;
 	char b[BDEVNAME_SIZE];
 
 	trace("bio %p, err %d", bio, err);
+
+	/* FIXME: inode is still guaranteed to be available? */
+	sb = bufvec_bio_sb(bio);
 
 	/* Remove buffer from bio, then unlock buffer */
 	while (1) {
@@ -116,6 +159,7 @@ static void bufvec_end_io(struct bio *bio, int err)
 		put_bh(buffer);
 	}
 
+	iowait_inflight_dec(sb->iowait);
 	bio_put(bio);
 }
 
@@ -196,6 +240,9 @@ int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count)
 		trace("buffer %p", buffer);
 	}
 	assert(i > 0);
+
+	/* FIXME: inode is still guaranteed to be available? */
+	iowait_inflight_inc(tux_sb(inode->i_sb)->iowait);
 
 	return i;
 }

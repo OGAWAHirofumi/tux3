@@ -326,10 +326,15 @@ enum rollup_flags { NO_ROLLUP, ALLOW_ROLLUP, FORCE_ROLLUP, };
 static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 {
 	unsigned delta = sb->delta++;
+	struct iowait iowait;
 	int err = 0;
 
 	trace(">>>>>>>>> commit delta %u", delta);
 	/* further changes of frontend belong to the next delta */
+
+	/* Prepare to wait I/O */
+	tux3_iowait_init(&iowait);
+	sb->iowait = &iowait;
 
 	/* Add delta log for debugging. */
 	log_delta(sb);
@@ -362,6 +367,9 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 
 	write_btree(sb, delta);
 	write_log(sb);
+	/* Wait I/O was submitted */
+	tux3_iowait_wait(&iowait);
+	/* Commit last block (for now, this is sync I/O) */
 	commit_delta(sb);
 	trace("<<<<<<<<< commit done %u", delta);
 
