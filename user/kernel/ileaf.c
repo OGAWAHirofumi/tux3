@@ -76,22 +76,22 @@ static int ileaf_init(struct btree *btree, vleaf *leaf)
 	return 0;
 }
 
-static int ileaf_sniff(struct btree *btree, vleaf *leaf)
+static int ileaf_need(struct btree *btree, struct ileaf *ileaf)
 {
-	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
-}
-
-static unsigned ileaf_need(struct btree *btree, void *vleaf)
-{
-	struct ileaf *ileaf = vleaf;
 	be_u16 *dict = ileaf_dict(btree, ileaf);
 	unsigned count = icount(ileaf);
 	return atdict(dict, count) + count * sizeof(*dict);
 }
 
-static unsigned ileaf_free(struct btree *btree, vleaf *leaf)
+static int ileaf_free(struct btree *btree, struct ileaf *ileaf)
 {
-	return btree->sb->blocksize - ileaf_need(btree, leaf) - sizeof(struct ileaf);
+	return btree->sb->blocksize
+		- ileaf_need(btree, ileaf) - sizeof(struct ileaf);
+}
+
+static int ileaf_sniff(struct btree *btree, vleaf *leaf)
+{
+	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
 }
 
 static void ileaf_dump(struct btree *btree, vleaf *vleaf)
@@ -285,39 +285,6 @@ static int ileaf_merge(struct btree *btree, void *vinto, void *vfrom)
 	return 1;
 }
 
-static void *ileaf_resize(struct btree *btree, tuxkey_t inum, vleaf *base, unsigned newsize)
-{
-	struct ileaf *leaf = base;
-	assert(ileaf_sniff(btree, leaf));
-	assert(inum >= ibase(leaf));
-	if (inum - ibase(leaf) >= btree->entries_per_leaf)
-		return NULL;
-
-	be_u16 *dict = ileaf_dict(btree, leaf);
-	unsigned at = inum - ibase(leaf);
-	unsigned count = icount(leaf);
-	unsigned extend_empty = at < count ? 0 : at - count + 1;
-	unsigned offset = at && count ? __atdict(dict, min(at, count)) : 0;
-	unsigned size = at < count ? __atdict(dict, at + 1) - offset : 0;
-	int more = newsize - size;
-
-	if (more > 0 && sizeof(*dict) * extend_empty + more > ileaf_free(btree, leaf))
-		return NULL;
-	be_u16 limit = to_be_u16(atdict(dict, count));
-	for (; extend_empty--; count++)
-		*(dict - count - 1) = limit;
-	unsigned itop = __atdict(dict, count);
-	void *attrs = leaf->table + offset;
-	trace("resize inum 0x%Lx at 0x%x from %x to %x", (L)inum, offset, size, newsize);
-
-	assert(itop >= offset + size);
-	memmove(attrs + newsize, attrs + size, itop - offset - size);
-	for (int i = at + 1; i <= count; i++)
-		add_idict(dict - i, more);
-	leaf->count = to_be_u16(count);
-	return attrs;
-}
-
 inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 {
 	assert(goal >= ibase(leaf));
@@ -385,13 +352,77 @@ void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 	ileaf_trim(btree, leaf);
 }
 
+static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
+			  unsigned newsize)
+{
+	struct ileaf *ileaf = vleaf;
+	be_u16 *dict = ileaf_dict(btree, ileaf);
+	unsigned count = icount(ileaf);
+	unsigned at = inum - ibase(ileaf);
+	int extend_dict, offset, size;
+
+	assert(inum >= ibase(ileaf));
+
+	/*
+	 * Restrict number of inum on a leaf.
+	 * FIXME: we might want more flexible format.
+	 */
+	if (at >= btree->entries_per_leaf)
+		return NULL;
+
+	/* Get existent attributes, and calculate expand/shrink size */
+	if (at + 1 > count) {
+		/* Need to extend dict */
+		extend_dict = (at + 1 - count) * sizeof(*dict);
+		offset = atdict(dict, count);
+		size = 0;
+	} else {
+		/* "at" is in dict, so get attr size */
+		extend_dict = 0;
+		offset = atdict(dict, at);
+		size = __atdict(dict, at + 1) - offset;
+	}
+
+	if (ileaf_free(btree, ileaf) < (int)newsize - size + extend_dict)
+		return NULL;
+
+	/* Extend dict */
+	if (extend_dict) {
+		be_u16 limit = to_be_u16(atdict(dict, count));
+		while (count < at + 1) {
+			count++;
+			*(dict - count) = limit;
+		}
+		ileaf->count = to_be_u16(count);
+	}
+
+	void *attrs = ileaf->table + offset;
+	if (newsize != size) {
+		/* Expand/Shrink attr space */
+		unsigned limit = __atdict(dict, count);
+		assert(limit >= offset + size);
+		memmove(attrs + newsize, attrs + size, limit - offset - size);
+
+		/* Adjust dict */
+		int diff = newsize - size;
+		at++;
+		while (at <= count) {
+			add_idict(dict - at, diff);
+			at++;
+		}
+	}
+
+	return attrs;
+}
+
 struct btree_ops itable_ops = {
-	.btree_init = ileaf_btree_init,
-	.leaf_dump = ileaf_dump,
-	.leaf_sniff = ileaf_sniff,
-	.leaf_init = ileaf_init,
-	.leaf_split = ileaf_split,
-	.leaf_merge = ileaf_merge,
-	.leaf_resize = ileaf_resize,
-	.balloc = balloc,
+	.btree_init	= ileaf_btree_init,
+	.leaf_init	= ileaf_init,
+	.leaf_split	= ileaf_split,
+	.leaf_merge	= ileaf_merge,
+	.leaf_resize	= ileaf_resize,
+	.balloc		= balloc,
+
+	.leaf_sniff	= ileaf_sniff,
+	.leaf_dump	= ileaf_dump,
 };
