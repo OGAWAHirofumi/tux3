@@ -118,7 +118,8 @@ static void test01(struct sb *sb, struct btree *btree)
 	}
 
 	/* Merge leaf */
-	dleaf_merge(btree, leaf1, leaf2);
+	ret = dleaf_merge(btree, leaf1, leaf2);
+	test_assert(ret == 1);
 	/* Check extents */
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
 		ret = dwalk_probe(leaf1, blocksize, walk, data[i].index);
@@ -170,7 +171,8 @@ static void test02(struct sb *sb, struct btree *btree)
 		dwalk_chop(walk);
 
 		/* merge leaf1 and leaf2 */
-		dleaf_merge(btree, leaf1, leaf2);
+		int ret = dleaf_merge(btree, leaf1, leaf2);
+		test_assert(ret == 1);
 
 		dwalk_probe(leaf1, blocksize, walk, 0);
 		for (int i = 0; i < chop; i++) {

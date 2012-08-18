@@ -302,9 +302,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		index += map[i].count;
 	}
 	if (tail) {
-		if (dleaf_need(btree, tail) < dleaf_free(btree, leaf))
-			dleaf_merge(btree, leaf, tail);
-		else {
+		if (!dleaf_merge(btree, leaf, tail)) {
 			mark_buffer_dirty_non(cursor_leafbuf(cursor));
 			assert(dleaf_groups(tail) >= 1);
 			/* Tail does not fit, add it as a new btree leaf */

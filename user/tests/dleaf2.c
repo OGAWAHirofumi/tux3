@@ -787,7 +787,7 @@ static void test05(struct sb *sb, struct btree *btree)
 	struct btree_key_range *key;
 	struct seg seg[10];
 	tuxkey_t hint;
-	int err;
+	int err, ret;
 
 	leaf1 = dleaf2_create(btree);
 	assert(leaf1);
@@ -822,7 +822,8 @@ static void test05(struct sb *sb, struct btree *btree)
 		test_assert(!err);
 
 		/* Test merge */
-		dleaf2_merge(btree, leaf1, leaf2);
+		ret = dleaf2_merge(btree, leaf1, leaf2);
+		test_assert(ret == 1);
 
 		struct test_extent res[] = {
 			{ .logical =  0, .physical =  0, .count = 10, },
@@ -861,7 +862,8 @@ static void test05(struct sb *sb, struct btree *btree)
 		test_assert(!err);
 
 		/* Test merge */
-		dleaf2_merge(btree, leaf1, leaf2);
+		ret = dleaf2_merge(btree, leaf1, leaf2);
+		test_assert(ret == 1);
 
 		struct test_extent res[] = {
 			{ .logical =  0, .physical =  0, .count = 10, },

@@ -132,14 +132,18 @@ out:
 	return leaf->entries + at;
 }
 
-static void uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
+static int uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 {
 	struct uleaf *into = vinto;
 	struct uleaf *from = vfrom;
 
-	assert(into->count + from->count <= btree->entries_per_leaf);
+	if (into->count + from->count > btree->entries_per_leaf)
+		return 0;
+
 	vecmove(&into->entries[into->count], from->entries, from->count);
 	into->count += from->count;
+
+	return 1;
 }
 
 static struct btree_ops ops = {

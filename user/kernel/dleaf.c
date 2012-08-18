@@ -291,7 +291,14 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, vleaf *from, vle
 	return get_index(gdict2 - 1, (struct entry *)(gdict2 - groups2) - 1);
 }
 
-void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
+/*
+ * Try to merge dleaf
+ *
+ * return value:
+ * 0 - couldn't merge
+ * 1 - merged
+ */
+int dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 {
 	struct dleaf *leaf = to_dleaf(vinto), *from = to_dleaf(vfrom);
 	struct group *gdict = (void *)leaf + btree->sb->blocksize;
@@ -307,15 +314,22 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 
 	/* Source is empty, so we do nothing */
 	if (dleaf_groups(from) == 0)
-		return;
+		return 1;
 
 	/* Destination is empty, so we just copy */
 	if (dleaf_groups(leaf) == 0) {
 		unsigned used = from_be_u16(from->used);
 		memcpy(leaf, from, from_be_u16(from->free));
 		memcpy((void *)leaf + used, (void *)from + used, btree->sb->blocksize - used);
-		return;
+		return 1;
 	}
+
+	/*
+	 * Check if there is space.
+	 * FIXME: we may be able to merge more if group/entry can be merged
+	 */
+	if (dleaf_need(btree, vfrom) > dleaf_free(btree, vinto))
+		return 0;
 
 	/* Try to merge group, and prepare to adjust */
 	if (group_keyhi(gstop) == group_keyhi(group2) &&
@@ -372,6 +386,8 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 		}
 	}
 	assert(!dleaf_check(leaf, btree->sb->blocksize));
+
+	return 1;
 }
 
 /*

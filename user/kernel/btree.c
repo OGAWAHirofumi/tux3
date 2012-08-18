@@ -625,13 +625,10 @@ static int try_leaf_merge(struct btree *btree, struct buffer_head *intobuf,
 {
 	struct vleaf *from = bufdata(frombuf);
 	struct vleaf *into = bufdata(intobuf);
-	unsigned from_size = btree->ops->leaf_need(btree, from);
 
 	/* Try to merge leaves */
-	if (from_size <= btree->ops->leaf_free(btree, into)) {
+	if (btree->ops->leaf_merge(btree, into, from)) {
 		struct sb *sb = btree->sb;
-		if (from_size > 0)
-			btree->ops->leaf_merge(btree, into, from);
 		/*
 		 * We know frombuf is redirected and dirty. So, in
 		 * here, we can just cancel leaf_redirect by bfree(),

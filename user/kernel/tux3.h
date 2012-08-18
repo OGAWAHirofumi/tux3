@@ -597,7 +597,8 @@ struct btree_ops {
 	unsigned (*leaf_free)(struct btree *btree, vleaf *leaf);
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, vleaf *leaf);
-	void (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
+	/* return value: 1 - merged, 0 - couldn't merge */
+	int (*leaf_merge)(struct btree *btree, vleaf *into, vleaf *from);
 	int (*leaf_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key, tuxkey_t *split_hint);
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
@@ -905,7 +906,7 @@ int tux_dir_is_empty(struct inode *dir);
 int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
-void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
+int dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
 unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree1_ops;
 

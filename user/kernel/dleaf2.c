@@ -232,7 +232,7 @@ static tuxkey_t dleaf2_split(struct btree *btree, tuxkey_t hint,
  * 0 - couldn't merge
  * 1 - merged
  */
-static void dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
+static int dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 {
 	struct dleaf2 *into = vinto, *from = vfrom;
 	struct extent into_ex, from_ex;
@@ -242,7 +242,7 @@ static void dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 	/* If "from" is empty or sentinel only, does nothing */
 	from_count = from_be_u16(from->count);
 	if (from_count <= 1)
-		return /* 1 */;
+		return 1;
 
 	from_size = sizeof(from->table[0]) * from_count;
 	/* If "into" is empty, just copy. FIXME: why there is no sentinel? */
@@ -251,7 +251,7 @@ static void dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 		into->count = from->count;
 		from->count = 0;
 		memcpy(into->table, from->table, from_size);
-		return /* 1 */;
+		return 1;
 	}
 
 	/* Try merge end of "from" and start of "into" */
@@ -268,7 +268,7 @@ static void dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 		can_merge = 1;
 
 	if (into_count + from_count - can_merge > btree->entries_per_leaf)
-		return /* 0 */;
+		return 0;
 
 	if (!from_ex.physical) {
 		/* If start of "from" is hole, use logical of sentinel */
@@ -284,7 +284,7 @@ static void dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 	into->count = to_be_u16(into_count + from_count - can_merge);
 	from->count = 0;
 
-	return /* 1 */;
+	return 1;
 }
 
 /*
