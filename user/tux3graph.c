@@ -984,8 +984,6 @@ int main(int argc, char *argv[])
 		errno = ENOMEM;
 		goto eek;
 	}
-	if ((errno = -load_itable(sb)))
-		goto eek;
 
 	void *replay_handle = replay_stage1(sb);
 	if (IS_ERR(replay_handle)) {

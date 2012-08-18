@@ -182,10 +182,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	if (!sbi->logmap)
 		goto error_logmap;
 
-	err = load_itable(sbi);
-	if (err)
-		goto error_bitmap;
-
 //	struct inode *vtable;
 	sbi->bitmap = tux3_iget(sb, TUX_BITMAP_INO);
 	err = PTR_ERR(sbi->bitmap);

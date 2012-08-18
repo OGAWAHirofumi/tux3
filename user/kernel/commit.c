@@ -9,6 +9,12 @@
 #define trace trace_on
 #endif
 
+static void setup_roots(struct sb *sb, struct disksuper *super)
+{
+	u64 iroot_val = from_be_u64(super->iroot);
+	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
+}
+
 void setup_sb(struct sb *sb, struct disksuper *super)
 {
 	init_rwsem(&sb->delta_lock);
@@ -49,6 +55,8 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	trace("freeatom %u, atomgen %u", sb->freeatom, sb->atomgen);
 	trace("dictsize %Lu", (L)sb->dictsize);
 	trace("logchain %Lu", (L)sb->logchain);
+
+	setup_roots(sb, super);
 }
 
 int load_sb(struct sb *sb)
@@ -82,14 +90,6 @@ int save_sb(struct sb *sb)
 	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
 	super->logchain = to_be_u64(sb->logchain);
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
-}
-
-int load_itable(struct sb *sb)
-{
-	u64 iroot_val = from_be_u64(sb->super.iroot);
-
-	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
-	return 0;
 }
 
 void clean_buffer(struct buffer_head *buffer)

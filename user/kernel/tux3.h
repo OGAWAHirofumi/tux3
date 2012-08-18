@@ -843,7 +843,6 @@ int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t k
 void setup_sb(struct sb *sb, struct disksuper *super);
 int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
-int load_itable(struct sb *sb);
 void clean_buffer(struct buffer_head *buffer);
 int apply_defered_bfree(struct sb *sb, u64 val);
 int force_rollup(struct sb *sb);

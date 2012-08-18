@@ -175,9 +175,6 @@ int make_tux3(struct sb *sb)
 	if (err)
 		return err;
 
-	trace("create inode table");
-	init_btree(itable_btree(sb), sb, no_root, &itable_ops);
-
 	trace("create bitmap");
 	sb->bitmap = create_internal_inode(sb, TUX_BITMAP_INO, NULL);
 	if (IS_ERR(sb->bitmap)) {

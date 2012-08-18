@@ -407,8 +407,6 @@ static void tux3_init(void *data, struct fuse_conn_info *conn)
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
 		goto eek;
-	if ((errno = -load_itable(sb)))
-		goto eek;
 	sb->bitmap = iget(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
 		errno = PTR_ERR(sb->bitmap);
