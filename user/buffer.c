@@ -187,10 +187,7 @@ void evict_buffer(struct buffer_head *buffer)
 struct buffer_head *new_buffer(map_t *map)
 {
 	struct buffer_head *buffer = NULL;
-	int min_buffers = 100, err;
-
-	if (max_buffers < min_buffers)
-		max_buffers = min_buffers;
+	int err;
 
 	if (!list_empty(buffers + BUFFER_FREED)) {
 		buffer = list_entry(buffers[BUFFER_FREED].next, struct buffer_head, link);
@@ -493,10 +490,16 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 	INIT_LIST_HEAD(&lru_buffers);
 	for (int i = 0; i < BUFFER_STATES; i++)
 		INIT_LIST_HEAD(buffers + i);
-#ifndef BUFFER_PARANOIA_DEBUG
+
 	unsigned bufsize = 1 << dev->bits;
 	max_buffers = poolsize / bufsize;
 	max_evict = max_buffers / 10;
+
+	int min_buffers = 100;
+	if (max_buffers < min_buffers)
+		max_buffers = min_buffers;
+
+#ifndef BUFFER_PARANOIA_DEBUG
 	preallocate_buffers(bufsize);
 #else
 	destroy_buffers();

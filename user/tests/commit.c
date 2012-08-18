@@ -326,7 +326,7 @@ int main(int argc, char *argv[])
 	assert(!err);
 
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
-	init_buffers(dev, 1 << 20, 1);
+	init_buffers(dev, 1 << 24, 1);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
 	struct sb *sb = rapid_sb(dev);
