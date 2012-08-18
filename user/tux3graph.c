@@ -369,8 +369,8 @@ static void draw_atable_start(struct graph_info *gi, struct btree *btree)
 	fprintf(gi->f, "label = \"{ dump of atable");
 }
 
-static void draw_atable_dirent(struct graph_info *gi, struct btree *btree,
-			       struct buffer_head *buffer)
+static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
+			    struct buffer_head *buffer)
 {
 	struct sb *sb = btree->sb;
 	tux_dirent *entry = bufdata(buffer);
@@ -461,7 +461,7 @@ static void draw_atable_data(struct graph_info *gi, struct btree *btree,
 
 		if (index < sb->atomref_base) {
 			/* atom name table */
-			draw_atable_dirent(gi, btree, buffer);
+			__draw_dir_data(gi, btree, buffer);
 		} else if (index < sb->unatom_base) {
 			/* atom refcount table */
 			if (start_atomref) {
@@ -516,16 +516,35 @@ static void draw_dir_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
 	fprintf(gi->f,
-		"label = \"directory entries:\\n"
-		"(filename, inum, etc.)\\n"
-		"inum is used as key to search\\n"
-		" inode in itable\"\n");
+		"label = \"{ dump of directory");
+}
+
+static void draw_dir_data(struct graph_info *gi, struct btree *btree,
+			  block_t index, unsigned count)
+{
+	struct buffer_head *buffer;
+
+	for (unsigned i = 0; i < count; i++) {
+		buffer = blockread(mapping(btree_inode(btree)), index + i);
+		assert(buffer);
+
+		__draw_dir_data(gi, btree, buffer);
+
+		blockput(buffer);
+	}
+}
+
+static void draw_dir_end(struct graph_info *gi, struct btree *btree)
+{
+	fprintf(gi->f,
+		" }\"\n");
+	draw_data_end(gi, btree);
 }
 
 struct draw_data_ops draw_dir = {
 	.draw_start	= draw_dir_start,
-	.draw_data	= draw_data,
-	.draw_end	= draw_data_end,
+	.draw_data	= draw_dir_data,
+	.draw_end	= draw_dir_end,
 };
 
 static void draw_file_start(struct graph_info *gi, struct btree *btree)
