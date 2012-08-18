@@ -167,12 +167,8 @@ int make_tux3(struct sb *sb)
 		goto eek;
 	}
 
-#ifdef ATOMIC
-	reserve_blocks_callback = reserve_superblock;
-#else
 	if (reserve_superblock(sb) < 0)
 		goto eek;
-#endif
 
 	trace("create version table");
 	sb->vtable = create_internal_inode(sb, TUX_VTABLE_INO, NULL);
