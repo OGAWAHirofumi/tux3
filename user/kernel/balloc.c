@@ -232,7 +232,7 @@ error:
 	return -EIO; // error???
 }
 
-int update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
+int replay_update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
 {
 	unsigned shift = sb->blockbits + 3, mask = (1 << shift) - 1;
 	struct buffer_head *buffer = blockread(mapping(sb->bitmap), start >> shift);
@@ -241,10 +241,15 @@ int update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
 		return -ENOMEM;
 	if (!(set ? all_clear : all_set)(bufdata(buffer), start & mask, count)) {
 		blockput(buffer);
+
+		error("%s: start 0x%Lx, count %x",
+		      set ? "already allocated" : "double free",
+		      (L)start, count);
 		return -EINVAL;
 	}
 	(set ? set_bits : clear_bits)(bufdata(buffer), start & mask, count);
-	sb->freeblocks += set ? count : -count;
+	/* freeblocks are already written */
+	/* FIXME: maybe we should call blockdirty(); */
 	blockput_dirty(buffer);
 	return 0;
 }

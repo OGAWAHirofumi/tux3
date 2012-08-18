@@ -20,11 +20,26 @@ static unsigned logsize[LOG_TYPES] = {
 	[LOG_BNODE_UPDATE] = 19,
 };
 
-int replay(struct sb *sb)
+static const char *log_name[LOG_TYPES] = {
+#define X(x)	[x] = #x
+	X(LOG_BALLOC),
+	X(LOG_BFREE),
+	X(LOG_BFREE_ON_ROLLUP),
+	X(LOG_LEAF_REDIRECT),
+	X(LOG_BNODE_REDIRECT),
+	X(LOG_BNODE_ROOT),
+	X(LOG_BNODE_SPLIT),
+	X(LOG_BNODE_ADD),
+	X(LOG_BNODE_UPDATE),
+#undef X
+};
+
+static int replay_load_logblocks(struct sb *sb)
 {
 	block_t logchain = sb->logchain;
 	unsigned logcount = from_be_u32(sb->super.logcount);
 
+	/* Load log blocks */
 	trace("load %u logblocks", logcount);
 	for (int i = logcount; i-- > 0;) {
 		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
@@ -45,99 +60,171 @@ int replay(struct sb *sb)
 		blockput(buffer);
 	}
 
-	unsigned code;
-	for (sb->lognext = 0; sb->lognext < logcount;) {
-		trace("log block %i", sb->lognext);
-		log_next(sb);
-		struct logblock *log = bufdata(sb->logbuf);
-		unsigned char *data = log->data;
-		while (data < log->data + from_be_u16(log->bytes)) {
-			switch (code = *data++) {
-			case LOG_BNODE_ROOT:
-			{
-				u64 root, left, right, rkey;
-				u8 count;
-				count = *data++;
-				data = decode48(data, &root);
-				data = decode48(data, &left);
-				data = decode48(data, &right);
-				data = decode48(data, &rkey);
-				trace("LOG_BNODE_ROOT: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx", count, (L)root, (L)left, (L)right, (L)rkey);
-
-				replay_bnode_root(sb, root, count, left, right, rkey);
-				break;
-			}
-			case LOG_BNODE_ADD:
-			case LOG_BNODE_UPDATE:
-			{
-				u64 child, parent, key;
-				data = decode48(data, &parent);
-				data = decode48(data, &child);
-				data = decode48(data, &key);
-				trace("parent = 0x%Lx, child = 0x%Lx, key = 0x%Lx", (L)parent, (L)child, (L)key);
-				break;
-			}
-			case LOG_BALLOC:
-			{
-				u64 block;
-				u8 count;
-				count = *data++;
-				data = decode48(data, &block);
-				trace("LOG_BALLOC: count %u, block %Lx", count, (L)block);
-				break;
-			}
-			case LOG_BFREE:
-			case LOG_BFREE_ON_ROLLUP:
-			case LOG_LEAF_REDIRECT:
-			case LOG_BNODE_REDIRECT:
-			case LOG_BNODE_SPLIT:
-				trace("log record: code 0x%02x", code);
-				data += logsize[code] - 1;
-				break;
-			default:
-				goto unknown;
-			}
-		}
-		log_drop(sb);
-	}
-#if 0
-	for (sb->lognext = 0; sb->lognext < logcount;) {
-		trace("log block %i", sb->lognext);
-		log_next(sb);
-		struct logblock *log = bufdata(sb->logbuf);
-		unsigned char *data = log->data;
-		while (data < log->data + from_be_u16(log->bytes)) {
-			switch (code = *data++) {
-			case LOG_BALLOC:
-			case LOG_BFREE:
-			case LOG_BFREE_ON_ROLLUP:
-			{
-				u64 block;
-				unsigned count = *data++;
-				data = decode48(data, &block);
-				trace("%s bits 0x%Lx/%x", code == LOG_BALLOC ? "set" : "clear", (L)block, count);
-				int err = update_bitmap(sb, block, count, code == LOG_BALLOC);
-				warn(">>> bitmap err = %i", err);
-				break;
-			}
-			case LOG_LEAF_REDIRECT:
-			case LOG_BNODE_REDIRECT:
-			case LOG_BNODE_ROOT:
-			case LOG_BNODE_SPLIT:
-			case LOG_BNODE_ADD:
-			case LOG_BNODE_UPDATE:
-				data += logsize[code] - 1;
-				break;
-			default:
-				goto unknown;
-			}
-		}
-		log_drop(sb);
-	}
-#endif
 	return 0;
-unknown:
-	warn("unrecognized log code 0x%x, 0x%x", code, LOG_BNODE_UPDATE);
-	log_drop(sb);
-	return -EINVAL;
+}
+
+/* Replay physical update like bnode, etc. */
+static int replay_log_stage1(struct sb *sb)
+{
+	struct logblock *log = bufdata(sb->logbuf);
+	unsigned char *data = log->data;
+	int err;
+
+	while (data < log->data + from_be_u16(log->bytes)) {
+		u8 code = *data++;
+		switch (code) {
+		case LOG_LEAF_REDIRECT:
+		case LOG_BNODE_REDIRECT:
+		{
+			u64 oldblock, newblock;
+			data = decode48(data, &oldblock);
+			data = decode48(data, &newblock);
+			trace("%s: oldblock %Lx, newblock %Lx",
+			      log_name[code], (L)oldblock, (L)newblock);
+			break;
+		}
+		case LOG_BNODE_ROOT:
+		{
+			u64 root, left, right, rkey;
+			u8 count;
+			count = *data++;
+			data = decode48(data, &root);
+			data = decode48(data, &left);
+			data = decode48(data, &right);
+			data = decode48(data, &rkey);
+			trace("%s: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx",
+			      log_name[code], count, (L)root, (L)left, (L)right, (L)rkey);
+
+			err = replay_bnode_root(sb, root, count, left, right, rkey);
+			if (err)
+				return err;
+			break;
+		}
+		case LOG_BNODE_SPLIT:
+		{
+			u32 pos;
+			u64 src, dest;
+			data = decode32(data, &pos);
+			data = decode48(data, &src);
+			data = decode48(data, &dest);
+			trace("%s: pos %x, src %Lx, dest %Lx",
+			      log_name[code], pos, (L)src, (L)dest);
+			break;
+		}
+		case LOG_BNODE_ADD:
+		case LOG_BNODE_UPDATE:
+		{
+			u64 child, parent, key;
+			data = decode48(data, &parent);
+			data = decode48(data, &child);
+			data = decode48(data, &key);
+			trace("%s: parent 0x%Lx, child 0x%Lx, key 0x%Lx",
+			      log_name[code], (L)parent, (L)child, (L)key);
+			break;
+		}
+		case LOG_BALLOC:
+		case LOG_BFREE:
+		case LOG_BFREE_ON_ROLLUP:
+			data += logsize[code] - sizeof(code);
+			break;
+		default:
+			warn("unrecognized log code 0x%x", code);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+/* Replay logical update like bitmap data pages, etc. */
+static int replay_log_stage2(struct sb *sb)
+{
+	struct logblock *log = bufdata(sb->logbuf);
+	unsigned char *data = log->data;
+	int err;
+
+	while (data < log->data + from_be_u16(log->bytes)) {
+		u8 code = *data++;
+		switch (code) {
+		case LOG_BALLOC:
+		case LOG_BFREE:
+		case LOG_BFREE_ON_ROLLUP:
+		{
+			u64 block;
+			u8 count;
+			count = *data++;
+			data = decode48(data, &block);
+			trace("%s: count %u, block %Lx",
+			      log_name[code], count, (L)block);
+
+			err = replay_update_bitmap(sb, block, count, code == LOG_BALLOC);
+			if (err)
+				return err;
+			break;
+		}
+		case LOG_BNODE_ROOT:
+		{
+			u64 root, left, right, rkey;
+			u8 count;
+			count = *data++;
+			data = decode48(data, &root);
+			data = decode48(data, &left);
+			data = decode48(data, &right);
+			data = decode48(data, &rkey);
+			trace("%s: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx",
+			      log_name[code], count, (L)root, (L)left, (L)right, (L)rkey);
+
+			err = replay_update_bitmap(sb, root, 1, 1);
+			if (err)
+				return err;
+			break;
+		}
+		case LOG_LEAF_REDIRECT:
+		case LOG_BNODE_REDIRECT:
+		case LOG_BNODE_SPLIT:
+		case LOG_BNODE_ADD:
+		case LOG_BNODE_UPDATE:
+			data += logsize[code] - sizeof(code);
+			break;
+		default:
+			warn("unrecognized log code 0x%x", code);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static int replay_logblocks(struct sb *sb, int (*replay_log_func)(struct sb *))
+{
+	unsigned logcount = from_be_u32(sb->super.logcount);
+	int err = 0;
+
+	for (sb->lognext = 0; sb->lognext < logcount;) {
+		trace("log block %i", sb->lognext);
+		log_next(sb);
+		err = replay_log_func(sb);
+		log_drop(sb);
+
+		if (err)
+			break;
+	}
+
+	return err;
+}
+
+int replay_stage1(struct sb *sb)
+{
+	int err;
+
+	err = replay_load_logblocks(sb);
+	if (err)
+		return err;
+
+	return replay_logblocks(sb, replay_log_stage1);
+}
+
+int replay_stage2(struct sb *sb)
+{
+	return replay_logblocks(sb, replay_log_stage2);
 }

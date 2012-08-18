@@ -56,7 +56,8 @@ int main(int argc, char *argv[])
 		invalidate_buffers(sb->volmap->map);
 		//show_buffers(sb->volmap->map);
 		invalidate_buffers(mapping(sb->logmap));
-		replay(sb);
+		replay_stage1(sb);
+		replay_stage2(sb);
 
 		/* free stash for valgrind */
 		destroy_defer_bfree(&sb->new_decycle);

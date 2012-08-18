@@ -127,9 +127,8 @@ int main(int argc, char *argv[])
 		goto eek;
 
 	if (!strcmp(command, "replay")) {
-		if ((errno = -replay(sb)))
+		if ((errno = -replay_stage1(sb)))
 			goto eek;
-		goto out;
 	}
 
 	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
@@ -149,6 +148,12 @@ int main(int argc, char *argv[])
 	}
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
+
+	if (!strcmp(command, "replay")) {
+		if ((errno = -replay_stage2(sb)))
+			goto eek;
+		goto out;
+	}
 
 	if (argc - optind < 1)
 		goto usage;

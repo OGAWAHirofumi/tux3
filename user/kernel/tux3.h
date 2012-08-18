@@ -799,7 +799,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
 block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks);
 int balloc(struct sb *sb, unsigned blocks, block_t *block);
 int bfree(struct sb *sb, block_t start, unsigned blocks);
-int update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
+int replay_update_bitmap(struct sb *sb, block_t start, unsigned count, int set);
 
 /* btree.c */
 unsigned calc_entries_per_node(unsigned blocksize);
@@ -905,7 +905,8 @@ int defer_bfree(struct stash *defree, block_t block, unsigned count);
 void destroy_defer_bfree(struct stash *defree);
 
 /* replay.c */
-int replay(struct sb *sb);
+int replay_stage1(struct sb *sb);
+int replay_stage2(struct sb *sb);
 
 /* utility.c */
 void hexdump(void *data, unsigned size);

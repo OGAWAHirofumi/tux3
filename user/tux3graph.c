@@ -964,7 +964,7 @@ int main(int argc, char *argv[])
 	if ((errno = -load_itable(sb)))
 		goto eek;
 
-	if ((errno = -replay(sb)))
+	if ((errno = -replay_stage1(sb)))
 		goto eek;
 
 	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
@@ -982,6 +982,9 @@ int main(int argc, char *argv[])
 		errno = -PTR_ERR(sb->atable);
 		goto eek;
 	}
+
+	if ((errno = -replay_stage2(sb)))
+		goto eek;
 
 	struct graph_info ginfo;
 	char filename[256];
