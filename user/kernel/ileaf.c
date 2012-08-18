@@ -95,6 +95,12 @@ static int ileaf_sniff(struct btree *btree, vleaf *leaf)
 	return ((struct ileaf *)leaf)->magic == to_be_u16(TUX3_MAGIC_ILEAF);
 }
 
+static int ileaf_can_free(struct btree *btree, void *leaf)
+{
+	struct ileaf *ileaf = leaf;
+	return icount(ileaf) == 0;
+}
+
 static void ileaf_dump(struct btree *btree, vleaf *vleaf)
 {
 	if (!tux3_trace)
@@ -507,6 +513,7 @@ struct btree_ops itable_ops = {
 	.private_ops	= &iattr_ops,
 
 	.leaf_sniff	= ileaf_sniff,
+	.leaf_can_free	= ileaf_can_free,
 	.leaf_dump	= ileaf_dump,
 };
 
@@ -522,5 +529,6 @@ struct btree_ops otable_ops = {
 	.private_ops	= &oattr_ops,
 
 	.leaf_sniff	= ileaf_sniff,
+	.leaf_can_free	= ileaf_can_free,
 	.leaf_dump	= ileaf_dump,
 };
