@@ -123,6 +123,10 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 			data = decode48(data, &key);
 			trace("%s: parent 0x%Lx, child 0x%Lx, key 0x%Lx",
 			      log_name[code], (L)parent, (L)child, (L)key);
+			if (code == LOG_BNODE_UPDATE)
+				err = replay_bnode_update(sb, parent, child, key);
+			if (err)
+				return err;
 			break;
 		}
 		case LOG_BALLOC:

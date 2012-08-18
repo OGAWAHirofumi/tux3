@@ -890,3 +890,31 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 
 	return 0;
 }
+
+/*
+ * Before this replay, replay should already dirty the buffer of parent.
+ * (e.g. by redirect)
+ */
+int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
+{
+	struct buffer_head *parentbuf;
+
+	parentbuf = vol_getblk(sb, parent);
+	if (IS_ERR(parentbuf))
+		return PTR_ERR(parentbuf);
+
+	struct bnode *bnode = bufdata(parentbuf);
+	struct index_entry *entry = bnode->entries, *top = entry + bcount(bnode);
+	while (entry < top) { /* binary search goes here */
+		if (from_be_u64(entry->key) == key)
+			break;
+		entry++;
+	}
+	assert(entry < top);
+
+	entry->block = to_be_u64(child);
+	mark_buffer_rollup_non(parentbuf);
+	blockput(parentbuf);
+
+	return 0;
+}

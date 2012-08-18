@@ -825,6 +825,7 @@ int cursor_redirect(struct cursor *cursor);
 int replay_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 		      block_t left, block_t right, tuxkey_t rkey);
+int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 
 /* commit.c */
 extern int (*reserve_blocks_callback)(struct sb *sb);
