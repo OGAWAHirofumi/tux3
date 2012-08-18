@@ -295,6 +295,32 @@ inum_t find_empty_inode(struct btree *btree, struct ileaf *leaf, inum_t goal)
 	return ibase(leaf) + at;
 }
 
+int ileaf_enum_inum(struct btree *btree, struct ileaf *ileaf,
+		    int (*func)(struct btree *, inum_t, void *),
+		    void *func_data)
+{
+	be_u16 *dict = (void *)ileaf + btree->sb->blocksize;
+	int at, offset;
+
+	offset = 0;
+	for (at = 0; at < icount(ileaf); at++) {
+		inum_t inum;
+		int err, limit;
+
+		limit = __atdict(dict, at + 1);
+		if (limit <= offset)
+			continue;
+		offset = limit;
+
+		inum = ibase(ileaf) + at;
+		err = func(btree, inum, func_data);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
 void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 {
 	assert(inum >= ibase(leaf));

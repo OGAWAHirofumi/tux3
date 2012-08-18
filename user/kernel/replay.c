@@ -47,6 +47,7 @@ static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 	memset(rp->blocknrs, 0, logcount * sizeof(block_t));
 
 	INIT_LIST_HEAD(&rp->log_orphan_add);
+	INIT_LIST_HEAD(&rp->orphan_in_otable);
 
 	return rp;
 }
@@ -54,6 +55,7 @@ static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 static void free_replay(struct replay *rp)
 {
 	assert(list_empty(&rp->log_orphan_add));
+	assert(list_empty(&rp->orphan_in_otable));
 	free(rp);
 }
 

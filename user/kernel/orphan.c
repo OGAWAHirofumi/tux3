@@ -223,10 +223,25 @@ int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum)
 }
 
 /* Free orphan inodes of destroy candidate (without destroy) */
-void replay_iput_orphan_without_destroy(struct sb *sb)
+void replay_iput_orphan_without_destroy(struct replay *rp)
 {
-	struct list_head *head = &sb->orphan_add;
+	struct sb *sb = rp->sb;
+	struct list_head *head;
 
+	/* orphan inodes not in sb->otable */
+	head = &sb->orphan_add;
+	while (!list_empty(head)) {
+		struct inode *inode;
+		inode = list_entry(head->next, struct inode, orphan_list);
+
+		/* Set i_nlink = 1 prevent to destroy inode. */
+		inode->i_nlink = 1;
+		list_del_init(&inode->orphan_list);
+		iput(inode);
+	}
+
+	/* orphan inodes in sb->otable */
+	head = &rp->orphan_in_otable;
 	while (!list_empty(head)) {
 		struct inode *inode;
 		inode = list_entry(head->next, struct inode, orphan_list);
@@ -238,22 +253,32 @@ void replay_iput_orphan_without_destroy(struct sb *sb)
 	}
 }
 
-static int load_orphan_inode(struct sb *sb, inum_t inum)
+static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 {
 	struct inode *inode = iget(sb, inum);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
+	assert(inode->i_nlink == 0);
 
 	/* List inode up, then caller will decide what to do */
-	list_add(&inode->orphan_list, &sb->orphan_add);
+	list_add(&inode->orphan_list, head);
 
 	return 0;
 }
 
-static int load_otable_orphan_inode(struct sb *sb)
+static int load_enum_inode(struct btree *btree, inum_t inum, void *data)
 {
+	struct replay *rp = data;
+	struct sb *sb = rp->sb;
+	return load_orphan_inode(sb, inum, &rp->orphan_in_otable);
+}
+
+/* Load orphan inode from sb->otable */
+static int load_otable_orphan_inode(struct replay *rp)
+{
+	struct sb *sb = rp->sb;
 	struct btree *otable = otable_btree(sb);
-	int err;
+	int ret, err;
 
 	if (!has_root(&sb->otable))
 		return 0;
@@ -266,6 +291,20 @@ static int load_otable_orphan_inode(struct sb *sb)
 	err = btree_probe(cursor, 0);
 	if (err)
 		goto error;
+	do {
+		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
+		void *leaf = bufdata(leafbuf);
+
+		err = ileaf_enum_inum(otable, leaf, load_enum_inode, rp);
+		if (err)
+			break;
+
+		ret = cursor_advance(cursor);
+		if (ret < 0) {
+			err = ret;
+			break;
+		}
+	} while (ret);
 	release_cursor(cursor);
 error:
 	up_write(&cursor->btree->lock);
@@ -274,6 +313,7 @@ error:
 	return err;
 }
 
+/* Load all orphan inodes */
 int replay_load_orphan_inodes(struct replay *rp)
 {
 	struct sb *sb = rp->sb;
@@ -285,7 +325,7 @@ int replay_load_orphan_inodes(struct replay *rp)
 		struct orphan *orphan =
 			list_entry(head->next, struct orphan, list);
 
-		err = load_orphan_inode(sb, orphan->inum);
+		err = load_orphan_inode(sb, orphan->inum, &sb->orphan_add);
 		if (err)
 			goto error;
 
@@ -293,13 +333,13 @@ int replay_load_orphan_inodes(struct replay *rp)
 		free_orphan(orphan);
 	}
 
-	err = load_otable_orphan_inode(sb);
+	err = load_otable_orphan_inode(rp);
 	if (err)
 		goto error;
 
 	return 0;
 
 error:
-	replay_iput_orphan_without_destroy(sb);
+	replay_iput_orphan_without_destroy(rp);
 	return err;
 }
