@@ -196,12 +196,22 @@ static void cursor_check(struct cursor *cursor)
 		if (i == cursor->level)
 			break;
 
-		struct bnode *node = level_node(cursor, i);
-		assert(node->entries < cursor->path[i].next);
-		assert(cursor->path[i].next <= node->entries + bcount(node));
-		assert(from_be_u64((cursor->path[i].next - 1)->key) >= key);
-		block = from_be_u64((cursor->path[i].next - 1)->block);
-		key = from_be_u64((cursor->path[i].next - 1)->key);
+		struct bnode *bnode = level_node(cursor, i);
+		struct index_entry *entry = cursor->path[i].next - 1;
+		assert(bnode->entries <= entry);
+		assert(entry < bnode->entries + bcount(bnode));
+		/*
+		 * If this entry is most left, it should be same key
+		 * with parent. Otherwise, most left key may not be
+		 * correct as next key.
+		 */
+		if (bnode->entries == entry)
+			assert(from_be_u64(entry->key) == key);
+		else
+			assert(from_be_u64(entry->key) > key);
+
+		block = from_be_u64(entry->block);
+		key = from_be_u64(entry->key);
 	}
 }
 
