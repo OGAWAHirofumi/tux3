@@ -67,19 +67,19 @@ static inline void *encode48(void *at, u64 val)
 
 static inline void *decode16(void *at, unsigned *val)
 {
-	*val = be16_to_cpu(*(__be16 *)at);
+	*val = be16_to_cpup(at);
 	return at + sizeof(u16);
 }
 
 static inline void *decode32(void *at, unsigned *val)
 {
-	*val = be32_to_cpu(*(__be32 *)at);
+	*val = be32_to_cpup(at);
 	return at + sizeof(u32);
 }
 
 static inline void *decode64(void *at, u64 *val)
 {
-	*val = be64_to_cpu(*(__be64 *)at);
+	*val = be64_to_cpup(at);
 	return at + sizeof(u64);
 }
 

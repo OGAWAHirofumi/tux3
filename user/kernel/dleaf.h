@@ -35,7 +35,7 @@ static inline struct group make_group(tuxkey_t keyhi, unsigned count)
 
 static inline unsigned group_keyhi(struct group *group)
 {
-	return be32_to_cpu(*(__be32 *)group) & 0xffffff;
+	return be32_to_cpup((__be32 *)group) & 0xffffff;
 }
 
 static inline unsigned group_count(struct group *group)
@@ -62,7 +62,7 @@ static inline struct entry make_entry(tuxkey_t keylo, unsigned limit)
 
 static inline unsigned entry_keylo(struct entry *entry)
 {
-	return be32_to_cpu(*(__be32 *)entry) & ~(-1 << 24);
+	return be32_to_cpup((__be32 *)entry) & ~(-1 << 24);
 }
 
 static inline unsigned entry_limit(struct entry *entry)
@@ -85,12 +85,12 @@ static inline struct diskextent make_extent(block_t block, unsigned count)
 
 static inline block_t extent_block(struct diskextent extent)
 {
-	return be64_to_cpu(*(__be64 *)&extent) & ~(-1LL << 48);
+	return be64_to_cpup((__be64 *)&extent) & ~(-1LL << 48);
 }
 
 static inline unsigned extent_count(struct diskextent extent)
 {
-	return ((be64_to_cpu(*(__be64 *)&extent) >> 48) & 0x3f) + 1;
+	return ((be64_to_cpup((__be64 *)&extent) >> 48) & 0x3f) + 1;
 }
 
 static inline unsigned extent_version(struct diskextent extent)
@@ -112,7 +112,7 @@ static inline void set_dleaf_groups(struct dleaf *leaf, int n)
 
 static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->groups = cpu_to_be16(be16_to_cpu(leaf->groups) + n);
+	be16_add_cpu(&leaf->groups, n);
 }
 
 int dleaf_init(struct btree *btree, void *leaf);

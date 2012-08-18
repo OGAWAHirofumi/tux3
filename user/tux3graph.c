@@ -390,7 +390,7 @@ static void draw_atable_atomref(struct graph_info *gi, struct btree *btree,
 	limit = (void *)low + sb->blocksize;
 	while (low < limit) {
 		unsigned atom = atom_base + (low - base);
-		unsigned ref = (u32)be16_to_cpu(*hi) << 16 | be16_to_cpu(*low);
+		unsigned ref = (u32)be16_to_cpup(hi) << 16 | be16_to_cpup(low);
 
 		if (ref) {
 			if (!prev_atomref)
@@ -399,7 +399,7 @@ static void draw_atable_atomref(struct graph_info *gi, struct btree *btree,
 			fprintf(gi->f,
 				" | low 0x%04hx, hi 0x%04hx"
 				" (atom %u, refcnt %u)",
-				be16_to_cpu(*low), be16_to_cpu(*hi), atom, ref);
+				be16_to_cpup(low), be16_to_cpup(hi), atom, ref);
 
 			prev_atomref = 1;
 		} else
@@ -426,7 +426,7 @@ static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
 		if (atom < sb->atomgen) {
 			fprintf(gi->f,
 				" | where 0x%08llx (atom %u)",
-				(u64)be64_to_cpu(*ptr), atom);
+				be64_to_cpup(ptr), atom);
 
 		}
 

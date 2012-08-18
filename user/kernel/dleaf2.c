@@ -369,7 +369,7 @@ static void dleaf2_resize(struct dleaf2 *dleaf, struct diskextent2 *head,
 		memmove(head + diff, head, limit - (void *)head);
 	else
 		memmove(head, head - diff, limit - (void *)(head - diff));
-	dleaf->count = cpu_to_be16(be16_to_cpu(dleaf->count) + diff);
+	be16_add_cpu(&dleaf->count, diff);
 }
 
 /* Initialize sentinel by bottom key */

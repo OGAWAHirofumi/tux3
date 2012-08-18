@@ -159,7 +159,7 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		if (!silent) {
 			if (err == -EINVAL)
 				warn("invalid superblock [%Lx]",
-				     be64_to_cpu(*(__be64 *)sbi->super.magic));
+				     be64_to_cpup((__be64 *)sbi->super.magic));
 			else
 				warn("Unable to read superblock");
 		}

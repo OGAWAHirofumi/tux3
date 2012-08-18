@@ -50,7 +50,7 @@ static inline unsigned atdict(__be16 *dict, unsigned at)
 
 static inline void add_idict(__be16 *dict, int n)
 {
-	*dict = cpu_to_be16(be16_to_cpu(*dict) + n);
+	be16_add_cpu(dict, n);
 }
 
 static inline unsigned icount(struct ileaf *leaf)
