@@ -222,10 +222,11 @@ int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum)
 	return 0;
 }
 
-/* Free orphan inodes of destroy candidate (without destroy) */
-void replay_iput_orphan_without_destroy(struct replay *rp)
+/* Destroy or clean orphan inodes of destroy candidate */
+void replay_iput_orphan_inodes(struct sb *sb,
+			       struct list_head *orphan_in_otable,
+			       int destroy)
 {
-	struct sb *sb = rp->sb;
 	struct list_head *head;
 
 	/* orphan inodes not in sb->otable */
@@ -234,21 +235,27 @@ void replay_iput_orphan_without_destroy(struct replay *rp)
 		struct inode *inode;
 		inode = list_entry(head->next, struct inode, orphan_list);
 
-		/* Set i_nlink = 1 prevent to destroy inode. */
-		inode->i_nlink = 1;
-		list_del_init(&inode->orphan_list);
+		if (!destroy) {
+			/* Set i_nlink = 1 prevent to destroy inode. */
+			inode->i_nlink = 1;
+			list_del_init(&inode->orphan_list);
+		}
 		iput(inode);
 	}
 
 	/* orphan inodes in sb->otable */
-	head = &rp->orphan_in_otable;
+	head = orphan_in_otable;
 	while (!list_empty(head)) {
 		struct inode *inode;
 		inode = list_entry(head->next, struct inode, orphan_list);
 
-		/* Set i_nlink = 1 prevent to destroy inode. */
-		inode->i_nlink = 1;
+		/* list_empty(&inode->orphan_list) tells it is in otable */
 		list_del_init(&inode->orphan_list);
+
+		if (!destroy) {
+			/* Set i_nlink = 1 prevent to destroy inode. */
+			inode->i_nlink = 1;
+		}
 		iput(inode);
 	}
 }
@@ -340,6 +347,6 @@ int replay_load_orphan_inodes(struct replay *rp)
 	return 0;
 
 error:
-	replay_iput_orphan_without_destroy(rp);
+	replay_iput_orphan_inodes(sb, &rp->orphan_in_otable, 0);
 	return err;
 }

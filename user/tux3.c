@@ -148,6 +148,8 @@ int main(int argc, char *argv[])
 
 	if ((errno = -replay_stage2(rp)))
 		goto eek;
+	if ((errno = -replay_stage3(rp, 1)))
+		goto eek;
 
 	if (!strcmp(command, "delta")) {
 		force_delta(sb);

@@ -1077,6 +1077,9 @@ int main(int argc, char *argv[])
 	fprintf(ginfo.f, "}\n");
 	fclose(ginfo.f);
 
+	if ((errno = -replay_stage3(rp, 0)))
+		goto eek;
+
 	put_super(sb);
 
 out:

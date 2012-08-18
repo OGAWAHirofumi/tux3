@@ -525,14 +525,37 @@ int replay_stage2(struct replay *rp)
 	int err = replay_logblocks(rp, replay_log_stage2);
 	if (err)
 		goto error;
+
 	/*
 	 * Load orphan inodes into sb->orphan_add to decide what to do
 	 * by caller.
 	 */
 	err = replay_load_orphan_inodes(rp);
+	if (err)
+		goto error;
+
+	return 0;
 
 error:
 	replay_done(rp);
 
 	return err;
+}
+
+/*
+ * Replay pending frontend request like orphan, etc. I.e. this starts
+ * to modify FS.
+ */
+int replay_stage3(struct replay *rp, int apply)
+{
+	struct sb *sb = rp->sb;
+	LIST_HEAD(orphan_in_otable);
+
+	list_splice_init(&rp->orphan_in_otable, &orphan_in_otable);
+	replay_done(rp);
+	/* Start logging after replay_done() */
+
+	replay_iput_orphan_inodes(sb, &orphan_in_otable, apply);
+
+	return 0;
 }

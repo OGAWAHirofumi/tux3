@@ -88,6 +88,7 @@ static void check_files(struct sb *sb, struct open_result *results, int nr)
 	sb->vtable = NULL;
 
 	test_assert(replay_stage2(rp) == 0);
+	test_assert(replay_stage3(rp, 0) == 0);
 
 	for (int i = 0; i < nr; i++) {
 		struct open_result *r = &results[i];

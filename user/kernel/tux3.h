@@ -978,12 +978,15 @@ int tux3_clear_inode_orphan(struct inode *inode);
 void clean_orphan_list(struct list_head *head);
 int replay_orphan_add(struct replay *rp, unsigned version, inum_t inum);
 int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum);
-void replay_iput_orphan_without_destroy(struct replay *rp);
+void replay_iput_orphan_inodes(struct sb *sb,
+			       struct list_head *orphan_in_otable,
+			       int destroy);
 int replay_load_orphan_inodes(struct replay *rp);
 
 /* replay.c */
 struct replay *replay_stage1(struct sb *sb);
 int replay_stage2(struct replay *rp);
+int replay_stage3(struct replay *rp, int apply);
 
 /* utility.c */
 void hexdump(void *data, unsigned size);
