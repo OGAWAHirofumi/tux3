@@ -149,7 +149,7 @@ static void replay_done(struct sb *sb, struct replay_info *info)
 	}
 
 	/* Update for future logblock position */
-	sb->logthis = sb->lognext = from_be_u32(sb->super.logcount);
+	sb->lognext = 0;
 }
 
 typedef int (*replay_log_func_t)(struct sb *, struct buffer_head *,
@@ -168,7 +168,7 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 
 	/* If log is before latest rollup, those were already applied to FS. */
 	if (bufindex(logbuf) < info->rollup_index) {
-		assert(0);	/* older logs should already be freed */
+//		assert(0);	/* older logs should already be freed */
 		return 0;
 	}
 	if (bufindex(logbuf) == info->rollup_index)
@@ -308,7 +308,7 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 
 	/* If log is before latest rollup, those were already applied to FS. */
 	if (bufindex(logbuf) < info->rollup_index) {
-		assert(0);	/* older logs should already be freed */
+//		assert(0);	/* older logs should already be freed */
 		return 0;
 	}
 	if (bufindex(logbuf) == info->rollup_index)
@@ -463,7 +463,8 @@ static int replay_logblocks(struct sb *sb, struct replay_info *info,
 	unsigned logcount = from_be_u32(sb->super.logcount);
 	int err;
 
-	for (sb->lognext = 0; sb->lognext < logcount;) {
+	sb->lognext = 0;
+	while (sb->lognext < logcount) {
 		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, (L)info->blocknrs[sb->lognext], (L)info->rollup_index);
 		log_next(sb);
 		err = replay_log_func(sb, sb->logbuf, info);

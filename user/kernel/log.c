@@ -15,30 +15,21 @@
  *    sb->logmap.  The inode itself is not used, just the mapping, so with a
  *    some work we could create/destroy the mapping by itself without the inode.
  *
- *  - Log blocks are indexed logically in sb->logmap, starting from zero at
- *    mount time and incrementing for each new log block and possibly wrapping
- *    back to zero if the filesystem is mounted long enough.
- *
  *  - There is no direct mapping from the log block cache to physical disk,
  *    instead there is a reverse chain starting from sb->logchain.  Log blocks
  *    are read only at replay on mount and written only at delta transition.
  *
- *  - sb->logbase: Logical index of the oldest log block in rollup cycle
- *  - sb->logthis: Logical index of the oldest log block in delta cycle
- *  - sb->lognext: Logmap index of next log block
+ *  - sb->super.logcount: count of log blocks in rollup cycle
+ *  - sb->lognext: Logmap index of next log block in delta cycle
  *  - sb->logpos/logtop: Pointer/limit to write next log entry
  *  - sb->logbuf: Cached log block referenced by logpos/logtop
  *
- *  - Log blocks older than the last committed delta are not actually needed
- *    in normal operation, just at replay, so sb->logbase might not actually
- *    be needed.
- *
  *  - At delta staging, physical addresses are assigned for log blocks from
- *    logthis to lognext, reverse chain pointers are set in the log blocks, and
+ *    0 to lognext, reverse chain pointers are set in the log blocks, and
  *    all log blocks for the delta are submitted for writeout.
  *
- *  - At delta commit, count of log blocks from logthis to lognext is recorded
- *    in superblock (later, metablock) which are the log blocks for the current
+ *  - At delta commit, count of log blocks is recorded in superblock
+ *    (later, metablock) which are the log blocks for the current
  *    rollup cycle.
  *
  *  - On delta completion, if log was rolluped in current delta then log blocks
@@ -46,8 +37,9 @@
  *    which is appended to sb->defree, the per-delta deferred free list at log
  *    flush time.
  *
- *  - On replay, sb->logcount log blocks for current rollup cycle are loaded in
- *    reverse order into logmap, using the log block reverse chain pointers.
+ *  - On replay, sb.super->logcount log blocks for current rollup cycle are
+ *    loaded in reverse order into logmap, using the log block reverse chain
+ *    pointers.
  *
  * Log block format
  *

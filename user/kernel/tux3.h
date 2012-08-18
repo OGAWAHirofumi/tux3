@@ -257,10 +257,8 @@ struct sb {
 	loff_t dictsize;	/* Atom dictionary size */
 
 	block_t logchain;	/* Previous log block physical address */
-	unsigned logbase;	/* Index of oldest log block in this rollup */
 
 	struct inode *logmap;	/* Log block cache */
-	unsigned logthis;	/* Index of first log block in delta */
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */

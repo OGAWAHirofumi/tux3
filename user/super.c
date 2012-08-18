@@ -63,10 +63,9 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 	 * this, if you update the atomic commit.
 	 */
 	log_finish(sb);
+	sb->lognext = 0;
 
 	sb->logchain = 0;
-	sb->logbase = 0;
-	sb->logthis = sb->lognext = 0;
 	if (sb->logmap)
 		invalidate_buffers(sb->logmap->map);
 
