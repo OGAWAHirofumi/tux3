@@ -277,7 +277,7 @@ static int write_log(struct sb *sb)
 	return 0;
 }
 
-static int retire_bfree(struct sb *sb, u64 val)
+static int apply_defered_bfree(struct sb *sb, u64 val)
 {
 	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
 }
@@ -292,7 +292,9 @@ static int commit_delta(struct sb *sb)
 	int err = save_sb(sb);
 	if (err)
 		return err;
-	return unstash(sb, &sb->defree, retire_bfree);
+
+	/* Commit was finished, apply defered bfree. */
+	return unstash(sb, &sb->defree, apply_defered_bfree);
 }
 
 static int need_delta(struct sb *sb)
