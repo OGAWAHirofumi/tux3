@@ -1,5 +1,7 @@
 #include <tux3user.h>
 
+/* depending on tux3 */
+
 void inc_nlink(struct inode *inode)
 {
 	inode->i_nlink++;

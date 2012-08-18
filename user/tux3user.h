@@ -20,6 +20,7 @@
 #include "libklib/libklib.h"
 #include "libklib/lockdebug.h"
 #include "libklib/mm.h"
+#include "libklib/fs.h"
 #include "writeback.h"
 
 /* Endian support */
