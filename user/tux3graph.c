@@ -18,6 +18,9 @@
 #include "kernel/dleaf.c"
 #include "kernel/ileaf.c"
 
+static const char itable_name[] = "itable";
+static const char otable_name[] = "otable";
+
 static const char *dtree_names[] = {
 	[TUX_BITMAP_INO]	= "bitmap",
 	[TUX_VTABLE_INO]	= "vtable",
@@ -29,6 +32,7 @@ static int verbose;
 #define DRAWN_DTREE	(1 << 0)
 #define DRAWN_DLEAF	(1 << 1)
 #define DRAWN_ILEAF	(1 << 2)
+#define DRAWN_OLEAF	(1 << 3)
 static int drawn;
 static LIST_HEAD(tmpfile_head);
 
@@ -129,7 +133,9 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		from_be_u32(txsb->logcount));
 
 	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
-		gi->bname, (L)itable_btree(sb)->root.block);
+		itable_name, (L)itable_btree(sb)->root.block);
+	fprintf(gi->f, "tux3_sb:oroot0:e -> %s_bnode_%llu:n;\n\n",
+		otable_name, (L)otable_btree(sb)->root.block);
 	fprintf(gi->f, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
 		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain));
 }
@@ -787,20 +793,20 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 	return size;
 }
 
-static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
+
+typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
+				  inum_t, u16);
+
+static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
+			 struct buffer_head *buffer,
+			 char *ileaf_name,
+			 draw_ileaf_attr_t draw_ileaf_attr)
 {
 	struct ileaf *ileaf = bufdata(buffer);
-	block_t blocknr = buffer->index;
 	be_u16 *dict = ileaf_dict(btree, ileaf);
-	char ileaf_name[32];
+	block_t blocknr = buffer->index;
 	int at;
 
-	if (!verbose && (drawn & DRAWN_ILEAF))
-		return;
-	drawn |= DRAWN_ILEAF;
-
-	snprintf(ileaf_name, sizeof(ileaf_name), "%s_%llu",
-		 gi->lname, (L)blocknr);
 	fprintf(gi->f,
 		"%s [\n"
 		"label = \"{ <%s0> [%s] (blocknr %llu%s)"
@@ -817,18 +823,9 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			continue;
 
 		inum_t inum = ibase(ileaf) + at;
-		struct inode *inode = iget(btree->sb, inum);
-		if (IS_ERR(inode))
-			error("inode couldn't get: inum %Lu", (L)inum);
 
-		fprintf(gi->f,
-			" | <a%d> attrs (ino %llu, size %u,"
-			" block %llu, depth %d)",
-			at, (L)inum, size,
-			(L)inode->btree.root.block,
-			inode->btree.root.depth);
-
-		iput(inode);
+		fprintf(gi->f, " | <a%d> attrs ", at);
+		draw_ileaf_attr(gi, btree, inum, size);
 	}
 	fprintf(gi->f,
 		" | .....");
@@ -864,6 +861,39 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 			ileaf_name, at,
 			ileaf_name, at);
 	}
+}
+
+static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
+			    inum_t inum, u16 size)
+{
+	struct inode *inode = iget(btree->sb, inum);
+	if (IS_ERR(inode))
+		error("inode couldn't get: inum %Lu", (L)inum);
+
+	fprintf(gi->f, "(ino %llu, size %u, block %llu, depth %d)",
+		(L)inum, size,
+		(L)inode->btree.root.block,
+		inode->btree.root.depth);
+
+	iput(inode);
+}
+
+static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
+{
+	struct ileaf *ileaf = bufdata(buffer);
+	be_u16 *dict = ileaf_dict(btree, ileaf);
+	block_t blocknr = buffer->index;
+	char ileaf_name[32];
+	int at;
+
+	if (!verbose && (drawn & DRAWN_ILEAF))
+		return;
+	drawn |= DRAWN_ILEAF;
+
+	snprintf(ileaf_name, sizeof(ileaf_name), "%s_%llu",
+		 gi->lname, (L)blocknr);
+
+	__draw_ileaf(gi, btree, buffer, ileaf_name, draw_ileaf_attr);
 
 	/* draw inode's dtree */
 	for (at = 0; at < icount(ileaf); at++) {
@@ -951,6 +981,27 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree, struct buffer
 out_iput:
 		iput(inode);
 	}
+}
+
+static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
+			    inum_t inum, u16 size)
+{
+	fprintf(gi->f, "(ino %llu, size %u)", (L)inum, size);
+}
+
+static void draw_oleaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
+{
+	block_t blocknr = buffer->index;
+	char oleaf_name[32];
+
+	if (!verbose && (drawn & DRAWN_OLEAF))
+		return;
+	drawn |= DRAWN_OLEAF;
+
+	snprintf(oleaf_name, sizeof(oleaf_name), "%s_%llu",
+		 gi->lname, (L)blocknr);
+
+	__draw_ileaf(gi, btree, buffer, oleaf_name, draw_oleaf_attr);
 }
 
 static void merge_file(FILE *dst, FILE *src)
@@ -1081,13 +1132,22 @@ int main(int argc, char *argv[])
 
 	ginfo = (struct graph_info){
 		.f = file,
-		.bname = "itable",
+		.bname = itable_name,
 		.lname = "ileaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
 	};
 	draw_sb(&ginfo, sb);
 	draw_logchain(&ginfo, sb);
 	draw_btree(&ginfo, itable_btree(sb), draw_ileaf);
+
+	ginfo = (struct graph_info){
+		.f = file,
+		.bname = otable_name,
+		.lname = "oleaf",
+		.link_head = LIST_HEAD_INIT(ginfo.link_head),
+	};
+	draw_btree(&ginfo, otable_btree(sb), draw_oleaf);
+
 	merge_tmpfiles(&ginfo);
 
 	fprintf(ginfo.f, "}\n");
