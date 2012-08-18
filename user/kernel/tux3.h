@@ -932,6 +932,7 @@ typedef int (*unstash_t)(struct sb *sb, u64 val);
 void stash_init(struct stash *stash);
 int stash_value(struct stash *stash, u64 value);
 int unstash(struct sb *sb, struct stash *defree, unstash_t actor);
+int stash_walk(struct sb *sb, struct stash *stash, unstash_t actor);
 int defer_bfree(struct stash *defree, block_t block, unsigned count);
 void destroy_defer_bfree(struct stash *defree);
 

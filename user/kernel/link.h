@@ -7,6 +7,9 @@ struct link { struct link *next; };
 
 #define LINK_INIT_CIRCULAR(name)	{ &(name), }
 #define link_entry(ptr, type, member)	container_of(ptr, type, member)
+/* take care: this doesn't check member is `struct link *' or not */
+#define __link_entry(ptr, type, member) \
+	container_of((typeof(((type *)0)->member) *)ptr, type, member)
 
 static inline void init_link_circular(struct link *head)
 {

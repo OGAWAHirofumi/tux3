@@ -384,20 +384,55 @@ int unstash(struct sb *sb, struct stash *stash, unstash_t actor)
 	if (flink_empty(head))
 		return 0;
 	while (1) {
-		int err;
 		page = __flink_next_entry(head, struct page, private);
-		u64 *vec = page_address(page), *top = page_address(page) + PAGE_SIZE;
+		u64 *vec = page_address(page);
+		u64 *top = page_address(page) + PAGE_SIZE;
+
 		if (top == stash->top)
 			top = stash->pos;
-		for (; vec < top; vec++)
+		for (; vec < top; vec++) {
+			int err;
 			if ((err = actor(sb, *vec)))
 				return err;
+		}
 		if (flink_is_last(head))
 			break;
 		flink_del_next(head);
 		__free_page(page);
 	}
 	stash->pos = page_address(page);
+	return 0;
+}
+
+/*
+ * Call actor() for each entries without freeing pages.
+ */
+int stash_walk(struct sb *sb, struct stash *stash, unstash_t actor)
+{
+	struct flink_head *head = &stash->head;
+	struct page *page;
+
+	if (flink_empty(head))
+		return 0;
+
+	struct link *link, *first;
+	link = first = flink_next(head);
+	do {
+		page = __link_entry(link, struct page, private);
+		u64 *vec = page_address(page);
+		u64 *top = page_address(page) + PAGE_SIZE;
+
+		if (top == stash->top)
+			top = stash->pos;
+		for (; vec < top; vec++) {
+			int err;
+			if ((err = actor(sb, *vec)))
+				return err;
+		}
+
+		link = link->next;
+	} while (link != first);
+
 	return 0;
 }
 
