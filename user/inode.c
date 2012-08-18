@@ -64,7 +64,7 @@ static void free_inode(struct inode *inode)
 	assert(list_empty(&inode->alloc_list));
 	assert(hlist_unhashed(&inode->i_hash));
 	assert(list_empty(&inode->list));
-	assert(!inode->state);
+	assert(!inode->i_state);
 	assert(mapping(inode)); /* some inodes are not malloced */
 	free_map(mapping(inode)); // invalidate dirty buffers!!!
 	if (inode->xcache)

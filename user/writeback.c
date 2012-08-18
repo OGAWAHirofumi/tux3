@@ -9,15 +9,15 @@ void clear_inode(struct inode *inode)
 	int has_refcnt = !list_empty(&inode->list);
 
 	list_del_init(&inode->list);
-	inode->state = 0;
+	inode->i_state = 0;
 	if (has_refcnt)
 		iput(inode);
 }
 
 void __mark_inode_dirty(struct inode *inode, unsigned flags)
 {
-	if ((inode->state & flags) != flags) {
-		inode->state |= flags;
+	if ((inode->i_state & flags) != flags) {
+		inode->i_state |= flags;
 		if (list_empty(&inode->list)) {
 			__iget(inode);
 			list_add_tail(&inode->list, &inode->i_sb->dirty_inodes);
@@ -45,25 +45,25 @@ void mark_buffer_dirty(struct buffer_head *buffer)
 
 int sync_inode(struct inode *inode)
 {
-	unsigned dirty = inode->state;
+	unsigned dirty = inode->i_state;
 	int err;
 
-	if (inode->state & I_DIRTY_PAGES) {
+	if (inode->i_state & I_DIRTY_PAGES) {
 		/* To handle redirty, this clears before flushing */
-		inode->state &= ~I_DIRTY_PAGES;
+		inode->i_state &= ~I_DIRTY_PAGES;
 		err = flush_buffers(mapping(inode));
 		if (err)
 			goto error;
 	}
-	if (inode->state & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
+	if (inode->i_state & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
 		/* To handle redirty, this clears before flushing */
-		inode->state &= ~(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+		inode->i_state &= ~(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
 		err = write_inode(inode);
 		if (err)
 			goto error;
 	}
 
-	if (dirty && !(inode->state & I_DIRTY)) {
+	if (dirty && !(inode->i_state & I_DIRTY)) {
 		list_del_init(&inode->list);
 		iput(inode);
 	}
@@ -71,7 +71,7 @@ int sync_inode(struct inode *inode)
 	return 0;
 
 error:
-	inode->state = dirty;
+	inode->i_state = dirty;
 	return err;
 }
 

@@ -31,9 +31,9 @@ static void clean_dirty_buffer(const char *str, struct list_head *head)
 
 static void clean_dirty_inode(const char *str, struct inode *inode)
 {
-	if (inode->state & I_DIRTY) {
-		trace(">>> clean %s inode i_count %d, state %x",
-		      str, atomic_read(&inode->i_count), inode->state);
+	if (inode->i_state & I_DIRTY) {
+		trace(">>> clean %s inode i_count %d, i_state %lx",
+		      str, atomic_read(&inode->i_count), inode->i_state);
 		del_defer_alloc_inum(inode);
 		clear_inode(inode);
 	}

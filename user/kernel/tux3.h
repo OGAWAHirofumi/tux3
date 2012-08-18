@@ -380,6 +380,7 @@ typedef struct inode {
 	unsigned present;
 	struct xcache *xcache;
 	struct list_head alloc_list; /* link for deferred inum allocation */
+
 	/* generic part of inode */
 	struct sb *i_sb;
 	map_t *map;
@@ -390,6 +391,7 @@ typedef struct inode {
 	struct mutex i_mutex;
 	dev_t i_rdev;
 	atomic_t i_count;
+	unsigned long i_state;
 	struct hlist_node i_hash;
 	struct list_head list;	/* link for dirty inodes */
 	unsigned state;
