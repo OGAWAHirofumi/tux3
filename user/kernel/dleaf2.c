@@ -399,12 +399,8 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	int err;
 
 	/* Paranoia checks */
-	{
-		unsigned seg_total_count = 0;
-		for (int i = rq->nr_segs; i < rq->max_segs; i++)
-			seg_total_count += rq->seg[i].count;
-		assert(key->len == seg_total_count);
-	}
+	assert(key->len == seg_total_count(rq->seg + rq->nr_segs,
+					   rq->max_segs - rq->nr_segs));
 
 	/*
 	 * Overwrite existent diskextent2 by specified segs. To do

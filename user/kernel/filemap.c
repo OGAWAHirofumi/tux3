@@ -408,6 +408,11 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			goto out_unlock;
 		}
 		segs = rq.nr_segs;
+		/*
+		 * Read might be partial. (due to max_segs, or FIXME:
+		 * lack of read for multiple leaves)
+		 */
+		count = seg_total_count(seg, segs);
 	} else {
 		assert(mode == MAP_READ);
 		/* btree doesn't have root yet */

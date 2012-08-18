@@ -18,4 +18,13 @@ struct dleaf_req {
 	struct seg *seg;
 };
 
+static inline unsigned seg_total_count(struct seg *seg, int nr_segs)
+{
+	unsigned total = 0;
+	int i;
+	for (i = 0; i < nr_segs; i++)
+		total += seg[i].count;
+	return total;
+}
+
 #endif /* !TUX3_DLEAF2_H */
