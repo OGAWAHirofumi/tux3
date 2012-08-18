@@ -746,9 +746,25 @@ static int tux3_da_write_begin(struct file *file, struct address_space *mapping,
 			       loff_t pos, unsigned len, unsigned flags,
 			       struct page **pagep, void **fsdata)
 {
-	*pagep = NULL;
-	return block_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
-				 tux3_da_get_block);
+	int ret;
+
+	ret = block_write_begin(mapping, pos, len, flags, pagep,
+				tux3_da_get_block);
+	if (ret < 0)
+		tux3_write_failed(mapping, pos + len);
+	return ret;
+}
+
+static int tux3_da_write_end(struct file *file, struct address_space *mapping,
+			     loff_t pos, unsigned len, unsigned copied,
+			     struct page *page, void *fsdata)
+{
+	int ret;
+
+	ret = generic_write_end(file, mapping, pos, len, copied, page, fsdata);
+	if (ret < len)
+		tux3_write_failed(mapping, pos + len);
+	return ret;
 }
 
 static int tux3_writepage(struct page *page, struct writeback_control *wbc)
@@ -773,10 +789,15 @@ static ssize_t tux3_direct_IO(int rw, struct kiocb *iocb,
 			      loff_t offset, unsigned long nr_segs)
 {
 	struct file *file = iocb->ki_filp;
-	struct inode *inode = file->f_mapping->host;
+	struct address_space *mapping = file->f_mapping;
+	struct inode *inode = mapping->host;
+	ssize_t ret;
 
-	return blockdev_direct_IO(rw, iocb, inode, inode->i_sb->s_bdev, iov,
-				  offset, nr_segs, tux3_get_block, NULL);
+	ret = blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
+				 tux3_get_block);
+	if (ret < 0 && (rw & WRITE))
+		tux3_write_failed(mapping, offset + iov_length(iov, nr_segs));
+	return ret;
 }
 
 static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
@@ -795,9 +816,8 @@ const struct address_space_operations tux_aops = {
 	.readpages		= tux3_readpages,
 	.writepage		= tux3_writepage,
 //	.writepages		= tux3_writepages,
-	.sync_page		= block_sync_page,
 	.write_begin		= tux3_da_write_begin,
-	.write_end		= generic_write_end,
+	.write_end		= tux3_da_write_end,
 	.bmap			= tux3_bmap,
 //	.invalidatepage		= ext4_da_invalidatepage,
 //	.releasepage		= ext4_releasepage,
@@ -820,7 +840,6 @@ const struct address_space_operations tux_blk_aops = {
 	.readpage	= tux3_blk_readpage,
 	.writepage	= tux3_blk_writepage,
 //	.writepages	= tux3_writepages,
-	.sync_page	= block_sync_page,
 	.write_begin	= tux3_da_write_begin,
 	.bmap		= tux3_bmap,
 };
@@ -851,15 +870,13 @@ static int tux3_vol_write_begin(struct file *file,
 				loff_t pos, unsigned len, unsigned flags,
 				struct page **pagep, void **fsdata)
 {
-	*pagep = NULL;
-	return block_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
+	return block_write_begin(mapping, pos, len, flags, pagep,
 				 tux3_vol_get_block);
 }
 
 const struct address_space_operations tux_vol_aops = {
 	.readpage	= tux3_vol_readpage,
 	.writepage	= tux3_vol_writepage,
-	.sync_page	= block_sync_page,
 	.write_begin	= tux3_vol_write_begin,
 };
 #endif /* __KERNEL__ */

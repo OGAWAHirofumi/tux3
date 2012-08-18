@@ -17,7 +17,7 @@
 
 /* FIXME: this should be mount option? */
 int tux3_trace;
-module_param(tux3_trace, bool, 0644);
+module_param(tux3_trace, int, 0644);
 
 static struct kmem_cache *tux_inode_cachep;
 
@@ -228,17 +228,17 @@ error:
 	return err;
 }
 
-static int tux3_get_sb(struct file_system_type *fs_type, int flags,
-	const char *dev_name, void *data, struct vfsmount *mnt)
+static struct dentry *tux3_mount(struct file_system_type *fs_type, int flags,
+	const char *dev_name, void *data)
 {
-	return get_sb_bdev(fs_type, flags, dev_name, data, tux3_fill_super, mnt);
+	return mount_bdev(fs_type, flags, dev_name, data, tux3_fill_super);
 }
 
 static struct file_system_type tux3_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "tux3",
 	.fs_flags	= FS_REQUIRES_DEV,
-	.get_sb		= tux3_get_sb,
+	.mount		= tux3_mount,
 	.kill_sb	= kill_block_super,
 };
 

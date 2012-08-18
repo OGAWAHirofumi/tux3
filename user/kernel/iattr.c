@@ -191,9 +191,12 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode64(attrs, &v64);
 			init_btree(&tuxnode->btree, sb, unpack_root(v64), dtree_ops());
 			break;
-		case LINK_COUNT_ATTR:
-			attrs = decode32(attrs, &inode->i_nlink);
+		case LINK_COUNT_ATTR: {
+			unsigned nlink;
+			attrs = decode32(attrs, &nlink);
+			set_nlink(inode, nlink);
 			break;
+		}
 		case MTIME_ATTR:
 			attrs = decode48(attrs, &v64);
 			inode->i_mtime = spectime(v64 << TIME_ATTR_SHIFT);

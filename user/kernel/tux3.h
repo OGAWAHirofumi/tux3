@@ -11,6 +11,7 @@
 #include <linux/bio.h>
 #include <linux/mutex.h>
 #include <linux/magic.h>
+#include <linux/slab.h>
 
 #define printf		printk
 #define vprintf		vprintk
@@ -645,7 +646,8 @@ extern const struct address_space_operations tux_blk_aops;
 extern const struct address_space_operations tux_vol_aops;
 
 /* inode.c */
-int tux3_write_inode(struct inode *inode, int do_sync);
+void tux3_write_failed(struct address_space *mapping, loff_t to);
+int tux3_write_inode(struct inode *inode, struct writeback_control *wbc);
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat);
 int tux3_setattr(struct dentry *dentry, struct iattr *iattr);
 

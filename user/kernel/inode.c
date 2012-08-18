@@ -75,7 +75,7 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 		tux_inode(inode)->present |= RDEV_BIT;
 		break;
 	case S_IFDIR:
-		inode->i_nlink++;
+		inc_nlink(inode);
 		break;
 	}
 	tux_inode(inode)->present |= CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
@@ -624,7 +624,7 @@ error:
 }
 
 #ifdef __KERNEL__
-int tux3_write_inode(struct inode *inode, int do_sync)
+int tux3_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
 	BUG_ON(tux_inode(inode)->inum == TUX_BITMAP_INO ||
@@ -668,7 +668,19 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 	err = inode_change_ok(inode, iattr);
 	if (err)
 		return err;
-	return inode_setattr(inode, iattr);
+
+	if (iattr->ia_valid & ATTR_SIZE && iattr->ia_size != inode->i_size) {
+		inode_dio_wait(inode);
+
+		err = tux3_truncate(inode, iattr->ia_size);
+		if (err)
+			return err;
+	}
+
+	setattr_copy(inode, iattr);
+	mark_inode_dirty(inode);
+
+	return 0;
 }
 
 static const struct file_operations tux_file_fops = {
@@ -689,7 +701,6 @@ static const struct file_operations tux_file_fops = {
 };
 
 static const struct inode_operations tux_file_iops = {
-	.truncate	= tux3_truncate,
 //	.permission	= ext4_permission,
 	.setattr	= tux3_setattr,
 	.getattr	= tux3_getattr
