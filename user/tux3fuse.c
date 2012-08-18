@@ -255,6 +255,12 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		return;
 	}
 
+	if (to_set & FUSE_SET_ATTR_SIZE) {
+		tuxtruncate(inode, attr->st_size);
+		to_set &= ~FUSE_SET_ATTR_SIZE;
+	}
+
+	change_begin(sb);
 	if (to_set & FUSE_SET_ATTR_MODE)
 		inode->i_mode = attr->st_mode;
 	if (to_set & FUSE_SET_ATTR_UID)
@@ -265,10 +271,9 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		inode->i_atime = attr->st_atim;
 	if (to_set & FUSE_SET_ATTR_MTIME)
 		inode->i_mtime = attr->st_mtim;
-	if (to_set & FUSE_SET_ATTR_SIZE)
-		tuxtruncate(inode, attr->st_size);
 	if (to_set)
 		mark_inode_dirty(inode);
+	change_end(sb);
 
 	struct stat stbuf;
 	tux3fuse_fill_stat(&stbuf, inode);

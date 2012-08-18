@@ -223,7 +223,12 @@ int tuxread(struct file *file, void *data, unsigned len)
 
 int tuxwrite(struct file *file, const void *data, unsigned len)
 {
-	return tuxio(file, (void *)data, len, 1);
+	struct sb *sb = file->f_inode->i_sb;
+	int ret;
+	change_begin(sb);
+	ret = tuxio(file, (void *)data, len, 1);
+	change_end(sb);
+	return ret;
 }
 
 void tuxseek(struct file *file, loff_t pos)
@@ -238,7 +243,7 @@ int page_symlink(struct inode *inode, const char *symname, int len)
 	int ret;
 
 	assert(inode->i_size == 0);
-	ret = tuxwrite(&file, symname, len);
+	ret = tuxio(&file, (void *)symname, len, 1);
 	if (ret < 0)
 		return ret;
 	if (len != ret)
