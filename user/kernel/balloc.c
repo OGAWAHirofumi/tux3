@@ -239,6 +239,7 @@ int replay_update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
 
 	if (!buffer)
 		return -ENOMEM;
+
 	if (!(set ? all_clear : all_set)(bufdata(buffer), start & mask, count)) {
 		blockput(buffer);
 
@@ -247,9 +248,11 @@ int replay_update_bitmap(struct sb *sb, block_t start, unsigned count, int set)
 		      (L)start, count);
 		return -EINVAL;
 	}
+
+	buffer = blockdirty(buffer, sb->rollup);
 	(set ? set_bits : clear_bits)(bufdata(buffer), start & mask, count);
 	/* freeblocks are already written */
-	/* FIXME: maybe we should call blockdirty(); */
-	blockput_dirty(buffer);
+	mark_buffer_dirty_non(buffer);
+	blockput(buffer);
 	return 0;
 }
