@@ -1083,14 +1083,25 @@ int free_empty_btree(struct btree *btree)
 	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
 	if (!rootbuf)
 		return -EIO;
+	/* Make btree has no root */
+	btree->root = no_root;
+	mark_btree_dirty(btree);
+
 	struct bnode *rootnode = bufdata(rootbuf);
 	assert(bcount(rootnode) == 1);
+	block_t leaf = from_be_u64(rootnode->entries[0].block);
+	struct buffer_head *leafbuf = vol_find_get_block(sb, leaf);
+
 	/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
-	defer_bfree(&sb->defree, from_be_u64(rootnode->entries[0].block), 1);
-	log_bfree(sb, from_be_u64(rootnode->entries[0].block), 1);
+	defer_bfree(&sb->defree, leaf, 1);
+	log_bfree(sb, leaf, 1);
 	defer_bfree(&sb->defree, bufindex(rootbuf), 1);
 	log_bfree(sb, bufindex(rootbuf), 1);
-	blockput(rootbuf);
+
+	if (leafbuf)
+		blockput_free(leafbuf);
+	blockput_free(rootbuf);
+
 	return 0;
 }
 

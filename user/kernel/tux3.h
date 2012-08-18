@@ -970,6 +970,11 @@ static inline void mark_btree_dirty(struct btree *btree)
 		__mark_inode_dirty(btree_inode(btree), I_DIRTY_DATASYNC);
 }
 
+static inline struct buffer_head *vol_find_get_block(struct sb *sb, block_t block)
+{
+	return peekblk(mapping(sb->volmap), block);
+}
+
 static inline struct buffer_head *vol_getblk(struct sb *sb, block_t block)
 {
 	return blockget(mapping(sb->volmap), block);
