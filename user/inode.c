@@ -109,6 +109,14 @@ void __iget(struct inode *inode)
 	atomic_inc(&inode->i_count);
 }
 
+/* get additional reference to inode; caller must already hold one. */
+void ihold(struct inode *inode)
+{
+	assert(!(inode->i_state & I_FREEING));
+	assert(atomic_read(&inode->i_count) >= 1);
+	atomic_inc(&inode->i_count);
+}
+
 struct inode *iget5_locked(struct sb *sb, inum_t inum,
 			   int (*test)(struct inode *, void *),
 			   int (*set)(struct inode *, void *), void *data)

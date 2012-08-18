@@ -118,7 +118,7 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 	change_begin(tux_sb(inode->i_sb));
 	inode->i_ctime = gettime();
 	inode_inc_link_count(inode);
-	atomic_inc(&inode->i_count);
+	ihold(inode);
 	err = tux_add_dirent(dir, dentry, inode);
 	if (err) {
 		inode_dec_link_count(inode);

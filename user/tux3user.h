@@ -150,8 +150,9 @@ int filemap_extent_io(struct buffer_head *buffer, int write);
 int write_bitmap(struct buffer_head *buffer);
 
 /* inode.c */
-void iput(struct inode *inode);
 void __iget(struct inode *inode);
+void ihold(struct inode *inode);
+void iput(struct inode *inode);
 int tuxread(struct file *file, char *data, unsigned len);
 int tuxwrite(struct file *file, const char *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);
