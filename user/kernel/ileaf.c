@@ -440,6 +440,21 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 	return attrs;
 }
 
+static tuxkey_t ileaf_split_hint(struct btree *btree, struct ileaf *ileaf,
+				 tuxkey_t key, int size)
+{
+	/*
+	 * FIXME: make sure there is space for size.
+	 * FIXME: better split position?
+	 */
+
+	tuxkey_t base = ibase(ileaf);
+	if (key > base + btree->entries_per_leaf)
+		return key & ~(btree->entries_per_leaf - 1);
+
+	return base + icount(ileaf) / 2;
+}
+
 static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 		       tuxkey_t key_limit,
 		       void *leaf, struct btree_key_range *key,
@@ -459,9 +474,7 @@ static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 	attrs = ileaf_resize(btree, key->start, ileaf, size);
 	if (attrs == NULL) {
 		/* There is no space to store */
-		unsigned at = icount(ileaf) / 2;
-		/* split at middle of inums. FIXME: better split position? */
-		*split_hint = ibase(ileaf) + at;
+		*split_hint = ileaf_split_hint(btree, ileaf, key->start, size);
 		return -ENOSPC;
 	}
 
