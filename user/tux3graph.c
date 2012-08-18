@@ -1138,7 +1138,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | freeblocks %llu"
 #endif
 		" | nextalloc %llu"
-		" | freeatom %u | atomgen %u"
+		" | atomdictsize %Lu | freeatom %u | atomgen %u"
 		" | <logchain_%llu> logchain %llu | logcount %u"
 		" }\"\n"
 		"shape = record\n"
@@ -1160,6 +1160,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		(L)from_be_u64(txsb->freeblocks),
 #endif
 		(L)from_be_u64(txsb->nextalloc),
+		(L)from_be_u64(txsb->atomdictsize),
 		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen),
 		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain),
 		from_be_u32(txsb->logcount));

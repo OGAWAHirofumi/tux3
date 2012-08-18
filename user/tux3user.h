@@ -105,9 +105,9 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 	.oroot		= to_be_u64(pack_root(&no_root)),	\
 	.blockbits	= to_be_u16(_bits),			\
 	.volblocks	= to_be_u64(_blocks),			\
+	.atomdictsize	= 0,					\
 	.freeatom	= 0,					\
 	.atomgen	= to_be_u32(1),				\
-	.dictsize	= 0,					\
 	.logchain	= 0,					\
 	.logcount	= 0,					\
 	INIT_DISKSB_FREEBLOCKS(_blocks)				\

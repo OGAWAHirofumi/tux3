@@ -56,29 +56,33 @@ static void test01(struct sb *sb)
 	int err;
 
 	/* Test positive and negative refcount carry */
-	err = use_atom(sb->atable, 6, 1 << 15);
+	atom_t atom;
+	err = make_atom(sb->atable, "foo", 3, &atom);
 	test_assert(!err);
-	err = use_atom(sb->atable, 6, 1 << 15);
+	err = atomref(sb->atable, atom, 1 << 15);
 	test_assert(!err);
-	err = use_atom(sb->atable, 6, -(1 << 15));
+	err = atomref(sb->atable, atom, 1 << 15);
 	test_assert(!err);
-	err = use_atom(sb->atable, 6, -(1 << 15));
+	err = atomref(sb->atable, atom, -(1 << 15));
+	test_assert(!err);
+	err = atomref(sb->atable, atom, -(1 << 15));
 	test_assert(!err);
 
 	atom_t atom1, atom2, atom3;
 	/* Test atom table */
-	atom1 = make_atom(sb->atable, "foo", 3);
-	test_assert(atom1 != -1);
-	atom2 = make_atom(sb->atable, "foo", 3);
-	test_assert(atom2 != -1);
+	err = make_atom(sb->atable, "foo", 3, &atom1);
+	test_assert(!err);
+	err = make_atom(sb->atable, "foo", 3, &atom2);
+	test_assert(!err);
 	test_assert(atom1 == atom2);
 
-	atom1 = make_atom(sb->atable, "bar", 3);
-	test_assert(atom1 != -1);
-	atom2 = make_atom(sb->atable, "foo", 3);
+	err = make_atom(sb->atable, "bar", 3, &atom1);
+	test_assert(!err);
+	err = make_atom(sb->atable, "foo", 3, &atom2);
+	test_assert(!err);
 	test_assert(atom1 != atom2);
-	atom3 = make_atom(sb->atable, "bar", 3);
-	test_assert(atom1 != -1);
+	err = make_atom(sb->atable, "bar", 3, &atom3);
+	test_assert(!err);
 	test_assert(atom1 == atom3);
 
 	struct inode *inode;
@@ -241,13 +245,13 @@ static void test02(struct sb *sb)
 	check_xattr(inode, data);
 
 	/* Test list xattr length */
-	int checklen = xattr_list(inode, NULL, 0);
+	int checklen = list_xattr(inode, NULL, 0);
 	/* Test -ERANGE */
-	err = xattr_list(inode, attrs, checklen - 1);
+	err = list_xattr(inode, attrs, checklen - 1);
 	test_assert(err == -ERANGE);
 
 	/* Test list xattr */
-	int len = xattr_list(inode, attrs, sizeof(attrs));
+	int len = list_xattr(inode, attrs, sizeof(attrs));
 	test_assert(len == checklen);
 	check_listxattr(inode, attrs, len, data);
 
@@ -257,7 +261,7 @@ static void test02(struct sb *sb)
 	data[0].len = -1;
 
 	check_xattr(inode, data);
-	len = xattr_list(inode, attrs, sizeof(attrs));
+	len = list_xattr(inode, attrs, sizeof(attrs));
 	test_assert(len);
 	check_listxattr(inode, attrs, len, data);
 

@@ -42,8 +42,8 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
-	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
-	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
+	/* Initialize base indexes for atable */
+	atable_init_base(sb);
 
 	/* Probably does not belong here (maybe metablock) */
 #ifdef ATOMIC
@@ -52,16 +52,16 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	sb->freeblocks = from_be_u64(super->freeblocks);
 #endif
 	sb->nextalloc = from_be_u64(super->nextalloc);
+	sb->atomdictsize = from_be_u64(super->atomdictsize);
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
-	sb->dictsize = from_be_u64(super->dictsize);
 	/* logchain and logcount are read from super directly */
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
 	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
 	      (L)sb->volblocks, (L)sb->freeblocks, (L)sb->nextalloc);
-	trace("freeatom %u, atomgen %u", sb->freeatom, sb->atomgen);
-	trace("dictsize %Lu", (L)sb->dictsize);
+	trace("atom_dictsize %Lu, freeatom %u, atomgen %u",
+	      (L)sb->atomdictsize, sb->freeatom, sb->atomgen);
 
 	setup_roots(sb, super);
 }
@@ -95,9 +95,9 @@ int save_sb(struct sb *sb)
 	super->freeblocks = to_be_u64(sb->freeblocks);
 #endif
 	super->nextalloc = to_be_u64(sb->nextalloc);
+	super->atomdictsize = to_be_u64(sb->atomdictsize);
 	super->freeatom = to_be_u32(sb->freeatom);
 	super->atomgen = to_be_u32(sb->atomgen);
-	super->dictsize = to_be_u64(sb->dictsize);
 	/* logchain and logcount are written to super directly */
 
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);

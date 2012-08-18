@@ -20,9 +20,10 @@
  * Atom count table:
  *
  * * Both tables are mapped into the atom table at a high logical offset.
- *   Allowing 32 bits worth of atom numbers, and with at most 256 atom entries
- *   per 4K dirent block, we need about (32 << 8) = 1 TB dirent bytes for the
- *   atom dictionary, so the refcount tables start at block 2^40 >> 12 = 2^28.
+ *   Allowing 32 bits worth of atom numbers, and with at lest 256 bytes
+ *   per atom entry, we need about (1 << 32 + 8) = 1 TB dirent bytes
+ *   for the atom dictionary, so the refcount tables start at block
+ *   2^40 >> 12 = 2^28.
  *
  * * The refcount table consists of pairs of blocks: even blocks with the low
  *   16 bits of refcount and odd blocks with the high 16 bits.  For 2^32 atoms
@@ -40,38 +41,113 @@
 
 typedef u32 atom_t;
 
+/* see dir.c */
+#define HEAD_PAD		(sizeof(inum_t) - 1)
+#define HEAD_SIZE		((sizeof(tux_dirent) + HEAD_PAD) & ~HEAD_PAD))
+/* FIXME: probably, we should limit maximum name length */
+#define MAX_ATOM_NAME_LEN	(256 - HEAD_SIZE)
+
+#define MAX_ATABLE_SIZE_BITS	48
+#define ATOM_DICT_BITS		40
+#define ATOMREF_TABLE_BITS	34
+
+/*
+ * FIXME: refcount bits is too small in theory. Because maximum
+ * refcount is maximum inodes.
+ */
+#define ATOMREF_SIZE		2
+#define ATOMREF_BLKBITS		1
+
+#define UNATOM_SIZE		8
+#define UNATOM_BLKBITS		3
+/* Sign bit is used for error */
+#define UNATOM_FREE_MAGIC	(0x6eadfceeULL << (sizeof(atom_t) * 8))
+#define UNATOM_FREE_MASK	(0xffffffffULL << (sizeof(atom_t) * 8))
+
+/* Initialize base address for dictionaries on atable */
+void atable_init_base(struct sb *sb)
+{
+	sb->atomref_base = 1U << (ATOM_DICT_BITS - sb->blockbits);
+	sb->unatom_base =
+		sb->atomref_base + (1U << (ATOMREF_TABLE_BITS - sb->blockbits));
+}
+
 static inline atom_t entry_atom(tux_dirent *entry)
 {
 	return from_be_u64(entry->inum);
 }
 
-static struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom, unsigned *offset)
+static struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom,
+					    unsigned *offset)
 {
-	unsigned shift = tux_sb(atable->i_sb)->blockbits - 3;
+	struct sb *sb = tux_sb(atable->i_sb);
+	unsigned shift = sb->blockbits - UNATOM_BLKBITS;
 
 	*offset = atom & ~(-1 << shift);
-	return blockread(mapping(atable), tux_sb(atable->i_sb)->unatom_base + (atom >> shift));
+	return blockread(mapping(atable), sb->unatom_base + (atom >> shift));
 }
 
-static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
+static loff_t unatom_dict_read(struct inode *atable, atom_t atom)
 {
-	unsigned offset;
-	struct sb *sb = tux_sb(atable->i_sb);
 	struct buffer_head *buffer;
-	int err = -ENOMEM;
+	unsigned offset;
 
 	buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
-		goto error;
-	u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
+		return -EIO;
+
+	be_u64 *unatom_dict = bufdata(buffer);
+	loff_t where = from_be_u64(unatom_dict[offset]);
 	blockput(buffer);
-	buffer = blockread(mapping(atable), where >> sb->blockbits);
+
+	return where;
+}
+
+static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
+{
+	struct buffer_head *buffer;
+	loff_t old;
+	unsigned offset;
+
+	buffer = blockread_unatom(atable, atom, &offset);
 	if (!buffer)
+		return -EIO;
+
+	be_u64 *unatom_dict = bufdata(buffer);
+	old = from_be_u64(unatom_dict[offset]);
+	unatom_dict[offset] = to_be_u64(where);
+	blockput_dirty(buffer);
+
+	return old;
+}
+
+static int is_free_unatom(loff_t where)
+{
+	return (where & UNATOM_FREE_MASK) == UNATOM_FREE_MAGIC;
+}
+
+/* Convert atom to name */
+static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
+{
+	struct sb *sb = tux_sb(atable->i_sb);
+	struct buffer_head *buffer;
+	int err;
+
+	loff_t where = unatom_dict_read(atable, atom);
+	if (where < 0) {
+		err = where;
 		goto error;
+	}
+
+	buffer = blockread(mapping(atable), where >> sb->blockbits);
+	if (!buffer) {
+		err = -EIO;
+		goto error;
+	}
 	tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 	if (entry_atom(entry) != atom) {
 		warn("atom %x reverse entry broken", atom);
-		err = -EINVAL;
+		err = -EIO;
 		goto error_blockput;
 	}
 	unsigned len = entry->name_len;
@@ -83,6 +159,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 		memcpy(name, entry->name, len);
 	}
 	blockput(buffer);
+
 	return len;
 
 error_blockput:
@@ -91,24 +168,188 @@ error:
 	return err;
 }
 
+/* Find free atom */
+static int get_freeatom(struct inode *atable, atom_t *atom)
+{
+	struct sb *sb = tux_sb(atable->i_sb);
+	atom_t freeatom = sb->freeatom;
+
+	if (!freeatom) {
+		*atom = sb->atomgen++;
+		return 0;
+	}
+
+	loff_t next = unatom_dict_read(atable, freeatom);
+	if (next < 0)
+		return next;
+	if (!is_free_unatom(next)) {
+		warn("something horrible happened");
+		return -EIO;
+	}
+
+	*atom = freeatom;
+	sb->freeatom = next & ~UNATOM_FREE_MASK;
+
+	return 0;
+}
+
+// bug waiting to happen...
+tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len, struct buffer_head **result, loff_t size);
+loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len, inum_t inum, umode_t mode, loff_t *size);
+
+/* Find atom of name */
+static int find_atom(struct inode *atable, const char *name, unsigned len,
+		     atom_t *atom)
+{
+	struct sb *sb = tux_sb(atable->i_sb);
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+
+	entry = tux_find_entry(atable, name, len, &buffer, sb->atomdictsize);
+	if (IS_ERR(entry)) {
+		int err = PTR_ERR(entry);
+		if (err == -ENOENT)
+			return -ENODATA;
+		return err;
+	}
+
+	*atom = entry_atom(entry);
+	blockput(buffer);
+	return 0;
+}
+
+/* Make atom for name */
+static int make_atom(struct inode *atable, const char *name, unsigned len,
+		     atom_t *atom)
+{
+	struct sb *sb = tux_sb(atable->i_sb);
+	int err;
+
+	err = find_atom(atable, name, len, atom);
+	if (!err)
+		return 0;
+	if (err != -ENODATA)
+		return err;
+
+	err = get_freeatom(atable, atom);
+	if (err)
+		return err;
+
+	loff_t where = tux_create_entry(atable, name, len, *atom, 0,
+					&sb->atomdictsize);
+	if (where < 0) {
+		/* FIXME: better set a flag that unatom broke or something!!! */
+		return where;
+	}
+
+	/* Enter into reverse map - maybe verify zero refs? */
+	where = unatom_dict_write(atable, *atom, where);
+	if (where < 0) {
+		/* FIXME: better set a flag that unatom broke or something!!! */
+		return where;
+	}
+
+	return 0;
+}
+
+/* Modify atom refcount */
+static int atomref(struct inode *atable, atom_t atom, int use)
+{
+	struct sb *sb = tux_sb(atable->i_sb);
+	unsigned shift = sb->blockbits - ATOMREF_BLKBITS;
+	unsigned block = sb->atomref_base + ATOMREF_SIZE * (atom >> shift);
+	unsigned offset = atom & ~(-1 << shift), kill = 0;
+	struct buffer_head *buffer;
+	be_u16 *refcount;
+
+	buffer = blockread(mapping(atable), block);
+	if (!buffer)
+		return -EIO;
+
+	refcount = bufdata(buffer);
+	int low = from_be_u16(refcount[offset]) + use;
+	trace("inc atom %x by %d, offset %x[%x], low = %d",
+	      atom, use, block, offset, low);
+	refcount[offset] = to_be_u16(low);
+	blockput_dirty(buffer);
+
+	if (!low || (low & (-1 << 16))) {
+		buffer = blockread(mapping(atable), block + 1);
+		if (!buffer)
+			return -EIO;
+
+		refcount = bufdata(buffer);
+		int high = from_be_u16(refcount[offset]);
+		if (low) {
+			trace("carry %d, offset %x[%x], high = %d",
+			      (low >> 16), block, offset, high);
+			high += (low >> 16);
+			assert(high >= 0); /* paranoia check */
+			refcount[offset] = to_be_u16(high);
+			mark_buffer_dirty(buffer);
+		}
+		blockput(buffer);
+
+		kill = !(low | high);
+	}
+
+	if (kill) {
+		warn("delete atom %Lx", (L)atom);
+		loff_t next = UNATOM_FREE_MAGIC | sb->freeatom;
+		loff_t where = unatom_dict_write(atable, atom, next);
+		if (where < 0) {
+			/* FIXME: better set a flag that unatom broke
+			 * or something! */
+			return -EIO;
+		}
+		sb->freeatom = atom;
+
+		buffer = blockread(mapping(atable), where >> sb->blockbits);
+		if (!buffer) {
+			/* FIXME: better set a flag that unatom broke
+			 * or something! */
+			return -EIO;
+		}
+
+		tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
+		if (entry_atom(entry) == atom) {
+			/* FIXME: better set a flag that unatom broke
+			 * or something! */
+			int err = tux_delete_entry(buffer, entry);
+			if (err)
+				return err;
+		} else {
+			/* FIXME: better set a flag that unatom broke
+			 * or something! */
+			/* Corruption of refcount or something */
+			warn("atom entry not found");
+			blockput(buffer);
+			return -EIO;
+		}
+	}
+
+	return 0;
+}
+
 /* userland only */
 void dump_atoms(struct inode *atable)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
-	unsigned blocks = (sb->atomgen + (sb->blockmask >> 1)) >> (sb->blockbits - 1);
+	unsigned blocks = (sb->atomgen + (sb->blockmask >> ATOMREF_BLKBITS))
+		>> (sb->blockbits - ATOMREF_BLKBITS);
 
 	for (unsigned j = 0; j < blocks; j++) {
-		unsigned block = sb->atomref_base + 2 * j;
+		unsigned block = sb->atomref_base + ATOMREF_SIZE * j;
 		struct buffer_head *lobuf, *hibuf;
 		if (!(lobuf = blockread(mapping(atable), block)))
 			goto eek;
-		if (!(hibuf = blockread(mapping(atable), block))) {
+		if (!(hibuf = blockread(mapping(atable), block + 1))) {
 			blockput(lobuf);
 			goto eek;
 		}
 		be_u16 *lorefs = bufdata(lobuf), *hirefs = bufdata(hibuf);
-		for (unsigned i = 0; i < (sb->blocksize >> 1); i++) {
-			unsigned refs = (from_be_u16(hirefs[i]) << 16) + from_be_u16(lorefs[i]);
+		for (unsigned i = 0; i < (sb->blocksize >> ATOMREF_BLKBITS); i++) {
+			unsigned refs = (from_be_u16(hirefs[i]) << 16) | from_be_u16(lorefs[i]);
 			if (!refs)
 				continue;
 			atom_t atom = i;
@@ -116,7 +357,8 @@ void dump_atoms(struct inode *atable)
 			int len = unatom(atable, atom, name, sizeof(name));
 			if (len < 0)
 				goto eek;
-			printf("%.*s = %x\n", len, name, atom);
+			trace_on("%.*s: atom 0x%08x, ref %u",
+				 len, name, atom, refs);
 		}
 		blockput(lobuf);
 		blockput(hibuf);
@@ -135,123 +377,16 @@ void show_freeatoms(struct sb *sb)
 
 	while (atom) {
 		warn("free atom: %Lx", (L)atom);
-		unsigned offset;
-		struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
-		if (!buffer)
+		loff_t next = unatom_dict_read(atable, atom);
+		if (next < 0)
 			goto eek;
-		u64 next = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-		blockput(buffer);
-		if ((next >> 48) != 0xdead)
+		if (!is_free_unatom(next))
 			goto eek;
-		atom = next & ~(-1LL << 48);
+		atom = next & ~UNATOM_FREE_MASK;
 	}
 	return;
 eek:
 	warn("eek");
-}
-
-static atom_t get_freeatom(struct inode *atable)
-{
-	struct sb *sb = tux_sb(atable->i_sb);
-	atom_t atom = sb->freeatom;
-
-	if (!atom)
-		return sb->atomgen++;
-	unsigned offset;
-	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
-	if (!buffer)
-		goto eek;
-	u64 next = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-	blockput(buffer);
-	if ((next >> 48) != 0xdead)
-		goto eek;
-	sb->freeatom = next & ~(-1LL << 48);
-	return atom;
-eek:
-	warn("something horrible happened");
-	return -1;
-}
-
-static int use_atom(struct inode *atable, atom_t atom, int use)
-{
-	struct sb *sb = tux_sb(atable->i_sb);
-	unsigned shift = sb->blockbits - 1;
-	unsigned block = sb->atomref_base + 2 * (atom >> shift);
-	unsigned offset = atom & ~(-1 << shift), kill = 0;
-	struct buffer_head *buffer;
-
-	if (!(buffer = blockread(mapping(atable), block)))
-		return -EIO;
-	int low = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + use;
-	trace("inc atom %x by %i, offset %x[%x], low = %i", atom, use, block, offset, low);
-	((be_u16 *)bufdata(buffer))[offset] = to_be_u16(low);
-	blockput_dirty(buffer);
-	if (!low || (low & (-1 << 16))) {
-		if (!(buffer = blockread(mapping(atable), block + 1)))
-			return -EIO;
-		int high = from_be_u16(((be_u16 *)bufdata(buffer))[offset]) + (low >> 16);
-		trace("carry %i, offset %x[%x], high = %i", low >> 16, block, offset, high);
-		((be_u16 *)bufdata(buffer))[offset] = to_be_u16(high);
-		blockput_dirty(buffer);
-		kill = !(low | high);
-	}
-	if (kill) {
-		warn("delete atom %Lx", (L) atom);
-		buffer = blockread_unatom(atable, atom, &offset);
-		if (!buffer)
-			return -1; // better set a flag that unatom broke or something!!!
-		u64 where = from_be_u64(((be_u64 *)bufdata(buffer))[offset]);
-		((be_u64 *)bufdata(buffer))[offset] = to_be_u64((u64)sb->freeatom | (0xdeadLL << 48));
-		blockput_dirty(buffer);
-		sb->freeatom = atom;
-		buffer = blockread(mapping(atable), where >> sb->blockbits);
-		tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
-		if (entry_atom(entry) == atom)
-			tux_delete_entry(buffer, entry);
-		else {
-			warn("atom entry not found");
-			blockput(buffer);
-		}
-	}
-	return 0;
-}
-
-// bug waiting to happen...
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len, struct buffer_head **result, loff_t size);
-loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len, inum_t inum, umode_t mode, loff_t *size);
-
-static atom_t find_atom(struct inode *atable, const char *name, unsigned len)
-{
-	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_entry(atable, name, len, &buffer, tux_sb(atable->i_sb)->dictsize);
-
-	if (IS_ERR(entry))
-		return -1; /* FIXME: return correct errno */
-	atom_t atom = entry_atom(entry);
-	blockput(buffer);
-	return atom;
-}
-
-static atom_t make_atom(struct inode *atable, const char *name, unsigned len)
-{
-	atom_t atom = find_atom(atable, name, len);
-
-	if (atom != -1)
-		return atom;
-	atom = get_freeatom(atable);
-	loff_t where = tux_create_entry(atable, name, len, atom, 0, &tux_sb(atable->i_sb)->dictsize);
-	if (where < 0)
-		return -1; // and what about the err???
-
-	/* Enter into reverse map - maybe verify zero refs? */
-	unsigned offset;
-	struct buffer_head *buffer = blockread_unatom(atable, atom, &offset);
-	if (!buffer)
-		return -1; // better set a flag that unatom broke or something!!!
-	((be_u64 *)bufdata(buffer))[offset] = to_be_u64(where);
-	blockput_dirty(buffer);
-
-	return atom;
 }
 
 /* Xattr cache */
@@ -260,6 +395,7 @@ int xcache_dump(struct inode *inode)
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;
+
 	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
@@ -302,12 +438,19 @@ static struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom)
 
 struct xcache *new_xcache(unsigned maxsize)
 {
-	warn("realloc xcache to %i", maxsize);
-	struct xcache *xcache = malloc(maxsize);
+	struct xcache *xcache;
 
+	warn("realloc xcache to %i", maxsize);
+
+	xcache = malloc(maxsize);
 	if (!xcache)
 		return NULL;
-	*xcache = (struct xcache){ .size = sizeof(struct xcache), .maxsize = maxsize };
+
+	*xcache = (struct xcache){
+		.size = sizeof(struct xcache),
+		.maxsize = maxsize
+	};
+
 	return xcache;
 }
 
@@ -334,11 +477,12 @@ static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
  *
  *  * Should expand by binary factor
  */
-static int xcache_update(struct inode *inode, unsigned atom, const void *data, unsigned len, unsigned flags)
+static int xcache_update(struct inode *inode, unsigned atom, const void *data,
+			 unsigned len, unsigned flags)
 {
-	int use = 0;
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache_lookup(xcache, atom);
+	int use = 0;
 
 	if (IS_ERR(xattr)) {
 		if (PTR_ERR(xattr) != -ENOATTR || (flags & XATTR_REPLACE))
@@ -374,23 +518,26 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data, u
 	mark_inode_dirty(inode);
 
 	use++;
-	if (use)
-		use_atom(tux_sb(inode->i_sb)->atable, atom, use);
+	if (use) {
+		/* FIXME: error check */
+		atomref(tux_sb(inode->i_sb)->atable, atom, use);
+	}
 
 	return 0;
 }
 
-int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size)
+int get_xattr(struct inode *inode, const char *name, unsigned len, void *data,
+	      unsigned size)
 {
 	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	atom_t atom;
 	int ret;
 
 	mutex_lock(&atable->i_mutex);
-	atom_t atom = find_atom(atable, name, len);
-	if (atom == -1) {
-		ret = -ENOATTR;
+	ret = find_atom(atable, name, len, &atom);
+	if (ret)
 		goto out;
-	}
+
 	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom);
 	if (IS_ERR(xattr)) {
 		ret = PTR_ERR(xattr);
@@ -406,55 +553,63 @@ out:
 	return ret;
 }
 
-int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags)
+int set_xattr(struct inode *inode, const char *name, unsigned len,
+	      const void *data, unsigned size, unsigned flags)
 {
-	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct inode *atable = sb->atable;
 
 	mutex_lock(&atable->i_mutex);
-	change_begin(tux_sb(inode->i_sb));
-	atom_t atom = make_atom(atable, name, len);
-	int err = -EINVAL;
-	if (atom != -1) {
+	change_begin(sb);
+
+	atom_t atom;
+	int err = make_atom(atable, name, len, &atom);
+	if (!err) {
 		err = xcache_update(inode, atom, data, size, flags);
 		if (err) {
 			/* FIXME: maybe, recovery for make_atom */
 		}
 	}
-	change_end(tux_sb(inode->i_sb));
+
+	change_end(sb);
 	mutex_unlock(&atable->i_mutex);
+
 	return err;
 }
 
 int del_xattr(struct inode *inode, const char *name, unsigned len)
 {
-	int err = 0;
-	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct inode *atable = sb->atable;
+	int err;
 
 	mutex_lock(&atable->i_mutex);
-	change_begin(tux_sb(inode->i_sb));
-	atom_t atom = find_atom(atable, name, len);
-	if (atom == -1) {
-		err = -ENOATTR;
-		goto out;
-	}
-	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache_lookup(xcache, atom);
-	if (IS_ERR(xattr)) {
-		err = PTR_ERR(xattr);
-		goto out;
-	}
-	int used = remove_old(xcache, xattr);
-	if (used) {
-		mark_inode_dirty(inode);
-		use_atom(atable, atom, -used);
+	change_begin(sb);
+
+	atom_t atom;
+	err = find_atom(atable, name, len, &atom);
+	if (!err) {
+		struct xcache *xcache = tux_inode(inode)->xcache;
+		struct xattr *xattr = xcache_lookup(xcache, atom);
+		if (IS_ERR(xattr)) {
+			err = PTR_ERR(xattr);
+			goto out;
+		}
+		int used = remove_old(xcache, xattr);
+		if (used) {
+			mark_inode_dirty(inode);
+			/* FIXME: error check */
+			atomref(atable, atom, -used);
+		}
 	}
 out:
-	change_end(tux_sb(inode->i_sb));
+	change_end(sb);
 	mutex_unlock(&atable->i_mutex);
+
 	return err;
 }
 
-int xattr_list(struct inode *inode, char *text, size_t size)
+int list_xattr(struct inode *inode, char *text, size_t size)
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;
@@ -482,8 +637,14 @@ int xattr_list(struct inode *inode, char *text, size_t size)
 
 			*(text += len) = 0;
 			text++;
-		} else
-			text += unatom(atable, atom, NULL, 0) + 1;
+		} else {
+			int len = unatom(atable, atom, NULL, 0);
+			if (len < 0) {
+				err = len;
+				goto error;
+			}
+			text += len + 1;
+		}
 
 		if ((xattr = xcache_next(xattr)) > limit) {
 			error("xcache bug");

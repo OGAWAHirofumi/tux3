@@ -182,9 +182,12 @@ struct disksuper {
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
 #endif
 	be_u64 nextalloc;	/* Get rid of this when we have a real allocation policy */
+	be_u64 atomdictsize;	/*
+				 * Size of the atom dictionary instead of i_size
+				 * FIXME: we are better to remove this somehow
+				 */
 	be_u32 freeatom;	/* Beginning of persistent free atom list in atable */
 	be_u32 atomgen;		/* Next atom number if there are no free atoms */
-	be_u64 dictsize;	/* Size of the atom dictionary instead if i_size */
 	be_u64 logchain;	/* Most recent delta commit block pointer */
 	be_u32 logcount;	/* Count of log blocks in the current log chain */
 } __packed;
@@ -254,10 +257,12 @@ struct sb {
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
 	unsigned version;	/* Currently mounted volume version view */
-	unsigned atomref_base, unatom_base; /* layout of atom table */
+
+	unsigned atomref_base;	/* Index of atom refcount base */
+	unsigned unatom_base;	/* Index of unatom base */
+	loff_t atomdictsize;	/* Atom dictionary size */
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
-	loff_t dictsize;	/* Atom dictionary size */
 
 	struct inode *logmap;	/* Log block cache */
 	unsigned lognext;	/* Index of next log block in log map */
@@ -1031,11 +1036,15 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count);
 int bytebits(u8 c);
 
 /* xattr.c */
+void atable_init_base(struct sb *sb);
 int xcache_dump(struct inode *inode);
 struct xcache *new_xcache(unsigned maxsize);
-int get_xattr(struct inode *inode, const char *name, unsigned len, void *data, unsigned size);
-int set_xattr(struct inode *inode, const char *name, unsigned len, const void *data, unsigned size, unsigned flags);
-int xattr_list(struct inode *inode, char *text, size_t size);
+int get_xattr(struct inode *inode, const char *name, unsigned len,
+	      void *data, unsigned size);
+int set_xattr(struct inode *inode, const char *name, unsigned len,
+	      const void *data, unsigned size, unsigned flags);
+int del_xattr(struct inode *inode, const char *name, unsigned len);
+int list_xattr(struct inode *inode, char *text, size_t size);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 unsigned encode_xsize(struct inode *inode);
