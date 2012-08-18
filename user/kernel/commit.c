@@ -9,6 +9,15 @@
 #define trace trace_on
 #endif
 
+/*
+ * Need frontend modification of backend buffers. (modification
+ * after latest delta commit and before rollup).
+ *
+ * E.g. frontend modified backend buffers, stage_delta() of when
+ * rollup is called.
+ */
+#define ALLOW_FRONTEND_MODIFY
+
 static void setup_roots(struct sb *sb, struct disksuper *super)
 {
 	u64 iroot_val = from_be_u64(super->iroot);
@@ -16,9 +25,6 @@ static void setup_roots(struct sb *sb, struct disksuper *super)
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
 	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
 }
-
-/* Allow frontend modify backend buffers */
-#define ALLOW_FRONTEND_MODIFY
 
 void setup_sb(struct sb *sb, struct disksuper *super)
 {
@@ -192,8 +198,6 @@ static int rollup_log(struct sb *sb)
 	 * If frontend made defered bfree (i.e. it is not applied to
 	 * bitmap yet), we have to re-log it on this cycle. Because we
 	 * obsolete all logs in past.
-	 * FIXME: if frontend can delay modification until backend,
-	 * this is unnecessary.
 	 */
 	stash_walk(sb, &sb->defree, relog_frontend_defer_as_bfree);
 #endif
@@ -256,14 +260,15 @@ static int rollup_log(struct sb *sb)
 	return 0;
 }
 
+/* Apply frontend modifications to backend buffers, and flush data buffers. */
 static int stage_delta(struct sb *sb)
 {
-	int err;
-
 	/* flush inodes */
-	err = sync_inodes(sb);
-	if (err)
-		return err;
+	return sync_inodes(sb);
+}
+
+static int write_leaves(struct sb *sb)
+{
 #if 1
 	/* flush leaf blocks */
 	return sync_inode(sb->volmap);
@@ -359,17 +364,36 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 	/* further changes of frontend belong to the next delta */
 	sb->delta++;
 
+	/* Add delta log for debugging. */
+	log_delta(sb);
+
+	/*
+	 * NOTE: This works like modification from frontend. (i.e. this
+	 * may generate defree log which is not committed yet at rollup.)
+	 *
+	 * - this is before rollup to merge modifications to this
+	 *   rollup, and flush at once for optimization.
+	 *
+	 * - this is required to prevent unexpected buffer state for
+	 *   cursor_redirect(). If we applied modification after
+	 *   rollup_log, it made unexpected dirty state (i.e. leaf is
+	 *   still dirty, but parent was already cleaned.)
+	 */
+	err = stage_delta(sb);
+	if (err)
+		return err;
+
 	if ((rollup_flag == ALLOW_ROLLUP && need_rollup(sb)) ||
 	    rollup_flag == FORCE_ROLLUP) {
 		err = rollup_log(sb);
 		if (err)
 			return err;
+
+		/* Add delta log for debugging. */
+		log_delta(sb);
 	}
 
-	/* Add delta log as an initial log for debugging. */
-	log_delta(sb);
-
-	stage_delta(sb);
+	write_leaves(sb);
 	write_log(sb);
 	commit_delta(sb);
 	trace("<<<<<<<<< commit done %u", sb->delta - 1);
