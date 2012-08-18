@@ -199,8 +199,39 @@ static void bufvec_submit_bio(struct bufvec *bufvec)
 	submit_bio(WRITE, bio);
 }
 
+/*
+ * We flush all buffers on this page?
+ *
+ * The page may have the dirty buffer for both of "delta" and
+ * "rollup", and we may flush only dirty buffers for "delta". So, if
+ * the page still has the dirty buffer, we should still keep the page
+ * dirty for "rollup".
+ */
+static int keep_page_dirty(struct bufvec *bufvec, struct page *page)
+{
+	struct buffer_head *first = page_buffers(page);
+	struct inode *inode = buffer_inode(first);
+
+	if (tux_inode(inode)->inum == TUX_VOLMAP_INO) {
+		struct buffer_head *tmp = first;
+		unsigned count = 0;
+		do {
+			if (buffer_dirty(tmp)) {
+				count++;
+				/* dirty buffers > flushing buffers? */
+				if (count > bufvec->on_page_idx)
+					return 1;
+			}
+			tmp = tmp->b_this_page;
+		} while (tmp != first);
+	}
+
+	return 0;
+}
+
 /* Preparation and lock page for I/O */
-static void bufvec_prepare_and_lock_page(struct page *page)
+static void
+bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 {
 	int ret;
 
@@ -211,8 +242,21 @@ static void bufvec_prepare_and_lock_page(struct page *page)
 	/* Set it before clearing dirty, so dirty or writeback are presented */
 	set_page_writeback(page);
 
-	ret = clear_page_dirty_for_io(page);
-	assert(ret);
+	/*
+	 * NOTE: This has the race if there is concurrent mark
+	 * dirty. But we shouldn't use concurrent dirty [B] on volmap.
+	 *
+	 *           [ A ]                        [ B ]
+	 * if (!keep_page_dirty())
+	 *                                   mark_buffer_dirty()
+	 *                                       TestSetPageDirty()
+	 *     // this lost dirty of [B]
+	 *     clear_dirty_for_io()
+	 */
+	if (!keep_page_dirty(bufvec, page)) {
+		ret = clear_page_dirty_for_io(page);
+		assert(ret);
+	}
 }
 
 static void bufvec_prepare_and_unlock_page(struct page *page)
@@ -346,7 +390,7 @@ static void bufvec_bio_add_multiple(struct bufvec *bufvec)
 	page = bufvec->on_page[0].buffer->b_page;
 
 	/* Prepare the page and buffers on the page for I/O */
-	bufvec_prepare_and_lock_page(page);
+	bufvec_prepare_and_lock_page(bufvec, page);
 	/* Set buffer_async_write to all buffers at first, then submit */
 	for (i = 0; i < bufvec->on_page_idx; i++) {
 		struct buffer_head *buffer = bufvec->on_page[i].buffer;
@@ -459,7 +503,7 @@ static void bufvec_bio_add_page(struct bufvec *bufvec)
 	}
 
 	/* Prepare the page, and buffers on the page for I/O */
-	bufvec_prepare_and_lock_page(page);
+	bufvec_prepare_and_lock_page(bufvec, page);
 	for (i = 0; i < bufvec->on_page_idx; i++) {
 		struct buffer_head *buffer = bufvec->on_page[i].buffer;
 		bufvec_prepare_buffer(buffer);
