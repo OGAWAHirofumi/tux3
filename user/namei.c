@@ -132,6 +132,30 @@ error_src:
 	return err;
 }
 
+int tuxsymlink(struct inode *dir, const char *name, unsigned len,
+	       struct tux_iattr *iattr, const char *symname)
+{
+	struct dentry dentry = {
+		.d_name.name = (unsigned char *)name,
+		.d_name.len = len,
+	};
+	int err;
+
+	/*
+	 * FIXME: we can find space with existent check
+	 */
+
+	err = tux_check_exist(dir, &dentry.d_name);
+	if (err)
+		return err;
+
+	err = __tux3_symlink(dir, &dentry, iattr, symname);
+	if (!err)
+		iput(dentry.d_inode);
+
+	return err;
+}
+
 int tuxunlink(struct inode *dir, const char *name, unsigned len)
 {
 	struct dentry dentry = {

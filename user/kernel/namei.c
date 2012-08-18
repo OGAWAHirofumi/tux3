@@ -129,19 +129,14 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 	return err;
 }
 
-static int tux3_symlink(struct inode *dir, struct dentry *dentry,
-			const char *symname)
+static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
+			  struct tux_iattr *iattr, const char *symname)
 {
-	struct tux_iattr iattr = {
-//		.uid	= current_fsuid(),
-//		.gid	= current_fsgid(),
-		.mode	= S_IFLNK | S_IRWXUGO,
-	};
 	struct inode *inode;
 	int err;
 
 	change_begin(tux_sb(dir->i_sb));
-	inode = tux_create_inode(dir, &iattr, 0);
+	inode = tux_create_inode(dir, iattr, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = page_symlink(inode, symname, strlen(symname) + 1);
@@ -155,8 +150,23 @@ static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 	}
 out:
 	change_end(tux_sb(dir->i_sb));
+
 	return err;
 }
+
+#ifdef __KERNEL__
+static int tux3_symlink(struct inode *dir, struct dentry *dentry,
+			const char *symname)
+{
+	struct tux_iattr iattr = {
+		.uid	= current_fsuid(),
+		.gid	= current_fsgid(),
+		.mode	= S_IFLNK | S_IRWXUGO,
+	};
+
+	return __tux3_symlink(dir, dentry, &iattr, symname);
+}
+#endif /* !__KERNEL__ */
 
 static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 {
@@ -287,10 +297,6 @@ error:
 	blockput(old_buffer);
 	return err;
 }
-
-void *a[] = {
-	tux3_symlink,
-};
 
 #ifdef __KERNEL__
 const struct file_operations tux_dir_fops = {
