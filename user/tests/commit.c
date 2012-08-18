@@ -517,6 +517,75 @@ static void test04(struct sb *sb)
 	test_free_shm(data, sizeof(*data) * NR_ORPHAN);
 }
 
+/* Test for mkdir/rmdir */
+static void test05(struct sb *sb)
+{
+	static struct open_result r;
+
+	struct tux_iattr iattr = { .mode = S_IFDIR | 0755 };
+
+	test_assert(make_tux3(sb) == 0);
+	test_assert(force_rollup(sb) == 0);
+
+	r.namelen = snprintf(r.name, sizeof(r.name), "dir%03d", 1);
+	r.err = -ENOENT;
+
+	/* Create dir and add some dirent without flush */
+	struct inode *dir;
+	dir = tuxcreate(sb->rootdir, r.name, r.namelen, &iattr);
+	test_assert(!IS_ERR(dir));
+
+	/* mkdir and rmdir subdir, this adds at least 1 buffer to dir */
+	struct inode *subdir;
+	const char *subname = "subdir";
+	subdir = tuxcreate(dir, subname, strlen(subname), &iattr);
+	test_assert(!IS_ERR(subdir));
+	iput(subdir);
+	test_assert(tuxrmdir(dir, subname, strlen(subname)) == 0);
+
+	iput(dir);
+
+	/* rmdir after flush */
+	if (test_start("test05.1")) {
+		test_assert(force_delta(sb) == 0);
+
+		/* rmdir created dir */
+		test_assert(tuxrmdir(sb->rootdir, r.name, r.namelen) == 0);
+		check_dirty(sb);
+
+		/* Flush */
+		test_assert(force_delta(sb) == 0);
+		clean_main(sb);
+
+		/* FIXME: fsck please, check leak */
+		/* fsck(); */
+
+		check_files(sb, &r, 1);
+		clean_main(sb);
+	}
+	test_end();
+	/* rmdir before flush */
+	if (test_start("test05.2")) {
+		/* rmdir created dir */
+		test_assert(tuxrmdir(sb->rootdir, r.name, r.namelen) == 0);
+		check_dirty(sb);
+
+		/* Flush */
+		test_assert(force_delta(sb) == 0);
+		clean_main(sb);
+
+		/* FIXME: fsck please, check leak */
+		/* fsck(); */
+
+		check_files(sb, &r, 1);
+		clean_main(sb);
+	}
+	test_end();
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -557,6 +626,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test04"))
 		test04(sb);
+	test_end();
+
+	if (test_start("test05"))
+		test05(sb);
 	test_end();
 
 	clean_main(sb);
