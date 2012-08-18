@@ -42,6 +42,7 @@ void tux3_iowait_wait(struct iowait *iowait)
 
 #define buffers_entry(x) \
 	list_entry(x, struct buffer_head, b_assoc_buffers)
+#define MAX_BUFVEC_COUNT	UINT_MAX
 
 /* Initialize bufvec */
 static void bufvec_init(struct bufvec *bufvec, struct list_head *head)
@@ -86,9 +87,17 @@ static inline void bufvec_buffer_move_to_contig(struct bufvec *bufvec,
  */
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer)
 {
-	/* Check if buffer is logically contiguous */
-	if (bufvec_contig_count(bufvec)) {
-		block_t last = bufvec_contig_last_index(bufvec);
+	unsigned contig_count = bufvec_contig_count(bufvec);
+
+	if (contig_count) {
+		block_t last;
+
+		/* Check contig_count limit */
+		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
+			return 0;
+
+		/* Check if buffer is logically contiguous */
+		last = bufvec_contig_last_index(bufvec);
 		if (last != bufindex(buffer) - 1)
 			return 0;
 	}
@@ -117,6 +126,9 @@ static void bufvec_contig_collect(struct bufvec *bufvec)
 		trace("buffer %p", buffer);
 
 		if (list_empty(bufvec->buffers))
+			break;
+		/* Check contig_count limit */
+		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
 			break;
 
 		last_index = bufindex(buffer);
