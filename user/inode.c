@@ -288,7 +288,14 @@ void iput(struct inode *inode)
 
 int tuxtruncate(struct inode *inode, loff_t size)
 {
-	return tux3_truncate(inode, size);
+	struct sb *sb = tux_sb(inode->i_sb);
+	int err;
+
+	change_begin(sb);
+	err = tux3_truncate(inode, size);
+	change_end(sb);
+
+	return err;
 }
 
 int write_inode(struct inode *inode)

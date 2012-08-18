@@ -497,7 +497,6 @@ void tux3_write_failed(struct address_space *mapping, loff_t to)
 static int tux3_truncate(struct inode *inode, loff_t newsize)
 {
 	/* FIXME: expanding size is not tested */
-	struct sb *sb = tux_sb(inode->i_sb);
 	int is_expand, err;
 
 	if (newsize == inode->i_size)
@@ -507,8 +506,6 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 
 	err = 0;
 	is_expand = newsize > inode->i_size;
-
-	change_begin(sb);
 
 	if (!is_expand) {
 		err = tux3_truncate_partial_block(inode, newsize);
@@ -528,7 +525,6 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	inode->i_mtime = inode->i_ctime = gettime();
 	mark_inode_dirty(inode);
 error:
-	change_end(sb);
 
 	return err;
 }
@@ -668,7 +664,8 @@ int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat
 int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 {
 	struct inode *inode = dentry->d_inode;
-	int err;
+	struct sb *sb = tux_sb(inode->i_sb);
+	int err, need_truncate = 0;
 
 	err = inode_change_ok(inode, iattr);
 	if (err)
@@ -676,7 +673,12 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	if (iattr->ia_valid & ATTR_SIZE && iattr->ia_size != inode->i_size) {
 		inode_dio_wait(inode);
+		need_truncate = 1;
+	}
 
+	change_begin(sb);
+
+	if (need_truncate) {
 		err = tux3_truncate(inode, iattr->ia_size);
 		if (err)
 			return err;
@@ -684,6 +686,8 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	setattr_copy(inode, iattr);
 	mark_inode_dirty(inode);
+
+	change_end(sb);
 
 	return 0;
 }
@@ -721,7 +725,7 @@ static const struct inode_operations tux_file_iops = {
 
 static const struct inode_operations tux_special_iops = {
 //	.permission	= ext4_permission,
-//	.setattr	= ext4_setattr,
+	.setattr	= tux3_setattr,
 	.getattr	= tux3_getattr
 #ifdef CONFIG_EXT4DEV_FS_XATTR
 //	.setxattr	= generic_setxattr,
@@ -735,6 +739,7 @@ const struct inode_operations tux_symlink_iops = {
 	.readlink	= generic_readlink,
 	.follow_link	= page_follow_link_light,
 	.put_link	= page_put_link,
+	.setattr	= tux3_setattr,
 	.getattr	= tux3_getattr,
 #if 0
 //	.setxattr	= generic_setxattr,
