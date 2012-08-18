@@ -102,7 +102,7 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 }
 
 /* When buffer was dirtied */
-static inline unsigned buffer_dirty_when(struct buffer_head *buffer)
+static inline unsigned tux3_bufdelta(struct buffer_head *buffer)
 {
 #ifdef assert
 	assert(buffer_dirty(buffer));
@@ -132,7 +132,7 @@ static inline struct list_head *dirty_head(struct dirty_buffers *dirty)
 static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 {
 	/* If true, buffer is still not stabilized. We can modify. */
-	if (buffer_dirty_when(buffer) == delta_when(delta))
+	if (tux3_bufdelta(buffer) == delta_when(delta))
 		return 1;
 	/* The buffer may already be in stabilized stage for backend. */
 	return 0;
