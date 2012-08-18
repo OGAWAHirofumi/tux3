@@ -124,50 +124,74 @@ static void log_end(struct sb *sb, void *pos)
 	mutex_unlock(&sb->loglock);
 }
 
-static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
+static void log_intent(struct sb *sb, u8 intent)
 {
 	/* Check whether array is uptodate */
 	BUILD_BUG_ON(ARRAY_SIZE(log_size) != LOG_TYPES);
 
-	assert(count < 256);	/* FIXME: extent max is 64 for now */
-	unsigned char *data = log_begin(sb, log_size[intent]);
-
+	unsigned char *data = log_begin(sb, 1);
 	*data++ = intent;
-	*data++ = count;
-	log_end(sb, encode48(data, block));
+	log_end(sb, data);
+}
+
+static void log_u48(struct sb *sb, u8 intent, u64 v1)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	log_end(sb, encode48(data, v1));
+}
+
+static void log_u8_u48(struct sb *sb, u8 intent, u8 v1, u64 v2)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	*data++ = v1;
+	log_end(sb, encode48(data, v2));
+}
+
+static void log_u48_u48(struct sb *sb, u8 intent, u64 v1, u64 v2)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	data = encode48(data, v1);
+	log_end(sb, encode48(data, v2));
+}
+
+static void log_u48_u48_u48(struct sb *sb, u8 intent, u64 v1, u64 v2, u64 v3)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	data = encode48(data, v1);
+	data = encode48(data, v2);
+	log_end(sb, encode48(data, v3));
 }
 
 /* balloc() until next rollup */
 void log_balloc(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_BALLOC, block, count);
+	assert(count < 256);	/* FIXME: extent max is 64 for now */
+	log_u8_u48(sb, LOG_BALLOC, count, block);
 }
 
 /* Defered bfree() */
 void log_bfree(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_BFREE, block, count);
+	assert(count < 256);	/* FIXME: extent max is 64 for now */
+	log_u8_u48(sb, LOG_BFREE, count, block);
 }
 
 /* Defered bfree() until after next rollup */
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_BFREE_ON_ROLLUP, block, count);
+	assert(count < 256);	/* FIXME: extent max is 64 for now */
+	log_u8_u48(sb, LOG_BFREE_ON_ROLLUP, count, block);
 }
 
 /* Same with log_bfree() (re-logged log_bfree_on_rollup() on rollup) */
 void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
 {
-	log_extent(sb, LOG_BFREE_RELOG, block, count);
-}
-
-static void log_redirect(struct sb *sb, u8 intent, block_t oldblock, block_t newblock)
-{
-	unsigned char *data = log_begin(sb, log_size[intent]);
-
-	*data++ = intent;
-	data = encode48(data, oldblock);
-	log_end(sb, encode48(data, newblock));
+	assert(count < 256);	/* FIXME: extent max is 64 for now */
+	log_u8_u48(sb, LOG_BFREE_RELOG, count, block);
 }
 
 /*
@@ -176,7 +200,7 @@ static void log_redirect(struct sb *sb, u8 intent, block_t oldblock, block_t new
  */
 void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
-	log_redirect(sb, LOG_LEAF_REDIRECT, oldblock, newblock);
+	log_u48_u48(sb, LOG_LEAF_REDIRECT, oldblock, newblock);
 }
 
 /*
@@ -186,7 +210,7 @@ void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock)
  */
 void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
-	log_redirect(sb, LOG_BNODE_REDIRECT, oldblock, newblock);
+	log_u48_u48(sb, LOG_BNODE_REDIRECT, oldblock, newblock);
 }
 
 /*
@@ -198,7 +222,6 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 		    block_t left, block_t right, tuxkey_t rkey)
 {
 	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_ROOT]);
-
 	assert(count == 1 || count == 2);
 	*data++ = LOG_BNODE_ROOT;
 	*data++ = count;
@@ -216,21 +239,10 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
 {
 	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_SPLIT]);
-
 	*data++ = LOG_BNODE_SPLIT;
 	data = encode16(data, pos);
 	data = encode48(data, src);
 	log_end(sb, encode48(data, dst));
-}
-
-static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t child, tuxkey_t key)
-{
-	unsigned char *data = log_begin(sb, log_size[intent]);
-
-	*data++ = intent;
-	data = encode48(data, parent);
-	data = encode48(data, child);
-	log_end(sb, encode48(data, key));
 }
 
 /*
@@ -239,7 +251,7 @@ static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t ch
  */
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
-	log_bnode_entry(sb, LOG_BNODE_ADD, parent, child, key);
+	log_u48_u48_u48(sb, LOG_BNODE_ADD, parent, child, key);
 }
 
 /*
@@ -248,22 +260,13 @@ void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
  */
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
-	log_bnode_entry(sb, LOG_BNODE_UPDATE, parent, child, key);
+	log_u48_u48_u48(sb, LOG_BNODE_UPDATE, parent, child, key);
 }
 
 /* Current freeblocks on rollup */
 void log_freeblocks(struct sb *sb, block_t freeblocks)
 {
-	unsigned char *data = log_begin(sb, log_size[LOG_FREEBLOCKS]);
-	*data++ = LOG_FREEBLOCKS;
-	log_end(sb, encode48(data, freeblocks));
-}
-
-static void log_intent(struct sb *sb, u8 intent)
-{
-	unsigned char *data = log_begin(sb, 1);
-	*data++ = intent;
-	log_end(sb, data);
+	log_u48(sb, LOG_FREEBLOCKS, freeblocks);
 }
 
 /* Log to know where is new rollup cycle  */
