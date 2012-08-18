@@ -63,9 +63,10 @@ KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
 
 OBJS		= tux3.o tux3graph.o
 FUSE_OBJS	= tux3fuse.o
+TEST_LIB_OBJS	= tests/test.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
 	tests/dir.o tests/dleaf.o tests/filemap.o tests/iattr.o tests/ileaf.o \
-	tests/inode.o tests/xattr.o
+	tests/inode.o tests/xattr.o $(TEST_LIB_OBJS)
 ALL_OBJS	= $(COMMON_OBJS) $(KERN_OBJS) $(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
 
 .PHONY: tests
@@ -116,7 +117,7 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) -include tux3user.h $(CHECKFLAGS) -c $<
 endif
 
-$(TUX3_LIB): $(COMMON_OBJS) $(KERN_OBJS)
+$(TUX3_LIB): $(COMMON_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS)
 	rm -f $@ && $(AR) $(AFLAGS) $@ $^
 
 $(TEST_BIN) $(TUX3_BIN):
