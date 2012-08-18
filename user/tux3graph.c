@@ -823,7 +823,7 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree,
 }
 
 typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
-				  inum_t, u16);
+				  inum_t, void *, u16);
 
 static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 {
@@ -833,13 +833,20 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 }
 
 static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
-			    inum_t inum, u16 size)
+			    inum_t inum, void *attrs, u16 size)
 {
-	struct inode *inode = tux3_iget(btree->sb, inum);
-	if (IS_ERR(inode))
-		error("inode couldn't get: inum %Lu", inum);
+	struct sb *sb = btree->sb;
+	struct inode *inode = rapid_open_inode(sb, NULL, 0);
 
-	int orphan = !list_empty(&inode->orphan_list);
+	/* Check there is orphaned inode */
+	struct inode *cache_inode = tux3_ilookup(sb, inum);
+	int orphan = 0;
+	if (cache_inode) {
+		orphan = !list_empty(&cache_inode->orphan_list);
+		iput(cache_inode);
+	}
+
+	iattr_ops.decode(btree, inode, attrs, size);
 
 	fprintf(gi->f,
 		"%s"
@@ -852,7 +859,8 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 		orphan ? ", orphan" : "",
 		orphan ? "</font>" : "");
 
-	iput(inode);
+	free_xcache(inode);
+	free_map(inode->map);
 }
 
 static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
@@ -881,18 +889,24 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		from_be_u16(ileaf->magic), icount(ileaf), ibase(ileaf));
 
 	/* draw inode attributes */
+	u16 offset = 0, limit, size;
 	for (at = 0; at < icount(ileaf); at++) {
-		u16 size = ileaf_attr_size(dict, at);
-		if (!size)
+		limit =__atdict(dict, at + 1);
+		if (offset >= limit)
 			continue;
+		size = limit - offset;
+
+		inum_t inum = ibase(ileaf) + at;
+		void *attrs = ileaf->table + offset;
+
+		offset = limit;
 
 		fprintf(gi->f,
 			"  <tr>\n"
 			"    <td port=\"a%d\">",
 			at);
 
-		inum_t inum = ibase(ileaf) + at;
-		draw_ileaf_attr(gi, btree, inum, size);
+		draw_ileaf_attr(gi, btree, inum, attrs, size);
 
 		fprintf(gi->f,
 			"</td>\n"
@@ -1065,7 +1079,7 @@ out_iput:
 }
 
 static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
-			    inum_t inum, u16 size)
+			    inum_t inum, void *attrs, u16 size)
 {
 	fprintf(gi->f, "attrs (ino %llu, size %u)", inum, size);
 }
