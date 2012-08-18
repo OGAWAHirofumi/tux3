@@ -156,13 +156,13 @@ int tuxread(struct file *file, char *data, unsigned len);
 int tuxwrite(struct file *file, const char *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);
 int tuxtruncate(struct inode *inode, loff_t size);
-int tuxunlink(struct inode *dir, const char *name, unsigned len);
 int write_inode(struct inode *inode);
 
 /* namei.c */
 struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr);
+int tuxunlink(struct inode *dir, const char *name, unsigned len);
 
 /* super.c */
 int put_super(struct sb *sb);

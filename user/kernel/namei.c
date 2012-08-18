@@ -100,14 +100,6 @@ static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
 	return err;
 }
 
-static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
-{
-	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len, &buffer);
-
-	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_dirent(buffer, entry);
-}
-
 static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
 			struct tux_iattr *iattr, dev_t rdev)
 {
@@ -215,6 +207,19 @@ out:
 	return err;
 }
 
+static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
+{
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+
+	entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len,
+				&buffer);
+	if (IS_ERR(entry))
+		return PTR_ERR(entry);
+
+	return tux_delete_dirent(buffer, entry);
+}
+
 static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
@@ -223,9 +228,15 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 	int err = tux_del_dirent(dir, dentry);
 	if (!err) {
 		inode->i_ctime = dir->i_ctime;
+		/* FIXME: we shouldn't write inode for i_nlink = 0? */
 		inode_dec_link_count(inode);
+		if (inode->i_nlink == 0) {
+			/* FIXME: what to do if error? */
+			err = tux3_mark_inode_orphan(inode);
+		}
 	}
 	change_end(tux_sb(inode->i_sb));
+
 	return err;
 }
 
@@ -325,8 +336,7 @@ error:
 }
 
 void *a[] = {
-	set_nlink, tux3_link,
-	tux3_symlink, tux3_unlink, tux3_rmdir, tux3_rename,
+	set_nlink, tux3_link, tux3_symlink, tux3_rmdir, tux3_rename,
 };
 
 #ifdef __KERNEL__

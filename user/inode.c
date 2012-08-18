@@ -326,51 +326,6 @@ out:
 	return err;
 }
 
-int tuxunlink(struct inode *dir, const char *name, unsigned len)
-{
-	struct sb *sb = tux_sb(dir->i_sb);
-	struct buffer_head *buffer;
-	int err;
-	tux_dirent *entry = tux_find_dirent(dir, (unsigned char *)name, len, &buffer);
-	if (IS_ERR(entry)) {
-		err = PTR_ERR(entry);
-		goto error;
-	}
-	inum_t inum = from_be_u64(entry->inum);
-	struct inode *inode = tux3_iget(sb, inum);
-	assert(PTR_ERR(inode) != -ENOENT);
-	if (IS_ERR(inode)) {
-		err = PTR_ERR(inode);
-		goto error_iget;
-	}
-	err = tux_delete_dirent(buffer, entry);
-	if (err)
-		goto error_open;
-
-	inode->i_ctime = dir->i_ctime;
-	inode->i_nlink--;
-	if (inode->i_nlink == 0) {
-		/* FIXME: what to do if error? */
-		err = tux3_mark_inode_orphan(inode);
-		if (err)
-			goto error_open;
-	}
-
-	/* FIXME: we shouldn't write inode for i_nlink = 0? */
-	mark_inode_dirty_sync(inode);
-	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */
-	iput(inode);
-
-	return 0;
-
-error_open:
-	iput(inode);
-error_iget:
-	blockput(buffer);
-error:
-	return err;
-}
-
 int write_inode(struct inode *inode)
 {
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */

@@ -13,21 +13,32 @@
 
 #include "kernel/namei.c"
 
+static int tuxlookup(struct inode *dir, struct dentry *dentry)
+{
+	struct dentry *result;
+
+	result = tux3_lookup(dir, dentry, NULL);
+	if (result && IS_ERR(result))
+		return PTR_ERR(result);
+	assert(result == NULL);
+
+	if (!dentry->d_inode)
+		return -ENOENT;
+
+	return 0;
+}
+
 struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
 {
 	struct dentry dentry = {
 		.d_name.name = (unsigned char *)name,
 		.d_name.len = len,
 	};
-	struct dentry *result;
+	int err;
 
-	result = tux3_lookup(dir, &dentry, NULL);
-	if (result && IS_ERR(result))
-		return ERR_CAST(result);
-	assert(result == NULL);
-
-	if (!dentry.d_inode)
-		return ERR_PTR(-ENOENT);
+	err = tuxlookup(dir, &dentry);
+	if (err)
+		return ERR_PTR(err);
 
 	return dentry.d_inode;
 }
@@ -60,4 +71,29 @@ struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 		return ERR_PTR(err);
 
 	return dentry.d_inode;
+}
+
+int tuxunlink(struct inode *dir, const char *name, unsigned len)
+{
+	struct dentry dentry = {
+		.d_name.name = (unsigned char *)name,
+		.d_name.len = len,
+	};
+	int err;
+
+	/*
+	 * FIXME: we can cache dirent position by tuxlookup(), and
+	 * tux3_unlink() can use it.
+	 */
+
+	err = tuxlookup(dir, &dentry);
+	if (err)
+		return err;
+
+	err = tux3_unlink(dir, &dentry);
+
+	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */
+	iput(dentry.d_inode);
+
+	return err;
 }
