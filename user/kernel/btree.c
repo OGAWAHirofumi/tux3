@@ -258,6 +258,25 @@ static int cursor_level_finished(struct cursor *cursor)
 }
 
 /*
+ * Cursor read root node.
+ * < 0 - error
+ *   0 - success
+ */
+static int cursor_read_root(struct cursor *cursor)
+{
+	struct btree *btree = cursor->btree;
+	struct buffer_head *buffer;
+
+	assert(has_root(btree));
+
+	buffer = vol_bread(btree->sb, btree->root.block);
+	if (!buffer)
+		return -EIO; /* FIXME: stupid, it might have been NOMEM */
+	level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
+	return 0;
+}
+
+/*
  * Cursor up to parent node.
  * 0 - there is no further parent (root was popped)
  * 1 - there is parent
@@ -287,7 +306,7 @@ static int cursor_advance_down(struct cursor *cursor)
 	child = from_be_u64(cursor->path[level].next->block);
 	buffer = vol_bread(btree->sb, child);
 	if (!buffer)
-		return -EIO; /* FIXME: error code */
+		return -EIO; /* FIXME: stupid, it might have been NOMEM */
 	cursor->path[level].next++;
 
 	if (cursor->len - 1 < btree->root.depth - 1) {
@@ -297,6 +316,7 @@ static int cursor_advance_down(struct cursor *cursor)
 		return 1;
 	}
 
+	assert(btree->ops->leaf_sniff(btree, bufdata(buffer)));
 	level_push(cursor, buffer, NULL);
 	cursor_check(cursor);
 	return 0;
@@ -325,32 +345,33 @@ int cursor_advance(struct cursor *cursor)
 	return 1;
 }
 
+/* Lookup index and set it as next down path */
+static void cursor_bnode_lookup(struct cursor *cursor, tuxkey_t key)
+{
+	struct path_level *at = &cursor->path[cursor->len - 1];
+	at->next = bnode_lookup(bufdata(at->buffer), key);
+}
+
 int probe(struct cursor *cursor, tuxkey_t key)
 {
-	struct btree *btree = cursor->btree;
-	unsigned i, depth = btree->root.depth;
-	struct buffer_head *buffer;
+	int ret;
 
-	assert(has_root(btree));
-	buffer = vol_bread(btree->sb, btree->root.block);
-	if (!buffer)
-		return -EIO;
-	struct bnode *node = bufdata(buffer);
+	ret = cursor_read_root(cursor);
+	if (ret < 0)
+		return ret;
+	do {
+		cursor_bnode_lookup(cursor, key);
 
-	for (i = 0; i < depth; i++) {
-		struct index_entry *entry = bnode_lookup(node, key);
-		level_push(cursor, buffer, entry + 1);
-		if (!(buffer = vol_bread(btree->sb, from_be_u64(entry->block))))
-			goto eek;
-		node = (struct bnode *)bufdata(buffer);
-	}
-	assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
-	level_push(cursor, buffer, NULL);
-	cursor_check(cursor);
+		ret = cursor_advance_down(cursor);
+		if (ret < 0)
+			goto error;
+	} while (ret);
+
 	return 0;
-eek:
+
+error:
 	release_cursor(cursor);
-	return -EIO; /* stupid, it might have been NOMEM */
+	return ret;
 }
 
 /*
