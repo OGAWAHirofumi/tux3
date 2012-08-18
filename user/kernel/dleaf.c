@@ -206,19 +206,18 @@ eek:
 	return -1;
 }
 
-int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry, unsigned blocksize)
+static int dleaf_split_at(vleaf *from, vleaf *into, int split, unsigned blocksize)
 {
 	struct dleaf *leaf = from, *leaf2 = into;
 	unsigned groups = dleaf_groups(leaf), groups2;
 	struct group *gdict = from + blocksize, *gbase = gdict - groups;
 	struct entry *edict = (void *)gbase, *ebase = (void *)leaf + from_be_u16(leaf->used);
 	unsigned recount = 0, grsplit = 0, exsplit = 0;
-	unsigned entries = edict - ebase, split = edict - 1 - entry;
+	unsigned entries = edict - ebase;
 
 	printf("split %p into %p at %x\n", leaf, leaf2, split);
 	if (!groups)
 		return 0;
-	assert(ebase <= entry && entry < edict);
 	assert(split < entries);
 	for (struct group *group = gdict - 1; group >= gbase; group--, grsplit++) {
 		if (recount + group_count(group) > split)
@@ -285,7 +284,8 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vlea
 	struct entry *edict = (void *)gbase;
 	struct entry *ebase = (void *)leaf + from_be_u16(leaf->used);
 	unsigned entries = edict - ebase;
-	unsigned groups2 = dleaf_split_at(from, into, edict - entries / 2, blocksize);
+	assert(entries >= 2);
+	unsigned groups2 = dleaf_split_at(from, into, entries / 2, blocksize);
 	struct group *gdict2 = (void *)leaf2 + blocksize;
 
 	return get_index(gdict2 - 1, (struct entry *)(gdict2 - groups2) - 1);

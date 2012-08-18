@@ -868,8 +868,6 @@ int tux_dir_is_empty(struct inode *dir);
 int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
-int dleaf_split_at(vleaf *from, vleaf *into, struct entry *entry,
-		   unsigned blocksize);
 void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
 unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;
