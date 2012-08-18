@@ -8,19 +8,7 @@
 #define trace trace_on
 #endif
 
-static unsigned logsize[LOG_TYPES] = {
-	[LOG_BALLOC] = 8,
-	[LOG_BFREE] = 8,
-	[LOG_BFREE_ON_ROLLUP] = 8,
-	[LOG_LEAF_REDIRECT] = 13,
-	[LOG_BNODE_REDIRECT] = 13,
-	[LOG_BNODE_ROOT] = 26,
-	[LOG_BNODE_SPLIT] = 15,
-	[LOG_BNODE_ADD] = 19,
-	[LOG_BNODE_UPDATE] = 19,
-};
-
-static const char *log_name[LOG_TYPES] = {
+static const char *log_name[] = {
 #define X(x)	[x] = #x
 	X(LOG_BALLOC),
 	X(LOG_BFREE),
@@ -102,6 +90,9 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 	unsigned char *data = log->data;
 	int err;
 
+	/* Check whether array is uptodate */
+	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
+
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
 		switch (code) {
@@ -164,7 +155,7 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_LEAF_REDIRECT:
-			data += logsize[code] - sizeof(code);
+			data += log_size[code] - sizeof(code);
 			break;
 		default:
 			warn("unrecognized log code 0x%x", code);
@@ -249,7 +240,7 @@ static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 		case LOG_BNODE_SPLIT:
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE:
-			data += logsize[code] - sizeof(code);
+			data += log_size[code] - sizeof(code);
 			break;
 		default:
 			warn("unrecognized log code 0x%x", code);

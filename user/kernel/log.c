@@ -64,8 +64,21 @@
  *
  */
 
+unsigned log_size[] = {
+	[LOG_BALLOC]		= 8,
+	[LOG_BFREE]		= 8,
+	[LOG_BFREE_ON_ROLLUP]	= 8,
+	[LOG_LEAF_REDIRECT]	= 13,
+	[LOG_BNODE_REDIRECT]	= 13,
+	[LOG_BNODE_ROOT]	= 26,
+	[LOG_BNODE_SPLIT]	= 15,
+	[LOG_BNODE_ADD]		= 19,
+	[LOG_BNODE_UPDATE]	= 19,
+};
+
 void log_next(struct sb *sb)
 {
+	/* FIXME: error handling of blockget() */
 	sb->logbuf = blockget(mapping(sb->logmap), sb->lognext++);
 	sb->logpos = bufdata(sb->logbuf) + sizeof(struct logblock);
 	sb->logtop = bufdata(sb->logbuf) + sb->blocksize;
@@ -89,7 +102,7 @@ void log_finish(struct sb *sb)
 	}
 }
 
-void *log_begin(struct sb *sb, unsigned bytes)
+static void *log_begin(struct sb *sb, unsigned bytes)
 {
 	mutex_lock(&sb->loglock);
 	if (sb->logpos + bytes > sb->logtop) {
@@ -101,7 +114,7 @@ void *log_begin(struct sb *sb, unsigned bytes)
 	return sb->logpos;
 }
 
-void log_end(struct sb *sb, void *pos)
+static void log_end(struct sb *sb, void *pos)
 {
 	sb->logpos = pos;
 	mutex_unlock(&sb->loglock);
@@ -109,8 +122,11 @@ void log_end(struct sb *sb, void *pos)
 
 static void log_extent(struct sb *sb, u8 intent, block_t block, unsigned count)
 {
+	/* Check whether array is uptodate */
+	BUILD_BUG_ON(ARRAY_SIZE(log_size) != LOG_TYPES);
+
 	assert(count < 256);	/* FIXME: extent max is 64 for now */
-	unsigned char *data = log_begin(sb, 8);
+	unsigned char *data = log_begin(sb, log_size[intent]);
 
 	*data++ = intent;
 	*data++ = count;
@@ -134,7 +150,7 @@ void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 
 static void log_redirect(struct sb *sb, u8 intent, block_t oldblock, block_t newblock)
 {
-	unsigned char *data = log_begin(sb, 13);
+	unsigned char *data = log_begin(sb, log_size[intent]);
 
 	*data++ = intent;
 	data = encode48(data, oldblock);
@@ -155,7 +171,7 @@ void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 		    block_t left, block_t right, tuxkey_t rkey)
 {
-	unsigned char *data = log_begin(sb, 26);
+	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_ROOT]);
 
 	assert(count == 1 || count == 2);
 	*data++ = LOG_BNODE_ROOT;
@@ -168,7 +184,7 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 
 void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest)
 {
-	unsigned char *data = log_begin(sb, 15);
+	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_SPLIT]);
 
 	*data++ = LOG_BNODE_SPLIT;
 	data = encode32(data, pos);
@@ -178,7 +194,7 @@ void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest)
 
 static void log_bnode_entry(struct sb *sb, u8 intent, block_t parent, block_t child, tuxkey_t key)
 {
-	unsigned char *data = log_begin(sb, 19);
+	unsigned char *data = log_begin(sb, log_size[intent]);
 
 	*data++ = intent;
 	data = encode48(data, parent);

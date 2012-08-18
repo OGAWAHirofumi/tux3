@@ -20,6 +20,21 @@
 #define __bitwise
 #endif
 
+#ifdef __CHECKER__
+#define BUILD_BUG_ON(condition)
+#else /* __CHECKER__ */
+#ifndef __OPTIMIZE__
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+#else
+extern int __build_bug_on_failed;
+#define BUILD_BUG_ON(condition)					\
+	do {							\
+		((void)sizeof(char[1 - 2*!!(condition)]));	\
+		if (condition) __build_bug_on_failed = 1;	\
+	} while(0)
+#endif
+#endif /* __CHECKER__ */
+
 #define __packed	__attribute__((packed))
 #define __weak		__attribute__((weak))
 
