@@ -52,7 +52,7 @@ ifeq ($(shell pkg-config fuse && echo found), found)
 endif
 TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
 	tests/dir tests/dleaf tests/filemap tests/iattr tests/ileaf \
-	tests/inode tests/xattr
+	tests/inode tests/log tests/xattr
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
 TUX3_LIB	= libtux3.a
@@ -66,7 +66,7 @@ FUSE_OBJS	= tux3fuse.o
 TEST_LIB_OBJS	= tests/test.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
 	tests/dir.o tests/dleaf.o tests/filemap.o tests/iattr.o tests/ileaf.o \
-	tests/inode.o tests/xattr.o $(TEST_LIB_OBJS)
+	tests/inode.o tests/log.o tests/xattr.o $(TEST_LIB_OBJS)
 ALL_OBJS	= $(COMMON_OBJS) $(KERN_OBJS) $(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
 
 .PHONY: tests
@@ -85,6 +85,7 @@ tests/filemap: tests/filemap.o $(TUX3_LIB)
 tests/iattr: tests/iattr.o $(TUX3_LIB)
 tests/ileaf: tests/ileaf.o $(TUX3_LIB)
 tests/inode: tests/inode.o $(TUX3_LIB)
+tests/log: tests/log.o $(TUX3_LIB)
 tests/xattr: tests/xattr.o $(TUX3_LIB)
 
 # dependency generation
