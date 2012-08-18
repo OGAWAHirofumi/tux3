@@ -1,291 +1,358 @@
-#include "../filemap.c"
-#include "diskio.h"	/* for fdsize64() */
+#ifndef trace
+#define trace trace_off
+#endif
 
-static void check_created_seg(struct seg *seg)
+#include "../filemap.c"
+#include "test.h"
+
+static void clean_main(struct sb *sb, struct inode *inode)
 {
-	assert(seg->block > 0);
-	assert(seg->count > 0);
+	iput(inode);
+	put_super(sb);
 }
 
-static void add_maps(struct inode *inode, block_t index, struct seg map[], int segs)
+static void add_maps(struct inode *inode, block_t index, struct seg *seg,
+		     int nr_segs)
 {
-	struct buffer_head *buffer;
-	for (int i = 0; i < segs; i++) {
-		for (unsigned j = 0; j < map[i].count; j++) {
-			buffer = blockget(inode->map, index + j);
-			*(block_t *)buffer->data = map[i].block + j;
-			blockput(buffer);
+	for (int i = 0; i < nr_segs; i++) {
+		struct seg *s = &seg[i];
+		for (unsigned j = 0; j < s->count; j++) {
+			struct buffer_head *buf;
+			buf = blockget(inode->map, index + j);
+			buf = blockdirty(buf, inode->i_sb->delta);
+			memset(buf->data, 0, inode->i_sb->blocksize);
+			*(block_t *)buf->data = s->block + j;
+			mark_buffer_dirty_non(buf);
+			blockput(buf);
 		}
-		index += map[i].count;
+		index += s->count;
 	}
 }
 
-static void check_maps(struct inode *inode, block_t index, struct seg map[], int segs)
+/* Create segments, then save state to buffer */
+static int d_map_region(struct inode *inode, block_t start, unsigned count,
+			struct seg *seg, unsigned max_segs, int create)
 {
-	struct buffer_head *buffer;
-	for (int i = 0; i < segs; i++) {
-		for (unsigned j = 0; j < map[i].count; j++) {
-			buffer = peekblk(inode->map, index + j);
-			if (map[i].state == SEG_HOLE)
-				assert(buffer == NULL);
+	int nr_segs;
+	/* this should be called with "create > 0" */
+	assert(create > 0);
+	nr_segs = map_region(inode, start, count, seg, max_segs, create);
+	if (nr_segs > 0)
+		add_maps(inode, start, seg, nr_segs);
+	return nr_segs;
+}
+
+static void check_maps(struct inode *inode, block_t index, struct seg *seg,
+		       int nr_segs)
+{
+	for (int i = 0; i < nr_segs; i++) {
+		struct seg *s = &seg[i];
+		for (unsigned j = 0; j < s->count; j++) {
+			struct buffer_head *buf;
+			buf = peekblk(inode->map, index + j);
+			if (s->state == SEG_HOLE)
+				test_assert(buf == NULL);
 			else {
-				block_t block = *(block_t *)buffer->data;
-				assert(block == map[i].block + j);
-				blockput(buffer);
+				block_t blk = *(block_t *)buf->data;
+				test_assert(blk == s->block + j);
+				blockput(buf);
 			}
 		}
-		index += map[i].count;
+		index += s->count;
 	}
 }
 
-static int d_map_region(struct inode *inode, block_t start, unsigned count, struct seg map[], unsigned max_segs, int create)
+/* Check returned segments are same state with buffer */
+static int check_map_region(struct inode *inode, block_t start, unsigned count,
+			    struct seg *seg, unsigned max_segs)
 {
-	int segs = map_region(inode, start, count, map, max_segs, create);
-	if (segs) {
-		if (create)
-			add_maps(inode, start, map, segs);
-		else
-			check_maps(inode, start, map, segs);
+	int nr_segs;
+	nr_segs = map_region(inode, start, count, seg, max_segs, 0);
+	if (nr_segs > 0)
+		check_maps(inode, start, seg, nr_segs);
+	return nr_segs;
+}
+
+struct test_data {
+	block_t index;
+	unsigned count;
+	int create;
+};
+
+/* Test basic operations */
+static void test01(struct sb *sb, struct inode *inode)
+{
+	/*
+	 * FIXME: map_region() are not supporting to read segments on
+	 * multiple leaves at once.
+	 */
+#define CAN_HANDLE_A_LEAF	1
+
+	/* Create by ascending order */
+	if (test_start("test01.1")) {
+		struct seg seg;
+		int err, segs;
+
+		for (int i = 0, j = 0; i < 30; i++, j++) {
+			segs = d_map_region(inode, 2*i, 1, &seg, 1, 1);
+			test_assert(segs == 1);
+		}
+#ifdef CAN_HANDLE_A_LEAF
+		for (int i = 0; i < 30; i++) {
+			segs = check_map_region(inode, 2*i, 1, &seg, 1);
+			test_assert(segs == 1);
+		}
+#else
+		segs = check_map_region(inode, 0, 30*2, map, ARRAY_SIZE(map));
+		test_assert(segs == 30*2);
+#endif
+
+		/* btree_chop and dleaf_chop test */
+		int index = 31*2;
+		while (index--) {
+			err = btree_chop(&inode->btree, index, TUXKEY_LIMIT);
+			test_assert(!err);
+#ifdef CAN_HANDLE_A_LEAF
+			for (int i = 0; i < 30; i++) {
+				if (index <= i*2)
+					break;
+				segs = check_map_region(inode, 2*i, 1, &seg, 1);
+				test_assert(segs == 1);
+			}
+#else
+			segs = check_map_region(inode, 0, 30*2, map,
+						ARRAY_SIZE(map));
+			test_assert(segs == i*2);
+#endif
+		}
+
+		/* Check if truncated all */
+		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
+		test_assert(segs == 1);
+		test_assert(seg.count == INT_MAX);
+		test_assert(seg.state == SEG_HOLE);
+
+		test_assert(force_delta(sb) == 0);
+		clean_main(sb, inode);
 	}
-	return segs;
+	test_end();
+
+	/* Create by descending order */
+	if (test_start("test01.2")) {
+		struct seg seg;
+		int err, segs;
+
+		for (int i = 30; i >= 0; i--) {
+			segs = d_map_region(inode, 2*i, 1, &seg, 1, 1);
+			test_assert(segs == 1);
+		}
+#ifdef CAN_HANDLE_A_LEAF
+		for (int i = 30; i >= 0; i--) {
+			segs = check_map_region(inode, 2*i, 1, &seg, 1);
+			test_assert(segs == 1);
+		}
+#else
+		segs = check_map_region(inode, 0, 30*2, map, ARRAY_SIZE(map));
+		test_assert(segs == i*2);
+#endif
+
+		err = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
+		test_assert(!err);
+
+		/* Check if truncated all */
+		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
+		test_assert(segs == 1);
+		test_assert(seg.count == INT_MAX);
+		test_assert(seg.state == SEG_HOLE);
+
+		test_assert(force_delta(sb) == 0);
+		clean_main(sb, inode);
+	}
+	test_end();
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb, inode);
+}
+
+/* Test redirect mode (create == 2) */
+static void test02(struct sb *sb, struct inode *inode)
+{
+	struct seg map[32];
+
+	struct test_data data[] = {
+		{ .index = 5,  .count = 64, .create = 1, },
+		{ .index = 10, .count = 20, .create = 2, },
+		{ .index = 80, .count = 10, .create = 2, },
+	};
+
+	int total_segs = 0;
+	for (int i = 0; i < ARRAY_SIZE(data); i++) {
+		int segs1, segs2;
+
+		segs1 = d_map_region(inode, data[i].index, data[i].count,
+				    map, ARRAY_SIZE(map), data[i].create);
+		test_assert(segs1 > 0);
+		total_segs += segs1;
+
+		segs2 = check_map_region(inode, data[i].index, data[i].count,
+					 map, ARRAY_SIZE(map));
+		test_assert(segs1 == segs2);
+	}
+
+	/* Check whole rage from 0 */
+	int segs = check_map_region(inode, 0, 200, map, ARRAY_SIZE(map));
+	test_assert(segs >= total_segs);
+
+	/* Clear dirty page to prevent to call map_region again */
+	truncate_inode_pages(mapping(inode), 0);
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb, inode);
+}
+
+/* Test overwrite seg entirely inside existing */
+static void test03(struct sb *sb, struct inode *inode)
+{
+	struct seg map1[32], map2[32];
+	int segs1, segs2;
+
+	/* Create range */
+	segs1 = d_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1), 1);
+	test_assert(segs1 > 0);
+	segs2 = check_map_region(inode, 2, 5, map2, ARRAY_SIZE(map2));
+	test_assert(segs1 == segs2);
+
+	/* Overwrite range */
+	segs1 = d_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1), 1);
+	test_assert(segs1 > 0);
+	segs2 = check_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1));
+	test_assert(segs1 == segs2);
+
+	segs1 = check_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1));
+	test_assert(segs1 > segs2);
+	test_assert(map1[0].block == map2[0].block);
+	test_assert(map1[0].count < map2[0].count);
+	test_assert(map1[0].count == 2);
+	test_assert(map1[1].block != map1[0].block);
+	test_assert(map1[1].count == 1);
+	test_assert(map1[2].block != map1[1].block);
+	test_assert(map1[2].count == 2);
+
+	/* Check whole rage from 0 */
+	segs2 = check_map_region(inode, 0, 200, map2, ARRAY_SIZE(map2));
+	test_assert(segs2 >= segs1);
+
+	/* Clear dirty page to prevent to call map_region again */
+	truncate_inode_pages(mapping(inode), 0);
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb, inode);
+}
+
+static void __test04(struct test_data data[], int nr, struct inode *inode)
+{
+	struct test_data *t = data;
+	struct seg map[32];
+	int total_segs = 0;
+
+	for (int i = 0; i < nr; i++, t++) {
+		int segs1, segs2;
+
+		segs1 = d_map_region(inode, t->index, t->count,
+				     map, ARRAY_SIZE(map), t->create);
+		test_assert(segs1 > 0);
+		total_segs += segs1;
+
+		segs2 = check_map_region(inode, t->index, t->count,
+					 map, ARRAY_SIZE(map));
+		test_assert(segs1 == segs2);
+	}
+#if 0
+	/* Check whole rage */
+	block_t idx = data[0].index;
+	unsigned end = data[nr - 1].index + data[nr - 1].count + 10;
+	segs = check_map_region(inode, idx, end - idx, map, ARRAY_SIZE(map));
+	test_assert(segs >= total_segs);
+#endif
+}
+
+/* Test to write block to hole */
+static void test04(struct sb *sb, struct inode *inode)
+{
+	struct test_data data[][3] = {
+		/* Test case 1 */
+		{
+			{ .index = 2, .count = 1, .create = 1, },
+			{ .index = 6, .count = 1, .create = 1, },
+			{ .index = 4, .count = 1, .create = 1, },
+		},
+		/* Test case 2 */
+		{
+			{ .index = 0x1100000, .count = 0x40, .create = 1, },
+			{ .index =  0x800000, .count = 0x40, .create = 1, },
+			{ .index =  0x800040, .count = 0x40, .create = 1, },
+		},
+	};
+
+	for (int test = 0; test < ARRAY_SIZE(data); test++) {
+		__test04(data[test], ARRAY_SIZE(data[test]), inode);
+
+		int err = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
+		test_assert(!err);
+	}
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb, inode);
 }
 
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
 		error("usage: %s <volname>", argv[0]);
+
 	char *name = argv[1];
 	int fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
-	assert(!ftruncate(fd, 1 << 24));
-	u64 size = 0;
-	if (fdsize64(fd, &size))
-		error("fdsize64 failed for '%s' (%s)", name, strerror(errno));
+	u64 size = 1 << 24;
+	assert(!ftruncate(fd, size));
+
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
-	init_buffers(dev, 1 << 20, 0);
+	init_buffers(dev, 1 << 20, 2);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, size >> dev->bits);
 	struct sb *sb = rapid_sb(dev);
 	sb->super = super;
 	setup_sb(sb, &super);
 
-	sb->volmap = rapid_open_inode(sb, NULL, 0);
-	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
-	sb->bitmap = rapid_open_inode(sb, filemap_extent_io, 0);
-	struct inode *inode = rapid_open_inode(sb, filemap_extent_io, 0);
-	init_btree(&inode->btree, sb, no_root, &dtree_ops);
-	int err = alloc_empty_btree(&inode->btree);
-	assert(!err);
+	sb->volmap = tux_new_volmap(sb);
+	assert(sb->volmap);
+	sb->logmap = tux_new_logmap(sb);
+	assert(sb->logmap);
 
-	block_t nextalloc = sb->nextalloc;
-	struct seg map[64];
-	int segs;
+	test_assert(make_tux3(sb) == 0);
 
-	if (1) {
-		for (int i = 0; i < 10; i++)
-			segs = map_region(inode, 2*i, 1, map, 2, 1);
-		show_segs(map, segs);
+	struct tux_iattr iattr = { .mode = S_IFREG | 0644, };
+	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &iattr);
 
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
+	test_assert(force_rollup(sb) == 0);
 
-	if (1) { /* redirect test */
-		segs = d_map_region(inode, 5, 64, map, 10, 1);
-		segs = d_map_region(inode, 10, 20, map, 10, 2);
-		segs = d_map_region(inode, 80, 10, map, 10, 2);
-		segs = d_map_region(inode, 0, 200, map, 10, 0);
-		invalidate_buffers(inode->map);
+	test_init(argv[0]);
 
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
+	if (test_start("test01"))
+		test01(sb, inode);
+	test_end();
 
-	if (1) { /* create seg entirely inside existing */
-		segs = map_region(inode, 2, 5, map, 10, 1); show_segs(map, segs);
-		segs = map_region(inode, 4, 1, map, 10, 1); show_segs(map, segs);
+	if (test_start("test02"))
+		test02(sb, inode);
+	test_end();
 
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
+	if (test_start("test03"))
+		test03(sb, inode);
+	test_end();
 
-	if (1) { /* seek[0] and seek[1] are same position */
-		segs = map_region(inode, 0x2, 0x1, map, 10, 1);
-		segs = map_region(inode, 0x6, 0x1, map, 10, 1);
-		segs = map_region(inode, 0x4, 0x1, map, 10, 1);
+	if (test_start("test04"))
+		test04(sb, inode);
+	test_end();
 
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
-	if (1) { /* another seek[0] and seek[1] are same position */
-		segs = map_region(inode, 0x1100000, 0x40, map, 10, 1);
-		segs = map_region(inode, 0x800000, 0x40, map, 10, 1);
-		segs = map_region(inode, 0x800040, 0x40, map, 10, 1);
-
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
-
-	if (1) {
-		struct seg seg;
-		for (int i = 0, j = 0; i < 30; i++, j++) {
-			segs = map_region(inode, 2*i, 1, &seg, 1, 1);
-			assert(segs == 1);
-			check_created_seg(&seg);
-			map[j].block = seg.block;
-			map[j].count = seg.count;
-		}
-		for (int i = 0, j = 0; i < 30; i++, j++) {
-			segs = map_region(inode, 2*i, 1, &seg, 1, 0);
-			assert(segs == 1);
-			check_created_seg(&seg);
-			assert(map[j].block == seg.block);
-			assert(map[j].count == seg.count);
-		}
-		show_tree_range(&inode->btree, 0, -1);
-		/* btree_chop and dleaf_chop test */
-		int index = 31*2;
-		while (index--) {
-			segs = btree_chop(&inode->btree, index, TUXKEY_LIMIT);
-			assert(!segs);
-			for (int i = 0, j = 0; i < 30; i++, j++) {
-				if (index <= i*2)
-					break;
-				map_region(inode, i*2, 1, &seg, 1, 0);
-				assert(map[j].block == seg.block);
-				assert(map[j].count == seg.count);
-			}
-		}
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
-	if (1) {
-		struct seg seg;
-		for (int i = 10, j = 0; i--; j++) {
-			segs = map_region(inode, 2*i, 1, &seg, 1, 1);
-			assert(segs == 1);
-			check_created_seg(&seg);
-			map[j].block = seg.block;
-			map[j].count = seg.count;
-		}
-		for (int i = 10, j = 0; i--; j++) {
-			segs = map_region(inode, 2*i, 1, &seg, 1, 0);
-			assert(segs == 1);
-			check_created_seg(&seg);
-			assert(map[j].block == seg.block);
-			assert(map[j].count == seg.count);
-		}
-		show_tree_range(&inode->btree, 0, -1);
-		/* 0/2: 0 => 3/1; 2 => 2/1; */
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
-	if (1) {
-		struct seg seg;
-		for (int i = 30, j = 0; i-- > 28; j++) {
-			segs = map_region(inode, 2*i, 1, &seg, 1, 1);
-			assert(segs == 1);
-			check_created_seg(&seg);
-			map[j].block = seg.block;
-			map[j].count = seg.count;
-		}
-		for (int i = 30, j = 0; i-- > 28; j++) {
-			segs = map_region(inode, 2*i, 1, &seg, 1, 0);
-			assert(segs == 1);
-			check_created_seg(&seg);
-			assert(map[j].block == seg.block);
-			assert(map[j].count == seg.count);
-		}
-		/* 0/2: 38 => 3/1; 3a => 2/1; */
-		show_tree_range(&inode->btree, 0, -1);
-
-		segs = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
-		assert(!segs);
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
-		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
-		err = unstash(sb, &sb->defree, apply_defered_bfree);
-		assert(!err);
-		sb->nextalloc = nextalloc;
-	}
-#if 1
-	/* Can't alloc contiguous range */
-	assert(balloc_from_range(sb, 0x10, 1, 1) >= 0);
-	sb->nextalloc = 0xf;
-	blockput_dirty(blockread(mapping(inode), 0x0));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	blockput_dirty(blockread(mapping(inode), 0x1));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	invalidate_buffers(mapping(inode));
-	filemap_extent_io(blockget(mapping(inode), 1), 0);
-
-	destroy_defer_bfree(&sb->defree);
-
-	exit(0);
-#endif
-
-#if 1
-	filemap_extent_io(blockget(mapping(inode), 5), 0);
-	exit(0);
-#endif
-
-#if 0
-	for (int i = 0; i < 20; i++) {
-		blockput_dirty(blockget(mapping(inode), i));
-		printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-	}
-	return 0;
-#endif
-
-#if 1
-	blockput_dirty(blockget(mapping(inode), 5));
-	blockput_dirty(blockget(mapping(inode), 6));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	blockput_dirty(blockget(mapping(inode), 6));
-	blockput_dirty(blockget(mapping(inode), 7));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	exit(0);
-#endif
-
-	blockput_dirty(blockget(mapping(inode), 0));
-	blockput_dirty(blockget(mapping(inode), 1));
-	blockput_dirty(blockget(mapping(inode), 2));
-	blockput_dirty(blockget(mapping(inode), 3));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	blockput_dirty(blockget(mapping(inode), 0));
-	blockput_dirty(blockget(mapping(inode), 1));
-	blockput_dirty(blockget(mapping(inode), 2));
-	blockput_dirty(blockget(mapping(inode), 3));
-	blockput_dirty(blockget(mapping(inode), 4));
-	blockput_dirty(blockget(mapping(inode), 5));
-// 	blockput_dirty(blockget(mapping(inode), 6));
-	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
-
-	//show_buffers(mapping(inode));
-	
-	exit(0);
+	clean_main(sb, inode);
+	return test_failures();
 }
