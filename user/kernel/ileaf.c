@@ -375,7 +375,7 @@ static int ileaf_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 }
 
 static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
-			  unsigned newsize)
+			  int newsize)
 {
 	struct ileaf *ileaf = vleaf;
 	be_u16 *dict = ileaf_dict(btree, ileaf);
@@ -398,7 +398,7 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 		size = __atdict(dict, at + 1) - offset;
 	}
 
-	if (ileaf_free(btree, ileaf) < (int)newsize - size + extend_dict)
+	if (ileaf_free(btree, ileaf) < newsize - size + extend_dict)
 		return NULL;
 
 	/* Extend dict */
@@ -482,7 +482,6 @@ struct btree_ops itable_ops = {
 	.leaf_init	= ileaf_init,
 	.leaf_split	= ileaf_split,
 	.leaf_merge	= ileaf_merge,
-	.leaf_resize	= ileaf_resize,
 	.leaf_chop	= ileaf_chop,
 	.leaf_write	= ileaf_write,
 	.balloc		= balloc,
@@ -497,7 +496,6 @@ struct btree_ops otable_ops = {
 	.leaf_init	= ileaf_init,
 	.leaf_split	= ileaf_split,
 	.leaf_merge	= ileaf_merge,
-	.leaf_resize	= ileaf_resize,
 	.leaf_chop	= ileaf_chop,
 	.leaf_write	= ileaf_write,
 	.balloc		= balloc,
