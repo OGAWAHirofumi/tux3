@@ -33,6 +33,11 @@ static void clean_main(struct sb *sb, struct inode *inode)
 
 struct uleaf { u32 magic, count; struct uentry { u16 key, val; } entries[]; };
 
+struct uleaf_req {
+	struct btree_key_range key;	/* key and count */
+	u16 val;
+};
+
 static inline struct uleaf *to_uleaf(vleaf *leaf)
 {
 	return leaf;
@@ -117,21 +122,6 @@ static int uleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 	return 1;
 }
 
-static void *uleaf_resize(struct btree *btree, tuxkey_t key, vleaf *data, unsigned one)
-{
-	test_assert(uleaf_sniff(btree, data));
-	struct uleaf *leaf = data;
-	unsigned at = uleaf_seek(btree, key, leaf);
-	if (at < leaf->count && leaf->entries[at].key == key)
-		goto out;
-	if (uleaf_free(btree, leaf) < one)
-		return NULL;
-	trace("expand leaf at 0x%x by %i", at, one);
-	vecmove(leaf->entries + at + one, leaf->entries + at, leaf->count++ - at);
-out:
-	return leaf->entries + at;
-}
-
 static int uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 {
 	struct uleaf *into = vinto;
@@ -146,20 +136,20 @@ static int uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 	return 1;
 }
 
-static struct btree_ops ops = {
-	.btree_init	= uleaf_btree_init,
-	.leaf_init	= uleaf_init,
-	.leaf_split	= uleaf_split,
-	.leaf_resize	= uleaf_resize,
-	.leaf_merge	= uleaf_merge,
-	.leaf_chop	= uleaf_chop,
-	.balloc		= balloc,
-	.bfree		= bfree,
-
-	.leaf_sniff	= uleaf_sniff,
-	.leaf_can_free	= uleaf_can_free,
-	.leaf_dump	= uleaf_dump,
-};
+static struct uentry *uleaf_resize(struct btree *btree, tuxkey_t key,
+				   struct uleaf *leaf, unsigned one)
+{
+	test_assert(uleaf_sniff(btree, leaf));
+	unsigned at = uleaf_seek(btree, key, leaf);
+	if (at < leaf->count && leaf->entries[at].key == key)
+		goto out;
+	if (uleaf_free(btree, leaf) < one)
+		return NULL;
+	trace("expand leaf at 0x%x by %i", at, one);
+	vecmove(leaf->entries + at + one, leaf->entries + at, leaf->count++ - at);
+out:
+	return leaf->entries + at;
+}
 
 static int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)
 {
@@ -182,6 +172,39 @@ static struct uentry *uleaf_lookup(struct uleaf *leaf, unsigned key)
 	}
 	return NULL;
 }
+
+static int uleaf_write(struct btree *btree, tuxkey_t key_bottom,
+		       tuxkey_t key_limit,
+		       void *leaf, struct btree_key_range *key,
+		       tuxkey_t *split_hint)
+{
+	struct uleaf_req *rq = container_of(key, struct uleaf_req, key);
+	struct uleaf *uleaf = leaf;
+	assert(key->len == 1);
+	if (!uleaf_insert(btree, uleaf, key->start, rq->val)) {
+		key->start++;
+		key->len--;
+		return 0;
+	}
+
+	*split_hint = key->start;
+	return -ENOSPC;
+}
+
+static struct btree_ops ops = {
+	.btree_init	= uleaf_btree_init,
+	.leaf_init	= uleaf_init,
+	.leaf_split	= uleaf_split,
+	.leaf_merge	= uleaf_merge,
+	.leaf_chop	= uleaf_chop,
+	.leaf_write	= uleaf_write,
+	.balloc		= balloc,
+	.bfree		= bfree,
+
+	.leaf_sniff	= uleaf_sniff,
+	.leaf_can_free	= uleaf_can_free,
+	.leaf_dump	= uleaf_dump,
+};
 
 /* Test of new_leaf() and new_node() */
 static void test01(struct sb *sb, struct inode *inode)
@@ -222,18 +245,22 @@ static void test01(struct sb *sb, struct inode *inode)
 	clean_main(sb, inode);
 }
 
-static void btree_expand_test(struct cursor *cursor, tuxkey_t key)
+static void btree_write_test(struct cursor *cursor, tuxkey_t key)
 {
 	int err;
 
 	err = btree_probe(cursor, key);
 	test_assert(!err);
 
-	struct uentry *entry = btree_expand(cursor, key, 1);
-	test_assert(!IS_ERR(entry));
-
-	*entry = (struct uentry){ .key = key, .val = key + 0x100 };
-	mark_buffer_dirty_non(cursor_leafbuf(cursor));
+	struct uleaf_req rq = {
+		.key = {
+			.start	= key,
+			.len	= 1,
+		},
+		.val		= key + 0x100,
+	};
+	err = btree_write(cursor, &rq.key);
+	test_assert(!err);
 
 	block_t block = bufindex(cursor_leafbuf(cursor));
 	release_cursor(cursor);
@@ -243,13 +270,13 @@ static void btree_expand_test(struct cursor *cursor, tuxkey_t key)
 	test_assert(!err);
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	test_assert(block == bufindex(leafbuf));
-	entry = uleaf_lookup(bufdata(leafbuf), key);
+	struct uentry *entry = uleaf_lookup(bufdata(leafbuf), key);
 	test_assert(entry);
 	test_assert(entry->key == key);
 	release_cursor(cursor);
 }
 
-/* btree_expand() and btree_chop() test */
+/* btree_write() and btree_chop() test */
 static void test02(struct sb *sb, struct inode *inode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -266,7 +293,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	int keys = sb->entries_per_node * btree->entries_per_leaf + 1;
 	/* Add keys to test tree_expand() until new depth */
 	for (int key = 0; key < keys; key++)
-		btree_expand_test(cursor, key);
+		btree_write_test(cursor, key);
 	test_assert(btree->root.depth == 2);
 	/* Check key again after addition completed */
 	for (int key = 0; key < keys; key++) {
@@ -302,7 +329,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	clean_main(sb, inode);
 }
 
-/* btree_expand() and btree_chop() test (reverse order) */
+/* btree_write() and btree_chop() test (reverse order) */
 static void test03(struct sb *sb, struct inode *inode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -319,7 +346,7 @@ static void test03(struct sb *sb, struct inode *inode)
 	int keys = sb->entries_per_node * btree->entries_per_leaf * 100;
 
 	for (int key = keys - 1; key >= 0; key--)
-		btree_expand_test(cursor, key);
+		btree_write_test(cursor, key);
 	assert(btree->root.depth >= 5); /* this test expects more than 5 */
 
 	/* Check key again after addition completed */
@@ -433,7 +460,7 @@ static void test05(struct sb *sb, struct inode *inode)
 	/* Some depths */
 	int keys = sb->entries_per_node * btree->entries_per_leaf * 100;
 	for (int key = keys - 1; key >= 0; key--)
-		btree_expand_test(cursor, key);
+		btree_write_test(cursor, key);
 	assert(btree->root.depth >= 5); /* this test expects more than 5 */
 
 	test_assert(btree_probe(cursor, 0) == 0);
