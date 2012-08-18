@@ -61,6 +61,7 @@ error:
 
 static void free_inode(struct inode *inode)
 {
+	inode->i_state &= ~I_BAD;
 	assert(list_empty(&inode->alloc_list));
 	assert(list_empty(&inode->orphan_list));
 	assert(hlist_unhashed(&inode->i_hash));
@@ -70,6 +71,18 @@ static void free_inode(struct inode *inode)
 
 	free_map(mapping(inode));
 	free(inode);
+}
+
+/* This is just to clean inode is partially initialized */
+static void make_bad_inode(struct inode *inode)
+{
+	remove_inode_hash(inode);
+	inode->i_state |= I_BAD;
+}
+
+static int is_bad_inode(struct inode *inode)
+{
+	return inode->i_state & I_BAD;
 }
 
 #include "kernel/inode.c"
@@ -101,7 +114,7 @@ static int evict_inode(struct inode *inode)
 {
 	int err = 0;
 
-	if (inode->i_nlink > 0) {
+	if (inode->i_nlink > 0 || is_bad_inode(inode)) {
 		truncate_inode_pages(mapping(inode), 0);
 		assert(!(inode->i_state & I_DIRTY));
 	} else {
@@ -188,6 +201,7 @@ struct inode *tux3_iget(struct sb *sb, inum_t inum)
 
 		int err = open_inode(inode);
 		if (err) {
+			make_bad_inode(inode);
 			iput(inode);
 			return ERR_PTR(err);
 		}

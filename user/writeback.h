@@ -6,6 +6,7 @@
 #define I_DIRTY_PAGES		(1 << 2)
 #define I_FREEING		(1 << 5)
 #define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
+#define I_BAD			(1 << 31)
 
 struct sb;
 struct inode;
