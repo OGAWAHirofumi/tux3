@@ -74,7 +74,6 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
 		switch (code) {
-		case LOG_LEAF_REDIRECT:
 		case LOG_BNODE_REDIRECT:
 		{
 			u64 oldblock, newblock;
@@ -126,6 +125,7 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 		case LOG_BALLOC:
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
+		case LOG_LEAF_REDIRECT:
 			data += logsize[code] - sizeof(code);
 			break;
 		default:
@@ -170,6 +170,25 @@ static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 				return err;
 			break;
 		}
+		case LOG_LEAF_REDIRECT:
+		case LOG_BNODE_REDIRECT:
+		{
+			u64 oldblock, newblock;
+			data = decode48(data, &oldblock);
+			data = decode48(data, &newblock);
+			trace("%s: oldblock %Lx, newblock %Lx",
+			      log_name[code], (L)oldblock, (L)newblock);
+			err = replay_update_bitmap(sb, newblock, 1, 1);
+			if (err)
+				return err;
+			if (code == LOG_LEAF_REDIRECT) {
+				/* leaf was already flushed */
+				err = replay_update_bitmap(sb, oldblock, 1, 0);
+				if (err)
+					return err;
+			}
+			break;
+		}
 		case LOG_BNODE_ROOT:
 		{
 			u64 root, left, right, rkey;
@@ -187,8 +206,6 @@ static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 				return err;
 			break;
 		}
-		case LOG_LEAF_REDIRECT:
-		case LOG_BNODE_REDIRECT:
 		case LOG_BNODE_SPLIT:
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE:
