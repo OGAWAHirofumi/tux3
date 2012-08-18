@@ -216,6 +216,21 @@ static inline void __free_pages(struct page *page, unsigned order)
 }
 #define __free_page(page) __free_pages((page), 0)
 
+
+struct nameidata {
+};
+
+struct qstr {
+	/* unsigned int hash; */
+	unsigned int len;
+	const unsigned char *name;
+};
+
+struct dentry {
+	struct qstr d_name;
+	struct inode *d_inode;
+};
+
 /*
  * File types
  *
