@@ -75,6 +75,9 @@ unsigned log_size[] = {
 	[LOG_BNODE_SPLIT]	= 15,
 	[LOG_BNODE_ADD]		= 19,
 	[LOG_BNODE_UPDATE]	= 19,
+	[LOG_BNODE_MERGE]	= 13,
+	[LOG_BNODE_DEL]		= 15,
+	[LOG_BNODE_ADJUST]	= 19,
 	[LOG_FREEBLOCKS]	= 7,
 	[LOG_ROLLUP]		= 1,
 	[LOG_DELTA]		= 1,
@@ -155,6 +158,15 @@ static void log_u48_u48(struct sb *sb, u8 intent, u64 v1, u64 v2)
 	*data++ = intent;
 	data = encode48(data, v1);
 	log_end(sb, encode48(data, v2));
+}
+
+static void log_u16_u48_u48(struct sb *sb, u8 intent, u16 v1, u64 v2, u64 v3)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	data = encode16(data, v1);
+	data = encode48(data, v2);
+	log_end(sb, encode48(data, v3));
 }
 
 static void log_u48_u48_u48(struct sb *sb, u8 intent, u64 v1, u64 v2, u64 v3)
@@ -238,15 +250,11 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
  */
 void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
 {
-	unsigned char *data = log_begin(sb, log_size[LOG_BNODE_SPLIT]);
-	*data++ = LOG_BNODE_SPLIT;
-	data = encode16(data, pos);
-	data = encode48(data, src);
-	log_end(sb, encode48(data, dst));
+	log_u16_u48_u48(sb, LOG_BNODE_SPLIT, pos, src, dst);
 }
 
 /*
- * Insert new record (child, key) to parent until next rollup
+ * Insert new index (child, key) to parent until next rollup
  * (parent buffer must be dirty already)
  */
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
@@ -255,12 +263,40 @@ void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 }
 
 /*
- * Update block of "key" entry by child on parent until next rollup
+ * Update ->block of "key" index by child on parent until next rollup
  * (parent buffer must be dirty already)
  */
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	log_u48_u48_u48(sb, LOG_BNODE_UPDATE, parent, child, key);
+}
+
+/*
+ * 1. Merge btree nodes from src to dst until next rollup
+ * 2. Defered bfree(src)
+ * (src and dst buffers must be dirty already)
+ */
+void log_bnode_merge(struct sb *sb, block_t src, block_t dst)
+{
+	log_u48_u48(sb, LOG_BNODE_MERGE, src, dst);
+}
+
+/*
+ * Delete indexes specified by (key, count) in bnode until next rollup
+ * (bnode buffer must be dirty already)
+ */
+void log_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
+{
+	log_u16_u48_u48(sb, LOG_BNODE_DEL, count, bnode, key);
+}
+
+/*
+ * Adjust ->key of index specified by "from" to "to" until next rollup
+ * (bnode buffer must be dirty already)
+ */
+void log_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to)
+{
+	log_u48_u48_u48(sb, LOG_BNODE_ADJUST, bnode, from, to);
 }
 
 /* Current freeblocks on rollup */

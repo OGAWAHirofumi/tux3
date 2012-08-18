@@ -300,8 +300,11 @@ enum {
 	LOG_BNODE_REDIRECT,	/* Log of bnode redirect */
 	LOG_BNODE_ROOT,		/* Log of new bnode root allocation */
 	LOG_BNODE_SPLIT,	/* Log of spliting bnode to new bnode */
-	LOG_BNODE_ADD,		/* Log of adding bnode entry */
-	LOG_BNODE_UPDATE,	/* Log of bnode entry update */
+	LOG_BNODE_ADD,		/* Log of adding bnode index */
+	LOG_BNODE_UPDATE,	/* Log of bnode index ->block update */
+	LOG_BNODE_MERGE,	/* Log of merging 2 bnodes */
+	LOG_BNODE_DEL,		/* Log of deleting bnode index */
+	LOG_BNODE_ADJUST,	/* Log of bnode index ->key adjust */
 	LOG_FREEBLOCKS,		/* Log of freeblocks in bitmap on rollup */
 	LOG_ROLLUP,		/* Log of marking rollup */
 	LOG_DELTA,		/* just for debugging */
@@ -915,6 +918,9 @@ void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst);
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 void log_bnode_update(struct sb *sb, block_t parent, block_t child,
 		      tuxkey_t key);
+void log_bnode_merge(struct sb *sb, block_t src, block_t dst);
+void log_bnode_del(struct sb *sb, block_t node, tuxkey_t key, unsigned count);
+void log_bnode_adjust(struct sb *sb, block_t node, tuxkey_t from, tuxkey_t to);
 void log_freeblocks(struct sb *sb, block_t freeblocks);
 void log_delta(struct sb *sb);
 void log_rollup(struct sb *sb);

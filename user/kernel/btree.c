@@ -551,9 +551,6 @@ static void bnode_merge_nodes(struct bnode *into, struct bnode *from)
 
 static void blockput_free(struct btree *btree, struct buffer_head *buffer)
 {
-	struct sb *sb = btree->sb;
-	block_t block = bufindex(buffer);
-
 	if (bufcount(buffer) != 1) {
 		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
 		blockput(buffer);
@@ -561,9 +558,6 @@ static void blockput_free(struct btree *btree, struct buffer_head *buffer)
 		return;
 	}
 	blockput(buffer);
-	/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
-	defer_bfree(&sb->defree, block, 1);
-	log_bfree(sb, block, 1);
 	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
 
@@ -575,6 +569,10 @@ static void adjust_parent_sep(struct cursor *cursor, int level, be_u64 newsep)
 
 		/* If nearest common parent, update separating key */
 		if (parent != level_node(cursor, level)->entries) {
+			log_bnode_adjust(cursor->btree->sb,
+					 bufindex(parent_at->buffer),
+					 from_be_u64(parent->key),
+					 from_be_u64(newsep));
 			parent->key = newsep;
 			mark_buffer_rollup_non(parent_at->buffer);
 			break;
@@ -583,11 +581,24 @@ static void adjust_parent_sep(struct cursor *cursor, int level, be_u64 newsep)
 	}
 }
 
-static void remove_index(struct cursor *cursor)
+/* Tracking info for chopped bnode indexes */
+struct chopped_index_info {
+	tuxkey_t start;
+	int count;
+};
+
+static void remove_index(struct cursor *cursor, struct chopped_index_info *cii)
 {
 	int level = cursor->level;
 	struct bnode *node = level_node(cursor, level);
+	struct chopped_index_info *ciil = &cii[level];
 
+	/* Collect chopped index in this node for logging later */
+	if (!ciil->count)
+		ciil->start = from_be_u64((cursor->path[level].next - 1)->key);
+	ciil->count++;
+
+	/* Remove an index */
 	bnode_remove_index(node, cursor->path[level].next - 1, 1);
 	--(cursor->path[level].next);
 	mark_buffer_rollup_non(cursor->path[level].buffer);
@@ -619,13 +630,14 @@ static int try_leaf_merge(struct btree *btree, struct buffer_head *intobuf,
 	struct vleaf *into = bufdata(intobuf);
 	unsigned from_size = btree->ops->leaf_need(btree, from);
 
-	/* Don't need to change buffers */
-	if (from_size == 0)
-		return 1;
-
 	/* Try to merge leaves */
 	if (from_size <= btree->ops->leaf_free(btree, into)) {
-		btree->ops->leaf_merge(btree, into, from);
+		struct sb *sb = btree->sb;
+		if (from_size > 0)
+			btree->ops->leaf_merge(btree, into, from);
+		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
+		defer_bfree(&sb->defree, bufindex(frombuf), 1);
+		log_bfree(sb, bufindex(frombuf), 1);
 		return 1;
 	}
 	return 0;
@@ -638,13 +650,13 @@ static int try_bnode_merge(struct sb *sb, struct buffer_head *intobuf,
 	struct bnode *from = bufdata(frombuf);
 	unsigned from_size = bcount(from);
 
-	/* Don't need to change buffers */
-	if (from_size == 0)
-		return 1;
-
 	/* Try to merge nodes */
 	if (from_size <= sb->entries_per_node - bcount(into)) {
-		bnode_merge_nodes(into, from);
+		if (from_size > 0)
+			bnode_merge_nodes(into, from);
+		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
+		defer_bfree(&sb->defree, bufindex(frombuf), 1);
+		log_bnode_merge(sb, bufindex(frombuf), bufindex(intobuf));
 		return 1;
 	}
 	return 0;
@@ -681,6 +693,7 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 	struct sb *sb = btree->sb;
 	struct btree_ops *ops = btree->ops;
 	struct buffer_head **prev, *leafprev = NULL;
+	struct chopped_index_info *cii;
 	struct cursor *cursor;
 	tuxkey_t limit;
 	int ret, done = 0;
@@ -693,7 +706,16 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 
 	cursor = alloc_cursor(btree, 0);
 	prev = malloc(sizeof(*prev) * btree->root.depth);
+	if (prev == NULL)
+		return -ENOMEM;
 	memset(prev, 0, sizeof(*prev) * btree->root.depth);
+
+	cii = malloc(sizeof(*cii) * btree->root.depth);
+	if (cii == NULL) {
+		free(prev);
+		return -ENOMEM;
+	}
+	memset(cii, 0, sizeof(*cii) * btree->root.depth);
 
 	down_write(&btree->lock);
 	btree_probe(cursor, start);
@@ -702,6 +724,10 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 	while (1) {
 		struct buffer_head *leafbuf;
 
+		/*
+		 * FIXME: If leaf was merged and freed later, we don't
+		 * need to redirect leaf and leaf_chop()
+		 */
 		if ((ret = cursor_redirect(cursor)))
 			goto out;
 		leafbuf = cursor_pop(cursor);
@@ -719,7 +745,7 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 		if (leafprev) {
 			if (try_leaf_merge(btree, leafprev, leafbuf)) {
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
-				remove_index(cursor);
+				remove_index(cursor, cii);
 				mark_buffer_dirty_non(leafprev);
 				blockput_free(btree, leafbuf);
 				goto keep_prev_leaf;
@@ -736,15 +762,29 @@ keep_prev_leaf:
 		while (done || cursor_level_finished(cursor)) {
 			struct buffer_head *buf;
 			int level = cursor->level;
+			struct chopped_index_info *ciil = &cii[level];
+
 
 			/* Get merge src buffer, and go parent level */
 			buf = cursor_pop(cursor);
+
+			/*
+			 * Logging chopped indexes
+			 * FIXME: If node is freed later (e.g. merged),
+			 * we dont't need to log this
+			 */
+			if (ciil->count) {
+				log_bnode_del(sb, bufindex(buf), ciil->start,
+					      ciil->count);
+			}
+			memset(ciil, 0, sizeof(*ciil));
+
 			/* Try to merge node with prev */
 			if (prev[level]) {
 				assert(level);
 				if (try_bnode_merge(sb, prev[level], buf)) {
 					trace(">>> can merge node %p into node %p", buf, prev[level]);
-					remove_index(cursor);
+					remove_index(cursor, cii);
 					mark_buffer_rollup_non(prev[level]);
 					blockput_free(btree, buf);
 					goto keep_prev_node;
@@ -771,9 +811,14 @@ chop_root:
 	while (btree->root.depth > 1 && bcount(bufdata(prev[0])) == 1) {
 		trace("drop btree level");
 		btree->root.block = bufindex(prev[1]);
-		blockput_free(btree, prev[0]);
 		btree->root.depth--;
 		mark_btree_dirty(btree);
+
+		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
+		defer_bfree(&sb->defree, bufindex(prev[0]), 1);
+		log_bfree(sb, bufindex(prev[0]), 1);
+		blockput_free(btree, prev[0]);
+
 		vecmove(prev, prev + 1, btree->root.depth);
 	}
 	ret = 0;
@@ -786,6 +831,7 @@ out:
 			blockput(prev[i]);
 	}
 	free(prev);
+	free(cii);
 	release_cursor(cursor);
 
 	up_write(&btree->lock);
