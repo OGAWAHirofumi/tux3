@@ -554,3 +554,44 @@ int ileaf_find_free(struct btree *btree, tuxkey_t key_bottom,
 
 	return 0;
 }
+
+/*
+ * Enumerate inum
+ * (callback for btree_traverse())
+ */
+int ileaf_enumerate(struct btree *btree, tuxkey_t key_bottom,
+		    tuxkey_t key_limit, void *leaf,
+		    tuxkey_t key, u64 len, void *data)
+{
+	struct ileaf *ileaf = leaf;
+	be_u16 *dict = ileaf_dict(btree, ileaf);
+	struct ileaf_enumrate_cb *cb = data;
+	tuxkey_t base = ibase(ileaf);
+	unsigned at, count, offset;
+
+	at = key - base;
+	count = min_t(u64, key + len - base, icount(ileaf));
+
+	offset = atdict(dict, at);
+	for (; at < count; at++) {
+		unsigned size, limit;
+		inum_t inum;
+		void *attrs;
+		int err;
+
+		limit = __atdict(dict, at + 1);
+		if (limit <= offset)
+			continue;
+		attrs = ileaf->table + offset;
+		size = limit - offset;
+
+		inum = base + at;
+		err = cb->callback(btree, inum, attrs, size, cb->data);
+		if (err)
+			return err;
+
+		offset = limit;
+	}
+
+	return 0;
+}
