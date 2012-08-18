@@ -546,7 +546,34 @@ int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
 
 static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
-	return 0;
+	struct inode *inode = buffer_inode(bufvec_first_buf(bufvec));
+	block_t block, index = bufvec_first_index(bufvec);
+	int err, rw = (mode == MAP_READ) ? READ : WRITE;
+	unsigned count = bufvec_count(bufvec);
+	struct seg map[10];
+
+	/* FIXME: For now, this is only for write */
+	assert(mode != MAP_READ);
+
+	int segs = map_region(inode, index, count, map, ARRAY_SIZE(map), mode);
+	if (segs < 0)
+		return segs;
+	assert(segs);
+
+	for (int i = 0; i < segs; i++) {
+		block = map[i].block;
+		count = map[i].count;
+
+		trace("extent 0x%Lx/%x => %Lx", index, count, block);
+
+		err = blockio_vec(rw, bufvec, block, count);
+		if (err)
+			break;
+
+		index += count;
+	}
+
+	return err;
 }
 
 /* create modes: 0 - read, 1 - write, 2 - redirect, 3 - delalloc */
