@@ -46,6 +46,11 @@ const char *test_series(void)
 	return test_env.series;
 }
 
+const char *test_name(void)
+{
+	return test_env.test[test_env.nest].name;
+}
+
 void test_assert_failed(void)
 {
 	test_env.test[test_env.nest].fail_cnt++;

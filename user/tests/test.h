@@ -7,8 +7,8 @@
 #define test_assert(x)	({						\
 	int __test_res = !(x);						\
 	if (__test_res) {						\
-		printf("%s: %s:%d:%s: assertion failed: %s\n",		\
-		       test_series(), __FILE__, __LINE__,		\
+		printf("[%s:%s] %s:%d:%s: assertion failed: %s\n",	\
+		       test_series(), test_name(), __FILE__, __LINE__,	\
 		       __func__, #x);					\
 		test_assert_failed();					\
 	}								\
@@ -17,6 +17,7 @@
 
 void test_init(const char *argv0);
 const char *test_series(void);
+const char *test_name(void);
 void test_assert_failed(void);
 int test_start(const char *name);
 void test_end(void);
