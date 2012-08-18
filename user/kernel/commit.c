@@ -54,7 +54,11 @@ int load_sb(struct sb *sb)
 	sb->atomref_base = 1 << (40 - sb->blockbits); // see xattr.c
 	sb->unatom_base = sb->atomref_base + (1 << (34 - sb->blockbits));
 	sb->volblocks = from_be_u64(super->volblocks);
+#ifdef ATOMIC
+	sb->freeblocks = sb->volblocks;
+#else
 	sb->freeblocks = from_be_u64(super->freeblocks);
+#endif
 	sb->nextalloc = from_be_u64(super->nextalloc);
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
@@ -76,7 +80,9 @@ int save_sb(struct sb *sb)
 
 	super->blockbits = to_be_u16(sb->blockbits);
 	super->volblocks = to_be_u64(sb->volblocks);
+#ifndef ATOMIC
 	super->freeblocks = to_be_u64(sb->freeblocks); // probably does not belong here
+#endif
 	super->nextalloc = to_be_u64(sb->nextalloc); // probably does not belong here
 	super->atomgen = to_be_u32(sb->atomgen); // probably does not belong here
 	super->freeatom = to_be_u32(sb->freeatom); // probably does not belong here
@@ -167,6 +173,8 @@ static int rollup_log(struct sb *sb)
 	new_cycle_log(sb);
 	/* Add rollup log as mark of new rollup cycle. */
 	log_rollup(sb);
+	/* Log to store freeblocks for flushing bitmap data */
+	log_freeblocks(sb, sb->freeblocks);
 
 	/*
 	 * Re-logging defered bfree blocks after rollup as defered

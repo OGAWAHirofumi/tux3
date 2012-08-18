@@ -92,19 +92,22 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		"subgraph cluster_disksuper {\n"
 		"label = \"disksuper\"\n"
 		"tux3_sb [\n"
-		"label = \"{ [disksuper] (blocknr %llu)"
+		"label = \"{ [disksuper] (blocknr %llu, freeblocks %llu)"
 		" | magic %.4s, 0x%02x, 0x%02x, 0x%02x, 0x%02x"
 		" | birthdate %llu | flags 0x%016llx"
 		" | <iroot0> iroot 0x%016llx (depth %u, block %llu)"
 		" | blockbits %u (size %u) | volblocks %llu"
-		" | freeblocks %llu | nextalloc %llu"
+#ifndef ATOMIC
+		" | freeblocks %llu"
+#endif
+		" | nextalloc %llu"
 		" | freeatom %u | atomgen %u"
 		" | <logchain_%llu> logchain %llu | logcount %u"
 		" }\"\n"
 		"shape = record\n"
 		"];\n"
 		"}\n\n",
-		(L)SB_LOC >> sb->blockbits,
+		(L)SB_LOC >> sb->blockbits, (L)sb->freeblocks,
 		txsb->magic,
 		(u8)txsb->magic[4], (u8)txsb->magic[5],
 		(u8)txsb->magic[6], (u8)txsb->magic[7],
@@ -113,7 +116,9 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		itable_btree(sb)->root.depth, (L)itable_btree(sb)->root.block,
 		sb->blockbits, sb->blocksize,
 		(L)from_be_u64(txsb->volblocks),
+#ifndef ATOMIC
 		(L)from_be_u64(txsb->freeblocks),
+#endif
 		(L)from_be_u64(txsb->nextalloc),
 		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen),
 		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain),
@@ -217,6 +222,14 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			fprintf(gi->f,
 				" | [%s] parent %llu, child %llu, key %llu ",
 				name, (L)parent, (L)child, (L)key);
+			break;
+		}
+		case LOG_FREEBLOCKS: {
+			u64 freeblocks;
+			data = decode48(data, &freeblocks);
+			fprintf(gi->f,
+				" | [LOG_FREEBLOCKS] freeblocks %llu ",
+				(L)freeblocks);
 			break;
 		}
 		case LOG_ROLLUP:

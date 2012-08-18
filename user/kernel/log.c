@@ -75,6 +75,7 @@ unsigned log_size[] = {
 	[LOG_BNODE_SPLIT]	= 15,
 	[LOG_BNODE_ADD]		= 19,
 	[LOG_BNODE_UPDATE]	= 19,
+	[LOG_FREEBLOCKS]	= 7,
 	[LOG_ROLLUP]		= 1,
 	[LOG_DELTA]		= 1,
 };
@@ -218,6 +219,13 @@ void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	log_bnode_entry(sb, LOG_BNODE_UPDATE, parent, child, key);
+}
+
+void log_freeblocks(struct sb *sb, block_t freeblocks)
+{
+	unsigned char *data = log_begin(sb, log_size[LOG_FREEBLOCKS]);
+	*data++ = LOG_FREEBLOCKS;
+	log_end(sb, encode48(data, freeblocks));
 }
 
 static void log_intent(struct sb *sb, u8 intent)

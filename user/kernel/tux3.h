@@ -170,7 +170,9 @@ struct disksuper {
 	be_u16 unused[3];	/* Padding for alignment */
 	be_u64 volblocks;	/* Volume size */
 	/* The rest should be moved to a "metablock" that is updated frequently */
+#ifndef ATOMIC /* Obsoleted by LOG_FREEBLOCKS */
 	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
+#endif
 	be_u64 nextalloc;	/* Get rid of this when we have a real allocation policy */
 	be_u32 freeatom;	/* Beginning of persistent free atom list in atable */
 	be_u32 atomgen;		/* Next atom number if there are no free atoms */
@@ -296,6 +298,7 @@ enum {
 	LOG_BNODE_SPLIT,	/* Log of spliting bnode to new bnode */
 	LOG_BNODE_ADD,		/* Log of adding bnode entry */
 	LOG_BNODE_UPDATE,	/* Log of bnode entry update */
+	LOG_FREEBLOCKS,		/* Log of freeblocks in bitmap on rollup */
 	LOG_ROLLUP,		/* Log of marking rollup */
 	LOG_DELTA,		/* just for debugging */
 	LOG_TYPES
@@ -903,6 +906,7 @@ void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dest);
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 void log_bnode_update(struct sb *sb, block_t parent, block_t child,
 		      tuxkey_t key);
+void log_freeblocks(struct sb *sb, block_t freeblocks);
 void log_delta(struct sb *sb);
 void log_rollup(struct sb *sb);
 
