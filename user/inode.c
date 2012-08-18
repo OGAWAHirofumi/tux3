@@ -269,6 +269,9 @@ struct inode *tux3_ilookup(struct sb *sb, inum_t inum)
  */
 void iput(struct inode *inode)
 {
+	if (inode == NULL)
+		return;
+
 	if (atomic_dec_and_test(&inode->i_count)) {
 		if (inode->i_nlink > 0 && inode->i_state & I_DIRTY) {
 			/* Keep the inode on dirty list */
