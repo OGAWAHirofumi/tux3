@@ -16,6 +16,7 @@
 /* tux3graph has to access internal structure */
 #include "kernel/btree.c"
 #include "kernel/dleaf.c"
+#include "kernel/dleaf2.c"
 #include "kernel/ileaf.c"
 
 /* Style of table on dot language */
@@ -684,29 +685,44 @@ static inline struct diskextent *dleaf_extent(struct diskextent *extents, int ex
 	return extents + ex;
 }
 
-static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
+static void draw_dleaf_start(struct graph_info *gi, const char *dleaf_name,
+			     struct buffer_head *buffer)
 {
-	struct dleaf *leaf = bufdata(buffer);
 	block_t blocknr = buffer->index;
-	struct group *groups = dleaf_groups_ptr(btree, leaf);
-	struct diskextent *extents;
-	char dleaf_name[32];
-	int gr;
 
-	if (!verbose && (drawn & DRAWN_DLEAF))
-		return;
-	drawn |= DRAWN_DLEAF;
-
-	snprintf(dleaf_name, sizeof(dleaf_name), "%s_%llu",
-		 gi->lname, (L)blocknr);
 	fprintf(gi->f,
 		"%s [\n"
-		"label = \"{ <%s0> [%s] (blocknr %llu%s)"
-		" | magic 0x%04x, free %u, used %u, groups %u",
+		"label = \"{ <%s0> [%s] (blocknr %llu%s)",
 		dleaf_name,
 		gi->lname, gi->lname, (L)blocknr,
-		buffer_dirty(buffer) ? ", dirty" : "",
-		from_be_u16(leaf->magic), from_be_u16(leaf->free), from_be_u16(leaf->used), dleaf_groups(leaf));
+		buffer_dirty(buffer) ? ", dirty" : "");
+}
+
+static void draw_dleaf_end(struct graph_info *gi, const char *dleaf_name,
+			   struct buffer_head *buffer)
+{
+	fprintf(gi->f,
+		" }\"\n"
+		"shape = record\n"
+		"%s"
+		"];\n",
+		buffer_dirty(buffer) ? "color = red\n" : "");
+}
+
+static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
+			const char *dleaf_name, struct buffer_head *buffer)
+{
+	struct dleaf *leaf = bufdata(buffer);
+	struct group *groups = dleaf_groups_ptr(btree, leaf);
+	struct diskextent *extents;
+	int gr;
+
+	draw_dleaf_start(gi, dleaf_name, buffer);
+
+	fprintf(gi->f,
+		" | magic 0x%04x, free %u, used %u, groups %u",
+		from_be_u16(leaf->magic), from_be_u16(leaf->free),
+		from_be_u16(leaf->used), dleaf_groups(leaf));
 
 	/* draw extents */
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
@@ -758,12 +774,7 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer
 			gr, group_count(group), group_keyhi(group), gr);
 	}
 
-	fprintf(gi->f,
-		" }\"\n"
-		"shape = record\n"
-		"%s"
-		"];\n",
-		buffer_dirty(buffer) ? "color = red\n" : "");
+	draw_dleaf_end(gi, dleaf_name, buffer);
 
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group_ptr(groups, gr);
@@ -778,6 +789,66 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer
 				dleaf_name, gr, ent, 0);
 		}
 	}
+}
+
+static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
+			const char *dleaf_name, struct buffer_head *buffer)
+{
+	struct dleaf2 *leaf = bufdata(buffer);
+	struct diskextent2 *dex, *dex_limit;
+	tuxkey_t prev;
+
+	draw_dleaf_start(gi, dleaf_name, buffer);
+
+	fprintf(gi->f,
+		" | magic 0x%04x, count %u",
+		from_be_u16(leaf->magic), from_be_u16(leaf->count));
+
+	dex = leaf->table;
+	dex_limit = dex + from_be_u16(leaf->count);
+	prev = TUXKEY_LIMIT;
+	while (dex < dex_limit) {
+		struct extent ex;
+		get_extent(dex, &ex);
+
+		if (prev != TUXKEY_LIMIT) {
+			unsigned count = ex.logical - prev;
+			fprintf(gi->f, " (count %u)", count);
+		}
+
+		fprintf(gi->f,
+			" | verhi 0x%04x, logical %llu,"
+			" verlo 0x%04x, physical %llu",
+			ex.version >> VER_BITS, (L)ex.logical,
+			ex.version & VER_MASK, (L)ex.physical);
+
+		if (dex == dex_limit - 1)
+			fprintf(gi->f, " (sentinel)");
+
+		prev = ex.logical;
+		dex++;
+	}
+
+	draw_dleaf_end(gi, dleaf_name, buffer);
+}
+
+static void draw_dleaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
+{
+	struct dleaf *leaf = bufdata(buffer);
+	block_t blocknr = buffer->index;
+	char dleaf_name[32];
+
+	if (!verbose && (drawn & DRAWN_DLEAF))
+		return;
+	drawn |= DRAWN_DLEAF;
+
+	snprintf(dleaf_name, sizeof(dleaf_name), "%s_%llu",
+		 gi->lname, (L)blocknr);
+
+	if (leaf->magic == to_be_u16(TUX3_MAGIC_DLEAF))
+		draw_dleaf1(gi, btree, dleaf_name, buffer);
+	else
+		draw_dleaf2(gi, btree, dleaf_name, buffer);
 
 	/* write link: dtree -> file data */
 	snprintf(gi->filedata, sizeof(gi->filedata), "%s_data", gi->bname);
