@@ -586,6 +586,127 @@ static void test05(struct sb *sb)
 	clean_main(sb);
 }
 
+/* Test for rename */
+static void test06(struct sb *sb)
+{
+	static struct open_result r[] = {
+		{
+			.name		= "before",
+			.namelen	= 6,
+			.err		= -ENOENT,
+		},
+		{
+			.name		= "after",
+			.namelen	= 5,
+			.err		= 0,
+		},
+		{
+			.name		= "before2",
+			.namelen	= 7,
+			.err		= -ENOENT,
+		},
+		{
+			.name		= "overwrite",
+			.namelen	= 9,
+			.err		= 0,
+		},
+	};
+
+	struct tux_iattr iattr = { .mode = S_IFDIR | 0755 };
+
+	test_assert(make_tux3(sb) == 0);
+	test_assert(force_rollup(sb) == 0);
+
+	/* Test mkdir("before"), then rename("before", "after"). */
+	struct inode *subdir;
+	subdir = tuxcreate(sb->rootdir, r[0].name, r[0].namelen, &iattr);
+	test_assert(!IS_ERR(subdir));
+	r[0].inum = subdir->inum;
+	iput(subdir);
+
+	/*
+	 * Test mkdir("before2") and mkdir("overwrite"), then
+	 * rename("before2", "overwrite").
+	 */
+	subdir = tuxcreate(sb->rootdir, r[2].name, r[2].namelen, &iattr);
+	test_assert(!IS_ERR(subdir));
+	r[2].inum = subdir->inum;
+	iput(subdir);
+
+	subdir = tuxcreate(sb->rootdir, r[3].name, r[3].namelen, &iattr);
+	test_assert(!IS_ERR(subdir));
+	r[3].inum = subdir->inum;
+	iput(subdir);
+	/* Check inum is not same */
+	test_assert(r[2].inum != r[3].inum);
+
+	/* Test rename after flush */
+	if (test_start("test06.1")) {
+		test_assert(force_delta(sb) == 0);
+
+		int err;
+		/* Test rename("before", "after") */
+		err = tuxrename(sb->rootdir, r[0].name, r[0].namelen,
+				sb->rootdir, r[1].name, r[1].namelen);
+		test_assert(!err);
+		/* Update inum for rename test */
+		r[1].inum = r[0].inum;
+
+		/* Test rename("before2", "overwrite") */
+		err = tuxrename(sb->rootdir, r[2].name, r[2].namelen,
+				sb->rootdir, r[3].name, r[3].namelen);
+		test_assert(!err);
+		/* Update inum for rename test */
+		r[3].inum = r[2].inum;
+
+		check_dirty(sb);
+
+		/* Flush */
+		test_assert(force_delta(sb) == 0);
+		clean_main(sb);
+
+		/* FIXME: fsck please, check leak */
+		/* fsck(); */
+
+		check_files(sb, r, ARRAY_SIZE(r));
+		clean_main(sb);
+	}
+	test_end();
+	/* Test rename before flush */
+	if (test_start("test06.2")) {
+		int err;
+		/* Test rename("before", "after") */
+		err = tuxrename(sb->rootdir, r[0].name, r[0].namelen,
+				sb->rootdir, r[1].name, r[1].namelen);
+		test_assert(!err);
+		/* Update inum for rename test */
+		r[1].inum = r[0].inum;
+
+		/* Test rename("before2", "overwrite") */
+		err = tuxrename(sb->rootdir, r[2].name, r[2].namelen,
+				sb->rootdir, r[3].name, r[3].namelen);
+		test_assert(!err);
+		/* Update inum for rename test */
+		r[3].inum = r[2].inum;
+
+		check_dirty(sb);
+
+		/* Flush */
+		test_assert(force_delta(sb) == 0);
+		clean_main(sb);
+
+		/* FIXME: fsck please, check leak */
+		/* fsck(); */
+
+		check_files(sb, r, ARRAY_SIZE(r));
+		clean_main(sb);
+	}
+	test_end();
+
+	test_assert(force_delta(sb) == 0);
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -630,6 +751,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test05"))
 		test05(sb);
+	test_end();
+
+	if (test_start("test06"))
+		test06(sb);
 	test_end();
 
 	clean_main(sb);
