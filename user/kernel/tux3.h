@@ -253,6 +253,7 @@ struct sb {
 	struct dirty_buffers pinned; /* dirty metadata not flushed per delta */
 
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
+	spinlock_t dirty_inodes_lock;
 	struct list_head dirty_inodes;	/* dirty inodes list */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
@@ -901,6 +902,7 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count);
 int bytebits(u8 c);
 
 /* writeback.c */
+void tux3_dirty_inode(struct inode *inode, int flags);
 void tux3_mark_buffer_dirty(struct buffer_head *buffer);
 void tux3_mark_buffer_rollup(struct buffer_head *buffer);
 int tux3_flush_inode(struct inode *inode, unsigned delta);

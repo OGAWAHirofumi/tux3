@@ -247,6 +247,7 @@ static int tux3_statfs(struct dentry *dentry, struct kstatfs *buf)
 static const struct super_operations tux3_super_ops = {
 	.alloc_inode	= tux3_alloc_inode,
 	.destroy_inode	= tux3_destroy_inode,
+	.dirty_inode	= tux3_dirty_inode,
 	.evict_inode	= tux3_evict_inode,
 	/* FIXME: we have to handle write_inode of sync (e.g. cache pressure) */
 //	.write_inode	= tux3_write_inode,

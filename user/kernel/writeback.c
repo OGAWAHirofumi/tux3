@@ -9,7 +9,21 @@
 #define trace trace_on
 #endif
 
-/* FIXME: we should rewrite with own buffer management. */
+/* FIXME: probably, we should rewrite with own buffer management. */
+
+/* This is hook of __mark_inode_dirty() */
+void tux3_dirty_inode(struct inode *inode, int flags)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	/* FIXME: we should save flags. And use it to know whether we
+	 * have to write inode data or not */
+	spin_lock(&sb->dirty_inodes_lock);
+	if (list_empty(&tux_inode(inode)->dirty_list))
+		list_add_tail(&tux_inode(inode)->dirty_list, &sb->dirty_inodes);
+	spin_unlock(&sb->dirty_inodes_lock);
+}
+
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
 	/*
@@ -25,9 +39,11 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 	}
 
 	tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
+	/* FIXME: we need to dirty inode only if buffer became
+	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
+	tux3_dirty_inode(buffer_inode(buffer), I_DIRTY_PAGES);
 }
 
-/* FIXME: we should rewrite with own buffer management. */
 void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);

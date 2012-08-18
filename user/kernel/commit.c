@@ -33,6 +33,7 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	INIT_LIST_HEAD(&sb->alloc_inodes);
 	INIT_LIST_HEAD(&sb->orphan_add);
 	INIT_LIST_HEAD(&sb->orphan_del);
+	spin_lock_init(&sb->dirty_inodes_lock);
 	INIT_LIST_HEAD(&sb->dirty_inodes);
 	init_dirty_buffers(&sb->pinned);
 	stash_init(&sb->defree);
