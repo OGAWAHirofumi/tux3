@@ -96,3 +96,30 @@ int tuxunlink(struct inode *dir, const char *name, unsigned len)
 
 	return err;
 }
+
+int tuxrmdir(struct inode *dir, const char *name, unsigned len)
+{
+	struct dentry dentry = {
+		.d_name.name = (unsigned char *)name,
+		.d_name.len = len,
+	};
+	int err;
+
+	/*
+	 * FIXME: we can cache dirent position by tuxlookup(), and
+	 * tux3_unlink() can use it.
+	 */
+
+	err = tuxlookup(dir, &dentry);
+	if (err)
+		return err;
+
+	err = -ENOTDIR;
+	if (S_ISDIR(dentry.d_inode->i_mode))
+		err = tux3_rmdir(dir, &dentry);
+
+	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */
+	iput(dentry.d_inode);
+
+	return err;
+}

@@ -163,6 +163,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr);
 int tuxunlink(struct inode *dir, const char *name, unsigned len);
+int tuxrmdir(struct inode *dir, const char *name, unsigned len);
 
 /* super.c */
 int put_super(struct sb *sb);

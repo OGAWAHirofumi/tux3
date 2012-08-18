@@ -250,7 +250,11 @@ static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 			inode->i_ctime = dir->i_ctime;
 			inode->i_size = 0;
 			clear_nlink(inode);
-			mark_inode_dirty(inode);
+			/* FIXME: we shouldn't write inode for i_nlink = 0? */
+			mark_inode_dirty_sync(inode);
+			/* FIXME: can't avoid this? what to do if error? */
+			err = tux3_mark_inode_orphan(inode);
+
 			inode_dec_link_count(dir);
 		}
 		change_end(tux_sb(inode->i_sb));
@@ -333,7 +337,7 @@ error:
 }
 
 void *a[] = {
-	set_nlink, tux3_link, tux3_symlink, tux3_rmdir, tux3_rename,
+	set_nlink, tux3_link, tux3_symlink, tux3_rename,
 };
 
 #ifdef __KERNEL__
