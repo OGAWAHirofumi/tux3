@@ -53,6 +53,20 @@ int replay(struct sb *sb)
 		unsigned char *data = log->data;
 		while (data < log->data + from_be_u16(log->bytes)) {
 			switch (code = *data++) {
+			case LOG_BNODE_ROOT:
+			{
+				u64 root, left, right, rkey;
+				u8 count;
+				count = *data++;
+				data = decode48(data, &root);
+				data = decode48(data, &left);
+				data = decode48(data, &right);
+				data = decode48(data, &rkey);
+				trace("LOG_BNODE_ROOT: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx", count, (L)root, (L)left, (L)right, (L)rkey);
+
+				replay_bnode_root(sb, root, count, left, right, rkey);
+				break;
+			}
 			case LOG_BNODE_ADD:
 			case LOG_BNODE_UPDATE:
 			{
@@ -64,21 +78,29 @@ int replay(struct sb *sb)
 				break;
 			}
 			case LOG_BALLOC:
+			{
+				u64 block;
+				u8 count;
+				count = *data++;
+				data = decode48(data, &block);
+				trace("LOG_BALLOC: count %u, block %Lx", count, (L)block);
+				break;
+			}
 			case LOG_BFREE:
 			case LOG_BFREE_ON_ROLLUP:
-				data += logsize[code] - 1;
-				break;
 			case LOG_LEAF_REDIRECT:
 			case LOG_BNODE_REDIRECT:
-			case LOG_BNODE_ROOT:
 			case LOG_BNODE_SPLIT:
+				trace("log record: code 0x%02x", code);
+				data += logsize[code] - 1;
+				break;
 			default:
 				goto unknown;
 			}
 		}
 		log_drop(sb);
 	}
-
+#if 0
 	for (sb->lognext = 0; sb->lognext < logcount;) {
 		trace("log block %i", sb->lognext);
 		log_next(sb);
@@ -112,7 +134,7 @@ int replay(struct sb *sb)
 		}
 		log_drop(sb);
 	}
-
+#endif
 	return 0;
 unknown:
 	warn("unrecognized log code 0x%x, 0x%x", code, LOG_BNODE_UPDATE);

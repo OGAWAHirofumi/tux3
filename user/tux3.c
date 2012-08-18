@@ -130,6 +130,13 @@ int main(int argc, char *argv[])
 
 	if ((errno = -load_itable(sb)))
 		goto eek;
+
+	if (!strcmp(command, "replay")) {
+		if ((errno = -replay(sb)))
+			goto eek;
+		return 0;
+	}
+
 	sb->bitmap = iget(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
 		errno = -PTR_ERR(sb->bitmap);

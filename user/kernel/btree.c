@@ -841,3 +841,26 @@ int free_empty_btree(struct btree *btree)
 	blockput(rootbuf);
 	return 0;
 }
+
+int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
+		      block_t left, block_t right, tuxkey_t rkey)
+{
+	struct buffer_head *rootbuf;
+	struct bnode *newroot;
+
+	rootbuf = vol_getblk(sb, root);
+	if (!rootbuf)
+		return -ENOMEM;
+	memset(bufdata(rootbuf), 0, bufsize(rootbuf));
+
+	newroot = bufdata(rootbuf);
+	newroot->count = to_be_u32(count);
+	newroot->entries[0].block = to_be_u64(left);
+	newroot->entries[1].block = to_be_u64(right);
+	newroot->entries[1].key = to_be_u64(rkey);
+
+	mark_buffer_rollup_atomic(rootbuf);
+	blockput(rootbuf);
+
+	return 0;
+}

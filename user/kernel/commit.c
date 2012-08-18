@@ -33,11 +33,14 @@ int load_sb(struct sb *sb)
 	sb->atomgen = from_be_u32(super->atomgen);
 	sb->freeatom = from_be_u32(super->freeatom);
 	sb->dictsize = from_be_u64(super->dictsize);
+	sb->logchain = from_be_u64(super->logchain);
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
 	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
 	      (L)sb->volblocks, (L)sb->freeblocks, (L)sb->nextalloc);
 	trace("freeatom %u, atomgen %u", sb->freeatom, sb->atomgen);
+	trace("dictsize %Lu", (L)sb->dictsize);
+	trace("logchain %Lu", (L)sb->logchain);
 	return 0;
 }
 
@@ -209,6 +212,7 @@ static int write_log(struct sb *sb)
 		defer_bfree(&sb->new_decycle, block, 1);
 
 		blockput(buffer);
+		trace("logchain %lld", (L)block);
 		sb->logchain = block;
 	}
 	sb->logthis = sb->lognext;

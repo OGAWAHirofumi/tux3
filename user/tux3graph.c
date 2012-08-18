@@ -952,10 +952,21 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20, 1);
 
 	sb->volmap = tux_new_volmap(sb);
-	if (!sb->volmap)
+	if (!sb->volmap) {
+		errno = ENOMEM;
 		goto eek;
+	}
+	sb->logmap = tux_new_logmap(sb);
+	if (!sb->logmap) {
+		errno = ENOMEM;
+		goto eek;
+	}
 	if ((errno = -load_itable(sb)))
 		goto eek;
+
+	if ((errno = -replay(sb)))
+		goto eek;
+
 	sb->bitmap = iget(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
 		errno = -PTR_ERR(sb->bitmap);
