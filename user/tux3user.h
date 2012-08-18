@@ -152,6 +152,7 @@ int page_symlink(struct inode *inode, const char *symname, int len);
 int page_readlink(struct inode *inode, void *buf, unsigned size);
 
 /* inode.c */
+void inode_leak_check(void);
 void __iget(struct inode *inode);
 void ihold(struct inode *inode);
 void iput(struct inode *inode);

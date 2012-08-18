@@ -102,6 +102,8 @@ int put_super(struct sb *sb)
 	if (sb->volmap)
 		iput(sb->volmap);
 
+	inode_leak_check();
+
 	return 0;
 }
 

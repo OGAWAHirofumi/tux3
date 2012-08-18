@@ -28,6 +28,24 @@ static unsigned long hash(inum_t inum)
 	return hash >> (64 - HASH_SHIFT);
 }
 
+void inode_leak_check(void)
+{
+	int leaks = 0;
+
+	for (int i = 0; i < HASH_SIZE; i++) {
+		struct hlist_head *head = inode_hashtable + i;
+		struct hlist_node *node;
+		struct inode *inode;
+		hlist_for_each_entry(inode, node, head, i_hash) {
+			trace_on("possible leak inode inum %Lu, i_count %d",
+				 (L)inode->inum, atomic_read(&inode->i_count));
+			leaks++;
+		}
+	}
+
+	assert(leaks == 0);
+}
+
 static void insert_inode_hash(struct inode *inode)
 {
 	struct hlist_head *b = inode_hashtable + hash(inode->inum);
