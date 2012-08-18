@@ -183,3 +183,57 @@ int tuxrmdir(struct inode *dir, const char *name, unsigned len)
 
 	return err;
 }
+
+int tuxrename(struct inode *old_dir, const char *old_name, unsigned old_len,
+	      struct inode *new_dir, const char *new_name, unsigned new_len)
+{
+	struct dentry old = {
+		.d_name.name = (unsigned char *)old_name,
+		.d_name.len = old_len,
+	};
+	struct dentry new = {
+		.d_name.name = (unsigned char *)new_name,
+		.d_name.len = new_len,
+	};
+	int err;
+
+	/*
+	 * FIXME: we can cache dirent position by tuxlookup(), and
+	 * tux3_rename() can use it.
+	 */
+
+	err = tuxlookup(old_dir, &old);
+	if (err)
+		return err;
+
+	err = tuxlookup(new_dir, &new);
+	if (err && err != -ENOENT)
+		goto error_old;
+
+	/* FIXME: check is not enough */
+	err = 0;
+	if (old.d_inode == new.d_inode)
+		goto out;
+	if (new.d_inode) {
+		if (S_ISDIR(old.d_inode->i_mode)) {
+			if (!S_ISDIR(new.d_inode->i_mode)) {
+				err = -ENOTDIR;
+				goto out;
+			}
+		} else {
+			if (S_ISDIR(new.d_inode->i_mode)) {
+				err = -EISDIR;
+				goto out;
+			}
+		}
+	}
+
+	err = tux3_rename(old_dir, &old, new_dir, &new);
+out:
+	if (new.d_inode)
+		iput(new.d_inode);
+error_old:
+	iput(old.d_inode);
+
+	return err;
+}

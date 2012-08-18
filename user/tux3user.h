@@ -166,6 +166,8 @@ int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
 	    const char *dstname, unsigned dstlen);
 int tuxunlink(struct inode *dir, const char *name, unsigned len);
 int tuxrmdir(struct inode *dir, const char *name, unsigned len);
+int tuxrename(struct inode *old_dir, const char *old_name, unsigned old_len,
+	      struct inode *new_dir, const char *new_name, unsigned new_len);
 
 /* super.c */
 int put_super(struct sb *sb);
