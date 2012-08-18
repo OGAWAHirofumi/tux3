@@ -12,6 +12,7 @@
 #include <libklib/compiler.h>
 #include <libklib/types.h>
 #include <libklib/bitops.h>
+#include <libklib/byteorder.h>
 #include <libklib/hash.h>
 #include <libklib/kdev_t.h>
 
