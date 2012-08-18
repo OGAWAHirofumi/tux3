@@ -146,6 +146,7 @@ static void tux3_inode_init_once(void *mem)
 
 	INIT_LIST_HEAD(&tuxi->alloc_list);
 	INIT_LIST_HEAD(&tuxi->orphan_list);
+	init_dirty_buffers(inode_dirty_heads(&tuxi->vfs_inode));
 	inode_init_once(&tuxi->vfs_inode);
 }
 

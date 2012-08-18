@@ -194,7 +194,7 @@ static int rollup_log(struct sb *sb)
 	 * bnode blocks will be flushed via volmap with leaves.
 	 */
 	list_splice_init(dirty_head_when(&sb->pinned, rollup),
-			 dirty_head(&mapping(sb->volmap)->dirty));
+			 dirty_head(inode_dirty_heads(sb->volmap)));
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", rollup);

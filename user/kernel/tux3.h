@@ -314,6 +314,7 @@ typedef struct {
 	struct xcache *xcache;	/* Extended attribute cache */
 	struct list_head alloc_list; /* link for deferred inum allocation */
 	struct list_head orphan_list; /* link for orphan inode list */
+	struct dirty_buffers dirty; /* list for dirty buffers */
 	struct inode vfs_inode;	/* Generic kernel inode */
 } tuxnode_t;
 
@@ -363,6 +364,11 @@ static inline void free(void *ptr)
 static inline struct block_device *sb_dev(struct sb *sb)
 {
 	return sb->vfs_sb->s_bdev;
+}
+
+static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
+{
+	return &tux_inode(inode)->dirty;
 }
 #else /* !__KERNEL__ */
 typedef struct inode {
@@ -429,6 +435,11 @@ static inline map_t *mapping(struct inode *inode)
 static inline struct dev *sb_dev(struct sb *sb)
 {
 	return sb->dev;
+}
+
+static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
+{
+	return &mapping(inode)->dirty;
 }
 #endif /* !__KERNEL__ */
 
