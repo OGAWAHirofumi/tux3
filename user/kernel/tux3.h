@@ -860,6 +860,7 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
 unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree_ops;
 
+void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst);
 int dwalk_end(struct dwalk *walk);
 block_t dwalk_block(struct dwalk *walk);
 unsigned dwalk_count(struct dwalk *walk);

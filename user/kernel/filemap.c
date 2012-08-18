@@ -248,6 +248,11 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 		segs = err;
 		goto out_release;
 	}
+	/* Update redirected place for local variables */
+	dwalk_redirect(walk, leaf, bufdata(cursor_leafbuf(cursor)));
+	dwalk_redirect(&headwalk, leaf, bufdata(cursor_leafbuf(cursor)));
+	leaf = bufdata(cursor_leafbuf(cursor));
+
 	struct dleaf *tail = NULL;
 	tuxkey_t tailkey = 0; // probably can just use limit instead
 	if (!dwalk_end(walk)) {
@@ -267,6 +272,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				segs = PTR_ERR(newbuf);
 				goto out_create;
 			}
+			log_balloc(sb, bufindex(newbuf), 1);
 			/*
 			 * ENOSPC on btree index split could leave the
 			 * cache state badly messed up.  Going to have
@@ -308,6 +314,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 				goto out_create;
 			}
 			memcpy(bufdata(newbuf), tail, sb->blocksize);
+			log_balloc(sb, bufindex(newbuf), 1);
 			if ((err = btree_insert_leaf(cursor, tailkey, newbuf))) {
 				segs = err;
 				goto out_create;

@@ -408,6 +408,22 @@ void dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
  *        If there is no next, it will stop with ->extent == ->exstop.)
  */
 
+void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst)
+{
+#ifndef ATOMIC
+	return;
+#endif
+	walk->leaf = dst;
+	walk->group = (void *)dst + ((void *)walk->group - (void *)src);
+	walk->gstop = (void *)dst + ((void *)walk->gstop - (void *)src);
+	walk->gdict = (void *)dst + ((void *)walk->gdict - (void *)src);
+	walk->entry = (void *)dst + ((void *)walk->entry - (void *)src);
+	walk->estop = (void *)dst + ((void *)walk->estop - (void *)src);
+	walk->exbase = (void *)dst + ((void *)walk->exbase - (void *)src);
+	walk->extent = (void *)dst + ((void *)walk->extent - (void *)src);
+	walk->exstop = (void *)dst + ((void *)walk->exstop - (void *)src);
+}
+
 /* FIXME: current code is assuming the entry has only one extent. */
 
 /* The first extent in dleaf */
