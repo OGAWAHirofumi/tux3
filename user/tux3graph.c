@@ -133,8 +133,7 @@ static void merge_tmpfiles(struct graph_info *gi)
 typedef void (*draw_leaf_t)(struct graph_info *, struct btree *btree,
 			    struct buffer_head *, void *);
 
-static void draw_bnode(struct graph_info *gi, int child_is_leaf,
-		       struct buffer_head *buffer)
+static void draw_bnode(struct graph_info *gi, struct buffer_head *buffer)
 {
 	struct bnode *bnode = bufdata(buffer);
 	block_t blocknr = buffer->index;
@@ -142,10 +141,10 @@ static void draw_bnode(struct graph_info *gi, int child_is_leaf,
 	int n;
 
 	fprintf(gi->f,
-		"%s_bnode_%llu [\n"
-		"label = \"{ <bnode0> [bnode] (blocknr %llu%s)"
+		"volmap_%llu [\n"
+		"label = \"{ <head> [bnode] (blocknr %llu%s)"
 		" | magic 0x%04x, count %u |",
-		gi->bname, blocknr, blocknr,
+		blocknr, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
 		from_be_u16(bnode->magic), bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
@@ -161,21 +160,12 @@ static void draw_bnode(struct graph_info *gi, int child_is_leaf,
 		"];\n",
 		buffer_dirty(buffer) ? "color = red\n" : "");
 
-	if (child_is_leaf) {
-		for (n = 0; n < bcount(bnode); n++) {
-			fprintf(gi->f,
-				"%s_bnode_%llu:f%u -> %s_%llu:%s0;\n",
-				gi->bname, blocknr, n,
-				gi->lname, from_be_u64(index[n].block),
-				gi->lname);
-		}
-	} else {
-		for (n = 0; n < bcount(bnode); n++) {
-			fprintf(gi->f,
-				"%s_bnode_%llu:f%u -> %s_bnode_%llu:bnode0;\n",
-				gi->bname, blocknr, n,
-				gi->bname, from_be_u64(index[n].block));
-		}
+	/* write link: bnode -> bnode or leaf */
+	for (n = 0; n < bcount(bnode); n++) {
+		fprintf(gi->f,
+			"volmap_%llu:f%u -> volmap_%llu:head;\n",
+			blocknr, n,
+			from_be_u64(index[n].block));
 	}
 }
 
@@ -184,7 +174,6 @@ static void walk_btree(struct graph_info *gi, struct btree *btree,
 {
 	struct cursor *cursor;
 	struct buffer_head *buffer;
-	int child_is_leaf;
 
 	cursor = alloc_cursor(btree, 0);
 	if (!cursor)
@@ -194,8 +183,7 @@ static void walk_btree(struct graph_info *gi, struct btree *btree,
 		error("cursor_read_root() error");
 
 	buffer = cursor->path[cursor->level].buffer;
-	child_is_leaf = btree->root.depth - 1 == cursor->level;
-	draw_bnode(gi, child_is_leaf, buffer);
+	draw_bnode(gi, buffer);
 
 	while (1) {
 		int ret = cursor_advance_down(cursor);
@@ -203,8 +191,7 @@ static void walk_btree(struct graph_info *gi, struct btree *btree,
 			error("cursor_advance_down() error");
 		if (ret) {
 			buffer = cursor->path[cursor->level].buffer;
-			child_is_leaf = btree->root.depth - 1 == cursor->level;
-			draw_bnode(gi, child_is_leaf, buffer);
+			draw_bnode(gi, buffer);
 			continue;
 		}
 
@@ -578,9 +565,8 @@ static void draw_dleaf_start(struct graph_info *gi, const char *dleaf_name,
 
 	fprintf(gi->f,
 		"%s [\n"
-		"label = \"{ <%s0> [%s] (blocknr %llu%s)",
-		dleaf_name,
-		gi->lname, gi->lname, blocknr,
+		"label = \"{ <head> [%s] (blocknr %llu%s)",
+		dleaf_name, gi->lname, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "");
 }
 
@@ -724,11 +710,13 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group_ptr(groups, gr);
+		/* write link: dleaf:group -> dleaf:entry */
 		fprintf(gi->f,
 			"%s:gr%u:w -> %s:gr%uent%u:w;\n",
 			dleaf_name, gr,
 			dleaf_name, gr, 0);
 		for (int ent = 0; ent < group_count(group); ent++) {
+			/* write link: dleaf:entry -> dleaf:extent */
 			fprintf(gi->f,
 				"%s:gr%uent%u:w -> %s:gr%uent%uex%u:w;\n",
 				dleaf_name, gr, ent,
@@ -809,15 +797,14 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree,
 		return;
 	drawn |= DRAWN_DLEAF;
 
-	snprintf(dleaf_name, sizeof(dleaf_name), "%s_%llu",
-		 gi->lname, blocknr);
+	snprintf(dleaf_name, sizeof(dleaf_name), "volmap_%llu", blocknr);
 
 	if (leaf->magic == to_be_u16(TUX3_MAGIC_DLEAF))
 		draw_dleaf1(gi, btree, dleaf_name, buffer, data);
 	else
 		draw_dleaf2(gi, btree, dleaf_name, buffer, data);
 
-	/* write link: dtree -> file data */
+	/* write link: dleaf -> file data */
 	add_link(gi, "%s:s -> %s [ltail=%s, lhead=cluster_%s];\n",
 		 dleaf_name, gi->filedata, gi->subgraph, gi->filedata);
 }
@@ -865,7 +852,6 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 
 static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			 struct buffer_head *buffer,
-			 const char *ileaf_name,
 			 draw_ileaf_attr_t draw_ileaf_attr)
 {
 	struct ileaf *ileaf = bufdata(buffer);
@@ -874,17 +860,17 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 	int at;
 
 	fprintf(gi->f,
-		"%s [\n"
+		"volmap_%llu [\n"
 		"label =\n"
 		"<<table " TABLE_STYLE ">\n"
 		"  <tr>\n"
-		"    <td port=\"%s0\">[%s] (blocknr %llu%s)</td>\n"
+		"    <td port=\"head\">[%s] (blocknr %llu%s)</td>\n"
 		"  </tr>\n"
 		"  <tr>\n"
 		"    <td>magic 0x%04x, count %u, ibase %llu</td>\n"
 		"  </tr>\n",
-		ileaf_name,
-		gi->lname, gi->lname, blocknr,
+		blocknr,
+		gi->lname, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
 		from_be_u16(ileaf->magic), icount(ileaf), ibase(ileaf));
 
@@ -940,10 +926,11 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		if (!ileaf_attr_size(dict, at))
 			continue;
 
+		/* write link: ileaf offset -> ileaf attrs */
 		fprintf(gi->f,
-			"%s:o%d:w -> %s:a%d:w;\n",
-			ileaf_name, at,
-			ileaf_name, at);
+			"volmap_%llu:o%d:w -> volmap_%llu:a%d:w;\n",
+			blocknr, at,
+			blocknr, at);
 	}
 }
 
@@ -988,17 +975,13 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 	struct ileaf *ileaf = bufdata(buffer);
 	be_u16 *dict = ileaf_dict(btree, ileaf);
 	block_t blocknr = buffer->index;
-	char ileaf_name[32];
 	int at;
 
 	if (!verbose && (drawn & DRAWN_ILEAF))
 		return;
 	drawn |= DRAWN_ILEAF;
 
-	snprintf(ileaf_name, sizeof(ileaf_name), "%s_%llu",
-		 gi->lname, blocknr);
-
-	__draw_ileaf(gi, btree, buffer, ileaf_name, draw_ileaf_attr);
+	__draw_ileaf(gi, btree, buffer, draw_ileaf_attr);
 
 	/* draw inode's dtree */
 	for (at = 0; at < icount(ileaf); at++) {
@@ -1030,8 +1013,8 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		assert(draw_data_ops);
 
 		/* write link: ileaf -> dtree root bnode */
-		add_link(gi, "%s:a%d:e -> %s_bnode_%llu:n;\n",
-			 ileaf_name, at, name,
+		add_link(gi, "volmap_%llu:a%d:e -> volmap_%llu:n;\n",
+			 blocknr, at,
 			 inode->btree.root.block);
 
 		if (!special_inode) {
@@ -1087,17 +1070,11 @@ static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
 static void draw_oleaf(struct graph_info *gi, struct btree *btree,
 		       struct buffer_head *buffer, void *data)
 {
-	block_t blocknr = buffer->index;
-	char oleaf_name[32];
-
 	if (!verbose && (drawn & DRAWN_OLEAF))
 		return;
 	drawn |= DRAWN_OLEAF;
 
-	snprintf(oleaf_name, sizeof(oleaf_name), "%s_%llu",
-		 gi->lname, blocknr);
-
-	__draw_ileaf(gi, btree, buffer, oleaf_name, draw_oleaf_attr);
+	__draw_ileaf(gi, btree, buffer, draw_oleaf_attr);
 }
 
 static void draw_log(struct graph_info *gi, struct sb *sb,
@@ -1292,6 +1269,7 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 		draw_log(gi, sb, buffer);
 		logcount--;
 		if (logcount) {
+			/* write link: logblock -> logblock */
 			fprintf(gi->f,
 				"logchain_%llu:f0:e -> logchain_%llu:n;\n",
 				nextchain, from_be_u64(log->logchain));
@@ -1349,10 +1327,13 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		from_be_u64(txsb->logchain), from_be_u64(txsb->logchain),
 		from_be_u32(txsb->logcount));
 
-	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
-		itable_name, itable_btree(sb)->root.block);
-	fprintf(gi->f, "tux3_sb:oroot0:e -> %s_bnode_%llu:n;\n\n",
-		otable_name, otable_btree(sb)->root.block);
+	/* write link: sb -> itable root */
+	fprintf(gi->f, "tux3_sb:iroot0:e -> volmap_%llu:n;\n\n",
+		itable_btree(sb)->root.block);
+	/* write link: sb -> otable root */
+	fprintf(gi->f, "tux3_sb:oroot0:e -> volmap_%llu:n;\n\n",
+		otable_btree(sb)->root.block);
+	/* write link: sb -> logchain */
 	fprintf(gi->f, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
 		from_be_u64(txsb->logchain), from_be_u64(txsb->logchain));
 }
