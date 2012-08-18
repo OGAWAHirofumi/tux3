@@ -184,7 +184,8 @@ typedef unsigned __bitwise__ gfp_t;
 
 struct page { void *address; unsigned long private; };
 
-#define PAGE_SIZE (1 << 6)
+#define PAGE_SIZE	(1 << 6)
+#define PAGE_CACHE_SIZE	PAGE_SIZE
 
 static inline void *page_address(struct page *page)
 {

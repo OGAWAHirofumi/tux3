@@ -132,14 +132,20 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 			  struct tux_iattr *iattr, const char *symname)
 {
+	struct sb *sb = tux_sb(dir->i_sb);
 	struct inode *inode;
+	unsigned len = strlen(symname) + 1;
 	int err;
 
-	change_begin(tux_sb(dir->i_sb));
+	/* FIXME: We want more length? */
+	if (len > PAGE_CACHE_SIZE)
+		return -ENAMETOOLONG;
+
+	change_begin(sb);
 	inode = tux_create_inode(dir, iattr, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
-		err = page_symlink(inode, symname, strlen(symname) + 1);
+		err = page_symlink(inode, symname, len);
 		if (!err) {
 			err = tux_add_dirent(dir, dentry, inode);
 			if (!err)
@@ -149,7 +155,7 @@ static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 		iput(inode);
 	}
 out:
-	change_end(tux_sb(dir->i_sb));
+	change_end(sb);
 
 	return err;
 }
