@@ -620,8 +620,7 @@ error:
 		change_end(sb);
 	}
 
-	if (tux_inode(inode)->xcache)
-		free(tux_inode(inode)->xcache);
+	free_xcache(inode);
 }
 
 #ifdef __KERNEL__

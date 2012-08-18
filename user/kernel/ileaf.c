@@ -132,7 +132,7 @@ static void ileaf_dump(struct btree *btree, void *vleaf)
 
 			attr_ops->decode(btree, &inode, attrs, size);
 
-			free(tux_inode(&inode)->xcache);
+			free_xcache(&inode);
 		}
 		offset = limit;
 	}

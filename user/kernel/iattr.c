@@ -157,7 +157,6 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	trace_off("decode %u attr bytes", size);
 	struct sb *sb = tux_sb(inode->i_sb);
 	tuxnode_t *tuxnode = tux_inode(inode);
-	struct xattr *xattr = tuxnode->xcache ? tuxnode->xcache->xattrs : NULL;
 	void *limit = attrs + size;
 	u64 v64;
 	u32 v32;
@@ -199,18 +198,8 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode48(attrs, &v64);
 			inode->i_mtime = spectime(v64 << TIME_ATTR_SHIFT);
 			break;
-		case XATTR_ATTR:;
-			// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
-			unsigned bytes, atom;
-			attrs = decode16(attrs, &bytes);
-			attrs = decode16(attrs, &atom);
-			*xattr = (struct xattr){ .atom = atom, .size = bytes - 2 };
-			unsigned xsize = sizeof(struct xattr) + xattr->size;
-			assert((void *)xattr + xsize <= (void *)tuxnode->xcache + tuxnode->xcache->maxsize);
-			memcpy(xattr->body, attrs, xattr->size);
-			attrs += xattr->size;
-			tuxnode->xcache->size += xsize;
-			xattr = xcache_next(xattr); // check limit!!!
+		case XATTR_ATTR:
+			attrs = decode_xattr(inode, attrs);
 			break;
 		default:
 			return NULL;
@@ -241,9 +230,9 @@ static int iattr_decode(struct btree *btree, void *data, void *attrs, int size)
 
 	xsize = decode_xsize(inode, attrs, size);
 	if (xsize) {
-		tux_inode(inode)->xcache = new_xcache(xsize);
-		if (tux_inode(inode)->xcache == NULL)
-			return -ENOMEM;
+		int err = new_xcache(inode, xsize);
+		if (err)
+			return err;
 	}
 
 	decode_attrs(inode, attrs, size); // error???

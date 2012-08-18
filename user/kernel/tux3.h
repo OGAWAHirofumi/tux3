@@ -331,6 +331,7 @@ enum {
 	LOG_TYPES
 };
 
+struct xcache;
 #ifdef __KERNEL__
 /*
  * In kernel an inode has a generic part and a filesystem-specific part
@@ -707,19 +708,6 @@ extern unsigned atsize[MAX_ATTRS];
 #define XATTR_REPLACE 2 // fail if xattr does not exist
 #endif
 
-struct xattr { u16 atom, size; char body[]; };
-struct xcache { u16 size, maxsize; struct xattr xattrs[]; };
-
-static inline struct xattr *xcache_next(struct xattr *xattr)
-{
-	return (void *)xattr->body + xattr->size;
-}
-
-static inline struct xattr *xcache_limit(struct xcache *xcache)
-{
-	return (void *)xcache + xcache->size;
-}
-
 /* Information for replay */
 struct replay {
 	struct sb *sb;
@@ -1047,16 +1035,18 @@ int bytebits(u8 c);
 /* xattr.c */
 void atable_init_base(struct sb *sb);
 int xcache_dump(struct inode *inode);
-struct xcache *new_xcache(unsigned maxsize);
+void free_xcache(struct inode *inode);
+int new_xcache(struct inode *inode, unsigned size);
 int get_xattr(struct inode *inode, const char *name, unsigned len,
 	      void *data, unsigned size);
 int set_xattr(struct inode *inode, const char *name, unsigned len,
 	      const void *data, unsigned size, unsigned flags);
 int del_xattr(struct inode *inode, const char *name, unsigned len);
 int list_xattr(struct inode *inode, char *text, size_t size);
+unsigned encode_xsize(struct inode *inode);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
-unsigned encode_xsize(struct inode *inode);
+void *decode_xattr(struct inode *inode, void *attrs);
 
 static inline void blockput_dirty(struct buffer_head *buffer)
 {

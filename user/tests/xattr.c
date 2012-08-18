@@ -129,7 +129,7 @@ static void test01(struct sb *sb)
 	test_assert(top1 - attrs == xsize1);
 
 	/* Remove all xcache by hand */
-	inode->xcache->size = sizeof(struct xcache);
+	inode->xcache->size = 0;
 
 	/* Test xattr inode table decode */
 	char *top2 = decode_attrs(inode, attrs, xsize1);
@@ -140,8 +140,7 @@ static void test01(struct sb *sb)
 	check_xcache(inode, data);
 
 	/* Free xcache by hand */
-	free(inode->xcache);
-	inode->xcache = NULL;
+	free_xcache(inode);
 
 	iput(inode);
 

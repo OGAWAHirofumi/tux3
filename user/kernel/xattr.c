@@ -391,6 +391,90 @@ eek:
 
 /* Xattr cache */
 
+struct xattr {
+	/* FIXME: 16bits? */
+	u16 atom;		/* atom of xattr data */
+	u16 size;		/* size of body[] */
+	char body[];
+};
+
+struct xcache {
+	u16 size;		/* size of xattrs[] */
+	u16 maxsize;		/* allocated memory size */
+	struct xattr xattrs[];
+};
+
+/* Free xcache memory */
+void free_xcache(struct inode *inode)
+{
+	if (tux_inode(inode)->xcache) {
+		free(tux_inode(inode)->xcache);
+		tux_inode(inode)->xcache = NULL;
+	}
+}
+
+/* Allocate new xcache memory */
+int new_xcache(struct inode *inode, unsigned size)
+{
+	struct xcache *xcache;
+
+	xcache = malloc(sizeof(*xcache) + size);
+	if (!xcache)
+		return -ENOMEM;
+
+	xcache->size = 0;
+	xcache->maxsize = size;
+	tux_inode(inode)->xcache = xcache;
+
+	return 0;
+}
+
+/* Expand xcache memory */
+static int expand_xcache(struct inode *inode, unsigned size)
+{
+#define MIN_ALLOC_SIZE	(1 << 7)
+	struct xcache *xcache, *old = tux_inode(inode)->xcache;
+
+	assert(!old || size > old->maxsize);
+
+	/* FIXME: better allocation strategy? See xcache_update() comment */
+	if (old)
+		size = max_t(unsigned, old->maxsize * 2, size);
+	else
+		size = ALIGN(size, MIN_ALLOC_SIZE);
+	warn("realloc xcache to %i", size);
+
+	assert(size);
+	assert(size <= USHRT_MAX);
+
+	xcache = malloc(sizeof(*xcache) + size);
+	if (!xcache)
+		return -ENOMEM;
+
+	if (!old)
+		xcache->size = 0;
+	else {
+		xcache->size = old->size;
+		memcpy(xcache->xattrs, old->xattrs, old->size);
+		free(old);
+	}
+	xcache->maxsize = size;
+
+	tux_inode(inode)->xcache = xcache;
+
+	return 0;
+}
+
+static inline struct xattr *xcache_next(struct xattr *xattr)
+{
+	return (void *)xattr->body + xattr->size;
+}
+
+static inline struct xattr *xcache_limit(struct xcache *xcache)
+{
+	return (void *)xcache->xattrs + xcache->size;
+}
+
 int xcache_dump(struct inode *inode)
 {
 	if (!tux_inode(inode)->xcache)
@@ -436,24 +520,6 @@ static struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom)
 	return ERR_PTR(-ENOATTR);
 }
 
-struct xcache *new_xcache(unsigned maxsize)
-{
-	struct xcache *xcache;
-
-	warn("realloc xcache to %i", maxsize);
-
-	xcache = malloc(maxsize);
-	if (!xcache)
-		return NULL;
-
-	*xcache = (struct xcache){
-		.size = sizeof(struct xcache),
-		.maxsize = maxsize
-	};
-
-	return xcache;
-}
-
 static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
 {
 	if (xattr) {
@@ -497,18 +563,10 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data,
 	/* Insert new */
 	unsigned more = sizeof(*xattr) + len;
 	if (!xcache || xcache->size + more > xcache->maxsize) {
-		unsigned oldsize = xcache ? xcache->size : sizeof(struct xcache);
-		unsigned maxsize = xcache ? xcache->maxsize : (1 << 7);
-		unsigned newsize = oldsize + max(more, maxsize);
-		struct xcache *newcache = new_xcache(newsize);
-		if (!newcache)
-			return -ENOMEM;
-		if (xcache) {
-			memcpy(newcache->xattrs, xcache->xattrs, oldsize - sizeof(struct xcache));
-			newcache->size = oldsize;
-			free(xcache);
-		}
-		tux_inode(inode)->xcache = newcache;
+		unsigned oldsize = xcache ? xcache->size : 0;
+		int err = expand_xcache(inode, oldsize + more);
+		if (err)
+			return err;
 	}
 	xattr = xcache_limit(tux_inode(inode)->xcache);
 	//warn("expand by %i\n", more);
@@ -664,6 +722,22 @@ error:
 
 /* Xattr encode/decode */
 
+unsigned encode_xsize(struct inode *inode)
+{
+	if (!tux_inode(inode)->xcache)
+		return 0;
+	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
+	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
+	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
+
+	while (xattr < limit) {
+		size += 2 + xatsize + xattr->size;
+		xattr = xcache_next(xattr);
+	}
+	assert(xattr == limit);
+	return size;
+}
+
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 {
 	if (!tux_inode(inode)->xcache)
@@ -709,21 +783,32 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 		}
 		attrs += atsize[kind];
 	}
-	return total ? total + sizeof(struct xcache) : 0;
+	return total;
 }
 
-unsigned encode_xsize(struct inode *inode)
+void *decode_xattr(struct inode *inode, void *attrs)
 {
-	if (!tux_inode(inode)->xcache)
-		return 0;
-	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
-	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
-	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
+	// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
+	struct xcache *xcache = tux_inode(inode)->xcache;
+	struct xattr *xattr = xcache_limit(xcache);
+	void *limit = xcache->xattrs + xcache->maxsize;
+	unsigned xsize, bytes, atom;
 
-	while (xattr < limit) {
-		size += 2 + xatsize + xattr->size;
-		xattr = xcache_next(xattr);
-	}
-	assert(xattr == limit);
-	return size;
+	attrs = decode16(attrs, &bytes);
+	attrs = decode16(attrs, &atom);
+
+	/* FIXME: check limit!!! */
+	assert((void *)xattr + sizeof(*xattr) <= limit);
+	*xattr = (struct xattr){
+		.atom = atom,
+		.size = bytes - 2,
+	};
+	xsize = sizeof(*xattr) + xattr->size;
+	assert((void *)xattr + xsize <= limit);
+
+	memcpy(xattr->body, attrs, xattr->size);
+	attrs += xattr->size;
+	xcache->size += xsize;
+
+	return attrs;
 }
