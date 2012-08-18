@@ -46,6 +46,9 @@ static void test01(struct sb *sb)
 	log_leaf_redirect(sb, 1, 2);
 	check(sb, LOG_LEAF_REDIRECT);
 
+	log_leaf_free(sb, 1);
+	check(sb, LOG_LEAF_FREE);
+
 	log_bnode_redirect(sb, 1, 2);
 	check(sb, LOG_BNODE_REDIRECT);
 
@@ -69,6 +72,9 @@ static void test01(struct sb *sb)
 
 	log_bnode_adjust(sb, 1, 2, 3);
 	check(sb, LOG_BNODE_ADJUST);
+
+	log_bnode_free(sb, 1);
+	check(sb, LOG_BNODE_FREE);
 
 	log_freeblocks(sb, 1);
 	check(sb, LOG_FREEBLOCKS);
