@@ -395,7 +395,8 @@ typedef struct inode {
 	loff_t i_size;
 	unsigned i_version;
 	struct timespec i_mtime, i_ctime, i_atime;
-	unsigned i_mode, i_uid, i_gid, i_nlink;
+	unsigned i_uid, i_gid, i_nlink;
+	umode_t i_mode;
 	struct mutex i_mutex;
 	dev_t i_rdev;
 	atomic_t i_count;
@@ -797,7 +798,7 @@ void tux3_clear_inode(struct inode *inode);
 int tux3_write_inode(struct inode *inode, int do_sync);
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat);
 int tux3_setattr(struct dentry *dentry, struct iattr *iattr);
-struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev);
+struct inode *tux_create_inode(struct inode *dir, umode_t mode, dev_t rdev);
 struct inode *tux3_iget(struct super_block *sb, inum_t inum);
 
 /* symlink.c */
@@ -896,7 +897,7 @@ int change_end(struct sb *sb);
 
 /* dir.c */
 void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry, struct inode *new_inode);
-int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, unsigned mode);
+int tux_create_dirent(struct inode *dir, const char *name, int len, inum_t inum, umode_t mode);
 tux_dirent *tux_find_dirent(struct inode *dir, const char *name, int len, struct buffer_head **result);
 int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry);
 int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry);

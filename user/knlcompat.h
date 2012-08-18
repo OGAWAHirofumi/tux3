@@ -89,6 +89,8 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
+typedef unsigned short umode_t;
+
 #define BITS_PER_LONG		LONG_BIT	/* SuS define this */
 #define BITOP_WORD(nr)		((nr) / BITS_PER_LONG)
 

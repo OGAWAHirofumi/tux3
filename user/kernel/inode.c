@@ -305,7 +305,7 @@ static int check_present(struct inode *inode)
 		}
 		break;
 	default:
-		error("Unknown mode: inum %Lx, mode %07o",
+		error("Unknown mode: inum %Lx, mode %07ho",
 		      (L)tuxnode->inum, inode->i_mode);
 		break;
 	}
@@ -646,13 +646,13 @@ static void tux_setup_inode(struct inode *inode)
 		break;
 	}
 	default:
-		error("Unknown mode: inum %Lx, mode %07o",
+		error("Unknown mode: inum %Lx, mode %07ho",
 		      (L)tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
 }
 
-struct inode *tux_create_inode(struct inode *dir, int mode, dev_t rdev)
+struct inode *tux_create_inode(struct inode *dir, umode_t mode, dev_t rdev)
 {
 	struct tux_iattr iattr = {
 		.uid	= current_fsuid(),

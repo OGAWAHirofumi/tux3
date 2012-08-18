@@ -73,7 +73,7 @@ void dump_attrs(struct inode *inode)
 			printf("rdev %x:%x ", MAJOR(inode->i_rdev), MINOR(inode->i_rdev));
 			break;
 		case MODE_OWNER_ATTR:
-			printf("mode 0%.6o uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
+			printf("mode %07ho uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
 			printf("ctime %Lx size %Lx ", (L)tuxtime(inode->i_ctime), (L)inode->i_size);
@@ -120,6 +120,7 @@ static void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = encode64(attrs, huge_encode_dev(inode->i_rdev));
 			break;
 		case MODE_OWNER_ATTR:
+			/* FIXME: i_mode is enough with 16bits */
 			attrs = encode32(attrs, inode->i_mode);
 			attrs = encode32(attrs, inode->i_uid);
 			attrs = encode32(attrs, inode->i_gid);

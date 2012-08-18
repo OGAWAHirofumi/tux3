@@ -49,7 +49,8 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 	return IS_ERR(entry) ? PTR_ERR(entry) : tux_delete_dirent(buffer, entry);
 }
 
-static int tux3_mknod(struct inode *dir, struct dentry *dentry, int mode, dev_t rdev)
+static int tux3_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
+		      dev_t rdev)
 {
 	struct inode *inode;
 	int err;
@@ -76,12 +77,13 @@ out:
 	return err;
 }
 
-static int tux3_create(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
+static int tux3_create(struct inode *dir, struct dentry *dentry, umode_t mode,
+		       struct nameidata *nd)
 {
 	return tux3_mknod(dir, dentry, mode, 0);
 }
 
-static int tux3_mkdir(struct inode *dir, struct dentry *dentry, int mode)
+static int tux3_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	if (dir->i_nlink >= TUX_LINK_MAX)
 		return -EMLINK;
