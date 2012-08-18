@@ -9,6 +9,7 @@
 #include <linux/fs.h>
 #include <linux/buffer_head.h>
 #include <linux/bio.h>
+#include <linux/blkdev.h>	/* for struct blk_plug */
 #include <linux/mutex.h>
 #include <linux/magic.h>
 #include <linux/slab.h>

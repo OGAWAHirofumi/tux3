@@ -692,12 +692,43 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 	return 0;
 }
 
+/* Almost copy of generic_file_aio_write() (added changed_begin/end). */
+static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
+				   unsigned long nr_segs, loff_t pos)
+{
+	struct file *file = iocb->ki_filp;
+	struct inode *inode = file->f_mapping->host;
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct blk_plug plug;
+	ssize_t ret;
+
+	BUG_ON(iocb->ki_pos != pos);
+
+	mutex_lock(&inode->i_mutex);
+	blk_start_plug(&plug);
+	/* FIXME: we would like to separate change_begin/end to small chunk */
+	change_begin(sb);
+	ret = __generic_file_aio_write(iocb, iov, nr_segs, &iocb->ki_pos);
+	change_end(sb);
+	mutex_unlock(&inode->i_mutex);
+
+	if (ret > 0 || ret == -EIOCBQUEUED) {
+		ssize_t err;
+
+		err = generic_write_sync(file, pos, ret);
+		if (err < 0 && ret > 0)
+			ret = err;
+	}
+	blk_finish_plug(&plug);
+	return ret;
+}
+
 static const struct file_operations tux_file_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= do_sync_read,
 	.write		= do_sync_write,
 	.aio_read	= generic_file_aio_read,
-	.aio_write	= generic_file_aio_write,
+	.aio_write	= tux3_file_aio_write,
 //	.unlocked_ioctl	= fat_generic_ioctl,
 #ifdef CONFIG_COMPAT
 //	.compat_ioctl	= fat_compat_dir_ioctl,
