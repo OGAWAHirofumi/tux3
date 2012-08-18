@@ -326,19 +326,6 @@ out:
 	return err;
 }
 
-struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
-{
-	struct buffer_head *buffer;
-	tux_dirent *entry = tux_find_dirent(dir, (unsigned char *)name, len, &buffer);
-	if (IS_ERR(entry))
-		return ERR_CAST(entry);
-	inum_t inum = from_be_u64(entry->inum);
-	blockput(buffer);
-	struct inode *inode = tux3_iget(dir->i_sb, inum);
-	assert(PTR_ERR(inode) != -ENOENT);
-	return inode;
-}
-
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr)
 {

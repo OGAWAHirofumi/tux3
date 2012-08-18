@@ -156,20 +156,22 @@ int tuxread(struct file *file, char *data, unsigned len);
 int tuxwrite(struct file *file, const char *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);
 int tuxtruncate(struct inode *inode, loff_t size);
-struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr);
 int tuxunlink(struct inode *dir, const char *name, unsigned len);
 int write_inode(struct inode *inode);
 
-/* utility.c */
-void stacktrace(void);
-int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
-int blockio(int rw, struct buffer_head *buffer, block_t block);
+/* namei.c */
+struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
 
 /* super.c */
 int put_super(struct sb *sb);
 struct inode *iget_or_create_inode(struct sb *sb, inum_t inum);
 int make_tux3(struct sb *sb);
+
+/* utility.c */
+void stacktrace(void);
+int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
+int blockio(int rw, struct buffer_head *buffer, block_t block);
 
 #endif /* !TUX3_USER_H */

@@ -6,13 +6,17 @@
 
 #include "tux3.h"
 
-static struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
-{
-	return dentry;
-}
-
 static void d_instantiate(struct dentry *dentry, struct inode *inode)
 {
+	dentry->d_inode = inode;
+}
+
+static struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
+{
+	if (IS_ERR(inode))
+		return ERR_CAST(inode);
+	d_instantiate(dentry, inode);
+	return NULL;
 }
 
 static void inc_nlink(struct inode *inode)
@@ -62,19 +66,20 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 	struct buffer_head *buffer;
 	struct inode *inode;
 	tux_dirent *entry;
+	inum_t inum;
 
 	entry = tux_find_dirent(dir, dentry->d_name.name, dentry->d_name.len,
 				&buffer);
 	if (IS_ERR(entry)) {
 		if (PTR_ERR(entry) != -ENOENT)
-			return ERR_PTR(PTR_ERR(entry));
+			return ERR_CAST(entry);
 		inode = NULL;
 		goto out;
 	}
-	inode = tux3_iget(tux_sb(dir->i_sb), from_be_u64(entry->inum));
+	inum = from_be_u64(entry->inum);
 	blockput(buffer);
-	if (IS_ERR(inode))
-		return ERR_PTR(PTR_ERR(inode));
+
+	inode = tux3_iget(tux_sb(dir->i_sb), inum);
 out:
 	return d_splice_alias(inode, dentry);
 }
@@ -308,7 +313,7 @@ error:
 }
 
 void *a[] = {
-	set_nlink, tux3_lookup, tux3_create, tux3_mkdir, tux3_link,
+	set_nlink, tux3_create, tux3_mkdir, tux3_link,
 	tux3_symlink, tux3_unlink, tux3_rmdir, tux3_rename,
 };
 

@@ -12,3 +12,22 @@
 #include "tux3user.h"
 
 #include "kernel/namei.c"
+
+struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
+{
+	struct dentry dentry = {
+		.d_name.name = (unsigned char *)name,
+		.d_name.len = len,
+	};
+	struct dentry *result;
+
+	result = tux3_lookup(dir, &dentry, NULL);
+	if (result && IS_ERR(result))
+		return ERR_CAST(result);
+	assert(result == NULL);
+
+	if (!dentry.d_inode)
+		return ERR_PTR(-ENOENT);
+
+	return dentry.d_inode;
+}
