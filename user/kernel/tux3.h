@@ -253,10 +253,10 @@ struct sb {
 	struct dirty_buffers pinned; /* dirty metadata not flushed per delta */
 
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
+	struct list_head dirty_inodes;	/* dirty inodes list */
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
-	struct list_head dirty_inodes;	/* dirty inodes list */
 	struct dev *dev;		/* userspace block device */
 #endif
 };
@@ -312,6 +312,7 @@ typedef struct {
 	inum_t inum;		/* Inode number */
 	unsigned present;	/* Attributes decoded from or to be encoded to inode table */
 	struct xcache *xcache;	/* Extended attribute cache */
+	struct list_head dirty_list; /* link for dirty inode list */
 	struct list_head alloc_list; /* link for deferred inum allocation */
 	struct list_head orphan_list; /* link for orphan inode list */
 	struct dirty_buffers dirty; /* list for dirty buffers */
@@ -376,6 +377,7 @@ typedef struct inode {
 	inum_t inum;
 	unsigned present;
 	struct xcache *xcache;
+	struct list_head dirty_list; /* link for dirty inode list */
 	struct list_head alloc_list; /* link for deferred inum allocation */
 	struct list_head orphan_list; /* link for orphan inode list */
 
@@ -392,7 +394,6 @@ typedef struct inode {
 	atomic_t i_count;
 	unsigned long i_state;
 	struct hlist_node i_hash;
-	struct list_head list;	/* link for dirty inodes */
 	unsigned state;
 } tuxnode_t;
 

@@ -64,9 +64,9 @@ static inline struct timespec gettime(void)
 	.i_version = 1,						\
 	.i_nlink = 1,						\
 	.i_count = ATOMIC_INIT(1),				\
+	.dirty_list = LIST_HEAD_INIT((inode).dirty_list),	\
 	.alloc_list = LIST_HEAD_INIT((inode).alloc_list),	\
-	.orphan_list = LIST_HEAD_INIT((inode).orphan_list),	\
-	.list = LIST_HEAD_INIT((inode).list)
+	.orphan_list = LIST_HEAD_INIT((inode).orphan_list)
 
 #define rapid_open_inode(sb, io, mode, init_defs...) ({		\
 	struct inode *__inode = &(struct inode){};		\

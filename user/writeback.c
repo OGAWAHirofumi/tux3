@@ -6,16 +6,17 @@
 
 void clear_inode(struct inode *inode)
 {
-	list_del_init(&inode->list);
+	list_del_init(&inode->dirty_list);
 	inode->i_state &= ~I_DIRTY;
 }
 
 void __mark_inode_dirty(struct inode *inode, unsigned flags)
 {
 	if ((inode->i_state & flags) != flags) {
+		struct sb *sb = inode->i_sb;
 		inode->i_state |= flags;
-		if (list_empty(&inode->list))
-			list_add_tail(&inode->list, &inode->i_sb->dirty_inodes);
+		if (list_empty(&inode->dirty_list))
+			list_add_tail(&inode->dirty_list, &sb->dirty_inodes);
 	}
 }
 
@@ -75,7 +76,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 			goto error;
 	}
 	if (!(inode->i_state & I_DIRTY))
-		list_del_init(&inode->list);
+		list_del_init(&inode->dirty_list);
 
 	iput(inode);
 
@@ -94,7 +95,7 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 
 	list_splice_init(&sb->dirty_inodes, &dirty_inodes);
 
-	list_for_each_entry_safe(inode, safe, &dirty_inodes, list) {
+	list_for_each_entry_safe(inode, safe, &dirty_inodes, dirty_list) {
 		/*
 		 * FIXME: this is hack. those inodes can be dirtied by
 		 * tux3_flush_inode() of other inodes, so it should be
@@ -112,10 +113,10 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	}
 #ifdef ATOMIC
 	/* If atomic-commit, bitmap and volmap is handled in the delta */
-	if (!list_empty(&sb->bitmap->list))
-		list_move(&sb->bitmap->list, &sb->dirty_inodes);
-	if (!list_empty(&sb->volmap->list))
-		list_move(&sb->volmap->list, &sb->dirty_inodes);
+	if (!list_empty(&sb->bitmap->dirty_list))
+		list_move(&sb->bitmap->dirty_list, &sb->dirty_inodes);
+	if (!list_empty(&sb->volmap->dirty_list))
+		list_move(&sb->volmap->dirty_list, &sb->dirty_inodes);
 #else
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)

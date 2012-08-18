@@ -80,10 +80,10 @@ error:
 static void free_inode(struct inode *inode)
 {
 	inode->i_state &= ~I_BAD;
+	assert(list_empty(&inode->dirty_list));
 	assert(list_empty(&inode->alloc_list));
 	assert(list_empty(&inode->orphan_list));
 	assert(hlist_unhashed(&inode->i_hash));
-	assert(list_empty(&inode->list));
 	assert(inode->i_state == I_FREEING);
 	assert(mapping(inode));
 
