@@ -55,6 +55,8 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 
 	/* orphan_add should be empty */
 	assert(&sb->orphan_add);
+	/* Deferred orphan deletion request is not flushed for each delta  */
+	clean_orphan_list(&sb->orphan_del);
 
 	/* defree must be flushed for each delta */
 	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));

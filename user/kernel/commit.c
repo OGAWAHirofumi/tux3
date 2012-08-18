@@ -26,6 +26,7 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	mutex_init(&sb->loglock);
 	INIT_LIST_HEAD(&sb->alloc_inodes);
 	INIT_LIST_HEAD(&sb->orphan_add);
+	INIT_LIST_HEAD(&sb->orphan_del);
 #ifndef __KERNEL__
 	INIT_LIST_HEAD(&sb->dirty_inodes);
 #endif
@@ -160,6 +161,7 @@ static int rollup_log(struct sb *sb)
 #ifndef __KERNEL__
 	LIST_HEAD(io_buffers);
 	LIST_HEAD(orphan_add);
+	LIST_HEAD(orphan_del);
 	/*
 	 * sb->rollup was incremented, so block fork may occur from here,
 	 * so before block fork was occured, cleans map->dirty list.
@@ -167,12 +169,14 @@ static int rollup_log(struct sb *sb)
 	 */
 	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
 	/*
-	 * Orphan inodes are still living. And logs will be obsoleted,
-	 * so, we store those to sb->otable.
-	 * [If we may want to have two orphan_add lists for frontend
-	 * and backend.]
+	 * Orphan inodes are still living, or orphan inodes in
+	 * sb->otable are dead. And logs will be obsoleted, so, we
+	 * apply those to sb->otable.
+	 * [If we may want to have two orphan_{add,del} lists for
+	 * frontend and backend.]
 	 */
 	list_splice_init(&sb->orphan_add, &orphan_add);
+	list_splice_init(&sb->orphan_del, &orphan_del);
 
 	/* This is starting the new rollup cycle of the log */
 	new_cycle_log(sb);
@@ -221,18 +225,28 @@ static int rollup_log(struct sb *sb)
 	assert(list_empty(&io_buffers));
 
 	trace("> apply orphan inodes %u", sb->rollup);
-	/*
-	 * This apply orphan inodes to sb->otable after flushed
-	 * bitmap. So, we will flush only leaf in this delta to
-	 * minimize data size of sb->otable for flushing.
-	 */
 	{
-		int err = tux3_rollup_orphan_add(sb, &orphan_add);
+		int err;
+
+		/*
+		 * This defered deletion of orphan from sb->otable.
+		 * It should be done before adding new orphan, because
+		 * orphan_add may have same inum in orphan_del.
+		 */
+		err = tux3_rollup_orphan_del(sb, &orphan_del);
+		if (err)
+			return err;
+
+		/*
+		 * This apply orphan inodes to sb->otable after flushed bitmap.
+		 */
+		err = tux3_rollup_orphan_add(sb, &orphan_add);
 		if (err)
 			return err;
 	}
 	trace("< apply orphan inodes %u", sb->rollup);
 	assert(list_empty(&orphan_add));
+	assert(list_empty(&orphan_del));
 #endif
 	trace("<<<<<<<<< commit rollup done %u", sb->rollup - 1);
 

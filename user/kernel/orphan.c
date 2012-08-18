@@ -21,6 +21,38 @@
 #define trace trace_on
 #endif
 
+/* Frontend modification cache for orphan */
+struct orphan {
+	inum_t inum;
+	struct list_head list;
+};
+
+static struct orphan *alloc_orphan(inum_t inum)
+{
+	struct orphan *orphan = malloc(sizeof(struct orphan));
+	if (!orphan)
+		return ERR_PTR(-ENOMEM);
+
+	INIT_LIST_HEAD(&orphan->list);
+	orphan->inum = inum;
+	return orphan;
+}
+
+static void free_orphan(struct orphan *orphan)
+{
+	free(orphan);
+}
+
+void clean_orphan_list(struct list_head *head)
+{
+	while (!list_empty(head)) {
+		struct orphan *orphan =
+			list_entry(head->next, struct orphan, list);
+		list_del(&orphan->list);
+		free_orphan(orphan);
+	}
+}
+
 /* FIXME: maybe, we can share code more with inode.c and iattr.c. */
 enum { ORPHAN_ATTR, };
 static unsigned orphan_asize[] = {
@@ -97,10 +129,25 @@ out:
 }
 
 /* Delete inum from sb->otable */
-int tux3_rollup_orphan_del(struct inode *inode)
+int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 {
-	struct btree *otable = otable_btree(tux_sb(inode->i_sb));
-	return purge_inum(otable, tux_inode(inode)->inum);
+	struct btree *otable = otable_btree(sb);
+	int err;
+
+	/* FIXME: we don't want to remove inum one by one */
+	while (!list_empty(orphan_del)) {
+		struct orphan *orphan =
+			list_entry(orphan_del->next, struct orphan, list);
+
+		err = purge_inum(otable, orphan->inum);
+		if (err)
+			return err;
+
+		list_del(&orphan->list);
+		free_orphan(orphan);
+	}
+
+	return 0;
 }
 
 /*
@@ -124,58 +171,51 @@ int tux3_mark_inode_orphan(struct inode *inode)
 	return 0;
 }
 
+/*
+ * FIXME: We may be able to merge this with inode deletion, and this
+ * may be able to be used for deferred inode deletion too with some
+ * tweaks.
+ */
+static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
+{
+	struct orphan *orphan = alloc_orphan(inum);
+	if (IS_ERR(orphan))
+		return PTR_ERR(orphan);
+
+	/* Add orphan deletion (from sb->otable) request. */
+	list_add(&orphan->list, &sb->orphan_del);
+
+	return 0;
+}
+
 /* Clear inode as orphan (inode was destroyed), and logging it. */
 int tux3_clear_inode_orphan(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	int err = 0;
 
 	if (!list_empty(&inode->orphan_list)) {
 		/* This orphan is not applied to sb->otable yet. */
 		list_del_init(&inode->orphan_list);
-		log_orphan_del(sb, sb->version, inode->inum);
 	} else {
-		/* This orphan was applied to sb->otable. */
-		err = tux3_rollup_orphan_del(inode);
+		/* This orphan was already applied to sb->otable. */
+		int err = add_defer_oprhan_del(sb, inode->inum);
+		if (err) {
+			/* FIXME: what to do? */
+			warn("orphan inum %Lu was leaved due to low memory",
+			     (L)inode->inum);
+			return err;
+		}
 	}
 
-	return err;
+	log_orphan_del(sb, sb->version, inode->inum);
+
+	return 0;
 }
 
 /*
  * On replay, we collects orphan logs at first. Then, we reconstruct
  * infos for orphan at end of replay.
  */
-struct orphan {
-	inum_t inum;
-	struct list_head list;
-};
-
-static struct orphan *alloc_orphan(inum_t inum)
-{
-	struct orphan *orphan = malloc(sizeof(struct orphan));
-	if (!orphan)
-		return ERR_PTR(-ENOMEM);
-
-	INIT_LIST_HEAD(&orphan->list);
-	orphan->inum = inum;
-	return orphan;
-}
-
-static void free_orphan(struct orphan *orphan)
-{
-	free(orphan);
-}
-
-void clean_orphan_list(struct list_head *head)
-{
-	while (!list_empty(head)) {
-		struct orphan *orphan =
-			list_entry(head->next, struct orphan, list);
-		list_del(&orphan->list);
-		free_orphan(orphan);
-	}
-}
 
 static struct orphan *replay_find_orphan(struct list_head *head, inum_t inum)
 {
@@ -215,11 +255,15 @@ int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum)
 		return 0;
 
 	orphan = replay_find_orphan(&rp->log_orphan_add, inum);
-	assert(orphan);
-	list_del(&orphan->list);
-	free_orphan(orphan);
+	if (orphan) {
+		/* There was prior LOG_ORPHAN_ADD, cancel it. */
+		list_del(&orphan->list);
+		free_orphan(orphan);
+		return 0;
+	}
 
-	return 0;
+	/* Orphan inum in sb->otable became dead. Add deletion request. */
+	return add_defer_oprhan_del(sb, inum);
 }
 
 /* Destroy or clean orphan inodes of destroy candidate */
@@ -277,6 +321,11 @@ static int load_enum_inode(struct btree *btree, inum_t inum, void *data)
 {
 	struct replay *rp = data;
 	struct sb *sb = rp->sb;
+
+	/* If inum is in orphan_del, it was dead already */
+	if (replay_find_orphan(&sb->orphan_del, inum))
+		return 0;
+
 	return load_orphan_inode(sb, inum, &rp->orphan_in_otable);
 }
 

@@ -266,6 +266,7 @@ struct sb {
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 
 	struct list_head orphan_add; /* defered orphan inode add list */
+	struct list_head orphan_del; /* defered orphan inode del list */
 
 	struct stash defree;	/* defer extent frees until after delta */
 	struct stash derollup;	/* defer extent frees until after rollup */
@@ -972,10 +973,11 @@ int defer_bfree(struct stash *defree, block_t block, unsigned count);
 void destroy_defer_bfree(struct stash *defree);
 
 /* orphan.c */
+void clean_orphan_list(struct list_head *head);
 int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add);
+int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del);
 int tux3_mark_inode_orphan(struct inode *inode);
 int tux3_clear_inode_orphan(struct inode *inode);
-void clean_orphan_list(struct list_head *head);
 int replay_orphan_add(struct replay *rp, unsigned version, inum_t inum);
 int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum);
 void replay_iput_orphan_inodes(struct sb *sb,
