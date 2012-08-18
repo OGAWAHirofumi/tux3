@@ -39,6 +39,8 @@
 #include "trace.h"
 #include "tux3user.h"
 
+#include <linux/fs.h>	/* for ioctl */
+
 #define FUSE_USE_VERSION 26
 #include <fuse.h>
 #include <fuse/fuse_lowlevel.h>
@@ -932,6 +934,28 @@ static void tux3fuse_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 	fuse_reply_err(req, ENOSYS);
 }
 
+static void tux3fuse_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+			   struct fuse_file_info *fi, unsigned flags,
+			   const void *in_buf, size_t in_bufsz,
+			   size_t out_bufsz)
+{
+	trace("(%lx, 0x%08x, %p, %p, %x, %p, %zu, %zu)",
+	      ino, cmd, arg, fi, flags, in_buf, in_bufsz, out_bufsz);
+
+	switch (cmd) {
+	case FS_IOC_GETFLAGS:
+	case FS_IOC_SETFLAGS:
+#if BITS_PER_LONG == 64
+	case FS_IOC32_GETFLAGS:
+	case FS_IOC32_SETFLAGS:
+#endif
+		fuse_reply_err(req, ENOTTY);
+		return;
+	}
+
+	fuse_reply_err(req, ENOTTY);
+}
+
 static struct fuse_lowlevel_ops tux3_ops = {
 	.init		= tux3fuse_init,
 	.destroy	= tux3fuse_destroy,
@@ -969,7 +993,7 @@ static struct fuse_lowlevel_ops tux3_ops = {
 	.setlk		= tux3fuse_setlk,
 #endif
 	.bmap		= tux3fuse_bmap,
-	/* .ioctl */
+	.ioctl		= tux3fuse_ioctl,
 	/* .poll */
 };
 
