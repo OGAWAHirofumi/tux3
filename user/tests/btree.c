@@ -168,6 +168,7 @@ int main(int argc, char *argv[])
 
 	sb->volmap = rapid_open_inode(sb, NULL, 0);
 	sb->logmap = rapid_open_inode(sb, dev_errio, 0);
+
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize),
 	printf("entries_per_node = %i\n", sb->entries_per_node);
 	struct btree btree = { };
@@ -227,5 +228,9 @@ int main(int argc, char *argv[])
 	free_cursor(cursor);
 	free_cursor(cursor2);
 	tree_chop(&btree, &(struct delete_info){ .key = 0 }, 0);
+
+	destroy_defer_bfree(&sb->derollup);
+	destroy_defer_bfree(&sb->defree);
+
 	exit(0);
 }

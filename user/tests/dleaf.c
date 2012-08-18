@@ -70,10 +70,15 @@ static void dwalk_probe_check(struct dwalk *walk, block_t index, struct diskexte
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 10 };
+	init_buffers(dev, 1 << 20, 0);
+
 	struct disksuper super = INIT_DISKSB(dev->bits, 150);
 	struct sb *sb = rapid_sb(dev);
 	sb->super = super;
 	setup_sb(sb, &super);
+
+	sb->logmap = tux_new_logmap(sb);
+	assert(sb->logmap);
 
 	printf("--- leaf test ---\n");
 	unsigned blocksize = sb->blocksize;
@@ -328,5 +333,11 @@ int main(int argc, char *argv[])
 		assert(nr == 5);
 		dleaf_destroy(btree, leaf1);
 	}
+
+	log_finish(sb);
+	destroy_defer_bfree(&sb->derollup);
+	destroy_defer_bfree(&sb->defree);
+	put_super(sb);
+
 	return 0;
 }
