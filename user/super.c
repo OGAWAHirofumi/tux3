@@ -28,6 +28,16 @@ static void clean_dirty_buffer(const char *str, struct list_head *head)
 		set_buffer_clean(buf);
 	}
 }
+
+static void clean_dirty_inode(const char *str, struct inode *inode)
+{
+	if (inode->state & I_DIRTY) {
+		trace(">>> clean %s inode i_count %d, state %x",
+		      str, atomic_read(&inode->i_count), inode->state);
+		del_defer_alloc_inum(inode);
+		clear_inode(inode);
+	}
+}
 #endif
 
 static void cleanup_garbage_for_debugging(struct sb *sb)
@@ -37,9 +47,16 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 	 * Pinned buffer is not flushing always, it is normal. So,
 	 * this clean those for unmount to check buffer debugging
 	 */
-	if (sb->bitmap)
+	if (sb->bitmap) {
 		clean_dirty_buffer("bitmap", &mapping(sb->bitmap)->dirty);
+		clean_dirty_inode("bitmap", sb->bitmap);
+	}
 	clean_dirty_buffer("pinned", &sb->pinned);
+
+	/* defree must be flushed for each delta */
+	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
+	destroy_defer_bfree(&sb->derollup);
+	destroy_defer_bfree(&sb->defree);
 #else /* !ATOMIC */
 	/*
 	 * Clean garbage (atomic commit) stuff. Don't forget to update

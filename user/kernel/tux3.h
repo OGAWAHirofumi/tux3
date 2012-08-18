@@ -888,6 +888,7 @@ extern struct btree_ops itable_ops;
 /* inode.c */
 struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
+void del_defer_alloc_inum(struct inode *inode);
 
 /* log.c */
 extern unsigned log_size[];
