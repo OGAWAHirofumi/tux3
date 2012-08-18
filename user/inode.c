@@ -246,6 +246,10 @@ error:
 	return err;
 }
 
+/*
+ * NOTE: iput() must not be called inside of change_begin/end() if
+ * i_nlink == 0.  Otherwise, it will become cause of deadlock.
+ */
 void iput(struct inode *inode)
 {
 	if (atomic_dec_and_test(&inode->i_count)) {
