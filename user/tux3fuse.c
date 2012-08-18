@@ -390,6 +390,42 @@ error:
 		fuse_reply_err(req, -err);
 }
 
+static void tux3fuse_symlink(fuse_req_t req, const char *link,
+			     fuse_ino_t parent, const char *name)
+{
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct tux_iattr iattr = {
+		.uid	= ctx->uid,
+		.gid	= ctx->gid,
+	};
+	struct inode *dir, *inode;
+	int err;
+
+	trace("('%s', %Lx, '%s')", link, (L)parent, name);
+
+	dir = tux3fuse_iget(sb, parent);
+	if (IS_ERR(dir)) {
+		err = -PTR_ERR(dir);
+		goto error;
+	}
+
+	inode = __tuxsymlink(dir, name, strlen(name), &iattr, link);
+	err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		struct fuse_entry_param ep;
+		tux3fuse_fill_ep(&ep, inode);
+		iput(inode);
+
+		fuse_reply_entry(req, &ep);
+		err = 0;
+	}
+	iput(dir);
+error:
+	if (err)
+		fuse_reply_err(req, -err);
+}
+
 static void tux3fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct sb *sb = tux3fuse_get_sb(req);
@@ -644,13 +680,6 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	fuse_reply_buf(req, NULL, 0);
 	free(buf);
-}
-
-static void tux3fuse_symlink(fuse_req_t req, const char *link,
-			     fuse_ino_t parent, const char *name)
-{
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
 }
 
 static void tux3fuse_statfs(fuse_req_t req, fuse_ino_t ino)

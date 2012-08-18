@@ -160,8 +160,8 @@ error_src:
 	return err;
 }
 
-int tuxsymlink(struct inode *dir, const char *name, unsigned len,
-	       struct tux_iattr *iattr, const char *symname)
+struct inode *__tuxsymlink(struct inode *dir, const char *name, unsigned len,
+			   struct tux_iattr *iattr, const char *symname)
 {
 	struct dentry dentry = {
 		.d_name.name = (unsigned char *)name,
@@ -169,17 +169,37 @@ int tuxsymlink(struct inode *dir, const char *name, unsigned len,
 	};
 	int err;
 
+	iattr->mode = S_IFLNK | S_IRWXUGO;
+	err = __tux3_symlink(dir, &dentry, iattr, symname);
+	if (err)
+		return ERR_PTR(err);
+	return dentry.d_inode;
+}
+
+int tuxsymlink(struct inode *dir, const char *name, unsigned len,
+	       struct tux_iattr *iattr, const char *symname)
+{
+	struct qstr qstr = {
+		.name = (unsigned char *)name,
+		.len = len,
+	};
+	struct inode *inode;
+	int err;
+
 	/*
 	 * FIXME: we can find space with existent check
 	 */
 
-	err = tux_check_exist(dir, &dentry.d_name);
+	err = tux_check_exist(dir, &qstr);
 	if (err)
 		return err;
 
-	err = __tux3_symlink(dir, &dentry, iattr, symname);
-	if (!err)
-		iput(dentry.d_inode);
+	inode = __tuxsymlink(dir, name, len, iattr, symname);
+	err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		iput(inode);
+		err = 0;
+	}
 
 	return err;
 }
