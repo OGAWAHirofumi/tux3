@@ -1,6 +1,8 @@
 #ifndef ATOMIC_COMMIT_H
 #define ATOMIC_COMMIT_H
 
+#include "buffer.h"
+
 /*
  * FIXME: this is for debug and information until complete
  * atomic-commit. Remove this after atomic-commit
@@ -30,7 +32,7 @@ static inline void mark_buffer_dirty_non(struct buffer_head *buffer)
 static inline void mark_buffer_rollup(struct buffer_head *buffer)
 {
 #ifdef ATOMIC
-	struct sb *sb = buffer_inode(buffer)->i_sb;
+	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 	if (!buffer_dirty(buffer)) {
 		unsigned rollup = sb->rollup;
 		set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(rollup),

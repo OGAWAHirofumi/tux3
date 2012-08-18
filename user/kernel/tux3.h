@@ -18,6 +18,7 @@
 #define die(code)		BUG_ON(1)
 
 #include "trace.h"
+#include "buffer.h"
 
 /*
  * Choose carefully:
@@ -213,20 +214,6 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 
 #ifdef __KERNEL__
 /* FIXME */
-#define DEFAULT_DIRTY_WHEN	0
-struct dirty_buffers {
-};
-
-/* Can we modify buffer from delta */
-static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
-{
-	return 1;
-}
-
-static inline void init_dirty_buffers(struct dirty_buffers *dirty)
-{
-}
-
 static inline int sync_inodes(struct sb *sb, unsigned delta)
 {
 	return 0;
