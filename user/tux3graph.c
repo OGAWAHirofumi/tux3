@@ -133,6 +133,31 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 static void draw_log(struct graph_info *gi, struct sb *sb,
 		     struct buffer_head *buffer)
 {
+	static const char *log_name[] = {
+#define X(x)	[x] = #x
+		X(LOG_BALLOC),
+		X(LOG_BFREE),
+		X(LOG_BFREE_ON_ROLLUP),
+		X(LOG_BFREE_RELOG),
+		X(LOG_LEAF_REDIRECT),
+		X(LOG_LEAF_FREE),
+		X(LOG_BNODE_REDIRECT),
+		X(LOG_BNODE_ROOT),
+		X(LOG_BNODE_SPLIT),
+		X(LOG_BNODE_ADD),
+		X(LOG_BNODE_UPDATE),
+		X(LOG_BNODE_MERGE),
+		X(LOG_BNODE_DEL),
+		X(LOG_BNODE_ADJUST),
+		X(LOG_BNODE_FREE),
+		X(LOG_FREEBLOCKS),
+		X(LOG_ROLLUP),
+		X(LOG_DELTA),
+#undef X
+	};
+	/* Check whether array is uptodate */
+	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
+
 	struct logblock *log = bufdata(buffer);
 	unsigned char *data = log->data;
 
@@ -147,6 +172,9 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		unsigned char code = *data++;
+
+		fprintf(gi->f, " | [%s] ", log_name[code]);
+
 		switch (code) {
 		case LOG_BALLOC:
 		case LOG_BFREE:
@@ -154,46 +182,26 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		case LOG_BFREE_RELOG: {
 			unsigned count = *data++;
 			u64 block;
-			char *name;
 			data = decode48(data, &block);
-			if (code == LOG_BALLOC)
-				name = "LOG_BALLOC";
-			else if (code == LOG_BFREE)
-				name = "LOG_BFREE";
-			else if (code == LOG_BFREE_ON_ROLLUP)
-				name = "LOG_BFREE_ON_ROLLUP";
-			else
-				name = "LOG_BFREE_RELOG";
-			fprintf(gi->f,
-				" | [%s] count %u, block %llu ",
-				name, count, (L)block);
+			fprintf(gi->f, "count %u, block %llu ",
+				count, (L)block);
 			break;
 		}
 		case LOG_LEAF_REDIRECT:
 		case LOG_BNODE_REDIRECT: {
 			u64 old, new;
-			char *name;
 			data = decode48(data, &old);
 			data = decode48(data, &new);
-			if (code == LOG_LEAF_REDIRECT)
-				name = "LOG_LEAF_REDIRECT";
-			else
-				name = "LOG_BNODE_REDIRECT";
-			fprintf(gi->f, " | [%s] old %llu, new %llu ",
-				name, (L)old, (L)new);
+			fprintf(gi->f, "old %llu, new %llu ",
+				(L)old, (L)new);
 			break;
 		}
 		case LOG_LEAF_FREE:
 		case LOG_BNODE_FREE: {
 			u64 block;
-			char *name;
 			data = decode48(data, &block);
-			if (code == LOG_LEAF_FREE)
-				name = "LOG_LEAF_FREE";
-			else
-				name = "LOG_BNODE_FREE";
-			fprintf(gi->f, " | [%s] %s %llu ",
-				name, code == LOG_LEAF_FREE ? "leaf" : "bnode",
+			fprintf(gi->f, "%s %llu ",
+				code == LOG_LEAF_FREE ? "leaf" : "bnode",
 				(L)block);
 			break;
 		}
@@ -205,8 +213,8 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &right);
 			data = decode48(data, &rkey);
 			fprintf(gi->f,
-				" | [LOG_BNODE_ROOT] count %u, root %llu, "
-				"left %llu, right %llu, right key %llu ",
+				"count %u, root %llu, left %llu, right %llu, "
+				"right key %llu ",
 				count, (L)root, (L)left, (L)right, (L)rkey);
 			break;
 		}
@@ -216,26 +224,18 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode16(data, &pos);
 			data = decode48(data, &src);
 			data = decode48(data, &dest);
-			fprintf(gi->f,
-				" | [LOG_BNODE_SPLIT] pos %u, src %llu, "
-				"dest %llu ",
+			fprintf(gi->f, "pos %u, src %llu, dest %llu ",
 				pos, (L)src, (L)dest);
 			break;
 		}
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE: {
 			u64 parent, child, key;
-			char *name;
 			data = decode48(data, &parent);
 			data = decode48(data, &child);
 			data = decode48(data, &key);
-			if (code == LOG_BNODE_ADD)
-				name = "LOG_BNODE_ADD";
-			else
-				name = "LOG_BNODE_UPDATE";
-			fprintf(gi->f,
-				" | [%s] parent %llu, child %llu, key %llu ",
-				name, (L)parent, (L)child, (L)key);
+			fprintf(gi->f, "parent %llu, child %llu, key %llu ",
+				(L)parent, (L)child, (L)key);
 			break;
 		}
 		case LOG_BNODE_MERGE:
@@ -243,9 +243,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 src, dst;
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
-			fprintf(gi->f,
-				" | [LOG_BNODE_MERGE] src %llu, dst %llu ",
-				(L)src, (L)dst);
+			fprintf(gi->f, "src %llu, dst %llu ", (L)src, (L)dst);
 			break;
 		}
 		case LOG_BNODE_DEL:
@@ -255,9 +253,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode16(data, &count);
 			data = decode48(data, &bnode);
 			data = decode48(data, &key);
-			fprintf(gi->f,
-				" | [LOG_BNODE_DEL] count %u, bnode %llu, "
-				"key %llu ",
+			fprintf(gi->f, "count %u, bnode %llu, key %llu ",
 				count, (L)bnode, (L)key);
 			break;
 		}
@@ -267,25 +263,18 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &node);
 			data = decode48(data, &from);
 			data = decode48(data, &to);
-			fprintf(gi->f,
-				" | [LOG_BNODE_ADJUST] node %llu, from %llu, "
-				"to %llu ",
+			fprintf(gi->f, "node %llu, from %llu, to %llu ",
 				(L)node, (L)from, (L)to);
 			break;
 		}
 		case LOG_FREEBLOCKS: {
 			u64 freeblocks;
 			data = decode48(data, &freeblocks);
-			fprintf(gi->f,
-				" | [LOG_FREEBLOCKS] freeblocks %llu ",
-				(L)freeblocks);
+			fprintf(gi->f, "freeblocks %llu ", (L)freeblocks);
 			break;
 		}
 		case LOG_ROLLUP:
-			fprintf(gi->f, " | [LOG_ROLLUP] ");
-			break;
 		case LOG_DELTA:
-			fprintf(gi->f, " | [LOG_DELTA] ");
 			break;
 		default:
 			fprintf(stderr, "Unknown log code 0x%x!\n", code);
