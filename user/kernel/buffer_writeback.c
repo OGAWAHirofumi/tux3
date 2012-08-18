@@ -2,6 +2,8 @@
  * Write back buffers
  */
 
+#include <linux/list_sort.h>
+
 /*
  * Helper for buffer vector I/O.
  */
@@ -196,10 +198,61 @@ int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count)
 	return i;
 }
 
+static int buffer_index_cmp(void *priv, struct list_head *a,
+			    struct list_head *b)
+{
+	struct buffer_head *buf_a, *buf_b;
+
+	buf_a = list_entry(a, struct buffer_head, b_assoc_buffers);
+	buf_b = list_entry(b, struct buffer_head, b_assoc_buffers);
+
+	if (bufindex(buf_a) < bufindex(buf_b))
+		return -1;
+	else if (bufindex(buf_a) > bufindex(buf_b))
+		return 1;
+	return 0;
+}
+
 /*
  * Flush buffers in head
  */
 int flush_list(struct list_head *head)
 {
-	return 0;
+	struct inode *inode;
+	struct bufvec bufvec;
+	struct buffer_head *buffer, *n;
+	int err = 0;
+
+	/* FIXME: on error path, we have to do something for buffer state */
+
+	if (list_empty(head))
+		return 0;
+
+	bufvec_init(&bufvec);
+
+	/* Sort by bufindex() */
+	list_sort(NULL, head, buffer_index_cmp);
+
+	/* Use first buffer to get inode, all should be for this inode. */
+	buffer = list_entry(head->next, struct buffer_head, b_assoc_buffers);
+	inode = buffer_inode(buffer);
+
+	list_for_each_entry_safe(buffer, n, head, b_assoc_buffers) {
+		assert(buffer_dirty(buffer));
+		while (!bufvec_add(&bufvec, buffer)) {
+			err = tux_inode(inode)->io(WRITE, &bufvec);
+			if (err)
+				goto error;
+		}
+	}
+	while (bufvec_count(&bufvec)) {
+		err = tux_inode(inode)->io(WRITE, &bufvec);
+		if (err)
+			goto error;
+	}
+
+error:
+	bufvec_free(&bufvec);
+
+	return err;
 }

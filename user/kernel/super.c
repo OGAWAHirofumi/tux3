@@ -176,6 +176,7 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	tuxi->btree = (struct btree){ };
 	tuxi->present = 0;
 	tuxi->xcache = NULL;
+	tuxi->io = NULL;
 
 	/* uninitialized stuff by alloc_inode() */
 	tuxi->vfs_inode.i_version = 1;

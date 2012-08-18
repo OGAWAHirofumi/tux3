@@ -306,7 +306,10 @@ typedef struct {
 	struct list_head dirty_list; /* link for dirty inode list */
 	struct list_head alloc_list; /* link for deferred inum allocation */
 	struct list_head orphan_list; /* link for orphan inode list */
+
 	struct dirty_buffers dirty; /* list for dirty buffers */
+	int (*io)(int rw, struct bufvec *bufvec);
+
 	struct inode vfs_inode;	/* Generic kernel inode */
 } tuxnode_t;
 
