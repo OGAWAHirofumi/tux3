@@ -62,9 +62,9 @@ struct buffer_head *blockget(map_t *map, block_t block);
 struct buffer_head *blockread(map_t *map, block_t block);
 void insert_buffer_hash(struct buffer_head *buffer);
 void remove_buffer_hash(struct buffer_head *buffer);
+int flush_list(struct list_head *list);
 int flush_buffers(map_t *map);
 int flush_state(unsigned state);
-void evict_buffer(struct buffer_head *buffer);
 void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
@@ -82,11 +82,6 @@ static inline unsigned bufsize(struct buffer_head *buffer)
 static inline block_t bufindex(struct buffer_head *buffer)
 {
 	return buffer->index;
-}
-
-static inline void get_bh(struct buffer_head *buffer)
-{
-	buffer->count++;
 }
 
 static inline int bufcount(struct buffer_head *buffer)
@@ -109,6 +104,7 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return buffer->state >= BUFFER_DIRTY;
 }
 
+void get_bh(struct buffer_head *buffer);
 int dev_errio(struct buffer_head *buffer, int write);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);

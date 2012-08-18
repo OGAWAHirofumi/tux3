@@ -33,7 +33,10 @@
 
 #define SECTOR_BITS 9
 #define SECTOR_SIZE (1 << SECTOR_BITS)
+
 #define BUFFER_PARANOIA_DEBUG
+static int debug_buffer;
+
 typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
 
 static struct list_head buffers[BUFFER_STATES], lru_buffers;
@@ -61,7 +64,7 @@ void show_buffers_(map_t *map, int all)
 
 		printf("[%i] ", i);
 		hlist_for_each_entry(buffer, node, bucket, hashlink) {
-			if (all || buffer->count)
+			if (all || buffer->count >= !hlist_unhashed(&buffer->hashlink) + 1)
 				show_buffer(buffer);
 		}
 		printf("\n");
@@ -103,6 +106,19 @@ void show_buffers_state(unsigned state)
 	show_buffer_list(buffers + state);
 }
 
+int count_buffers(void)
+{
+	struct buffer_head *safe, *buffer;
+	int count = 0;
+	list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
+		if (buffer->count <= !hlist_unhashed(&buffer->hashlink))
+			continue;
+		trace_off("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count);
+		count++;
+	}
+	return count;
+}
+
 void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
 {
 	list_move_tail(&buffer->link, list);
@@ -134,25 +150,64 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return buffer;
 }
 
-void blockput_free(struct buffer_head *buffer)
+#ifdef BUFFER_PARANOIA_DEBUG
+static void __free_buffer(struct buffer_head *buffer)
 {
-	if (bufcount(buffer) != 1) {
-		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
-		blockput(buffer);
-		assert(bufcount(buffer) == 0);
+	list_del(&buffer->link);
+	free(buffer->data);
+	free(buffer);
+}
+#endif
+
+static void free_buffer(struct buffer_head *buffer)
+{
+#ifdef BUFFER_PARANOIA_DEBUG
+	if (debug_buffer) {
+		__free_buffer(buffer);
+		buffer_count--;
 		return;
 	}
-	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
-	blockput(buffer);
+#endif
+	/* insert at head, not tail? */
+	set_buffer_state(buffer, BUFFER_FREED);
+	buffer->map = NULL;
+	buffer_count--;
 }
 
 void blockput(struct buffer_head *buffer)
 {
-	assert(buffer != NULL);
+	assert(buffer);
+	assert(buffer->count > 0);
 	buftrace("Release buffer %Lx, count = %i, state = %i", (L)buffer->index, buffer->count, buffer->state);
-	assert(buffer->count);
-	if (!--buffer->count)
+	buffer->count--;
+	if (buffer->count == 0) {
 		buftrace("Free buffer %Lx", (L)buffer->index);
+		assert(!buffer_dirty(buffer));
+		assert(hlist_unhashed(&buffer->hashlink));
+		assert(list_empty(&buffer->lru));
+		free_buffer(buffer);
+	}
+}
+
+void get_bh(struct buffer_head *buffer)
+{
+	assert(buffer->count >= 1);
+	buffer->count++;
+}
+
+void blockput_free(struct buffer_head *buffer)
+{
+	assert(buffer_dirty(buffer));
+
+	if (bufcount(buffer) != 2) { /* caller + hashlink == 2 */
+		warn("free block %Lx/%x still in use!",
+		     (L)bufindex(buffer), bufcount(buffer));
+		blockput(buffer);
+		assert(bufcount(buffer) == 1);
+		return;
+	}
+	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
+	blockput(buffer);
 }
 
 unsigned buffer_hash(block_t block)
@@ -162,7 +217,9 @@ unsigned buffer_hash(block_t block)
 
 void insert_buffer_hash(struct buffer_head *buffer)
 {
-	struct hlist_head *bucket = buffer->map->hash + buffer_hash(buffer->index);
+	map_t *map = buffer->map;
+	struct hlist_head *bucket = map->hash + buffer_hash(buffer->index);
+	get_bh(buffer); /* get additonal refcount for hashlink */
 	hlist_add_head(&buffer->hashlink, bucket);
 	list_add_tail(&buffer->lru, &lru_buffers);
 }
@@ -171,26 +228,25 @@ void remove_buffer_hash(struct buffer_head *buffer)
 {
 	list_del_init(&buffer->lru);
 	hlist_del_init(&buffer->hashlink);
+	blockput(buffer); /* put additonal refcount for hashlink */
 }
 
-void evict_buffer(struct buffer_head *buffer)
+static void evict_buffer(struct buffer_head *buffer)
 {
 	buftrace("evict buffer [%Lx]", (L)buffer->index);
 	assert(buffer_clean(buffer) || buffer_empty(buffer));
-	assert(!buffer->count);
+	assert(buffer->count == 1);
 	remove_buffer_hash(buffer);
-	buffer->map = NULL;
-	set_buffer_state(buffer, BUFFER_FREED); /* insert at head, not tail? */
-	buffer_count--;
 }
 
 struct buffer_head *new_buffer(map_t *map)
 {
 	struct buffer_head *buffer = NULL;
+	struct list_head *freed_list = &buffers[BUFFER_FREED];
 	int err;
 
-	if (!list_empty(buffers + BUFFER_FREED)) {
-		buffer = list_entry(buffers[BUFFER_FREED].next, struct buffer_head, link);
+	if (!list_empty(freed_list)) {
+		buffer = list_entry(freed_list->next, struct buffer_head, link);
 		goto have_buffer;
 	}
 
@@ -200,7 +256,7 @@ struct buffer_head *new_buffer(map_t *map)
 		int count = 0;
 	
 		list_for_each_entry_safe(victim, safe, &lru_buffers, lru) {
-			if (victim->count != 0)
+			if (victim->count != 1)
 				continue;
 			if (buffer_clean(victim) || buffer_empty(victim)) {
 				evict_buffer(victim);
@@ -209,8 +265,8 @@ struct buffer_head *new_buffer(map_t *map)
 			}
 		}
 
-		if (!list_empty(buffers + BUFFER_FREED)) {
-			buffer = list_entry(buffers[BUFFER_FREED].next, struct buffer_head, link);
+		if (!list_empty(freed_list)) {
+			buffer = list_entry(freed_list->next, struct buffer_head, link);
 			goto have_buffer;
 		}
 	}
@@ -218,42 +274,34 @@ struct buffer_head *new_buffer(map_t *map)
 	buftrace("expand buffer pool");
 	if (buffer_count == max_buffers) {
 		warn("Maximum buffer count exceeded (%i)", buffer_count);
-		return ERR_PTR(-ERANGE);
+		return ERR_PTR(-ENOMEM);
 	}
-	buffer = (struct buffer_head *)malloc(sizeof(struct buffer_head));
+
+	buffer = malloc(sizeof(struct buffer_head));
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
 	*buffer = (struct buffer_head){
-		.link = LIST_HEAD_INIT(buffer->link),
-		.lru = LIST_HEAD_INIT(buffer->lru),
+		.state	= BUFFER_FREED,
+		.link	= LIST_HEAD_INIT(buffer->link),
+		.lru	= LIST_HEAD_INIT(buffer->lru),
 	};
 	INIT_HLIST_NODE(&buffer->hashlink);
-	if ((err = -posix_memalign((void **)&(buffer->data), SECTOR_SIZE, 1 << map->dev->bits))) {
+
+	err = posix_memalign(&buffer->data, SECTOR_SIZE, 1 << map->dev->bits);
+	if (err) {
 		warn("Error: %s unable to expand buffer pool", strerror(err));
 		free(buffer);
-		return ERR_PTR(err);
+		return ERR_PTR(-err);
 	}
+
 have_buffer:
-	assert(!buffer->count);
+	assert(buffer->count == 0);
 	assert(buffer->state == BUFFER_FREED);
-	set_buffer_empty(buffer);
 	buffer->map = map;
-	buffer->count++;
+	buffer->count = 1;
+	set_buffer_empty(buffer);
 	buffer_count++;
 	return buffer;
-}
-
-int count_buffers(void)
-{
-	struct buffer_head *safe, *buffer;
-	int count = 0;
-	list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
-		if (!buffer->count)
-			continue;
-		trace_off("buffer %Lx has non-zero count %d", (long long)buffer->index, buffer->count);
-		count++;
-	}
-	return count;
 }
 
 struct buffer_head *peekblk(map_t *map, block_t block)
@@ -261,11 +309,12 @@ struct buffer_head *peekblk(map_t *map, block_t block)
 	struct hlist_head *bucket = map->hash + buffer_hash(block);
 	struct buffer_head *buffer;
 	struct hlist_node *node;
-	hlist_for_each_entry(buffer, node, bucket, hashlink)
+	hlist_for_each_entry(buffer, node, bucket, hashlink) {
 		if (buffer->index == block) {
-			buffer->count++;
+			get_bh(buffer);
 			return buffer;
 		}
+	}
 	return NULL;
 }
 
@@ -274,14 +323,17 @@ struct buffer_head *blockget(map_t *map, block_t block)
 	struct hlist_head *bucket = map->hash + buffer_hash(block);
 	struct buffer_head *buffer;
 	struct hlist_node *node;
-	hlist_for_each_entry(buffer, node, bucket, hashlink)
+	hlist_for_each_entry(buffer, node, bucket, hashlink) {
 		if (buffer->index == block) {
 			list_move_tail(&buffer->lru, &lru_buffers);
-			buffer->count++;
+			get_bh(buffer);
 			return buffer;
 		}
+	}
+
 	buftrace("make buffer [%Lx]", (L)block);
-	if (IS_ERR(buffer = new_buffer(map)))
+	buffer = new_buffer(map);
+	if (IS_ERR(buffer))
 		return NULL; // ERR_PTR me!!!
 	buffer->index = block;
 	insert_buffer_hash(buffer);
@@ -341,7 +393,7 @@ void invalidate_buffers(map_t *map)
 		struct buffer_head *buffer;
 		struct hlist_node *node, *n;
 		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
-			if (!buffer->count) {
+			if (buffer->count == 1) {
 				if (!buffer_empty(buffer))
 					set_buffer_empty(buffer);
 				evict_buffer(buffer);
@@ -374,35 +426,21 @@ int flush_state(unsigned state)
 	return flush_list(buffers + state);
 }
 
-static int debug_buffer;
-
 #ifdef BUFFER_PARANOIA_DEBUG
-static void free_buffer(struct buffer_head *buffer)
-{
-	if (list_empty(&buffer->lru))
-		assert(hlist_unhashed(&buffer->hashlink));
-	else
-		assert(!hlist_unhashed(&buffer->hashlink));
-	list_del(&buffer->lru);
-	list_del(&buffer->link);
-	free(buffer->data);
-	free(buffer);
-}
-
 static void __destroy_buffers(void)
 {
 	struct buffer_head *buffer, *safe;
 	struct list_head *head;
+
+	/* If debug_buffer, buffer should already be freed */
+
 	for (int i = 0; i < BUFFER_STATES; i++) {
 		head = buffers + i;
-		list_for_each_entry_safe(buffer, safe, head, link) {
-			if (debug_buffer) {
-				if (BUFFER_DIRTY <= i)
-					continue;
-				if (buffer->count || i != buffer->state)
-					continue;
+		if (!debug_buffer) {
+			list_for_each_entry_safe(buffer, safe, head, link) {
+				list_del(&buffer->lru);
+				__free_buffer(buffer);
 			}
-			free_buffer(buffer);
 		}
 		if (!list_empty(head)) {
 			warn("state %d: buffer leak, or list corruption?", i);
@@ -414,17 +452,19 @@ static void __destroy_buffers(void)
 		}
 		assert(list_empty(head));
 	}
-#if 1
-	int has_dirty = 0;
-	list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
-		if (BUFFER_DIRTY <= buffer->state) {
-			if (!debug_buffer)
-				free_buffer(buffer);
-			else
-				has_dirty = 1;
+
+	/*
+	 * If buffer is dirty, it may not be on buffers state list
+	 * (e.g. buffer may be on map->dirty).
+	 */
+	if (!debug_buffer) {
+		list_for_each_entry_safe(buffer, safe, &lru_buffers, lru) {
+			assert(buffer_dirty(buffer));
+			list_del(&buffer->lru);
+			__free_buffer(buffer);
 		}
 	}
-	if (has_dirty) {
+	if (!list_empty(&lru_buffers)) {
 		warn("dirty buffer leak, or list corruption?");
 		list_for_each_entry(buffer, &lru_buffers, lru) {
 			if (BUFFER_DIRTY <= buffer->state) {
@@ -435,20 +475,15 @@ static void __destroy_buffers(void)
 		printf("\n");
 		assert(list_empty(&lru_buffers));
 	}
-#else
-	assert(list_empty(&lru_buffers));
-#endif
 }
 
 static void destroy_buffers(void)
 {
 	atexit(__destroy_buffers);
 }
-#endif
-
-#ifndef BUFFER_PARANOIA_DEBUG
+#else /* !BUFFER_PARANOIA_DEBUG */
 static struct buffer_head *prealloc_heads;
-static unsigned char *data_pool;
+static void *data_pool;
 
 static int preallocate_buffers(unsigned bufsize)
 {
@@ -459,17 +494,19 @@ static int preallocate_buffers(unsigned bufsize)
 	if (!prealloc_heads)
 		goto buffers_allocation_failure;
 	buftrace("Pre-allocating data for buffers...");
-	if ((err = posix_memalign((void **)&data_pool, (1 << SECTOR_BITS), max_buffers*bufsize)))
+	err = posix_memalign(&data_pool, 1 << SECTOR_BITS, max_buffers*bufsize);
+	if (err)
 		goto data_allocation_failure;
 
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
-	for(i = 0; i < max_buffers; i++) {
+	for (i = 0; i < max_buffers; i++) {
 		prealloc_heads[i] = (struct buffer_head){
-			.data = (data_pool + i*bufsize),
-			.state = BUFFER_FREED,
-			.lru = LIST_HEAD_INIT(prealloc_heads[i].lru),
+			.data	= data_pool + i*bufsize,
+			.state	= BUFFER_FREED,
+			.lru	= LIST_HEAD_INIT(prealloc_heads[i].lru),
 		};
 		INIT_HLIST_NODE(&prealloc_heads[i].hashlink);
+
 		list_add_tail(&prealloc_heads[i].link, buffers + BUFFER_FREED);
 	}
 
@@ -480,7 +517,7 @@ data_allocation_failure:
 	free(prealloc_heads);
 buffers_allocation_failure:
 	warn("Unable to pre-allocate buffers. Using on demand allocation for buffers");
-	return err;
+	return -err;
 }
 #endif /* !BUFFER_PARANOIA_DEBUG */
 
@@ -533,7 +570,10 @@ int dev_errio(struct buffer_head *buffer, int write)
 map_t *new_map(struct dev *dev, blockio_t *io)
 {
 	map_t *map = malloc(sizeof(*map)); // error???
-	*map = (map_t){ .dev = dev, .io = io ? io : dev_blockio };
+	*map = (map_t){
+		.dev	= dev,
+		.io	= io ? io : dev_blockio
+	};
 	INIT_LIST_HEAD(&map->dirty);
 	for (int i = 0; i < BUFFER_BUCKETS; i++)
 		INIT_HLIST_HEAD(&map->hash[i]);

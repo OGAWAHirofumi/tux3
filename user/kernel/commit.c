@@ -101,30 +101,12 @@ void clean_buffer(struct buffer_head *buffer)
 	if (hlist_unhashed(&buffer->hashlink)) {
 		set_buffer_clean(buffer);
 		blockput(buffer);
-		evict_buffer(buffer);
 	} else
 		set_buffer_clean(buffer);
 #endif
 }
 
 /* Delta transition */
-
-static int flush_buffer_list(struct sb *sb, struct list_head *head)
-{
-#ifndef __KERNEL__
-	/* FIXME: code should be share with flush_buffers() */
-	struct buffer_head *buffer;
-
-	while (!list_empty(head)) {
-		buffer = list_entry(head->next, struct buffer_head, link);
-		trace(">>> flush buffer %Lx:%Lx", (L)tux_inode(buffer_inode(buffer))->inum, (L)bufindex(buffer));
-		// mapping, index set but not hashed in mapping
-		buffer->map->io(buffer, 1);
-		evict_buffer(buffer);
-	}
-#endif
-	return 0;
-}
 
 static int relog_frontend_defer_as_bfree(struct sb *sb, u64 val)
 {
@@ -191,7 +173,7 @@ static int rollup_log(struct sb *sb)
 
 	/* bnode blocks */
 	trace("> flush pinned buffers %u", sb->rollup);
-	flush_buffer_list(sb, &sb->pinned);
+	flush_list(&sb->pinned);
 	trace("< done pinned buffers %u", sb->rollup);
 
 	/* map dirty bitmap blocks to disk and write out */
@@ -231,7 +213,7 @@ static int stage_delta(struct sb *sb)
 #else
 	/* what is this? */
 	/* leaf blocks */
-	return flush_buffer_list(sb, &sb->commit);
+	return flush_list(&sb->commit);
 #endif
 }
 

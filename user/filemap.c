@@ -26,11 +26,10 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		/* Replace the buffer by cloned buffer. */
 		remove_buffer_hash(buffer);
 		insert_buffer_hash(clone);
+
 		/*
-		 * FIXME: The refcount of buffer is not dropped here,
-		 * the refcount may not be needed actually. Because
-		 * this buffer was removed from lru list. Well, so,
-		 * the backend has to free this buffer (blockput(buffer))
+		 * The refcount of buffer is used for backend. So, the
+		 * backend has to free this buffer (blockput(buffer))
 		 */
 		buffer = clone;
 	}
