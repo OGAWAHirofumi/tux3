@@ -57,8 +57,7 @@ struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 	 * FIXME: we can find space with existent check
 	 */
 
-	entry = tux_find_dirent(dir, dentry.d_name.name, dentry.d_name.len,
-				&buffer);
+	entry = tux_find_dirent(dir, &dentry.d_name, &buffer);
 	if (!IS_ERR(entry)) {
 		blockput(buffer);
 		return ERR_PTR(-EEXIST); // should allow create of a file that already exists!!!

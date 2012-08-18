@@ -183,12 +183,13 @@ create:
 	return (block << blockbits) + offset; /* only needed for xattr create */
 }
 
-int tux_create_dirent(struct inode *dir, const unsigned char *name,
-		      unsigned len, inum_t inum, umode_t mode)
+int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
+		      umode_t mode)
 {
 	loff_t where;
 
-	where = tux_create_entry(dir, (char *)name, len, inum, mode, &dir->i_size);
+	where = tux_create_entry(dir, (const char *)qstr->name, qstr->len, inum,
+				 mode, &dir->i_size);
 	if (where < 0)
 		return where;
 
@@ -234,10 +235,11 @@ error:
 	return ERR_PTR(err);
 }
 
-tux_dirent *tux_find_dirent(struct inode *dir, const unsigned char *name,
-			    unsigned len, struct buffer_head **result)
+tux_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,
+			    struct buffer_head **result)
 {
-	return tux_find_entry(dir, (char *)name, len, result, dir->i_size);
+	return tux_find_entry(dir, (const char *)qstr->name, qstr->len,
+			      result, dir->i_size);
 }
 
 static unsigned char filetype[TUX_TYPES] = {
