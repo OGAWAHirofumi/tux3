@@ -41,10 +41,14 @@ static inline u64 from_be_u64(be_u64 val)
 	return bswap_64((__force u64)val);
 }
 
-static inline be_u16 to_be_u16(u16 val)
+static inline be_u16 __to_be_u16(u16 val)
 {
 	return (__force be_u16)bswap_16(val);
 }
+#define to_be_u16(__x)						\
+	(__builtin_constant_p((u16)(__x)) ?			\
+	 (__force be_u16)__bswap_constant_16((u16)(__x)) :	\
+	 __to_be_u16(__x))
 
 static inline be_u32 to_be_u32(u32 val)
 {
