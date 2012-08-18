@@ -87,12 +87,13 @@ int main(int argc, char *argv[])
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 
 	if (1) { /* redirect test */
 		segs = d_map_region(inode, 5, 64, map, 10, 1);
-		block_t redirect_block = map[0].block + 5;
 		segs = d_map_region(inode, 10, 20, map, 10, 2);
 		segs = d_map_region(inode, 80, 10, map, 10, 2);
 		segs = d_map_region(inode, 0, 200, map, 10, 0);
@@ -100,11 +101,8 @@ int main(int argc, char *argv[])
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
-		/* free leaked blocks by redirect */
-		assert(!bfree(sb, redirect_block, 20));
-		/* free stash for valgrind */
-		destroy_defer_bfree(&sb->defree);
-		destroy_defer_bfree(&sb->derollup);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 
@@ -114,6 +112,8 @@ int main(int argc, char *argv[])
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 
@@ -124,6 +124,8 @@ int main(int argc, char *argv[])
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 	if (1) { /* another seek[0] and seek[1] are same position */
@@ -133,6 +135,8 @@ int main(int argc, char *argv[])
 		struct delete_info delinfo = { .key = 0, };
 		segs = tree_chop(&inode->btree, &delinfo, 0);
 		assert(!segs);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 
@@ -169,6 +173,8 @@ int main(int argc, char *argv[])
 		}
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 	if (1) {
@@ -194,6 +200,8 @@ int main(int argc, char *argv[])
 		assert(!segs);
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 	if (1) {
@@ -219,9 +227,12 @@ int main(int argc, char *argv[])
 		assert(!segs);
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, 0);
 		assert(segs == 1 && seg.count == INT_MAX && seg.state == SEG_HOLE);
+		err = unstash(sb, &sb->defree, apply_defered_bfree);
+		assert(!err);
 		sb->nextalloc = nextalloc;
 	}
 #if 1
+	/* Can't alloc contiguous range */
 	assert(balloc_from_range(sb, 0x10, 1, 1) >= 0);
 	sb->nextalloc = 0xf;
 	blockput_dirty(blockread(mapping(inode), 0x0));
@@ -230,6 +241,9 @@ int main(int argc, char *argv[])
 	printf("flush... %s\n", strerror(-flush_buffers(mapping(inode))));
 	invalidate_buffers(mapping(inode));
 	filemap_extent_io(blockget(mapping(inode), 1), 0);
+
+	destroy_defer_bfree(&sb->defree);
+
 	exit(0);
 #endif
 
