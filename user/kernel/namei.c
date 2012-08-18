@@ -211,7 +211,8 @@ static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 		err = tux_del_dirent(dir, dentry);
 		if (!err) {
 			inode->i_ctime = dir->i_ctime;
-			inode->i_size = 0;
+			/* FIXME: we need to do this for POSIX? */
+			/* inode->i_size = 0; */
 			clear_nlink(inode);
 			/* FIXME: we shouldn't write inode for i_nlink = 0? */
 			mark_inode_dirty_sync(inode);
