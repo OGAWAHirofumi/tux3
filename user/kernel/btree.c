@@ -650,6 +650,15 @@ static void add_child(struct bnode *node, struct index_entry *p, block_t child, 
 	node->count = to_be_u32(bcount(node) + 1);
 }
 
+static void bnode_split(struct bnode *src, unsigned pos, struct bnode *dst)
+{
+	dst->count = to_be_u32(bcount(src) - pos);
+	src->count = to_be_u32(pos);
+
+	memcpy(&dst->entries[0], &src->entries[pos],
+	       bcount(dst) * sizeof(struct index_entry));
+}
+
 /*
  * Insert new leaf to next cursor position.
  * keep == 1: keep current cursor position.
@@ -691,9 +700,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		struct bnode *newnode = bufdata(newbuf);
 		unsigned half = bcount(parent) / 2;
 		u64 newkey = from_be_u64(parent->entries[half].key);
-		newnode->count = to_be_u32(bcount(parent) - half);
-		memcpy(&newnode->entries[0], &parent->entries[half], bcount(newnode) * sizeof(struct index_entry));
-		parent->count = to_be_u32(half);
+
+		bnode_split(parent, half, newnode);
 		log_bnode_split(sb, bufindex(parentbuf), half, bufindex(newbuf));
 
 		/* if the cursor is in the new node, use that as the parent */
@@ -924,7 +932,6 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 int replay_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
 {
 	struct buffer_head *srcbuf, *dstbuf;
-	struct bnode *dstnode, *srcnode;
 	int err = 0;
 
 	srcbuf = vol_getblk(sb, src);
@@ -940,12 +947,7 @@ int replay_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
 	}
 	memset(bufdata(dstbuf), 0, bufsize(dstbuf));
 
-	srcnode = bufdata(srcbuf);
-	dstnode = bufdata(dstbuf);
-
-	dstnode->count = to_be_u32(bcount(srcnode) - pos);
-	memcpy(&dstnode->entries[0], &srcnode->entries[pos], bcount(dstnode) * sizeof(struct index_entry));
-	srcnode->count = to_be_u32(pos);
+	bnode_split(bufdata(srcbuf), pos, bufdata(dstbuf));
 
 	mark_buffer_rollup_non(srcbuf);
 	mark_buffer_rollup_atomic(dstbuf);
