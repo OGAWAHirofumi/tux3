@@ -897,6 +897,9 @@ void replay_iput_orphan_inodes(struct sb *sb,
 			       int destroy);
 int replay_load_orphan_inodes(struct replay *rp);
 
+/* super.c */
+struct replay *tux3_init_fs(struct sb *sbi);
+
 /* replay.c */
 struct replay *replay_stage1(struct sb *sb);
 int replay_stage2(struct replay *rp);

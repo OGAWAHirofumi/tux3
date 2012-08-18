@@ -111,43 +111,14 @@ int main(int argc, char *argv[])
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 2);
 
-	sb->volmap = tux_new_volmap(sb);
-	if (!sb->volmap) {
-		errno = ENOMEM;
-		goto eek;
-	}
-	sb->logmap = tux_new_logmap(sb);
-	if (!sb->logmap) {
-		errno = ENOMEM;
-		goto eek;
-	}
-
-	struct replay *rp = replay_stage1(sb);
+	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
 		errno = -PTR_ERR(rp);
-		goto eek;
-	}
-
-	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
-	if (IS_ERR(sb->bitmap)) {
-		errno = -PTR_ERR(sb->bitmap);
-		goto eek;
-	}
-	sb->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
-	if (IS_ERR(sb->rootdir)) {
-		errno = -PTR_ERR(sb->rootdir);
-		goto eek;
-	}
-	sb->atable = tux3_iget(sb, TUX_ATABLE_INO);
-	if (IS_ERR(sb->atable)) {
-		errno = -PTR_ERR(sb->atable);
 		goto eek;
 	}
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
 
-	if ((errno = -replay_stage2(rp)))
-		goto eek;
 	if ((errno = -replay_stage3(rp, 1)))
 		goto eek;
 

@@ -25,3 +25,9 @@ int bfree(struct sb *sb, block_t block, unsigned blocks)
 	trace("<- %Lx/%x", block, blocks);
 	return 0;
 }
+
+int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
+			 int set)
+{
+	return 0;
+}

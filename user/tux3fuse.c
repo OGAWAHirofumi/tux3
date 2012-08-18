@@ -83,41 +83,12 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 50 << 20, 2);
 
-	sb->volmap = tux_new_volmap(sb);
-	if (!sb->volmap) {
-		errno = ENOMEM;
-		goto error;
-	}
-	sb->logmap = tux_new_logmap(sb);
-	if (!sb->logmap) {
-		errno = ENOMEM;
-		goto error;
-	}
-
-	struct replay *rp = replay_stage1(sb);
+	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
 		errno = -PTR_ERR(rp);
 		goto error;
 	}
 
-	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
-	if (IS_ERR(sb->bitmap)) {
-		errno = -PTR_ERR(sb->bitmap);
-		goto error;
-	}
-	sb->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
-	if (IS_ERR(sb->rootdir)) {
-		errno = -PTR_ERR(sb->rootdir);
-		goto error;
-	}
-	sb->atable = tux3_iget(sb, TUX_ATABLE_INO);
-	if (IS_ERR(sb->atable)) {
-		errno = -PTR_ERR(sb->atable);
-		goto error;
-	}
-
-	if ((errno = -replay_stage2(rp)))
-		goto error;
 	if ((errno = -replay_stage3(rp, 1)))
 		goto error;
 

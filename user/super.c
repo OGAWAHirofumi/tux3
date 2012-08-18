@@ -14,6 +14,8 @@
 #define trace trace_on
 #endif
 
+#include "kernel/super.c"
+
 #ifdef ATOMIC
 static void clean_dirty_buffer(const char *str, struct list_head *head)
 {
@@ -63,8 +65,6 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 
 	/* defree must be flushed for each delta */
 	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
-	destroy_defer_bfree(&sb->derollup);
-	destroy_defer_bfree(&sb->defree);
 #else /* !ATOMIC */
 	/*
 	 * Clean garbage (atomic commit) stuff. Don't forget to update
@@ -77,7 +77,6 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 		invalidate_buffers(sb->logmap->map);
 
 	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
-	destroy_defer_bfree(&sb->defree);
 	assert(flink_empty(&sb->derollup.head));
 	assert(list_empty(&sb->pinned));
 #endif /* !ATOMIC */
@@ -92,18 +91,7 @@ int put_super(struct sb *sb)
 
 	cleanup_garbage_for_debugging(sb);
 
-	if (sb->vtable)
-		iput(sb->vtable);
-	if (sb->rootdir)
-		iput(sb->rootdir);
-	if (sb->atable)
-		iput(sb->atable);
-	if (sb->bitmap)
-		iput(sb->bitmap);
-	if (sb->logmap)
-		iput(sb->logmap);
-	if (sb->volmap)
-		iput(sb->volmap);
+	__tux3_put_super(sb);
 
 	inode_leak_check();
 

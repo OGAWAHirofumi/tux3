@@ -75,23 +75,10 @@ static struct replay *check_replay(struct sb *sb)
 {
 	/* Replay, and read file back */
 	test_assert(load_sb(sb) == 0);
-	sb->volmap = tux_new_volmap(sb);
-	test_assert(sb->volmap);
-	sb->logmap = tux_new_logmap(sb);
-	test_assert(sb->logmap);
 
-	struct replay *rp = replay_stage1(sb);
-	test_assert(!IS_ERR(rp));
-
-	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
-	test_assert(!IS_ERR(sb->bitmap));
-	sb->rootdir = tux3_iget(sb, TUX_ROOTDIR_INO);
-	test_assert(!IS_ERR(sb->rootdir));
-	sb->atable = tux3_iget(sb, TUX_ATABLE_INO);
-	test_assert(!IS_ERR(sb->atable));
+	struct replay *rp = tux3_init_fs(sb);
+	assert(!IS_ERR(rp));
 	sb->vtable = NULL;
-
-	test_assert(replay_stage2(rp) == 0);
 
 	return rp;
 }

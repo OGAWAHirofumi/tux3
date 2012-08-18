@@ -4,9 +4,96 @@
  * Licensed under the GPL version 2
  */
 
+#include "tux3.h"
+
+static void __tux3_put_super(struct sb *sbi)
+{
+	destroy_defer_bfree(&sbi->derollup);
+	destroy_defer_bfree(&sbi->defree);
+
+	iput(sbi->rootdir);
+	sbi->rootdir = NULL;
+	iput(sbi->atable);
+	sbi->atable = NULL;
+	iput(sbi->vtable);
+	sbi->vtable = NULL;
+	iput(sbi->bitmap);
+	sbi->bitmap = NULL;
+	iput(sbi->logmap);
+	sbi->logmap = NULL;
+	iput(sbi->volmap);
+	sbi->volmap = NULL;
+
+	/* FIXME: add more sanity check */
+	assert(list_empty(&sbi->alloc_inodes));
+}
+
+struct replay *tux3_init_fs(struct sb *sbi)
+{
+	struct replay *rp = NULL;
+	struct inode *inode;
+	int err;
+
+	err = -ENOMEM;
+
+	/* Prepare non on-disk inodes */
+	sbi->volmap = tux_new_volmap(sbi);
+	if (!sbi->volmap)
+		goto error;
+
+	sbi->logmap = tux_new_logmap(sbi);
+	if (!sbi->logmap)
+		goto error;
+
+	/* Replay physical structures */
+	rp = replay_stage1(sbi);
+	if (IS_ERR(rp)) {
+		err = PTR_ERR(rp);
+		goto error;
+	}
+
+	/* Load internal inodes */
+	inode = iget_or_create_inode(sbi, TUX_BITMAP_INO);
+	if (IS_ERR(inode))
+		goto error_inode;
+	sbi->bitmap = inode;
+#if 0
+	inode = tux3_iget(sbi, TUX_VTABLE_INO);
+	if (IS_ERR(inode))
+		goto error_inode;
+	sbi->vtable = inode;
+#endif
+	inode = tux3_iget(sbi, TUX_ATABLE_INO);
+	if (IS_ERR(inode))
+		goto error_inode;
+	sbi->atable = inode;
+
+	inode = tux3_iget(sbi, TUX_ROOTDIR_INO);
+	if (IS_ERR(inode))
+		goto error_inode;
+	sbi->rootdir = inode;
+
+	err = replay_stage2(rp);
+	if (err) {
+		rp = NULL;
+		goto error;
+	}
+
+	return rp;
+
+error_inode:
+	err = PTR_ERR(inode);
+error:
+	if (!IS_ERR_OR_NULL(rp))
+		replay_stage3(rp, 0);
+	__tux3_put_super(sbi);
+
+	return ERR_PTR(err);
+}
+
+#ifdef __KERNEL__
 #include <linux/module.h>
 #include <linux/statfs.h>
-#include "tux3.h"
 
 /* This will go to include/linux/magic.h */
 #ifndef TUX3_SUPER_MAGIC
@@ -95,14 +182,7 @@ static void tux3_put_super(struct super_block *sb)
 
 	tux3_write_super(sb);
 
-	destroy_defer_bfree(&sbi->derollup);
-	destroy_defer_bfree(&sbi->defree);
-	iput(sbi->atable);
-	iput(sbi->bitmap);
-	iput(sbi->volmap);
-	iput(sbi->logmap);
-
-	BUG_ON(!list_empty(&sbi->alloc_inodes));
+	__tux3_put_super(sbi);
 	sb->s_fs_info = NULL;
 	kfree(sbi);
 }
@@ -143,6 +223,7 @@ static const struct super_operations tux3_super_ops = {
 static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct sb *sbi;
+	struct replay *rp = NULL;
 	int err, blocksize;
 
 	sbi = kzalloc(sizeof(struct sb), GFP_KERNEL);
@@ -182,49 +263,32 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	}
 	warn("s_blocksize %lu", sb->s_blocksize);
 
-	err = -ENOMEM;
-	sbi->volmap = tux_new_volmap(sbi);
-	if (!sbi->volmap)
+	rp = tux3_init_fs(sbi);
+	if (IS_ERR(rp)) {
+		err = PTR_ERR(rp);
 		goto error;
+	}
 
-	sbi->logmap = tux_new_logmap(sbi);
-	if (!sbi->logmap)
-		goto error_logmap;
-
-//	struct inode *vtable;
-	sbi->bitmap = tux3_iget(sbi, TUX_BITMAP_INO);
-	err = PTR_ERR(sbi->bitmap);
-	if (IS_ERR(sbi->bitmap))
-		goto error_bitmap;
-
-	sbi->rootdir = tux3_iget(sbi, TUX_ROOTDIR_INO);
-	err = PTR_ERR(sbi->rootdir);
-	if (IS_ERR(sbi->rootdir))
-		goto error_rootdir;
-
-	sbi->atable = tux3_iget(sbi, TUX_ATABLE_INO);
-	err = PTR_ERR(sbi->atable);
-	if (IS_ERR(sbi->atable))
-		goto error_atable;
+	err = replay_stage3(rp, 1);
+	if (err) {
+		rp = NULL;
+		goto error;
+	}
 
 	sb->s_root = d_alloc_root(sbi->rootdir);
-	if (!sb->s_root)
-		goto error_alloc_root;
+	if (!sb->s_root) {
+		err = -ENOMEM;
+		goto error;
+	}
 
 	return 0;
 
-error_alloc_root:
-	iput(sbi->atable);
-error_atable:
-	iput(sbi->rootdir);
-error_rootdir:
-	iput(sbi->bitmap);
-error_bitmap:
-	iput(sbi->logmap);
-error_logmap:
-	iput(sbi->volmap);
 error:
+	if (!IS_ERR_OR_NULL(rp))
+		replay_stage3(rp, 0);
+	__tux3_put_super(sbi);
 	kfree(sbi);
+
 	return err;
 }
 
@@ -259,3 +323,4 @@ static void __exit exit_tux3(void)
 module_init(init_tux3);
 module_exit(exit_tux3);
 MODULE_LICENSE("GPL");
+#endif /* !__KERNEL__ */
