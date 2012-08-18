@@ -9,12 +9,6 @@
 #define __bitwise__
 #endif
 
-#ifdef __CHECK_ENDIAN__
-#define __bitwise __bitwise__
-#else
-#define __bitwise
-#endif
-
 #ifdef __GNUC__
 #define __packed	__attribute__((packed))
 #define __weak		__attribute__((weak))

@@ -9,8 +9,9 @@
 
 #include <libklib/list.h>
 #include <libklib/err.h>
-#include <libklib/bitops.h>
 #include <libklib/compiler.h>
+#include <libklib/types.h>
+#include <libklib/bitops.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)
@@ -78,17 +79,6 @@ extern int __build_bug_on_failed;
 	type __max2 = (y);			\
 	__max1 > __max2 ? __max1: __max2; })
 
-typedef signed char		s8;
-typedef unsigned char		u8;
-typedef signed short		s16;
-typedef unsigned short		u16;
-typedef signed int		s32;
-typedef unsigned int		u32;
-typedef signed long long	s64;
-typedef unsigned long long	u64;
-
-typedef unsigned short		umode_t;
-
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
 /*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
@@ -105,8 +95,6 @@ typedef unsigned short		umode_t;
 #endif
 
 /* Kernel page emulation for deferred free support */
-
-typedef unsigned __bitwise__ gfp_t;
 
 struct nameidata {
 };
