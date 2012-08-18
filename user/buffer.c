@@ -701,6 +701,18 @@ void free_map(map_t *map)
 }
 
 /*
+ * Helper for waiting I/O (stub)
+ */
+
+void tux3_iowait_init(struct iowait *iowait)
+{
+}
+
+void tux3_iowait_wait(struct iowait *iowait)
+{
+}
+
+/*
  * Buffer I/O vector
  */
 

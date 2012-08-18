@@ -138,6 +138,10 @@ static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 	return 0;
 }
 
+/* Helper for waiting I/O (stub) */
+struct iowait {
+};
+
 /* Vector for I/O */
 struct bufvec {
 	struct buffer_head **bufv;
@@ -220,6 +224,8 @@ void init_dirty_buffers(struct dirty_buffers *dirty);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
 
+void tux3_iowait_init(struct iowait *iowait);
+void tux3_iowait_wait(struct iowait *iowait);
 void bufvec_free(struct bufvec *bufvec);
 struct bufvec *bufvec_alloc(unsigned max_count);
 int bufvec_add(struct bufvec *bufvec, struct buffer_head *buffer);
