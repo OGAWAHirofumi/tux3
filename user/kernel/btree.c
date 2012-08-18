@@ -528,6 +528,24 @@ static void level_redirect_blockput(struct cursor *cursor, int level, struct buf
 	level_replace_blockput(cursor, level, clone, next);
 }
 
+/* FIXME: we might want to remove exception for leaf */
+static int cursor_need_redirect(struct sb *sb, int is_leaf,
+				struct buffer_head *buffer)
+{
+	/* If not dirty, need redirect */
+	if (!buffer_dirty(buffer))
+		return 1;
+
+	/* If buffer is dirty and leaf, doesn't need to redirect */
+	if (is_leaf)
+		return 0;
+
+	/* Can we modify buffer for sb->rollup? */
+	if (buffer_can_modify(buffer, sb->rollup))
+		return 0;
+	return 1;
+}
+
 int cursor_redirect(struct cursor *cursor)
 {
 #ifndef ATOMIC
@@ -542,11 +560,11 @@ int cursor_redirect(struct cursor *cursor)
 		struct buffer_head *buffer;
 		block_t uninitialized_var(oldblock);
 		block_t uninitialized_var(newblock);
-		int redirected = 0;
+		int redirected = 0, is_leaf = (level == btree->root.depth);
 
 		buffer = cursor->path[level].buffer;
-		/* If buffer is not dirty, redirect it to modify */
-		if (!buffer_dirty(buffer)) {
+		/* If buffer needs to redirect to dirty, redirect it */
+		if (cursor_need_redirect(sb, is_leaf, buffer)) {
 			redirected = 1;
 
 			/* Redirect buffer before changing */
@@ -557,7 +575,7 @@ int cursor_redirect(struct cursor *cursor)
 			newblock = bufindex(clone);
 			trace("redirect %Lx to %Lx", oldblock, newblock);
 			level_redirect_blockput(cursor, level, clone);
-			if (level == btree->root.depth) {
+			if (is_leaf) {
 				/* This is leaf buffer */
 				mark_buffer_dirty_atomic(clone);
 				log_leaf_redirect(sb, oldblock, newblock);
@@ -569,7 +587,7 @@ int cursor_redirect(struct cursor *cursor)
 			log_bnode_redirect(sb, oldblock, newblock);
 			defer_bfree(&sb->derollup, oldblock, 1);
 		} else {
-			if (level == btree->root.depth) {
+			if (is_leaf) {
 				/* This is leaf buffer */
 				goto parent_level;
 			}

@@ -36,7 +36,7 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 #ifndef __KERNEL__
 	INIT_LIST_HEAD(&sb->dirty_inodes);
 #endif
-	INIT_LIST_HEAD(&sb->pinned);
+	init_dirty_buffers(&sb->pinned);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
 
@@ -187,10 +187,12 @@ static int rollup_log(struct sb *sb)
 	 */
 	unstash(sb, &sb->derollup, relog_as_bfree);
 
-	/* bnode blocks */
-	trace("> flush pinned buffers %u", rollup);
-	flush_list(&sb->pinned);
-	trace("< done pinned buffers %u", rollup);
+	/*
+	 * Merge dirty bnode blocks buffers to volmap dirty list, then
+	 * bnode blocks will be flushed via volmap with leaves.
+	 */
+	list_splice_init(dirty_head_when(&sb->pinned, rollup),
+			 dirty_head(&mapping(sb->volmap)->dirty));
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", rollup);
@@ -233,11 +235,12 @@ static int stage_delta(struct sb *sb, unsigned delta)
 	return sync_inodes(sb, delta);
 }
 
-static int write_leaves(struct sb *sb, unsigned delta)
+static int write_btree(struct sb *sb, unsigned delta)
 {
 	/*
-	 * Flush leaves blocks.  FIXME: Now we are using DEFAULT_DIRTY_WHEN
-	 * for leaves. Do we need to per delta dirty buffers?
+	 * Flush leaves (and if there is rollup, bnodes too) blocks.
+	 * FIXME: Now we are using DEFAULT_DIRTY_WHEN for leaves. Do
+	 * we need to per delta dirty buffers?
 	 */
 	return sync_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
 }
@@ -357,7 +360,7 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 		log_delta(sb);
 	}
 
-	write_leaves(sb, delta);
+	write_btree(sb, delta);
 	write_log(sb);
 	commit_delta(sb);
 	trace("<<<<<<<<< commit done %u", delta);

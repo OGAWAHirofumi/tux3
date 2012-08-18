@@ -31,8 +31,11 @@ static inline void mark_buffer_rollup(struct buffer_head *buffer)
 {
 #ifdef ATOMIC
 	struct sb *sb = buffer_inode(buffer)->i_sb;
-	if (!buffer_dirty(buffer))
-		set_buffer_state_list(buffer, BUFFER_DIRTY, &sb->pinned);
+	if (!buffer_dirty(buffer)) {
+		unsigned rollup = sb->rollup;
+		set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(rollup),
+				      dirty_head_when(&sb->pinned, rollup));
+	}
 #else
 	mark_buffer_dirty(buffer);
 #endif

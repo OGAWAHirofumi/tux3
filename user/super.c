@@ -54,7 +54,7 @@ static void cleanup_garbage_for_debugging(struct sb *sb)
 		clean_dirty_buffer("bitmap", dirty_head_when(dirty, rollup));
 		clean_dirty_inode("bitmap", sb->bitmap);
 	}
-	clean_dirty_buffer("pinned", &sb->pinned);
+	clean_dirty_buffer("pinned", dirty_head_when(&sb->pinned, rollup));
 
 	/* orphan_add should be empty */
 	assert(&sb->orphan_add);

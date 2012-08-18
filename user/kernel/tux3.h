@@ -248,7 +248,7 @@ struct sb {
 	struct stash defree;	/* defer extent frees until after delta */
 	struct stash derollup;	/* defer extent frees until after rollup */
 
-	struct list_head pinned; /* dirty metadata not flushed per delta */
+	struct dirty_buffers pinned; /* dirty metadata not flushed per delta */
 
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 #ifdef __KERNEL__

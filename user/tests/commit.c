@@ -61,7 +61,7 @@ static void check_dirty(struct sb *sb)
 {
 	/* volmap only, because data buffers doesn't have block address yet */
 	check_dirty_list(sb, dirty_head(&mapping(sb->volmap)->dirty));
-	check_dirty_list(sb, &sb->pinned);
+	check_dirty_list(sb, dirty_head_when(&sb->pinned, sb->rollup));
 }
 
 struct open_result {
