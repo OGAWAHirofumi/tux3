@@ -18,6 +18,10 @@
 #include "kernel/dleaf.c"
 #include "kernel/ileaf.c"
 
+/* Style of table on dot language */
+#define TABLE_STYLE \
+	"border=\"0\" cellborder=\"1\" cellpadding=\"5\" cellspacing=\"0\""
+
 static const char itable_name[] = "itable";
 static const char otable_name[] = "otable";
 
@@ -793,13 +797,12 @@ static inline u16 ileaf_attr_size(be_u16 *dict, int at)
 	return size;
 }
 
-
 typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
 				  inum_t, u16);
 
 static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			 struct buffer_head *buffer,
-			 char *ileaf_name,
+			 const char *ileaf_name,
 			 draw_ileaf_attr_t draw_ileaf_attr)
 {
 	struct ileaf *ileaf = bufdata(buffer);
@@ -809,10 +812,16 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 
 	fprintf(gi->f,
 		"%s [\n"
-		"label = \"{ <%s0> [%s] (blocknr %llu%s)"
-		" | magic 0x%04x, count %u, ibase %llu",
-		ileaf_name, gi->lname,
-		gi->lname, (L)blocknr,
+		"label =\n"
+		"<<table " TABLE_STYLE ">\n"
+		"  <tr>\n"
+		"    <td port=\"%s0\">[%s] (blocknr %llu%s)</td>\n"
+		"  </tr>\n"
+		"  <tr>\n"
+		"    <td>magic 0x%04x, count %u, ibase %llu</td>\n"
+		"  </tr>\n",
+		ileaf_name,
+		gi->lname, gi->lname, (L)blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
 		ileaf->magic, icount(ileaf), (L)ibase(ileaf));
 
@@ -822,37 +831,43 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		if (!size)
 			continue;
 
-		inum_t inum = ibase(ileaf) + at;
+		fprintf(gi->f,
+			"  <tr>\n"
+			"    <td port=\"a%d\">",
+			at);
 
-		fprintf(gi->f, " | <a%d> attrs ", at);
+		inum_t inum = ibase(ileaf) + at;
 		draw_ileaf_attr(gi, btree, inum, size);
+
+		fprintf(gi->f,
+			"</td>\n"
+			"  </tr>\n");
 	}
 	fprintf(gi->f,
-		" | .....");
+		"  <tr>\n"
+		"   <td>.....</td>\n"
+		"  </tr>\n");
 
 	/* draw offset part */
-	for (at = icount(ileaf); at > 0; at--) {
-		if (at == icount(ileaf)) {
-			fprintf(gi->f,
-				" | <o%d> offset %u (at %d)",
-				at, atdict(dict, at), at);
-		} else {
-			fprintf(gi->f,
-				" | <o%d> offset %u (at %d, ino %llu, size %u)",
-				at, atdict(dict, at), at, (L)ibase(ileaf) + at,
-				ileaf_attr_size(dict, at));
-		}
+	for (at = icount(ileaf) - 1; at >= 0; at--) {
+		fprintf(gi->f,
+			"  <tr>\n"
+			"   <td port=\"o%d\">"
+			"limit %u (offset %u, size %u, ino %llu)</td>\n"
+			"  </tr>\n",
+			at, atdict(dict, at + 1), atdict(dict, at),
+			ileaf_attr_size(dict, at), (L)ibase(ileaf) + at);
 	}
 
 	fprintf(gi->f,
-		" }\"\n"
-		"shape = record\n"
+		"</table>>\n"
+		"shape = plaintext\n"
 		"%s"
 		"];\n",
 		buffer_dirty(buffer) ? "color = red\n" : "");
 
 	/* draw allows from offset to attributes */
-	for (at = 1; at < icount(ileaf); at++) {
+	for (at = 0; at < icount(ileaf); at++) {
 		if (!ileaf_attr_size(dict, at))
 			continue;
 
@@ -870,10 +885,18 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 	if (IS_ERR(inode))
 		error("inode couldn't get: inum %Lu", (L)inum);
 
-	fprintf(gi->f, "(ino %llu, size %u, block %llu, depth %d)",
+	int orphan = !list_empty(&inode->orphan_list);
+
+	fprintf(gi->f,
+		"%s"
+		"attrs (ino %llu, size %u, block %llu, depth %d%s)"
+		"%s",
+		orphan ? "<font color=\"blue\">" : "",
 		(L)inum, size,
 		(L)inode->btree.root.block,
-		inode->btree.root.depth);
+		inode->btree.root.depth,
+		orphan ? ", orphan" : "",
+		orphan ? "</font>" : "");
 
 	iput(inode);
 }
@@ -986,7 +1009,7 @@ out_iput:
 static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
 			    inum_t inum, u16 size)
 {
-	fprintf(gi->f, "(ino %llu, size %u)", (L)inum, size);
+	fprintf(gi->f, "attrs (ino %llu, size %u)", (L)inum, size);
 }
 
 static void draw_oleaf(struct graph_info *gi, struct btree *btree, struct buffer_head *buffer)
