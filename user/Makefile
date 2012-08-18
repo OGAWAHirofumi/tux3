@@ -21,6 +21,10 @@ CFLAGS	+= -Wno-missing-field-initializers
 #CFLAGS += -Wp,-Wunused-macros
 # gcc checker
 CFLAGS	+= -D_FORTIFY_SOURCE=2
+# gcov
+ifneq ($(GCOV),)
+CFLAGS	+= --coverage
+endif
 # use atomic-commit
 CFLAGS	+= -DATOMIC=1
 # user flags
@@ -40,6 +44,8 @@ INSTALL	= install
 TESTDIR	= $(TOPDIR)
 OWNER	= root
 GROUP	= root
+
+GCOV_DIR = gcov
 
 DISTDIR	=
 PREFIX	= /usr/local
@@ -133,11 +139,14 @@ endif
 clean:
 	rm -f $(ALL_BIN) $(TUX3_LIB) *.o tests/*.o kernel/*.o
 	rm -f a.out $(TESTDIR)/testdev
+	rm -f *.gcda tests/*.gcda kernel/*.gcda
+	rm -f *.gcno tests/*.gcno kernel/*.gcno
 	make -C tests clean
 
 distclean: clean
 	rm -f *.orig kernel/*.orig
 	rm -rf $(DEP_DIRS)
+	rm -rf $(GCOV_DIR)
 
 install: install-bin install-test
 
@@ -152,6 +161,12 @@ install-test: install-bin $(TEST_BIN)
 # tests rules
 tests: $(TEST_BIN)
 	make -C tests
+ifneq ($(GCOV),)
+	# Use lcov to summarize gcov data
+	[ -d $(GCOV_DIR) ] || mkdir $(GCOV_DIR)
+	lcov -b $(TOPDIR) -d $(TOPDIR) -c -o $(GCOV_DIR)/tux3.info
+	genhtml --show-details --legend -o $(GCOV_DIR) $(GCOV_DIR)/tux3.info
+endif
 
 makefs mkfs: tux3
 	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M
