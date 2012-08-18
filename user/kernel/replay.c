@@ -34,33 +34,64 @@ static const char *log_name[LOG_TYPES] = {
 #undef X
 };
 
+/* Load log blocks and pin. */
 static int replay_load_logblocks(struct sb *sb)
 {
 	block_t logchain = sb->logchain;
-	unsigned logcount = from_be_u32(sb->super.logcount);
+	unsigned j, i = from_be_u32(sb->super.logcount);
+	struct buffer_head *buffer;
+	int err;
 
-	/* Load log blocks */
-	trace("load %u logblocks", logcount);
-	for (int i = logcount; i-- > 0;) {
-		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
-		if (!buffer)
-			return -ENOMEM;
-		int err = blockio(0, buffer, logchain);
+	trace("load %u logblocks", i);
+	while (i-- > 0) {
+		buffer = blockget(mapping(sb->logmap), i);
+		if (!buffer) {
+			err = -ENOMEM;
+			goto error;
+		}
+		err = blockio(0, buffer, logchain);
 		if (err) {
 			blockput(buffer);
-			return err;
+			goto error;
 		}
+
 		struct logblock *log = bufdata(buffer);
 		if (log->magic != to_be_u16(TUX3_MAGIC_LOG)) {
 			warn("bad log magic %x", from_be_u16(log->magic));
 			blockput(buffer);
-			return -EINVAL;
+			err = -EINVAL;
+			goto error;
 		}
 		logchain = from_be_u64(log->logchain);
-		blockput(buffer);
 	}
 
 	return 0;
+
+error:
+	j = from_be_u32(sb->super.logcount);
+	while (--j > i) {
+		buffer = blockget(mapping(sb->logmap), j);
+		assert(buffer != NULL);
+		blockput(buffer);
+		blockput(buffer);
+	}
+	return err;
+}
+
+/* Unpin log blocks, and prepare for future logging. */
+static void replay_unload_logblocks(struct sb *sb)
+{
+	unsigned i = from_be_u32(sb->super.logcount);
+
+	while (i-- > 0) {
+		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
+		assert(buffer != NULL);
+		blockput(buffer);
+		blockput(buffer);
+	}
+
+	/* Update for future logblock position */
+	sb->logthis = sb->lognext = from_be_u32(sb->super.logcount);
 }
 
 typedef int (*replay_log_func_t)(struct sb *, struct logblock *, block_t);
@@ -275,16 +306,18 @@ out:
 
 int replay_stage1(struct sb *sb)
 {
-	int err;
-
-	err = replay_load_logblocks(sb);
-	if (err)
-		return err;
-
-	return replay_logblocks(sb, replay_log_stage1);
+	int err = replay_load_logblocks(sb);
+	if (!err) {
+		err = replay_logblocks(sb, replay_log_stage1);
+		if (err)
+			replay_unload_logblocks(sb);
+	}
+	return err;
 }
 
 int replay_stage2(struct sb *sb)
 {
-	return replay_logblocks(sb, replay_log_stage2);
+	int err = replay_logblocks(sb, replay_log_stage2);
+	replay_unload_logblocks(sb);
+	return err;
 }
