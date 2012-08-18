@@ -1049,12 +1049,6 @@ void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 void *decode_xattr(struct inode *inode, void *attrs);
 
-static inline void blockput_dirty(struct buffer_head *buffer)
-{
-	mark_buffer_dirty(buffer);
-	blockput(buffer);
-}
-
 static inline void mark_btree_dirty(struct btree *btree)
 {
 	if (btree != itable_btree(btree->sb) &&
