@@ -997,7 +997,16 @@ int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *l
 	return insert_leaf(cursor, key, leafbuf, 0);
 }
 
-static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
+/*
+ * Split leaf, then insert to parent.
+ * key:  key to add after split (cursor will point leaf which is including key)
+ * hint: hint for split
+ *
+ * return value:
+ *   0 - success
+ * < 0 - error
+ */
+static int btree_leaf_split(struct cursor *cursor, tuxkey_t key, tuxkey_t hint)
 {
 	trace("split leaf");
 	struct btree *btree = cursor->btree;
@@ -1009,7 +1018,8 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 	log_balloc(btree->sb, bufindex(newbuf), 1);
 
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
-	tuxkey_t newkey = (btree->ops->leaf_split)(btree, key, bufdata(leafbuf), bufdata(newbuf));
+	tuxkey_t newkey = btree->ops->leaf_split(btree, hint, bufdata(leafbuf),
+						 bufdata(newbuf));
 	if (key < newkey)
 		mark_buffer_dirty_non(newbuf);
 	else
@@ -1033,7 +1043,7 @@ void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 		if (space)
 			return space;
 		assert(!i);
-		err = btree_leaf_split(cursor, key);
+		err = btree_leaf_split(cursor, key, key);
 		if (err) {
 			warn("insert_node failed (%d)", err);
 			break;

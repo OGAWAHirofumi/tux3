@@ -77,19 +77,19 @@ static void uleaf_dump(struct btree *btree, vleaf *data)
 #endif
 }
 
-static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
+static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into)
 {
 	test_assert(uleaf_sniff(btree, from));
 	struct uleaf *leaf = from;
 	unsigned at = leaf->count / 2;
-	if (leaf->count && key > leaf->entries[leaf->count - 1].key) // binsearch!
+	if (leaf->count && hint > leaf->entries[leaf->count - 1].key) // binsearch!
 		at = leaf->count;
 	unsigned tail = leaf->count - at;
 	uleaf_init(btree, into);
 	veccopy(to_uleaf(into)->entries, leaf->entries + at, tail);
 	to_uleaf(into)->count = tail;
 	leaf->count = at;
-	return tail ? to_uleaf(into)->entries[0].key : key;
+	return tail ? to_uleaf(into)->entries[0].key : hint;
 }
 
 static unsigned uleaf_seek(struct btree *btree, tuxkey_t key, struct uleaf *leaf)

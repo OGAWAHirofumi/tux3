@@ -275,7 +275,7 @@ static int dleaf_split_at(vleaf *from, vleaf *into, int split, unsigned blocksiz
  * Split dleaf at middle in terms of entries, may be unbalanced in extents.
  * Not used for now because we do the splits by hand in filemap.c
  */
-static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into)
+static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into)
 {
 	struct dleaf *leaf = to_dleaf(from), *leaf2 = to_dleaf(into);
 	assert(dleaf_sniff(btree, from));

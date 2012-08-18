@@ -584,7 +584,7 @@ struct btree_ops {
 	void (*btree_init)(struct btree *btree);
 	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
 	int (*leaf_init)(struct btree *btree, vleaf *leaf);
-	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t key, vleaf *from, vleaf *into);
+	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into);
 	void *(*leaf_resize)(struct btree *btree, tuxkey_t key, vleaf *leaf, unsigned size);
 	void (*leaf_dump)(struct btree *btree, vleaf *leaf);
 	unsigned (*leaf_need)(struct btree *btree, vleaf *leaf);

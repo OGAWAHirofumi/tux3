@@ -181,16 +181,17 @@ static void ileaf_trim(struct btree *btree, struct ileaf *leaf)
 
 #define SPLIT_AT_INUM
 
-static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vleaf *into)
+static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
+			    vleaf *from, vleaf *into)
 {
 	assert(ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
 	be_u16 *dict = from + btree->sb->blocksize, *destdict = into + btree->sb->blocksize;
 
 #ifdef SPLIT_AT_INUM
-	trace("split at inum 0x%Lx", (L)inum);
-	assert(inum >= ibase(leaf));
-	unsigned at = min_t(tuxkey_t, inum - ibase(leaf), icount(leaf));
+	trace("split at inum 0x%Lx", (L)hint);
+	assert(hint >= ibase(leaf));
+	unsigned at = min_t(tuxkey_t, hint - ibase(leaf), icount(leaf));
 #else
 	/* binsearch inum starting nearest middle of block */
 	unsigned at = 1, hi = icount(leaf);
@@ -214,8 +215,8 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t inum, vleaf *from, vle
 		add_idict(destdict - i, -split);
 #ifdef SPLIT_AT_INUM
 	/* round down to multiple of 64 above ibase */
-	inum_t round = inum & ~(inum_t)(btree->entries_per_leaf - 1);
-	dest->ibase = to_be_u64(round > ibase(leaf) + icount(leaf) ? round : inum);
+	inum_t round = hint & ~(inum_t)(btree->entries_per_leaf - 1);
+	dest->ibase = to_be_u64(round > ibase(leaf) + icount(leaf) ? round : hint);
 #else
 	dest->ibase = to_be_u64(ibase(leaf) + at);
 #endif
