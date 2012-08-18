@@ -99,12 +99,11 @@ struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 	return __tuxmknod(dir, name, len, iattr, 0);
 }
 
-int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
-	    const char *dstname, unsigned dstlen)
+struct inode *__tuxlink(struct inode *src_inode, struct inode *dir,
+			const char *dstname, unsigned dstlen)
 {
 	struct dentry src = {
-		.d_name.name = (unsigned char *)srcname,
-		.d_name.len = srclen,
+		.d_inode = src_inode,
 	};
 	struct dentry dst = {
 		.d_name.name = (unsigned char *)dstname,
@@ -112,15 +111,29 @@ int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
 	};
 	int err;
 
-	err = tuxlookup(dir, &src);
+	err = tux3_link(&src, dir, &dst);
 	if (err)
-		return err;
-	if (S_ISDIR(src.d_inode->i_mode)) {
+		return ERR_PTR(err);
+	assert(dst.d_inode == src_inode);
+	return dst.d_inode;
+}
+
+int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
+	    const char *dstname, unsigned dstlen)
+{
+	struct inode *src_inode;
+	int err;
+
+	src_inode = tuxopen(dir, srcname, srclen);
+	if (IS_ERR(src_inode))
+		return PTR_ERR(src_inode);
+
+	if (S_ISDIR(src_inode->i_mode)) {
 		err = -EPERM;
 		goto error_src;
 	}
 	/* Orphaned inode. We shouldn't grab this. */
-	if (src.d_inode->i_nlink == 0) {
+	if (src_inode->i_nlink == 0) {
 		err = -ENOENT;
 		goto error_src;
 	}
@@ -129,17 +142,20 @@ int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
 	 * FIXME: we can find space with existent check
 	 */
 
-	err = tux_check_exist(dir, &dst.d_name);
+	struct qstr dststr = {
+		.name = (unsigned char *)dstname,
+		.len = dstlen,
+	};
+	err = tux_check_exist(dir, &dststr);
 	if (err)
 		goto error_src;
 
-	err = tux3_link(&src, dir, &dst);
-	if (!err) {
-		assert(dst.d_inode == src.d_inode);
-		iput(dst.d_inode);
-	}
+	struct inode *inode = __tuxlink(src_inode, dir, dstname, dstlen);
+	err = PTR_ERR(inode);
+	if (!err)
+		iput(inode);
 error_src:
-	iput(src.d_inode);
+	iput(src_inode);
 
 	return err;
 }

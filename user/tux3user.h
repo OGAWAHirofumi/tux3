@@ -166,6 +166,8 @@ struct inode *__tuxmknod(struct inode *dir, const char *name, unsigned len,
 			 struct tux_iattr *iattr, dev_t rdev);
 struct inode *tuxcreate(struct inode *dir, const char *name, unsigned len,
 			struct tux_iattr *iattr);
+struct inode *__tuxlink(struct inode *src_inode, struct inode *dir,
+			const char *dstname, unsigned dstlen);
 int tuxlink(struct inode *dir, const char *srcname, unsigned srclen,
 	    const char *dstname, unsigned dstlen);
 int tuxsymlink(struct inode *dir, const char *name, unsigned len,
