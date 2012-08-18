@@ -704,7 +704,6 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 	/* Chop all range if len >= TUXKEY_LIMIT */
 	limit = (len >= TUXKEY_LIMIT) ? TUXKEY_LIMIT : start + len;
 
-	cursor = alloc_cursor(btree, 0);
 	prev = malloc(sizeof(*prev) * btree->root.depth);
 	if (prev == NULL)
 		return -ENOMEM;
@@ -712,13 +711,21 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 
 	cii = malloc(sizeof(*cii) * btree->root.depth);
 	if (cii == NULL) {
-		free(prev);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto error_cii;
 	}
 	memset(cii, 0, sizeof(*cii) * btree->root.depth);
 
+	cursor = alloc_cursor(btree, 0);
+	if (!cursor) {
+		ret = -ENOMEM;
+		goto error_alloc_cursor;
+	}
+
 	down_write(&btree->lock);
-	btree_probe(cursor, start);
+	ret = btree_probe(cursor, start);
+	if (ret)
+		goto error_btree_probe;
 
 	/* Walk leaves */
 	while (1) {
@@ -830,13 +837,15 @@ out:
 		if (prev[i])
 			blockput(prev[i]);
 	}
-	free(prev);
-	free(cii);
 	release_cursor(cursor);
-
+error_btree_probe:
 	up_write(&btree->lock);
 
 	free_cursor(cursor);
+error_alloc_cursor:
+	free(cii);
+error_cii:
+	free(prev);
 
 	return ret;
 }
