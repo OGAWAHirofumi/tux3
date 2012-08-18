@@ -143,6 +143,12 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 	/* Check whether array is uptodate */
 	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
 
+	/* If log is before latest rollup, those were already applied to FS. */
+	if (bufindex(logbuf) < info->rollup_index)
+		return 0;
+	if (bufindex(logbuf) == info->rollup_index)
+		data = info->rollup_pos;
+
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
 		switch (code) {
@@ -226,6 +232,12 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 	block_t blocknr = info->blocknrs[bufindex(logbuf)];
 	unsigned char *data = log->data;
 	int err;
+
+	/* If log is before latest rollup, those were already applied to FS. */
+	if (bufindex(logbuf) < info->rollup_index)
+		return 0;
+	if (bufindex(logbuf) == info->rollup_index)
+		data = info->rollup_pos;
 
 	/* log block address itself works as balloc log */
 	trace("LOG BLOCK: logblock %Lx", (L)blocknr);
