@@ -9,6 +9,7 @@
  */
 
 #include "tux3.h"
+#include "dleaf.h"
 
 #ifndef trace
 #define trace trace_on
