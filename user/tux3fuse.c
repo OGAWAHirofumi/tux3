@@ -712,8 +712,22 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 static void tux3fuse_statfs(fuse_req_t req, fuse_ino_t ino)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct statvfs statvfs = {
+		.f_bsize	= sb->blocksize,
+		.f_frsize	= sb->blocksize,
+		.f_blocks	= sb->volblocks,
+		.f_bfree	= sb->freeblocks,
+		.f_bavail	= sb->freeblocks,
+		//.f_files	= ,
+		//.f_ffree	= ,
+		//.f_favail	= ,
+		//.f_fsid	= ,
+		//.f_flag	= ,
+		.f_namemax	= TUX_NAME_LEN,
+	};
+
+	fuse_reply_statfs(req, &statvfs);
 }
 
 static void tux3fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
