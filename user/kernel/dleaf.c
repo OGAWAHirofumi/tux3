@@ -822,16 +822,19 @@ static int dleaf_chop(struct btree *btree, tuxkey_t chop, vleaf *vleaf)
 		block_t block = dwalk_block(&walk);
 		unsigned count = chop - dwalk_index(&walk);
 
-		/* FIXME: err check? */
-		(btree->ops->bfree)(sb, block + count, dwalk_count(&walk) - count);
+		/* FIXME: should set buffer clean? */
+		defer_bfree(&sb->defree, block + count, dwalk_count(&walk) - count);
+		log_bfree(sb, block + count, dwalk_count(&walk) - count);
+
 		dwalk_update(&walk, make_extent(block, count));
 		if (!dwalk_next(&walk))
 			goto out;
 	}
 	struct dwalk rewind = walk;
 	do {
-		/* FIXME: err check? */
-		(btree->ops->bfree)(sb, dwalk_block(&walk), dwalk_count(&walk));
+		/* FIXME: should set buffer clean? */
+		defer_bfree(&sb->defree, dwalk_block(&walk), dwalk_count(&walk));
+		log_bfree(sb, dwalk_block(&walk), dwalk_count(&walk));
 	} while (dwalk_next(&walk));
 	dwalk_chop(&rewind);
 out:

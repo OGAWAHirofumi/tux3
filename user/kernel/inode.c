@@ -398,7 +398,7 @@ static int purge_inum(struct inode *inode)
 			/* FIXME: truncate the bnode and leaf if empty. */
 			struct ileaf *ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
 			ileaf_purge(itable, inum, ileaf);
-			mark_buffer_dirty(cursor_leafbuf(cursor));
+			mark_buffer_dirty_non(cursor_leafbuf(cursor));
 		}
 		release_cursor(cursor);
 	}
