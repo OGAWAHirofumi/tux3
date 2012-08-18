@@ -342,8 +342,8 @@ static void walk_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t d
 	if (cursor_read_root(cursor) < 0)
 		error("cursor_read_root() error");
 
-	buffer = cursor->path[cursor->len - 1].buffer;
-	child_is_leaf = btree->root.depth - 1 == cursor->len - 1;
+	buffer = cursor->path[cursor->level].buffer;
+	child_is_leaf = btree->root.depth - 1 == cursor->level;
 	draw_bnode(gi, child_is_leaf, buffer);
 
 	while (1) {
@@ -351,8 +351,8 @@ static void walk_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t d
 		if (ret < 0)
 			error("cursor_advance_down() error");
 		if (ret) {
-			buffer = cursor->path[cursor->len - 1].buffer;
-			child_is_leaf = btree->root.depth - 1 == cursor->len - 1;
+			buffer = cursor->path[cursor->level].buffer;
+			child_is_leaf = btree->root.depth - 1 == cursor->level;
 			draw_bnode(gi, child_is_leaf, buffer);
 			continue;
 		}

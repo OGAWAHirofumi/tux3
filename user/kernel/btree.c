@@ -97,20 +97,20 @@ static inline struct bnode *cursor_node(struct cursor *cursor, int level)
 
 struct buffer_head *cursor_leafbuf(struct cursor *cursor)
 {
-	assert(cursor->len - 1 == cursor->btree->root.depth);
-	return cursor->path[cursor->len - 1].buffer;
+	assert(cursor->level == cursor->btree->root.depth);
+	return cursor->path[cursor->level].buffer;
 }
 
 static void level_root_add(struct cursor *cursor, struct buffer_head *buffer,
 			   struct index_entry *next)
 {
 #ifdef CURSOR_DEBUG
-	assert(cursor->len < cursor->maxlen);
-	assert(cursor->path[cursor->len].buffer == FREE_BUFFER);
-	assert(cursor->path[cursor->len].next == FREE_NEXT);
+	assert(cursor->level < cursor->maxlevel);
+	assert(cursor->path[cursor->level + 1].buffer == FREE_BUFFER);
+	assert(cursor->path[cursor->level + 1].next == FREE_NEXT);
 #endif
-	vecmove(cursor->path + 1, cursor->path, cursor->len);
-	cursor->len++;
+	vecmove(cursor->path + 1, cursor->path, cursor->level + 1);
+	cursor->level++;
 	cursor->path[0].buffer = buffer;
 	cursor->path[0].next = next;
 }
@@ -119,7 +119,7 @@ static void level_replace_blockput(struct cursor *cursor, int level, struct buff
 {
 #ifdef CURSOR_DEBUG
 	assert(buffer);
-	assert(level < cursor->len);
+	assert(level <= cursor->level);
 	assert(cursor->path[level].buffer != FREE_BUFFER);
 	assert(cursor->path[level].next != FREE_NEXT);
 #endif
@@ -130,14 +130,14 @@ static void level_replace_blockput(struct cursor *cursor, int level, struct buff
 
 void level_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next)
 {
+	cursor->level++;
 #ifdef CURSOR_DEBUG
-	assert(cursor->len < cursor->maxlen);
-	assert(cursor->path[cursor->len].buffer == FREE_BUFFER);
-	assert(cursor->path[cursor->len].next == FREE_NEXT);
+	assert(cursor->level <= cursor->maxlevel);
+	assert(cursor->path[cursor->level].buffer == FREE_BUFFER);
+	assert(cursor->path[cursor->level].next == FREE_NEXT);
 #endif
-	cursor->path[cursor->len].buffer = buffer;
-	cursor->path[cursor->len].next = next;
-	cursor->len++;
+	cursor->path[cursor->level].buffer = buffer;
+	cursor->path[cursor->level].next = next;
 }
 
 static struct buffer_head *level_pop(struct cursor *cursor)
@@ -145,14 +145,14 @@ static struct buffer_head *level_pop(struct cursor *cursor)
 	struct buffer_head *buffer;
 
 #ifdef CURSOR_DEBUG
-	assert(cursor->len > 0);
+	assert(cursor->level >= 0);
 #endif
-	cursor->len--;
-	buffer = cursor->path[cursor->len].buffer;
+	buffer = cursor->path[cursor->level].buffer;
 #ifdef CURSOR_DEBUG
-	cursor->path[cursor->len].buffer = FREE_BUFFER;
-	cursor->path[cursor->len].next = FREE_NEXT;
+	cursor->path[cursor->level].buffer = FREE_BUFFER;
+	cursor->path[cursor->level].next = FREE_NEXT;
 #endif
+	cursor->level--;
 	return buffer;
 }
 
@@ -171,7 +171,7 @@ static inline int level_finished(struct cursor *cursor, int level)
 
 void release_cursor(struct cursor *cursor)
 {
-	while (cursor->len)
+	while (cursor->level >= 0)
 		level_pop_blockput(cursor);
 }
 
@@ -186,14 +186,14 @@ void show_cursor(struct cursor *cursor, int depth)
 
 static void cursor_check(struct cursor *cursor)
 {
-	if (cursor->len == 0)
+	if (cursor->level == -1)
 		return;
 	tuxkey_t key = 0;
 	block_t block = cursor->btree->root.block;
 
-	for (int i = 0; i < cursor->len; i++) {
+	for (int i = 0; i <= cursor->level; i++) {
 		assert(bufindex(cursor->path[i].buffer) == block);
-		if (i + 1 == cursor->len)
+		if (i == cursor->level)
 			break;
 
 		struct bnode *node = cursor_node(cursor, i);
@@ -205,22 +205,22 @@ static void cursor_check(struct cursor *cursor)
 	}
 }
 
-static inline int alloc_cursor_size(int maxlevel)
+static inline int alloc_cursor_size(int count)
 {
-	return sizeof(struct cursor) + sizeof(struct path_level) * maxlevel;
+	return sizeof(struct cursor) + sizeof(struct path_level) * count;
 }
 
 struct cursor *alloc_cursor(struct btree *btree, int extra)
 {
-	int maxlevel = btree->root.depth + 1 + extra;
-	struct cursor *cursor = malloc(alloc_cursor_size(maxlevel));
+	int maxlevel = btree->root.depth + extra;
+	struct cursor *cursor = malloc(alloc_cursor_size(maxlevel + 1));
 
 	if (cursor) {
 		cursor->btree = btree;
-		cursor->len = 0;
+		cursor->level = -1;
 #ifdef CURSOR_DEBUG
-		cursor->maxlen = maxlevel;
-		for (int i = 0; i < maxlevel; i++) {
+		cursor->maxlevel = maxlevel;
+		for (int i = 0; i <= maxlevel; i++) {
 			cursor->path[i].buffer = FREE_BUFFER; /* for debug */
 			cursor->path[i].next = FREE_NEXT; /* for debug */
 		}
@@ -232,7 +232,7 @@ struct cursor *alloc_cursor(struct btree *btree, int extra)
 void free_cursor(struct cursor *cursor)
 {
 #ifdef CURSOR_DEBUG
-	assert(cursor->len == 0);
+	assert(cursor->level == -1);
 #endif
 	free(cursor);
 }
@@ -253,8 +253,8 @@ static struct index_entry *bnode_lookup(struct bnode *node, tuxkey_t key)
 static int cursor_level_finished(struct cursor *cursor)
 {
 	/* must not be leaf */
-	assert(cursor->len - 1 < cursor->btree->root.depth);
-	return level_finished(cursor, cursor->len - 1);
+	assert(cursor->level < cursor->btree->root.depth);
+	return level_finished(cursor, cursor->level);
 }
 
 /*
@@ -283,9 +283,9 @@ static int cursor_read_root(struct cursor *cursor)
  */
 static int cursor_advance_up(struct cursor *cursor)
 {
-	assert(cursor->len != 0);
+	assert(cursor->level >= 0);
 	level_pop_blockput(cursor);
-	return cursor->len != 0;
+	return cursor->level >= 0;
 }
 
 /*
@@ -297,19 +297,18 @@ static int cursor_advance_up(struct cursor *cursor)
 static int cursor_advance_down(struct cursor *cursor)
 {
 	struct btree *btree = cursor->btree;
-	int level = cursor->len - 1;
 	struct buffer_head *buffer;
 	block_t child;
 
-	assert(cursor->len - 1 < btree->root.depth);
+	assert(cursor->level < btree->root.depth);
 
-	child = from_be_u64(cursor->path[level].next->block);
+	child = from_be_u64(cursor->path[cursor->level].next->block);
 	buffer = vol_bread(btree->sb, child);
 	if (!buffer)
 		return -EIO; /* FIXME: stupid, it might have been NOMEM */
-	cursor->path[level].next++;
+	cursor->path[cursor->level].next++;
 
-	if (cursor->len - 1 < btree->root.depth - 1) {
+	if (cursor->level < btree->root.depth - 1) {
 		struct bnode *node = bufdata(buffer);
 		level_push(cursor, buffer, node->entries);
 		cursor_check(cursor);
@@ -348,7 +347,7 @@ int cursor_advance(struct cursor *cursor)
 /* Lookup index and set it as next down path */
 static void cursor_bnode_lookup(struct cursor *cursor, tuxkey_t key)
 {
-	struct path_level *at = &cursor->path[cursor->len - 1];
+	struct path_level *at = &cursor->path[cursor->level];
 	at->next = bnode_lookup(bufdata(at->buffer), key);
 }
 
@@ -680,7 +679,7 @@ keep_prev_node:
 			if (ret < 0)
 				goto out;
 		} while (ret);
-		level = cursor->len - 2;
+		level = cursor->level - 1;
 	}
 
 error_leaf_chop:

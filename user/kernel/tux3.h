@@ -214,9 +214,9 @@ struct cursor {
 #ifdef CURSOR_DEBUG
 #define FREE_BUFFER	((void *)0xdbc06505)
 #define FREE_NEXT	((void *)0xdbc06507)
-	int maxlen;
+	int maxlevel;
 #endif
-	int len;
+	int level;
 	struct path_level {
 		struct buffer_head *buffer;
 		struct index_entry *next;
