@@ -15,6 +15,7 @@ static const char *log_name[] = {
 	X(LOG_BFREE_ON_ROLLUP),
 	X(LOG_BFREE_RELOG),
 	X(LOG_LEAF_REDIRECT),
+	X(LOG_LEAF_FREE),
 	X(LOG_BNODE_REDIRECT),
 	X(LOG_BNODE_ROOT),
 	X(LOG_BNODE_SPLIT),
@@ -23,6 +24,7 @@ static const char *log_name[] = {
 	X(LOG_BNODE_MERGE),
 	X(LOG_BNODE_DEL),
 	X(LOG_BNODE_ADJUST),
+	X(LOG_BNODE_FREE),
 	X(LOG_FREEBLOCKS),
 	X(LOG_ROLLUP),
 	X(LOG_DELTA),
@@ -279,6 +281,8 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
+		case LOG_LEAF_FREE:
+		case LOG_BNODE_FREE:
 		case LOG_FREEBLOCKS:
 		case LOG_ROLLUP:
 		case LOG_DELTA:
@@ -357,6 +361,20 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			}
 			break;
 		}
+		case LOG_LEAF_FREE:
+		case LOG_BNODE_FREE:
+		{
+			u64 block;
+			data = decode48(data, &block);
+			trace("%s: block %Lx", log_name[code], (L)block);
+			err = replay_update_bitmap(sb, block, 1, 0);
+			if (err)
+				return err;
+
+			if (code == LOG_BNODE_FREE)
+				blockput_free(vol_find_get_block(sb, block));
+			break;
+		}
 		case LOG_BNODE_ROOT:
 		{
 			u64 root, left, right, rkey;
@@ -398,6 +416,8 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			err = replay_update_bitmap(sb, src, 1, 0);
 			if (err)
 				return err;
+
+			blockput_free(vol_find_get_block(sb, src));
 			break;
 		}
 		case LOG_FREEBLOCKS:

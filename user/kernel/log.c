@@ -70,6 +70,7 @@ unsigned log_size[] = {
 	[LOG_BFREE_ON_ROLLUP]	= 8,
 	[LOG_BFREE_RELOG]	= 8,
 	[LOG_LEAF_REDIRECT]	= 13,
+	[LOG_LEAF_FREE]		= 7,
 	[LOG_BNODE_REDIRECT]	= 13,
 	[LOG_BNODE_ROOT]	= 26,
 	[LOG_BNODE_SPLIT]	= 15,
@@ -78,6 +79,7 @@ unsigned log_size[] = {
 	[LOG_BNODE_MERGE]	= 13,
 	[LOG_BNODE_DEL]		= 15,
 	[LOG_BNODE_ADJUST]	= 19,
+	[LOG_BNODE_FREE]	= 7,
 	[LOG_FREEBLOCKS]	= 7,
 	[LOG_ROLLUP]		= 1,
 	[LOG_DELTA]		= 1,
@@ -185,7 +187,7 @@ void log_balloc(struct sb *sb, block_t block, unsigned count)
 	log_u8_u48(sb, LOG_BALLOC, count, block);
 }
 
-/* Defered bfree() */
+/* bfree() */
 void log_bfree(struct sb *sb, block_t block, unsigned count)
 {
 	assert(count < 256);	/* FIXME: extent max is 64 for now */
@@ -208,11 +210,17 @@ void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
 
 /*
  * 1. balloc(newblock) until next rollup
- * 2. Defered bfree(oldblock)
+ * 2. bfree(oldblock)
  */
 void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
 	log_u48_u48(sb, LOG_LEAF_REDIRECT, oldblock, newblock);
+}
+
+/* Same with log_bfree(leaf) (but this is for canceling log_leaf_redirect()) */
+void log_leaf_free(struct sb *sb, block_t leaf)
+{
+	log_u48(sb, LOG_LEAF_FREE, leaf);
 }
 
 /*
@@ -273,7 +281,8 @@ void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key
 
 /*
  * 1. Merge btree nodes from src to dst until next rollup
- * 2. Defered bfree(src)
+ * 2. bfree(src) (but this is for canceling log_bnode_redirect())
+ * 3. Clear dirty of src buffer
  * (src and dst buffers must be dirty already)
  */
 void log_bnode_merge(struct sb *sb, block_t src, block_t dst)
@@ -297,6 +306,16 @@ void log_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
 void log_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to)
 {
 	log_u48_u48_u48(sb, LOG_BNODE_ADJUST, bnode, from, to);
+}
+
+/*
+ * 1. bfree(bnode)  (but this is for canceling log_bnode_redirect())
+ * 2. Clear dirty of bnode buffer
+ * (bnode must be dirty already)
+ */
+void log_bnode_free(struct sb *sb, block_t bnode)
+{
+	log_u48(sb, LOG_BNODE_FREE, bnode);
 }
 
 /* Current freeblocks on rollup */

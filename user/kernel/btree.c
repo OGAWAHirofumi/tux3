@@ -626,9 +626,15 @@ static int try_leaf_merge(struct btree *btree, struct buffer_head *intobuf,
 		struct sb *sb = btree->sb;
 		if (from_size > 0)
 			btree->ops->leaf_merge(btree, into, from);
-		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
-		defer_bfree(&sb->defree, bufindex(frombuf), 1);
-		log_bfree(sb, bufindex(frombuf), 1);
+		/*
+		 * We know frombuf is redirected and dirty. So, in
+		 * here, we can just cancel leaf_redirect by bfree(),
+		 * instead of defered_bfree()
+		 * FIXME: we can optimize freeing leaf without
+		 * leaf_redirect, and if we did, this is not true.
+		 */
+		bfree(sb, bufindex(frombuf), 1);
+		log_leaf_free(sb, bufindex(frombuf));
 		return 1;
 	}
 	return 0;
@@ -645,8 +651,14 @@ static int try_bnode_merge(struct sb *sb, struct buffer_head *intobuf,
 	if (from_size <= sb->entries_per_node - bcount(into)) {
 		if (from_size > 0)
 			bnode_merge_nodes(into, from);
-		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
-		defer_bfree(&sb->defree, bufindex(frombuf), 1);
+		/*
+		 * We know frombuf is redirected and dirty. So, in
+		 * here, we can just cancel bnode_redirect by bfree(),
+		 * instead of defered_bfree()
+		 * FIXME: we can optimize freeing bnode without
+		 * bnode_redirect, and if we did, this is not true.
+		 */
+		bfree(sb, bufindex(frombuf), 1);
 		log_bnode_merge(sb, bufindex(frombuf), bufindex(intobuf));
 		return 1;
 	}
@@ -812,9 +824,15 @@ chop_root:
 		btree->root.depth--;
 		mark_btree_dirty(btree);
 
-		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
-		defer_bfree(&sb->defree, bufindex(prev[0]), 1);
-		log_bfree(sb, bufindex(prev[0]), 1);
+		/*
+		 * We know prev[0] is redirected and dirty. So, in
+		 * here, we can just cancel bnode_redirect by bfree(),
+		 * instead of defered_bfree()
+		 * FIXME: we can optimize freeing bnode without
+		 * bnode_redirect, and if we did, this is not true.
+		 */
+		bfree(sb, bufindex(prev[0]), 1);
+		log_bnode_free(sb, bufindex(prev[0]));
 		blockput_free(prev[0]);
 
 		vecmove(prev, prev + 1, btree->root.depth);
@@ -1092,15 +1110,39 @@ int free_empty_btree(struct btree *btree)
 	block_t leaf = from_be_u64(rootnode->entries[0].block);
 	struct buffer_head *leafbuf = vol_find_get_block(sb, leaf);
 
-	/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
-	defer_bfree(&sb->defree, leaf, 1);
-	log_bfree(sb, leaf, 1);
-	defer_bfree(&sb->defree, bufindex(rootbuf), 1);
-	log_bfree(sb, bufindex(rootbuf), 1);
-
-	if (leafbuf)
+	if (leafbuf && buffer_dirty(leafbuf)) {
+		/*
+		 * This is redirected leaf. So, in here, we can just
+		 * cancel leaf_redirect by bfree(), instead of
+		 * defered_bfree().
+		 */
+		bfree(sb, leaf, 1);
+		log_leaf_free(sb, leaf);
+		assert(!btree->ops->leaf_need(btree, bufdata(leafbuf)));
 		blockput_free(leafbuf);
-	blockput_free(rootbuf);
+	} else {
+		defer_bfree(&sb->defree, leaf, 1);
+		log_bfree(sb, leaf, 1);
+		if (leafbuf) {
+			assert(!btree->ops->leaf_need(btree, bufdata(leafbuf)));
+			blockput(leafbuf);
+		}
+	}
+
+	if (buffer_dirty(rootbuf)) {
+		/*
+		 * This is redirected bnode. So, in here, we can just
+		 * cancel bnode_redirect by bfree(), instead of
+		 * defered_bfree().
+		 */
+		bfree(sb, bufindex(rootbuf), 1);
+		log_bnode_free(sb, bufindex(rootbuf));
+		blockput_free(rootbuf);
+	} else {
+		defer_bfree(&sb->derollup, bufindex(rootbuf), 1);
+		log_bfree_on_rollup(sb, bufindex(rootbuf), 1);
+		blockput(rootbuf);
+	}
 
 	return 0;
 }
