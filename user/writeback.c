@@ -112,7 +112,7 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 			goto error;
 	}
 #ifdef ATOMIC
-	/* If atomic-commit, bitmap and volmap is handled in the delta */
+	/* The bitmap and volmap inode is handled in the delta */
 	if (!list_empty(&sb->bitmap->dirty_list))
 		list_move(&sb->bitmap->dirty_list, &sb->dirty_inodes);
 	if (!list_empty(&sb->volmap->dirty_list))
