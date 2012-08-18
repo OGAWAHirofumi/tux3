@@ -174,7 +174,6 @@ int main(int argc, char *argv[])
 			errno = -PTR_ERR(inode);
 			goto eek;
 		}
-		tux_dump_entries(blockget(sb->rootdir->map, 0));
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 
@@ -200,7 +199,7 @@ int main(int argc, char *argv[])
 		if ((errno = -sync_super(sb)))
 			goto eek;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
-		tux_dump_entries(blockget(sb->rootdir->map, 0));
+		//tux_dump_entries(blockget(sb->rootdir->map, 0));
 		//show_tree_range(&sb->itable, 0, -1);
 	}
 
