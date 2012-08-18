@@ -912,8 +912,8 @@ int defer_bfree(struct stash *defree, block_t block, unsigned count);
 void destroy_defer_bfree(struct stash *defree);
 
 /* replay.c */
-int replay_stage1(struct sb *sb);
-int replay_stage2(struct sb *sb);
+void *replay_stage1(struct sb *sb);
+int replay_stage2(struct sb *sb, void *info);
 
 /* utility.c */
 void hexdump(void *data, unsigned size);

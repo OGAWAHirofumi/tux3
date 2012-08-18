@@ -971,8 +971,11 @@ int main(int argc, char *argv[])
 	if ((errno = -load_itable(sb)))
 		goto eek;
 
-	if ((errno = -replay_stage1(sb)))
+	void *replay_handle = replay_stage1(sb);
+	if (IS_ERR(replay_handle)) {
+		errno = -PTR_ERR(replay_handle);
 		goto eek;
+	}
 
 	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
@@ -990,7 +993,7 @@ int main(int argc, char *argv[])
 		goto eek;
 	}
 
-	if ((errno = -replay_stage2(sb)))
+	if ((errno = -replay_stage2(sb, replay_handle)))
 		goto eek;
 
 	struct graph_info ginfo;

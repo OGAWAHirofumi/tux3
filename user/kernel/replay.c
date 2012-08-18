@@ -24,21 +24,52 @@ static const char *log_name[] = {
 #undef X
 };
 
-/* Load log blocks and pin. */
-static int replay_load_logblocks(struct sb *sb)
+struct replay_info {
+	void *rollup_pos;	/* position of rollup log in a log block */
+	block_t rollup_index;	/* index of a log block including rollup log */
+	block_t blocknrs[];	/* block address of log blocks */
+};
+
+static void *find_log_rollup(struct logblock *log)
+{
+	unsigned char *data = log->data;
+
+	while (data < log->data + from_be_u16(log->bytes)) {
+		u8 code = *data;
+		if (code == LOG_ROLLUP)
+			return data;
+		data += log_size[code];
+	}
+	return NULL;
+}
+
+/* Prepare log info for replay and pin logblocks. */
+static struct replay_info *replay_prepare(struct sb *sb)
 {
 	block_t logchain = sb->logchain;
-	unsigned j, i = from_be_u32(sb->super.logcount);
+	unsigned j, i, logcount = from_be_u32(sb->super.logcount);
+	struct replay_info *info;
 	struct buffer_head *buffer;
 	int err;
 
-	trace("load %u logblocks", i);
+	/* FIXME: this address array is quick hack. Rethink about log
+	 * block management and log block address. */
+	info = malloc(sizeof(struct replay_info) + logcount * sizeof(block_t));
+	if (!info)
+		return ERR_PTR(-ENOMEM);
+	info->rollup_pos = NULL;
+	info->rollup_index = -1;
+	memset(info->blocknrs, 0, logcount * sizeof(block_t));
+
+	trace("load %u logblocks", logcount);
+	i = logcount;
 	while (i-- > 0) {
 		buffer = blockget(mapping(sb->logmap), i);
 		if (!buffer) {
 			err = -ENOMEM;
 			goto error;
 		}
+		assert(bufindex(buffer) == i);
 		err = blockio(0, buffer, logchain);
 		if (err) {
 			blockput(buffer);
@@ -52,26 +83,40 @@ static int replay_load_logblocks(struct sb *sb)
 			err = -EINVAL;
 			goto error;
 		}
+
+		/* Find latest rollup (Note: LOG_ROLLUP is first record). */
+		if (info->rollup_index == -1) {
+			info->rollup_pos = find_log_rollup(log);
+			if (info->rollup_pos)
+				info->rollup_index = bufindex(buffer);
+		}
+		/* Store index => blocknr map */
+		info->blocknrs[bufindex(buffer)] = logchain;
+
 		logchain = from_be_u64(log->logchain);
 	}
 
-	return 0;
+	return info;
 
 error:
-	j = from_be_u32(sb->super.logcount);
+	free(info);
+
+	j = logcount;
 	while (--j > i) {
 		buffer = blockget(mapping(sb->logmap), j);
 		assert(buffer != NULL);
 		blockput(buffer);
 		blockput(buffer);
 	}
-	return err;
+	return ERR_PTR(err);
 }
 
 /* Unpin log blocks, and prepare for future logging. */
-static void replay_unload_logblocks(struct sb *sb)
+static void replay_done(struct sb *sb, struct replay_info *info)
 {
 	unsigned i = from_be_u32(sb->super.logcount);
+
+	free(info);
 
 	while (i-- > 0) {
 		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
@@ -84,11 +129,14 @@ static void replay_unload_logblocks(struct sb *sb)
 	sb->logthis = sb->lognext = from_be_u32(sb->super.logcount);
 }
 
-typedef int (*replay_log_func_t)(struct sb *, struct logblock *, block_t);
+typedef int (*replay_log_func_t)(struct sb *, struct buffer_head *,
+				 struct replay_info *);
 
 /* Replay physical update like bnode, etc. */
-static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
+static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
+			     struct replay_info *info)
 {
+	struct logblock *log = bufdata(logbuf);
 	unsigned char *data = log->data;
 	int err;
 
@@ -171,14 +219,17 @@ static int replay_log_stage1(struct sb *sb, struct logblock *log, block_t blknr)
 }
 
 /* Replay logical update like bitmap data pages, etc. */
-static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
+static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
+			     struct replay_info *info)
 {
+	struct logblock *log = bufdata(logbuf);
+	block_t blocknr = info->blocknrs[bufindex(logbuf)];
 	unsigned char *data = log->data;
 	int err;
 
 	/* log block address itself works as balloc log */
-	trace("LOG BLOCK: logblock %Lx", (L)blknr);
-	err = replay_update_bitmap(sb, blknr, 1, 1);
+	trace("LOG BLOCK: logblock %Lx", (L)blocknr);
+	err = replay_update_bitmap(sb, blocknr, 1, 1);
 	if (err)
 		return err;
 	/* FIXME: make defree entires for logblock */
@@ -257,64 +308,41 @@ static int replay_log_stage2(struct sb *sb, struct logblock *log, block_t blknr)
 	return 0;
 }
 
-static int replay_logblocks(struct sb *sb, replay_log_func_t replay_log_func)
+static int replay_logblocks(struct sb *sb, struct replay_info *info,
+			    replay_log_func_t replay_log_func)
 {
-	unsigned i, logcount = from_be_u32(sb->super.logcount);
-	block_t logchain, *array;
-	int err = 0;
-
-	/* FIXME: this address array is quick hack. Rethink about log
-	 * block management and log block address. */
-	array = malloc(logcount * sizeof(block_t));
-	if (!array)
-		return -ENOMEM;
-
-	logchain = sb->logchain;
-	i = logcount;
-	while (i--) {
-		array[i] = logchain;
-
-		struct buffer_head *buffer = blockget(mapping(sb->logmap), i);
-		if (!buffer) {
-			err = -ENOMEM;
-			goto out;
-		}
-		struct logblock *log = bufdata(buffer);
-		logchain = from_be_u64(log->logchain);
-		blockput(buffer);
-	}
+	unsigned logcount = from_be_u32(sb->super.logcount);
+	int err;
 
 	for (sb->lognext = 0; sb->lognext < logcount;) {
-		block_t blocknr = array[sb->lognext];
-		trace("log block %i, blocknr %Lx", sb->lognext, (L)blocknr);
+		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, (L)info->blocknrs[sb->lognext], (L)info->rollup_index);
 		log_next(sb);
-		err = replay_log_func(sb, bufdata(sb->logbuf), blocknr);
+		err = replay_log_func(sb, sb->logbuf, info);
 		log_drop(sb);
 
 		if (err)
-			break;
+			return err;
 	}
 
-out:
-	free(array);
-
-	return err;
+	return 0;
 }
 
-int replay_stage1(struct sb *sb)
+void *replay_stage1(struct sb *sb)
 {
-	int err = replay_load_logblocks(sb);
-	if (!err) {
-		err = replay_logblocks(sb, replay_log_stage1);
-		if (err)
-			replay_unload_logblocks(sb);
+	struct replay_info *info = replay_prepare(sb);
+	if (!IS_ERR(info)) {
+		int err = replay_logblocks(sb, info, replay_log_stage1);
+		if (err) {
+			replay_done(sb, info);
+			return ERR_PTR(err);
+		}
 	}
-	return err;
+	return info;
 }
 
-int replay_stage2(struct sb *sb)
+int replay_stage2(struct sb *sb, void *info)
 {
-	int err = replay_logblocks(sb, replay_log_stage2);
-	replay_unload_logblocks(sb);
+	int err = replay_logblocks(sb, info, replay_log_stage2);
+	replay_done(sb, info);
 	return err;
 }
