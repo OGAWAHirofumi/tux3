@@ -65,6 +65,7 @@ void remove_buffer_hash(struct buffer_head *buffer);
 int flush_buffers(map_t *map);
 int flush_state(unsigned state);
 void evict_buffer(struct buffer_head *buffer);
+void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
 

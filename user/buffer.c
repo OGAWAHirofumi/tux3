@@ -203,7 +203,9 @@ struct buffer_head *new_buffer(map_t *map)
 		int count = 0;
 	
 		list_for_each_entry_safe(victim, safe, &lru_buffers, lru) {
-			if (victim->count == 0 && buffer_clean(victim)) {
+			if (victim->count != 0)
+				continue;
+			if (buffer_clean(victim) || buffer_empty(victim)) {
 				evict_buffer(victim);
 				if (++count == max_evict)
 					break;
@@ -303,6 +305,36 @@ struct buffer_head *blockread(map_t *map, block_t block)
 	return buffer;
 }
 
+void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend)
+{
+	unsigned blockbits = map->dev->bits;
+	unsigned blocksize = 1 << blockbits;
+	block_t start = (lstart + blocksize - 1) >> blockbits;
+	block_t end = lend >> blockbits;
+	unsigned partial = lstart & (blocksize - 1);
+	unsigned partial_size = blocksize - partial;
+	unsigned i;
+
+	assert((lend & (blocksize - 1)) == (blocksize - 1));
+
+	for (i = 0; i < BUFFER_BUCKETS; i++) {
+		struct hlist_head *bucket = &map->hash[i];
+		struct buffer_head *buffer;
+		struct hlist_node *node, *n;
+		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
+			/* Clear partial truncated buffer */
+			if (partial && buffer->index == start - 1)
+				memset(buffer->data + partial, 0, partial_size);
+
+			if (buffer->index < start || end < buffer->index)
+				continue;
+
+			if (!buffer_empty(buffer))
+				set_buffer_empty(buffer);
+		}
+	}
+}
+
 /* !!! only used for testing */
 void invalidate_buffers(map_t *map)
 {
@@ -313,8 +345,8 @@ void invalidate_buffers(map_t *map)
 		struct hlist_node *node, *n;
 		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
 			if (!buffer->count) {
-				if (!buffer_clean(buffer))
-					set_buffer_clean(buffer);
+				if (!buffer_empty(buffer))
+					set_buffer_empty(buffer);
 				evict_buffer(buffer);
 			}
 		}

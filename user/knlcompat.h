@@ -202,4 +202,14 @@ static inline dev_t huge_decode_dev(u64 dev)
 	return new_decode_dev(dev);
 }
 
+static inline void truncate_inode_pages_range(map_t *map, loff_t lstart, loff_t lend)
+{
+	truncate_buffers_range(map, lstart, lend);
+}
+
+static inline void truncate_inode_pages(map_t *map, loff_t lstart)
+{
+	truncate_buffers_range(map, lstart, LLONG_MAX);
+}
+
 #endif /* !TUX3_KERNEL_COMPAT_H */

@@ -834,7 +834,6 @@ static int dleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 		block_t block = dwalk_block(&walk);
 		unsigned count = start - dwalk_index(&walk);
 
-		/* FIXME: should set buffer clean? */
 		defer_bfree(&sb->defree, block + count, dwalk_count(&walk) - count);
 		log_bfree(sb, block + count, dwalk_count(&walk) - count);
 
@@ -844,7 +843,6 @@ static int dleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 	}
 	struct dwalk rewind = walk;
 	do {
-		/* FIXME: should set buffer clean? */
 		defer_bfree(&sb->defree, dwalk_block(&walk), dwalk_count(&walk));
 		log_bfree(sb, dwalk_block(&walk), dwalk_count(&walk));
 	} while (dwalk_next(&walk));
