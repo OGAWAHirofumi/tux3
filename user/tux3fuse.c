@@ -567,8 +567,7 @@ static void tux3fuse_open(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_flush(fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_file_info *fi)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	fuse_reply_err(req, 0);
 }
 
 static void tux3fuse_release(fuse_req_t req, fuse_ino_t ino,
