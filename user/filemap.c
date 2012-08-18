@@ -166,10 +166,14 @@ int write_bitmap(struct buffer_head *buffer)
 
 static int tuxio(struct file *file, void *data, unsigned len, int write)
 {
-	int err = 0;
 	struct inode *inode = file->f_inode;
+	struct sb *sb = tux_sb(inode->i_sb);
 	loff_t pos = file->f_pos;
-	trace("%s %u bytes at %Lu, isize = 0x%Lx", write ? "write" : "read", len, (s64)pos, (s64)inode->i_size);
+	int err = 0;
+
+	trace("%s %u bytes at %Lu, isize = 0x%Lx",
+	      write ? "write" : "read", len, (s64)pos, (s64)inode->i_size);
+
 	if (write && pos + len > MAX_FILESIZE)
 		return -EFBIG;
 	if (!write && pos + len > inode->i_size) {
@@ -181,38 +185,58 @@ static int tuxio(struct file *file, void *data, unsigned len, int write)
 	if (write)
 		inode->i_mtime = inode->i_ctime = gettime();
 
-	unsigned bbits = tux_sb(inode->i_sb)->blockbits;
-	unsigned bsize = tux_sb(inode->i_sb)->blocksize;
-	unsigned bmask = tux_sb(inode->i_sb)->blockmask;
+	unsigned bbits = sb->blockbits;
+	unsigned bsize = sb->blocksize;
+	unsigned bmask = sb->blockmask;
+
 	loff_t tail = len;
 	while (tail) {
+		struct buffer_head *buffer, *clone;
 		unsigned from = pos & bmask;
 		unsigned some = from + tail > bsize ? bsize - from : tail;
 		int full = write && some == bsize;
-		struct buffer_head *buffer = (full ? blockget : blockread)(mapping(inode), pos >> bbits);
+
+		if (full)
+			buffer = blockget(mapping(inode), pos >> bbits);
+		else
+			buffer = blockread(mapping(inode), pos >> bbits);
 		if (!buffer) {
 			err = -EIO;
 			break;
 		}
-		if (write){
-			mark_buffer_dirty(buffer);
-			memcpy(bufdata(buffer) + from, data, some);
+
+		if (write) {
+			clone = blockdirty(buffer, sb->delta);
+			if (IS_ERR(clone)) {
+				blockput(buffer);
+				err = PTR_ERR(clone);
+				break;
+			}
+
+			memcpy(bufdata(clone) + from, data, some);
+			mark_buffer_dirty_non(clone);
+		} else {
+			clone = buffer;
+			memcpy(data, bufdata(clone) + from, some);
 		}
-		else
-			memcpy(data, bufdata(buffer) + from, some);
-		trace_off("transfer %u bytes, block 0x%Lx, buffer %p", some, bufindex(buffer), buffer);
-		//hexdump(bufdata(buffer) + from, some);
-		blockput(buffer);
+
+		trace_off("transfer %u bytes, block 0x%Lx, buffer %p",
+			  some, bufindex(clone), buffer);
+
+		blockput(clone);
+
 		tail -= some;
 		data += some;
 		pos += some;
 	}
 	file->f_pos = pos;
+
 	if (write) {
 		if (inode->i_size < pos)
 			inode->i_size = pos;
 		mark_inode_dirty(inode);
 	}
+
 	return err ? err : len - tail;
 }
 

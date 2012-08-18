@@ -170,7 +170,7 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 	struct sb *sb = tux_sb(inode->i_sb);
 	block_t index = newsize >> sb->blockbits;
 	unsigned offset = newsize & sb->blockmask;
-	struct buffer_head *buffer;
+	struct buffer_head *buffer, *clone;
 
 	if (!offset)
 		return 0;
@@ -179,8 +179,15 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 	if (!buffer)
 		return -EIO;
 
-	memset(bufdata(buffer) + offset, 0, inode->i_sb->blocksize - offset);
-	blockput_dirty(buffer);
+	clone = blockdirty(buffer, sb->delta);
+	if (IS_ERR(clone)) {
+		blockput(buffer);
+		return PTR_ERR(clone);
+	}
+
+	memset(bufdata(clone) + offset, 0, sb->blocksize - offset);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
 
 	return 0;
 }
