@@ -920,7 +920,9 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
  * Before this replay, replay should already dirty the buffer of parent.
  * (e.g. by redirect)
  */
-int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
+static int replay_bnode_change(struct sb *sb, block_t parent, block_t child,
+			tuxkey_t key,
+			void (*change)(struct bnode *, block_t, tuxkey_t))
 {
 	struct buffer_head *parentbuf;
 
@@ -929,7 +931,38 @@ int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t k
 		return PTR_ERR(parentbuf);
 
 	struct bnode *bnode = bufdata(parentbuf);
-	struct index_entry *entry = bnode->entries, *top = entry + bcount(bnode);
+	change(bnode, child, key);
+
+	mark_buffer_rollup_non(parentbuf);
+	blockput(parentbuf);
+
+	return 0;
+}
+
+static void add_func(struct bnode *bnode, block_t child, tuxkey_t key)
+{
+	struct index_entry *entry = bnode->entries;
+	struct index_entry *top = entry + bcount(bnode);
+
+	while (entry < top) { /* binary search goes here */
+		if (from_be_u64(entry->key) > key)
+			break;
+		entry++;
+	}
+
+	add_child(bnode, entry, child, key);
+}
+
+int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
+{
+	return replay_bnode_change(sb, parent, child, key, add_func);
+}
+
+static void update_func(struct bnode *bnode, block_t child, tuxkey_t key)
+{
+	struct index_entry *entry = bnode->entries;
+	struct index_entry *top = entry + bcount(bnode);
+
 	while (entry < top) { /* binary search goes here */
 		if (from_be_u64(entry->key) == key)
 			break;
@@ -938,8 +971,9 @@ int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t k
 	assert(entry < top);
 
 	entry->block = to_be_u64(child);
-	mark_buffer_rollup_non(parentbuf);
-	blockput(parentbuf);
+}
 
-	return 0;
+int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
+{
+	return replay_bnode_change(sb, parent, child, key, update_func);
 }

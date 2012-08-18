@@ -223,6 +223,8 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 			      log_name[code], (L)parent, (L)child, (L)key);
 			if (code == LOG_BNODE_UPDATE)
 				err = replay_bnode_update(sb, parent, child, key);
+			else
+				err = replay_bnode_add(sb, parent, child, key);
 			if (err)
 				return err;
 			break;
