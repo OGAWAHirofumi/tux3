@@ -250,8 +250,8 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 	err = replay_update_bitmap(sb, blocknr, 1, 1);
 	if (err)
 		return err;
-	/* FIXME: make defree entires for logblock */
-	/* defer_bfree(&sb->new_decycle, blknr, 1); */
+	/* Mark log block as derollup block */
+	defer_bfree(&sb->derollup, blocknr, 1);
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		u8 code = *data++;
@@ -268,7 +268,13 @@ static int replay_log_stage2(struct sb *sb, struct buffer_head *logbuf,
 			trace("%s: count %u, block %Lx",
 			      log_name[code], count, (L)block);
 
-			err = replay_update_bitmap(sb, block, count, code == LOG_BALLOC);
+			err = 0;
+			if (code == LOG_BALLOC)
+				err = replay_update_bitmap(sb, block, count, 1);
+			else if (code == LOG_BFREE_ON_ROLLUP)
+				defer_bfree(&sb->derollup, block, count);
+			else
+				err = replay_update_bitmap(sb, block, count, 0);
 			if (err)
 				return err;
 			break;
