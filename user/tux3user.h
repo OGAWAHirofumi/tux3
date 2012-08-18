@@ -160,11 +160,11 @@ void inode_leak_check(void);
 void __iget(struct inode *inode);
 void ihold(struct inode *inode);
 void iput(struct inode *inode);
+int tuxtruncate(struct inode *inode, loff_t size);
+int write_inode(struct inode *inode);
 int tuxread(struct file *file, char *data, unsigned len);
 int tuxwrite(struct file *file, const char *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);
-int tuxtruncate(struct inode *inode, loff_t size);
-int write_inode(struct inode *inode);
 
 /* namei.c */
 struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);

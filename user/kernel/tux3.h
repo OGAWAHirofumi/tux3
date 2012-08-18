@@ -407,6 +407,7 @@ typedef struct inode {
 	struct sb *i_sb;
 	map_t *map;
 	loff_t i_size;
+	block_t i_blocks;
 	unsigned i_version;
 	struct timespec i_mtime, i_ctime, i_atime;
 	unsigned i_uid, i_gid, i_nlink;

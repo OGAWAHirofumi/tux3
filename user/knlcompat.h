@@ -329,4 +329,5 @@ static inline void truncate_inode_pages(map_t *map, loff_t lstart)
 	truncate_buffers_range(map, lstart, LLONG_MAX);
 }
 
+void truncate_setsize(struct inode *inode, loff_t newsize);
 #endif /* !TUX3_KERNEL_COMPAT_H */

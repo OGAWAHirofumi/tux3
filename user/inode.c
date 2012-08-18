@@ -164,6 +164,27 @@ struct inode *iget5_locked(struct sb *sb, inum_t inum,
 	return inode;
 }
 
+/* Truncate partial block. If partial, we have to update last block. */
+static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	block_t index = newsize >> sb->blockbits;
+	unsigned offset = newsize & sb->blockmask;
+	struct buffer_head *buffer;
+
+	if (!offset)
+		return 0;
+
+	buffer = blockread(mapping(inode), index);
+	if (!buffer)
+		return -EIO;
+
+	memset(bufdata(buffer) + offset, 0, inode->i_sb->blocksize - offset);
+	blockput_dirty(buffer);
+
+	return 0;
+}
+
 #include "kernel/inode.c"
 
 static void tux_setup_inode(struct inode *inode)
@@ -241,6 +262,27 @@ void iput(struct inode *inode)
 	}
 }
 
+int tuxtruncate(struct inode *inode, loff_t size)
+{
+	return tux3_truncate(inode, size);
+}
+
+int write_inode(struct inode *inode)
+{
+	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
+	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
+	       tux_inode(inode)->inum != TUX_LOGMAP_INO &&
+	       tux_inode(inode)->inum != TUX_INVALID_INO);
+	switch (tux_inode(inode)->inum) {
+	case TUX_BITMAP_INO:
+	case TUX_VTABLE_INO:
+	case TUX_ATABLE_INO:
+		/* FIXME: assert(only btree should be changed); */
+		break;
+	}
+	return save_inode(inode);
+}
+
 static int tuxio(struct file *file, char *data, unsigned len, int write)
 {
 	int err = 0;
@@ -307,63 +349,4 @@ void tuxseek(struct file *file, loff_t pos)
 {
 	warn("seek to 0x%Lx", (s64)pos);
 	file->f_pos = pos;
-}
-
-/*
- * Truncate partial block, otherwise, if uses expands size with
- * truncate(), it will show existent old data.
- */
-static int truncate_partial_block(struct inode *inode, loff_t size)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	if (!(size & sb->blockmask))
-		return 0;
-	block_t index = size >> sb->blockbits;
-	unsigned offset = size & sb->blockmask;
-	struct buffer_head *buffer = blockread(mapping(inode), index);
-	if (!buffer)
-		return -EIO;
-	memset(bufdata(buffer) + offset, 0, inode->i_sb->blocksize - offset);
-	blockput_dirty(buffer);
-	return 0;
-}
-
-int tuxtruncate(struct inode *inode, loff_t size)
-{
-	/* FIXME: expanding size is not tested */
-	struct sb *sb = tux_sb(inode->i_sb);
-	tuxkey_t index = (size + sb->blockmask) >> sb->blockbits;
-	int is_expand;
-	int err = 0;
-
-	if (size == inode->i_size)
-		goto out;
-	is_expand = size > inode->i_size;
-
-	inode->i_size = size;
-	if (!is_expand) {
-		truncate_partial_block(inode, size);
-		truncate_inode_pages(mapping(inode), size);
-		err = btree_chop(&inode->btree, index, TUXKEY_LIMIT);
-	}
-	inode->i_mtime = inode->i_ctime = gettime();
-	mark_inode_dirty(inode);
-out:
-	return err;
-}
-
-int write_inode(struct inode *inode)
-{
-	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
-	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
-	       tux_inode(inode)->inum != TUX_LOGMAP_INO &&
-	       tux_inode(inode)->inum != TUX_INVALID_INO);
-	switch (tux_inode(inode)->inum) {
-	case TUX_BITMAP_INO:
-	case TUX_VTABLE_INO:
-	case TUX_ATABLE_INO:
-		/* FIXME: assert(only btree should be changed); */
-		break;
-	}
-	return save_inode(inode);
 }

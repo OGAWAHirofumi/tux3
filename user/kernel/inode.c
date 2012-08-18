@@ -468,6 +468,74 @@ out:
 	return err;
 }
 
+static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	tuxkey_t index = (newsize + sb->blockmask) >> sb->blockbits;
+
+	return btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
+}
+
+#ifdef __KERNEL__
+/* Truncate partial block. If partial, we have to update last block. */
+static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
+{
+	return block_truncate_page(inode->i_mapping, newsize, tux3_get_block);
+}
+
+void tux3_write_failed(struct address_space *mapping, loff_t to)
+{
+	struct inode *inode = mapping->host;
+
+	if (to > inode->i_size) {
+		truncate_pagecache(inode, to, inode->i_size);
+		tux3_truncate_blocks(inode, inode->i_size);
+	}
+}
+#endif /* !__KERNEL__ */
+
+static int tux3_truncate(struct inode *inode, loff_t newsize)
+{
+	/* FIXME: expanding size is not tested */
+	struct sb *sb = tux_sb(inode->i_sb);
+	int is_expand, err;
+
+	if (newsize == inode->i_size)
+		return 0;
+
+	/* inode_dio_wait(inode); */	/* FIXME: for direct I/O */
+
+	err = 0;
+	is_expand = newsize > inode->i_size;
+
+	change_begin(sb);
+
+	if (!is_expand) {
+		err = tux3_truncate_partial_block(inode, newsize);
+		if (err)
+			goto error;
+	}
+
+	/* Change i_size, then clean buffers */
+	truncate_setsize(inode, newsize);
+
+	if (!is_expand) {
+		err = tux3_truncate_blocks(inode, newsize);
+		if (err)
+			goto error;
+	}
+
+	/* FIXME: implement i_blocks */
+	inode->i_blocks = ((newsize+sb->blockmask) & ~(loff_t)sb->blockmask)>>9;
+
+	inode->i_mtime = inode->i_ctime = gettime();
+	mark_inode_dirty(inode);
+error:
+	change_end(sb);
+
+	return err;
+}
+
 /*
  * NOTE: clear_inode() for this inode is already done. This shouldn't
  * use generic part of inode basically.
@@ -489,46 +557,6 @@ static int purge_inode(struct inode *inode)
 }
 
 #ifdef __KERNEL__
-static int tux_can_truncate(struct inode *inode)
-{
-	if (IS_APPEND(inode) || IS_IMMUTABLE(inode))
-		return 0;
-	if (S_ISREG(inode->i_mode))
-		return 1;
-	if (S_ISDIR(inode->i_mode))
-		return 1;
-	if (S_ISLNK(inode->i_mode))
-		return 1;
-	return 0;
-}
-
-static void __tux3_truncate(struct inode *inode)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	tuxkey_t index = (inode->i_size + sb->blockmask) >> sb->blockbits;
-	int err;
-
-	if (!tux_can_truncate(inode))
-		return;
-	/* FIXME: must fix expand size */
-	WARN_ON(inode->i_size);
-	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
-	err = btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
-	inode->i_blocks = ((inode->i_size + sb->blockmask)
-			   & ~(loff_t)sb->blockmask) >> 9;
-	inode->i_mtime = inode->i_ctime = gettime();
-	mark_inode_dirty(inode);
-}
-
-static void tux3_truncate(struct inode *inode)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-
-	change_begin(sb);
-	__tux3_truncate(inode);
-	change_end(sb);
-}
-
 void tux3_delete_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);

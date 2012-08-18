@@ -225,3 +225,12 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
 	d_instantiate(dentry, inode);
 	return NULL;
 }
+
+void truncate_setsize(struct inode *inode, loff_t newsize)
+{
+	loff_t oldsize = inode->i_size;
+
+	inode->i_size = newsize;
+	if (newsize < oldsize)
+		truncate_inode_pages(mapping(inode), newsize);
+}
