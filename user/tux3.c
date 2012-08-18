@@ -168,9 +168,10 @@ int main(int argc, char *argv[])
 		printf("---- open file ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode) && PTR_ERR(inode) == -ENOENT) {
+			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU, };
 			printf("---- create file ----\n");
 			inode = tuxcreate(sb->rootdir, filename, strlen(filename),
-					  &(struct tux_iattr){ .mode = S_IFREG | S_IRWXU });
+					  &iattr);
 		}
 		if (IS_ERR(inode)) {
 			errno = -PTR_ERR(inode);

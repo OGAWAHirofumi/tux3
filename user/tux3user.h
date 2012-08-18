@@ -92,10 +92,6 @@ static inline void reset_bit(unsigned char *bitmap, unsigned bit)
 	bitmap[bit >> 3] &= ~(1 << (bit & 7));
 }
 
-struct tux_iattr {
-	unsigned mode, uid, gid;
-};
-
 #ifdef ATOMIC
 #define INIT_DISKSB_FREEBLOCKS(_blocks)
 #else

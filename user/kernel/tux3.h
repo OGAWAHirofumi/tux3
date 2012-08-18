@@ -443,6 +443,12 @@ static inline struct dev *sb_dev(struct sb *sb)
 }
 #endif /* !__KERNEL__ */
 
+struct tux_iattr {
+	uid_t	uid;
+	gid_t	gid;
+	umode_t	mode;
+};
+
 static inline struct btree *itable_btree(struct sb *sb)
 {
 	return &sb->itable;
@@ -737,10 +743,6 @@ static inline struct timespec gettime(void)
 {
 	return current_kernel_time();
 }
-
-struct tux_iattr {
-	unsigned mode, uid, gid;
-};
 
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {

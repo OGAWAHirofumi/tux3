@@ -125,15 +125,15 @@ static int clear_other_magic(struct sb *sb)
 static struct inode *create_internal_inode(struct sb *sb, inum_t inum,
 					   struct tux_iattr *iattr)
 {
+	static struct tux_iattr null_iattr;
 	struct inode *dir = &(struct inode){
 		.i_sb = sb,
 		.i_mode = S_IFDIR | 0755,
 	};
-	struct tux_iattr *null_iattr = &(struct tux_iattr){};
 	struct inode *inode;
 
 	if (iattr == NULL)
-		iattr = null_iattr;
+		iattr = &null_iattr;
 
 	inode = __tux_create_inode(dir, inum, iattr, 0);
 	assert(IS_ERR(inode) || inode->inum == inum);
