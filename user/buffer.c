@@ -650,3 +650,72 @@ void free_map(map_t *map)
 	}
 	free(map);
 }
+
+/*
+ * Buffer I/O vector
+ */
+
+void bufvec_free(struct bufvec *bufvec)
+{
+	free(bufvec);
+}
+
+struct bufvec *bufvec_alloc(unsigned max_count)
+{
+	struct bufvec *bufvec;
+	unsigned bufv_size = max_count * sizeof(struct buffer_head *);
+	unsigned iovec_size = max_count * sizeof(struct iovec);
+
+	bufvec = malloc(sizeof(*bufvec) + iovec_size + bufv_size);
+	if (!bufvec)
+		return ERR_PTR(-ENOMEM);
+
+	memset(bufvec, 0, sizeof(*bufvec) + bufv_size + iovec_size);
+	bufvec->bufv = (void *)bufvec + sizeof(*bufvec);
+	bufvec->iov = (void *)bufvec->bufv + bufv_size;
+	bufvec->max_count = max_count;
+
+	return bufvec;
+}
+
+/*
+ * Add buffer to bufvec. If there is no space or buffer is not
+ * logically contiguous, return 0 and fail to add.
+ */
+int bufvec_add(struct bufvec *bufvec, struct buffer_head *buffer)
+{
+	/* Check if buffer is logically contiguous */
+	if (bufvec_inuse(bufvec)) {
+		block_t prev = bufvec_last_index(bufvec);
+		if (prev != bufindex(buffer) - 1)
+			return 0;
+	}
+
+	if (bufvec->count == bufvec->max_count) {
+		if (bufvec->pos == 0)
+			return 0;
+
+		unsigned size;
+		/* If there is space already done, use it */
+		size = bufvec_inuse(bufvec) * sizeof(struct buffer_head *);
+		memmove(bufvec->bufv, bufvec_bufv(bufvec), size);
+		size = bufvec_inuse(bufvec) * sizeof(struct iovec);
+		memmove(bufvec->iov, bufvec_iov(bufvec), size);
+
+		bufvec->count -= bufvec->pos;
+		bufvec->pos = 0;
+	}
+
+	bufvec->bufv[bufvec->count] = buffer;
+	bufvec->iov[bufvec->count].iov_base = bufdata(buffer);
+	bufvec->iov[bufvec->count].iov_len = bufsize(buffer);
+	bufvec->count++;
+
+	return 1;
+}
+
+void bufvec_io_done(struct bufvec *bufvec, unsigned done_count)
+{
+	assert(bufvec_inuse(bufvec) >= done_count);
+	bufvec->pos += done_count;
+}

@@ -89,12 +89,74 @@ static void test01(void)
 	free_map(map2);
 }
 
+/* Test for bufvec */
+static void test02(void)
+{
+#define BUFFER_COUNT	100
+	struct dev *dev = &(struct dev){ .bits = 12 };
+	struct bufvec *bufvec;
+	struct buffer_head *buffer;
+	unsigned count, index = 0;
+
+	/* This expect buffer is never reclaimed */
+	init_buffers(dev, 10 << 20, 2);
+	map_t *map = new_map(dev, NULL);
+	test_assert(map);
+
+	bufvec = bufvec_alloc(BUFFER_COUNT);
+	test_assert(bufvec);
+
+	/* Add buffer until maximum */
+	count = 0;
+	while (bufvec_space(bufvec)) {
+		buffer = blockget(map, index++);
+		test_assert(buffer);
+		int ret = bufvec_add(bufvec, buffer);
+		test_assert(ret);
+		count++;
+	}
+	test_assert(count == BUFFER_COUNT);
+	test_assert(bufvec_inuse(bufvec) == BUFFER_COUNT);
+
+	/* Partially done */
+	for (unsigned i = 0; i < 20; i++)
+		blockput(bufvec_bufv(bufvec)[i]);
+	bufvec_io_done(bufvec, 20);
+	test_assert(bufvec_inuse(bufvec) == BUFFER_COUNT - 20);
+
+	/* Add buffer until maximum again */
+	count = 0;
+	while (bufvec_space(bufvec)) {
+		buffer = blockget(map, index++);
+		test_assert(buffer);
+		int ret = bufvec_add(bufvec, buffer);
+		test_assert(ret);
+		count++;
+	}
+	test_assert(count == 20);	/* Can add 20 was done I/O */
+	test_assert(bufvec_inuse(bufvec) == BUFFER_COUNT);
+
+	/* Done */
+	for (unsigned i = 0; i < bufvec_inuse(bufvec); i++)
+		blockput(bufvec_bufv(bufvec)[i]);
+	bufvec_io_done(bufvec, BUFFER_COUNT);
+	test_assert(bufvec_inuse(bufvec) == 0);
+
+	bufvec_free(bufvec);
+
+	free_map(map);
+}
+
 int main(int argc, char *argv[])
 {
 	test_init(argv[0]);
 
 	if (test_start("test01"))
 		test01();
+	test_end();
+
+	if (test_start("test02"))
+		test02();
 	test_end();
 
 	return test_failures();

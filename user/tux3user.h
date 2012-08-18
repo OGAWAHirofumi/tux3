@@ -136,6 +136,9 @@ int make_tux3(struct sb *sb);
 /* utility.c */
 void stacktrace(void);
 int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
+int devio_vec(int rw, struct dev *dev, loff_t offset, struct iovec *iov,
+	      unsigned iovcnt);
 int blockio(int rw, struct buffer_head *buffer, block_t block);
+int blockio_vec(int rw, struct bufvec *bufvec, unsigned count, block_t block);
 
 #endif /* !TUX3_USER_H */
