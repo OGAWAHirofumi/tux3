@@ -26,13 +26,13 @@ static int bitmap_all_test(struct sb *sb, block_t start, unsigned count,
 	int ret = 1;
 
 	for (block_t block = start_block; block < end_block; block++) {
-		loff_t block_start = (loff_t)(block << sb->blockbits) << 3;
-		loff_t block_count = (loff_t)sb->blocksize << 3;
+		block_t block_start = (block_t)(block << sb->blockbits) << 3;
+		block_t block_count = (block_t)sb->blocksize << 3;
 
 		struct buffer_head *buf = blockget(bitmap->map, block);
-		loff_t start_off, end_off, checkcnt;
+		block_t start_off, end_off, checkcnt;
 
-		start_off = max_t(loff_t, start - block_start, 0);
+		start_off = max(start - block_start, 0LL);
 		end_off = min(start + count - block_start, block_count);
 		checkcnt = end_off - start_off;
 

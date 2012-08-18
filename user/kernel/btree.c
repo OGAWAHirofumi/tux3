@@ -180,7 +180,7 @@ void show_cursor(struct cursor *cursor, int depth)
 {
 	printf(">>> cursor %p/%i:", cursor, depth);
 	for (int i = 0; i < depth; i++)
-		printf(" [%Lx/%i]", (L)bufindex(cursor->path[i].buffer), bufcount(cursor->path[i].buffer));
+		printf(" [%Lx/%i]", bufindex(cursor->path[i].buffer), bufcount(cursor->path[i].buffer));
 	printf("\n");
 }
 
@@ -474,7 +474,7 @@ out:
 
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
-	printf("%i level btree at %Li:\n", btree->root.depth, (L)btree->root.block);
+	printf("%i level btree at %Li:\n", btree->root.depth, btree->root.block);
 	if (!has_root(btree))
 		return;
 
@@ -488,8 +488,6 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 		buffer = cursor_leafbuf(cursor);
 		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
-		//tuxkey_t *next = pnext_key(cursor, btree->depth);
-		//printf("next key = %Lx:\n", next ? (L)*next : 0);
 	} while (--count && cursor_advance(cursor));
 	free_cursor(cursor);
 }
@@ -539,7 +537,7 @@ int cursor_redirect(struct cursor *cursor)
 				return PTR_ERR(clone);
 			oldblock = bufindex(buffer);
 			newblock = bufindex(clone);
-			trace("redirect %Lx to %Lx", (L)oldblock, (L)newblock);
+			trace("redirect %Lx to %Lx", oldblock, newblock);
 			level_redirect_blockput(cursor, level, clone);
 			if (level == btree->root.depth) {
 				/* This is leaf buffer */
@@ -1169,8 +1167,8 @@ int alloc_empty_btree(struct btree *btree)
 	struct bnode *rootnode = bufdata(rootbuf);
 	block_t rootblock = bufindex(rootbuf);
 	block_t leafblock = bufindex(leafbuf);
-	trace("root at %Lx", (L)rootblock);
-	trace("leaf at %Lx", (L)leafblock);
+	trace("root at %Lx", rootblock);
+	trace("leaf at %Lx", leafblock);
 	bnode_init_root(rootnode, 1, leafblock, 0, 0);
 	log_bnode_root(sb, rootblock, 1, leafblock, 0, 0);
 	log_balloc(sb, leafblock, 1);

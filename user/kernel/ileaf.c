@@ -113,16 +113,16 @@ static void ileaf_dump(struct btree *btree, void *vleaf)
 	unsigned offset = 0;
 
 	trace_on("inode table block 0x%Lx/%i (%x bytes free)",
-		 (L)ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
+		 ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
 
 	for (int i = 0; i < icount(leaf); i++, inum++) {
 		int limit = __atdict(dict, i + 1), size = limit - offset;
 		if (!size)
 			continue;
 		if (size < 0)
-			trace_on("  0x%Lx: <corrupt>\n", (L)inum);
+			trace_on("  0x%Lx: <corrupt>\n", inum);
 		else if (!size)
-			trace_on("  0x%Lx: <empty>\n", (L)inum);
+			trace_on("  0x%Lx: <empty>\n", inum);
 		else if (attr_ops == &iattr_ops) {
 			/* FIXME: this doesn't work in kernel */
 			struct inode inode = { .i_sb = vfs_sb(btree->sb) };
@@ -142,7 +142,7 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 	unsigned at = inum - ibase(leaf), size = 0;
 	void *attrs = NULL;
 
-	trace("lookup inode 0x%Lx, %Lx + %x", (L)inum, (L)ibase(leaf), at);
+	trace("lookup inode 0x%Lx, %Lx + %x", inum, ibase(leaf), at);
 	if (at < icount(leaf)) {
 		be_u16 *dict = ileaf_dict(btree, leaf);
 		unsigned offset = atdict(dict, at);
@@ -210,7 +210,7 @@ static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
 	if (hint == ibase(leaf))
 		hint++;
 
-	trace("split at inum 0x%Lx", (L)hint);
+	trace("split at inum 0x%Lx", hint);
 	unsigned at = min_t(tuxkey_t, hint - ibase(leaf), icount(leaf));
 #else
 	/* binsearch inum starting nearest middle of block */

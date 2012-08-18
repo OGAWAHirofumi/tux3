@@ -193,7 +193,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &oldblock);
 			data = decode48(data, &newblock);
 			trace("%s: oldblock %Lx, newblock %Lx",
-			      log_name[code], (L)oldblock, (L)newblock);
+			      log_name[code], oldblock, newblock);
 			err = replay_bnode_redirect(rp, oldblock, newblock);
 			if (err)
 				return err;
@@ -209,7 +209,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &right);
 			data = decode48(data, &rkey);
 			trace("%s: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx",
-			      log_name[code], count, (L)root, (L)left, (L)right, (L)rkey);
+			      log_name[code], count, root, left, right, rkey);
 
 			err = replay_bnode_root(rp, root, count, left, right, rkey);
 			if (err)
@@ -224,7 +224,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
 			trace("%s: pos %x, src %Lx, dst %Lx",
-			      log_name[code], pos, (L)src, (L)dst);
+			      log_name[code], pos, src, dst);
 			err = replay_bnode_split(rp, src, pos, dst);
 			if (err)
 				return err;
@@ -238,7 +238,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &child);
 			data = decode48(data, &key);
 			trace("%s: parent 0x%Lx, child 0x%Lx, key 0x%Lx",
-			      log_name[code], (L)parent, (L)child, (L)key);
+			      log_name[code], parent, child, key);
 			if (code == LOG_BNODE_UPDATE)
 				err = replay_bnode_update(rp, parent, child, key);
 			else
@@ -253,7 +253,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
 			trace("%s: src 0x%Lx, dst 0x%Lx",
-			      log_name[code], (L)src, (L)dst);
+			      log_name[code], src, dst);
 			err = replay_bnode_merge(rp, src, dst);
 			if (err)
 				return err;
@@ -267,7 +267,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &bnode);
 			data = decode48(data, &key);
 			trace("%s: bnode 0x%Lx, count 0x%x, key 0x%Lx",
-			      log_name[code], (L)bnode, count, (L)key);
+			      log_name[code], bnode, count, key);
 			err = replay_bnode_del(rp, bnode, key, count);
 			if (err)
 				return err;
@@ -280,7 +280,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &from);
 			data = decode48(data, &to);
 			trace("%s: bnode 0x%Lx, from 0x%Lx, to 0x%Lx",
-			      log_name[code], (L)bnode, (L)from, (L)to);
+			      log_name[code], bnode, from, to);
 			err = replay_bnode_adjust(rp, bnode, from, to);
 			if (err)
 				return err;
@@ -338,7 +338,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			count = *data++;
 			data = decode48(data, &block);
 			trace("%s: count %u, block %Lx",
-			      log_name[code], count, (L)block);
+			      log_name[code], count, block);
 
 			err = 0;
 			if (code == LOG_BALLOC)
@@ -358,7 +358,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &oldblock);
 			data = decode48(data, &newblock);
 			trace("%s: oldblock %Lx, newblock %Lx",
-			      log_name[code], (L)oldblock, (L)newblock);
+			      log_name[code], oldblock, newblock);
 			err = replay_update_bitmap(rp, newblock, 1, 1);
 			if (err)
 				return err;
@@ -377,7 +377,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 		{
 			u64 block;
 			data = decode48(data, &block);
-			trace("%s: block %Lx", log_name[code], (L)block);
+			trace("%s: block %Lx", log_name[code], block);
 			err = replay_update_bitmap(rp, block, 1, 0);
 			if (err)
 				return err;
@@ -396,7 +396,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &right);
 			data = decode48(data, &rkey);
 			trace("%s: count %u, root block %Lx, left %Lx, right %Lx, rkey %Lx",
-			      log_name[code], count, (L)root, (L)left, (L)right, (L)rkey);
+			      log_name[code], count, root, left, right, rkey);
 
 			err = replay_update_bitmap(rp, root, 1, 1);
 			if (err)
@@ -411,7 +411,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
 			trace("%s: pos %x, src %Lx, dst %Lx",
-			      log_name[code], pos, (L)src, (L)dst);
+			      log_name[code], pos, src, dst);
 			err = replay_update_bitmap(rp, dst, 1, 1);
 			if (err)
 				return err;
@@ -423,7 +423,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
 			trace("%s: src 0x%Lx, dst 0x%Lx",
-			      log_name[code], (L)src, (L)dst);
+			      log_name[code], src, dst);
 			err = replay_update_bitmap(rp, src, 1, 0);
 			if (err)
 				return err;
@@ -439,7 +439,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			data = decode16(data, &version);
 			data = decode48(data, &inum);
 			trace("%s: version 0x%x, inum 0x%Lx",
-			      log_name[code], version, (L)inum);
+			      log_name[code], version, inum);
 			if (code == LOG_ORPHAN_ADD)
 				err = replay_orphan_add(rp, version, inum);
 			else
@@ -453,7 +453,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			u64 freeblocks;
 			data = decode48(data, &freeblocks);
 			trace("%s: freeblocks %llu", log_name[code],
-			      (L)freeblocks);
+			      freeblocks);
 			sb->freeblocks = freeblocks;
 			break;
 		}
@@ -475,7 +475,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 	 * Log block address itself works as balloc log. (This must be
 	 * after LOG_FREEBLOCKS replay if there is it.)
 	 */
-	trace("LOG BLOCK: logblock %Lx", (L)blocknr);
+	trace("LOG BLOCK: logblock %Lx", blocknr);
 	err = replay_update_bitmap(rp, blocknr, 1, 1);
 	if (err)
 		return err;
@@ -493,7 +493,7 @@ static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 
 	sb->lognext = 0;
 	while (sb->lognext < logcount) {
-		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, (L)rp->blocknrs[sb->lognext], (L)rp->rollup_index);
+		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, rp->blocknrs[sb->lognext], rp->rollup_index);
 		log_next(sb, 0);
 		err = replay_log_func(rp, sb->logbuf);
 		log_drop(sb);

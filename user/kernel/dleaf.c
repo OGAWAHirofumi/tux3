@@ -127,13 +127,13 @@ void dleaf_dump(struct btree *btree, void *vleaf)
 			--entry;
 			unsigned offset = entry == edict - 1 ? 0 : entry_limit(entry + 1);
 			int count = entry_limit(entry) - offset;
-			printf(" %Lx =>", (L)get_index(group, entry));
+			printf(" %Lx =>", get_index(group, entry));
 			//printf(" %p (%i)", entry, entry_limit(entry));
 			if (count < 0)
 				printf(" <corrupt>");
 			else for (int i = 0; i < count; i++) {
 				struct diskextent extent = extents[offset + i];
-				printf(" %Lx", (L)extent_block(extent));
+				printf(" %Lx", extent_block(extent));
 				if (extent_count(extent))
 					printf("/%x", extent_count(extent));
 			}
@@ -582,7 +582,7 @@ int dwalk_back(struct dwalk *walk)
  */
 int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key)
 {
-	trace("probe for 0x%Lx", (L)key);
+	trace("probe for 0x%Lx", key);
 	unsigned keylo = key & 0xffffff, keyhi = key >> 24;
 
 	walk->leaf = leaf;
@@ -656,7 +656,7 @@ probe_entry:
 int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 {
 	if (!dleaf_groups(walk->leaf) || walk->entry == walk->estop || dwalk_index(walk) != index) {
-		trace("add entry 0x%Lx", (L)index);
+		trace("add entry 0x%Lx", index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 		if (!walk->mock.groups || group_keyhi(&walk->mock.group) != keyhi || group_count(&walk->mock.group) >= MAX_GROUP_ENTRIES) {
 			trace("add group %i", walk->mock.groups);
@@ -669,7 +669,7 @@ int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 		walk->mock.entry = make_entry(keylo, walk->extent - walk->exbase);
 		inc_group_count(&walk->mock.group, 1);
 	}
-	trace("add extent 0x%Lx => 0x%Lx/%x", (L)index, (L)extent_block(extent), extent_count(extent));
+	trace("add extent 0x%Lx => 0x%Lx/%x", index, extent_block(extent), extent_count(extent));
 	walk->mock.free += sizeof(*walk->extent);
 	walk->extent++;
 	inc_entry_limit(&walk->mock.entry, 1);
@@ -780,7 +780,7 @@ int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 
 	trace("group %ti/%i", walk->gstop + groups - 1 - walk->group, groups);
 	if (!groups || dwalk_index(walk) != index) {
-		trace("add entry 0x%Lx", (L)index);
+		trace("add entry 0x%Lx", index);
 		unsigned keylo = index & 0xffffff, keyhi = index >> 24;
 		if (!groups || group_keyhi(walk->group) != keyhi || group_count(walk->group) >= MAX_GROUP_ENTRIES) {
 			trace("add group %i", groups);

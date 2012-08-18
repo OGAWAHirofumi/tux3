@@ -14,7 +14,19 @@ enum {
 
 #define BUFFER_BUCKETS 999
 
-typedef loff_t block_t; // disk io address range
+// disk io address range
+#ifdef BUFFER_FOR_TUX3
+/*
+ * Choose carefully:
+ * loff_t can be "long" or "long long" in userland. (not printf friendly)
+ * sector_t can be "unsigned long" or "u64". (32bits arch 32bits is too small)
+ *
+ * we want 48bits for tux3, and error friendly. (FIXME: u64 is better?)
+ */
+typedef signed long long	block_t;
+#else
+typedef loff_t			block_t;
+#endif
 
 struct dev { unsigned fd, bits; };
 

@@ -337,7 +337,7 @@ static int check_present(struct inode *inode)
 		break;
 	default:
 		error("Unknown mode: inum %Lx, mode %07ho",
-		      (L)tuxnode->inum, inode->i_mode);
+		      tuxnode->inum, inode->i_mode);
 		break;
 	}
 	return 0;
@@ -367,7 +367,7 @@ static int open_inode(struct inode *inode)
 	};
 	err = btree_read(cursor, &rq.key);
 	if (err == -ENOENT)
-		warn("inum %llx couldn't found", (L)tux_inode(inode)->inum);
+		warn("inum %llx couldn't found", tux_inode(inode)->inum);
 	if (!err) {
 		check_present(inode);
 		tux_setup_inode(inode);
@@ -420,7 +420,7 @@ static int save_inode(struct inode *inode)
 	int err = 0;
 
 	assert(inum != TUX_LOGMAP_INO && inum != TUX_INVALID_INO);
-	trace("save inode 0x%Lx", (L)inum);
+	trace("save inode 0x%Lx", inum);
 
 #ifndef __KERNEL__
 	/* FIXME: kill this, only mkfs path needs this */
@@ -709,7 +709,7 @@ static void tux_setup_inode(struct inode *inode)
 	}
 	default:
 		error("Unknown mode: inum %Lx, mode %07ho",
-		      (L)tux_inode(inode)->inum, inode->i_mode);
+		      tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
 }

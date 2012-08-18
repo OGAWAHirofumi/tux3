@@ -76,7 +76,7 @@ void show_segs(struct seg map[], unsigned segs)
 {
 	printf("%i segs: ", segs);
 	for (int i = 0; i < segs; i++)
-		printf("%Lx/%i ", (L)map[i].block, map[i].count);
+		printf("%Lx/%i ", map[i].block, map[i].count);
 	printf("\n");
 }
 
@@ -154,7 +154,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		if (limit > cursor_next_key(cursor))
 			limit = cursor_next_key(cursor);
 	}
-	trace("--- index %Lx, limit %Lx ---", (L)start, (L)limit);
+	trace("--- index %Lx, limit %Lx ---", start, limit);
 
 	block_t index = start, seg_start, block;
 	struct dwalk headwalk = *walk;
@@ -178,7 +178,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		} else {
 			block = dwalk_block(walk);
 			count = dwalk_count(walk);
-			trace("emit %Lx/%x", (L)block, count );
+			trace("emit %Lx/%x", block, count);
 			map[segs++] = (struct seg){ .block = block, .count = count };
 			index = ex_index + count;
 			dwalk_next(walk);
@@ -233,7 +233,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 				goto out_release;
 			}
 			log_balloc(sb, block, count);
-			trace("fill in %Lx/%i ", (L)block, count);
+			trace("fill in %Lx/%i ", block, count);
 			map[i] = (struct seg){
 				.block = block,
 				.count = count,
@@ -295,7 +295,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			dwalk_add(&headwalk, index, make_extent(above_block, above));
 			continue;
 		}
-		trace("pack 0x%Lx => %Lx/%x", (L)index, (L)map[i].block, map[i].count);
+		trace("pack 0x%Lx => %Lx/%x", index, map[i].block, map[i].count);
 		dleaf_dump(btree, leaf);
 		dwalk_add(&headwalk, index, make_extent(map[i].block, map[i].count));
 		dleaf_dump(btree, leaf);
@@ -516,7 +516,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 			    struct buffer_head *bh_result, int create)
 {
 	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
-	      (L)tux_inode(inode)->inum, (L)iblock, bh_result->b_size, create);
+	      tux_inode(inode)->inum, iblock, bh_result->b_size, create);
 
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
@@ -574,8 +574,8 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 		break;
 	}
 	trace("<== inum %Lu, mapped %d, block %Lu, size %zu",
-	      (L)tux_inode(inode)->inum, buffer_mapped(bh_result),
-	      (L)bh_result->b_blocknr, bh_result->b_size);
+	      tux_inode(inode)->inum, buffer_mapped(bh_result),
+	      bh_result->b_blocknr, bh_result->b_size);
 
 	return 0;
 }
@@ -851,7 +851,7 @@ int write_bitmap(struct buffer_head *buffer)
 		return err;
 	assert(err == 1);
 	assert(buffer->state - BUFFER_DIRTY == ((sb->rollup - 1) & (BUFFER_DIRTY_STATES - 1)));
-	trace("write bitmap %Lx", (L)buffer->index);
+	trace("write bitmap %Lx", buffer->index);
 	err = blockio(WRITE, buffer, seg.block);
 	if (!err)
 		clean_buffer(buffer);

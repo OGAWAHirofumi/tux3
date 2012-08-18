@@ -88,11 +88,11 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 					begin = found;
 				else {
 					if ((begin >> mapshift) != block)
-						printf("-%Lx ", (L)(found - 1));
+						printf("-%Lx ", found - 1);
 					else if (begin == found - 1)
-						printf("%Lx ", (L)begin);
+						printf("%Lx ", begin);
 					else
-						printf("%Lx-%Lx ", (L)begin, (L)(found - 1));
+						printf("%Lx-%Lx ", begin, found - 1);
 					begin = -1;
 					ended++;
 				}
@@ -103,7 +103,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		tail -= bytes;
 		offset = 0;
 		if (begin >= 0)
-			printf("%Lx-", (L)begin);
+			printf("%Lx-", begin);
 		if (any)
 			printf("\n");
 	}
@@ -116,7 +116,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
 {
 	struct inode *inode = sb->bitmap;
-	trace_off("balloc %i blocks from [%Lx/%Lx]", blocks, (L)start, (L)count);
+	trace_off("balloc %i blocks from [%Lx/%x]", blocks, start, count);
 	assert(blocks > 0);
 	block_t limit = start + count;
 	unsigned blocksize = 1 << sb->blockbits;
@@ -167,7 +167,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned
 				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
 				mutex_unlock(&sb->bitmap->i_mutex);
-				trace("balloc extent -> [%Lx/%x]", (L)found, blocks);
+				trace("balloc extent -> [%Lx/%x]", found, blocks);
 				return found;
 			}
 		}
@@ -183,7 +183,7 @@ final_partial_byte:
 int balloc(struct sb *sb, unsigned blocks, block_t *block)
 {
 	assert(blocks > 0);
-	trace_off("balloc %x blocks at goal %Lx", blocks, (L)sb->nextalloc);
+	trace_off("balloc %x blocks at goal %Lx", blocks, sb->nextalloc);
 	block_t goal = sb->nextalloc, total = sb->volblocks;
 
 	if ((*block = balloc_from_range(sb, goal, total - goal, blocks)) >= 0)
@@ -205,14 +205,14 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 
 	buffer = blockread(mapping(sb->bitmap), mapblock);
 	if (!buffer) {
-		warn("could not read bitmap buffer: extent 0x%Lx\n", (L)start);
+		warn("couldn't read bitmap buffer: extent 0x%Lx\n", start);
 		goto error;
 	}
 
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
 		goto double_free;
-	trace("bfree extent <- [%Lx/%x], ", (L)start, blocks);
+	trace("bfree extent <- [%Lx/%x], ", start, blocks);
 	buffer = blockdirty(buffer, sb->rollup);
 	// FIXME: error check of buffer
 	clear_bits(bufdata(buffer), start, blocks);
@@ -225,7 +225,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	return 0;
 
 double_free:
-	error("double free: start 0x%Lx, blocks %x", (L)start, blocks);
+	error("double free: start 0x%Lx, blocks %x", start, blocks);
 	mutex_unlock(&sb->bitmap->i_mutex);
 	blockput(buffer);
 error:
@@ -247,7 +247,7 @@ int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
 
 		error("%s: start 0x%Lx, count %x",
 		      set ? "already allocated" : "double free",
-		      (L)start, count);
+		      start, count);
 		return -EINVAL;
 	}
 

@@ -21,8 +21,8 @@ static void clean_dirty_buffer(const char *str, struct list_head *head)
 
 	list_for_each_entry_safe(buf, n, head, link) {
 		trace(">>> clean %s buffer %Lx:%Lx, count %d, state %d",
-		      str, (L)tux_inode(buffer_inode(buf))->inum,
-		      (L)bufindex(buf), bufcount(buf),
+		      str, tux_inode(buffer_inode(buf))->inum,
+		      bufindex(buf), bufcount(buf),
 		      buf->state);
 		assert(buffer_dirty(buf));
 		set_buffer_clean(buf);
@@ -166,7 +166,7 @@ static int reserve_superblock(struct sb *sb)
 		if (block == -1)
 			return -ENOSPC; // fix error code ???
 		log_balloc(sb, block, 1);
-		trace("reserve %Lx", (L)block);
+		trace("reserve %Lx", block);
 	}
 
 	return 0;

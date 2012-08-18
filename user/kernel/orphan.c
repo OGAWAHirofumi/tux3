@@ -210,7 +210,7 @@ int tux3_clear_inode_orphan(struct inode *inode)
 		if (err) {
 			/* FIXME: what to do? */
 			warn("orphan inum %Lu was leaved due to low memory",
-			     (L)inode->inum);
+			     inode->inum);
 			return err;
 		}
 	}

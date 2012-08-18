@@ -38,7 +38,7 @@ void inode_leak_check(void)
 		struct inode *inode;
 		hlist_for_each_entry(inode, node, head, i_hash) {
 			trace_on("possible leak inode inum %Lu, i_count %d",
-				 (L)inode->inum, atomic_read(&inode->i_count));
+				 inode->inum, atomic_read(&inode->i_count));
 			leaks++;
 		}
 	}
@@ -246,7 +246,7 @@ static int tuxio(struct file *file, char *data, unsigned len, int write)
 	int err = 0;
 	struct inode *inode = file->f_inode;
 	loff_t pos = file->f_pos;
-	trace("%s %u bytes at %Lu, isize = 0x%Lx", write ? "write" : "read", len, (L)pos, (L)inode->i_size);
+	trace("%s %u bytes at %Lu, isize = 0x%Lx", write ? "write" : "read", len, (s64)pos, (s64)inode->i_size);
 	if (write && pos + len > MAX_FILESIZE)
 		return -EFBIG;
 	if (!write && pos + len > inode->i_size) {
@@ -277,7 +277,7 @@ static int tuxio(struct file *file, char *data, unsigned len, int write)
 		}
 		else
 			memcpy(data, bufdata(buffer) + from, some);
-		trace_off("transfer %u bytes, block 0x%Lx, buffer %p", some, (L)bufindex(buffer), buffer);
+		trace_off("transfer %u bytes, block 0x%Lx, buffer %p", some, bufindex(buffer), buffer);
 		//hexdump(bufdata(buffer) + from, some);
 		blockput(buffer);
 		tail -= some;
@@ -305,7 +305,7 @@ int tuxwrite(struct file *file, const char *data, unsigned len)
 
 void tuxseek(struct file *file, loff_t pos)
 {
-	warn("seek to 0x%Lx", (L)pos);
+	warn("seek to 0x%Lx", (s64)pos);
 	file->f_pos = pos;
 }
 

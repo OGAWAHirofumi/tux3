@@ -76,16 +76,16 @@ void dump_attrs(struct inode *inode)
 			printf("mode %07ho uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			printf("ctime %Lx size %Lx ", (L)tuxtime(inode->i_ctime), (L)inode->i_size);
+			printf("ctime %Lx size %Lx ", tuxtime(inode->i_ctime), (s64)inode->i_size);
 			break;
 		case DATA_BTREE_ATTR:
-			printf("root %Lx:%u ", (L)tuxnode->btree.root.block, tuxnode->btree.root.depth);
+			printf("root %Lx:%u ", tuxnode->btree.root.block, tuxnode->btree.root.depth);
 			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", inode->i_nlink);
 			break;
 		case MTIME_ATTR:
-			printf("mtime %Lx ", (L)tuxtime(inode->i_mtime));
+			printf("mtime %Lx ", tuxtime(inode->i_mtime));
 			break;
 		case XATTR_ATTR:
 			printf("xattr(s) ");

@@ -59,9 +59,9 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
 	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
-	      (L)sb->volblocks, (L)sb->freeblocks, (L)sb->nextalloc);
+	      sb->volblocks, sb->freeblocks, sb->nextalloc);
 	trace("atom_dictsize %Lu, freeatom %u, atomgen %u",
-	      (L)sb->atomdictsize, sb->freeatom, sb->atomgen);
+	      (s64)sb->atomdictsize, sb->freeatom, sb->atomgen);
 
 	setup_roots(sb, super);
 }
@@ -306,7 +306,7 @@ static int write_log(struct sb *sb)
 		defer_bfree(&sb->derollup, block, 1);
 
 		blockput(buffer);
-		trace("logchain %lld", (L)block);
+		trace("logchain %lld", block);
 		sb->super.logchain = to_be_u64(block);
 	}
 

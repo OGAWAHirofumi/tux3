@@ -21,7 +21,7 @@ static void usage(void)
 
 static int mkfs(int fd, const char *volname, unsigned blocksize)
 {
-	u64 volsize = 0;
+	loff_t volsize = 0;
 	if (fdsize64(fd, &volsize))
 		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
 	int blockbits = 12;
@@ -47,7 +47,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	if (!sb->logmap)
 		return -ENOMEM;
 
-	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (L)volsize);
+	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (s64)volsize);
 	int err = make_tux3(sb);
 	if (!err) {
 		show_tree_range(itable_btree(sb), 0, -1);
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
 			goto eek;
 		if (seekarg) {
 			loff_t seek = strtoull(seekarg, NULL, 0);
-			printf("seek to %Li\n", (L)seek);
+			printf("seek to %Li\n", (s64)seek);
 			tuxseek(file, seek);
 		}
 		char text[1 << 16];
@@ -219,7 +219,7 @@ int main(int argc, char *argv[])
 		char buf[100] = { };
 		if (seekarg) {
 			loff_t seek = strtoull(seekarg, NULL, 0);
-			printf("seek to %Li\n", (L)seek);
+			printf("seek to %Li\n", (s64)seek);
 			tuxseek(file, seek);
 		}
 		memset(buf, 0, sizeof(buf));
@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 		loff_t seek = 0;
 		if (seekarg)
 			seek = strtoull(seekarg, NULL, 0);
-		printf("---- new size %Lu ----\n", (L)seek);
+		printf("---- new size %Lu ----\n", (s64)seek);
 		if ((errno = -tuxtruncate(inode, seek)))
 			goto eek;
 		iput(inode);

@@ -218,7 +218,7 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				blockput(buffer);
-				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", tux_inode(dir)->inum, block);
 				err = -EIO;
 				goto error;
 			}
@@ -290,7 +290,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				blockput(buffer);
-				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", tux_inode(dir)->inum, block);
 				return -EIO;
 			}
 			if (!is_deleted(entry)) {
@@ -364,7 +364,7 @@ int tux_dir_is_empty(struct inode *dir)
 		for (; entry <= limit; entry = next_entry(entry)) {
 			if (!entry->rec_len) {
 				blockput(buffer);
-				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", (L)tux_inode(dir)->inum, block);
+				tux_error(dir->i_sb, "zero length entry at <%Lx:%x>", tux_inode(dir)->inum, block);
 				return -EIO;
 			}
 			if (is_deleted(entry))

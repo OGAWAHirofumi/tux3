@@ -2,7 +2,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned
 {
 	block_t block = sb->nextalloc;
 	sb->nextalloc += blocks;
-	trace("-> %Lx/%x", (L)block, blocks);
+	trace("-> %Lx/%x", block, blocks);
 	return block;
 }
 
@@ -21,6 +21,6 @@ found:
 
 int bfree(struct sb *sb, block_t block, unsigned blocks)
 {
-	trace("<- %Lx/%x", (L)block, blocks);
+	trace("<- %Lx/%x", block, blocks);
 	return 0;
 }

@@ -70,7 +70,7 @@ int streamwrite(int fd, void *data, size_t count)
 	return iorel(fd, data, count, 1);
 }
 
-int fdsize64(int fd, uint64_t *size)
+int fdsize64(int fd, loff_t *size)
 {
 	struct stat stat;
 	if (fstat(fd, &stat))

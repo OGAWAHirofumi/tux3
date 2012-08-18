@@ -294,7 +294,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 	}
 
 	if (kill) {
-		warn("delete atom %Lx", (L)atom);
+		warn("delete atom %x", atom);
 		loff_t next = UNATOM_FREE_MAGIC | sb->freeatom;
 		loff_t where = unatom_dict_write(atable, atom, next);
 		if (where < 0) {
@@ -376,7 +376,7 @@ void show_freeatoms(struct sb *sb)
 	atom_t atom = sb->freeatom;
 
 	while (atom) {
-		warn("free atom: %Lx", (L)atom);
+		warn("free atom: %x", atom);
 		loff_t next = unatom_dict_read(atable, atom);
 		if (next < 0)
 			goto eek;

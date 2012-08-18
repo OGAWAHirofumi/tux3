@@ -40,14 +40,12 @@
  */
 static int debug_buffer;
 
-typedef long long L; /* widen to suppress printf warnings on 64 bit systems */
-
 static struct list_head buffers[BUFFER_STATES], lru_buffers;
 static unsigned max_buffers = 10000, max_evict = 1000, buffer_count;
 
 void show_buffer(struct buffer_head *buffer)
 {
-	printf("%Lx/%i%s ", (L)buffer->index, buffer->count,
+	printf("%Lx/%i%s ", buffer->index, buffer->count,
 		buffer_dirty(buffer) ? "*" :
 		buffer_clean(buffer) ? "" :
 		buffer->state == BUFFER_EMPTY ? "-" :
@@ -213,10 +211,10 @@ void blockput(struct buffer_head *buffer)
 {
 	assert(buffer);
 	assert(buffer->count > 0);
-	buftrace("Release buffer %Lx, count = %i, state = %i", (L)buffer->index, buffer->count, buffer->state);
+	buftrace("Release buffer %Lx, count = %i, state = %i", buffer->index, buffer->count, buffer->state);
 	buffer->count--;
 	if (buffer->count == 0) {
-		buftrace("Free buffer %Lx", (L)buffer->index);
+		buftrace("Free buffer %Lx", buffer->index);
 		assert(!buffer_dirty(buffer));
 		assert(hlist_unhashed(&buffer->hashlink));
 		assert(list_empty(&buffer->lru));
@@ -239,7 +237,7 @@ void blockput_free(struct buffer_head *buffer)
 
 	if (bufcount(buffer) != 2) { /* caller + hashlink == 2 */
 		warn("free block %Lx/%x still in use!",
-		     (L)bufindex(buffer), bufcount(buffer));
+		     bufindex(buffer), bufcount(buffer));
 		blockput(buffer);
 		assert(bufcount(buffer) == 1);
 		return;
@@ -271,7 +269,7 @@ void remove_buffer_hash(struct buffer_head *buffer)
 
 static void evict_buffer(struct buffer_head *buffer)
 {
-	buftrace("evict buffer [%Lx]", (L)buffer->index);
+	buftrace("evict buffer [%Lx]", buffer->index);
 	assert(buffer_clean(buffer) || buffer_empty(buffer));
 	assert(buffer->count == 1);
 	reclaim_buffer(buffer);
@@ -366,7 +364,7 @@ struct buffer_head *blockget(map_t *map, block_t block)
 		}
 	}
 
-	buftrace("make buffer [%Lx]", (L)block);
+	buftrace("make buffer [%Lx]", block);
 	buffer = new_buffer(map);
 	if (IS_ERR(buffer))
 		return NULL; // ERR_PTR me!!!
@@ -379,7 +377,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 {
 	struct buffer_head *buffer = blockget(map, block);
 	if (buffer && buffer_empty(buffer)) {
-		buftrace("read buffer %Lx, state %i", (L)buffer->index, buffer->state);
+		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
 		int err = buffer->map->io(buffer, 0);
 		if (err) {
 			blockput(buffer);
@@ -445,7 +443,7 @@ int flush_list(struct list_head *list)
 	int err = 0;
 	while (!list_empty(list)) {
 		struct buffer_head *buffer = list_entry(list->next, struct buffer_head, link);
-		buftrace("write buffer %Lx", (L)buffer->index);
+		buftrace("write buffer %Lx", buffer->index);
 		assert(buffer_dirty(buffer));
 		if ((err = buffer->map->io(buffer, 1)))
 			break;

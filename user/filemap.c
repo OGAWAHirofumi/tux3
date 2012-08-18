@@ -83,7 +83,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 {
 	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = tux_sb(inode->i_sb);
-	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", (L)tux_inode(inode)->inum, (L)bufindex(buffer));
+	trace("%s inode 0x%Lx block 0x%Lx", write ? "write" : "read", tux_inode(inode)->inum, bufindex(buffer));
 	if (bufindex(buffer) & (-1LL << MAX_BLOCKS_BITS))
 		return -EIO;
 	struct dev *dev = sb->dev;
@@ -96,7 +96,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 	block_t start;
 	unsigned count;
 	guess_region(buffer, &start, &count, write);
-	printf("---- extent 0x%Lx/%x ----\n", (L)start, count);
+	printf("---- extent 0x%Lx/%x ----\n", start, count);
 
 	struct seg map[10];
 
@@ -106,7 +106,7 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 
 	if (!segs) {
 		if (!write) {
-			trace("unmapped block %Lx", (L)bufindex(buffer));
+			trace("unmapped block %Lx", bufindex(buffer));
 			memset(bufdata(buffer), 0, sb->blocksize);
 			set_buffer_clean(buffer);
 			return 0;
@@ -114,14 +114,15 @@ int filemap_extent_io(struct buffer_head *buffer, int write)
 		return -EIO;
 	}
 
+	block_t index = start;
 	int err = 0;
-	for (int i = 0, index = start; !err && i < segs; i++) {
+	for (int i = 0; !err && i < segs; i++) {
 		int hole = map[i].state == SEG_HOLE;
-		trace_on("extent 0x%Lx/%x => %Lx", (L)index, map[i].count, (L)map[i].block);
+		trace_on("extent 0x%Lx/%x => %Lx", index, map[i].count, map[i].block);
 		for (int j = 0; !err && j < map[i].count; j++) {
 			block_t block = map[i].block + j;
 			buffer = blockget(mapping(inode), index + j);
-			trace_on("block 0x%Lx => %Lx", (L)bufindex(buffer), (L)block);
+			trace_on("block 0x%Lx => %Lx", bufindex(buffer), block);
 			if (write) {
 				err = blockio(WRITE, buffer, block);
 			} else {
@@ -155,7 +156,7 @@ int write_bitmap(struct buffer_head *buffer)
 		return err;
 	assert(err == 1);
 	assert(buffer->state - BUFFER_DIRTY == ((sb->rollup - 1) & (BUFFER_DIRTY_STATES - 1)));
-	trace("write bitmap %Lx", (L)buffer->index);
+	trace("write bitmap %Lx", buffer->index);
 	err = blockio(WRITE, buffer, seg.block);
 	if (!err)
 		clean_buffer(buffer);

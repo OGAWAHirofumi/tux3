@@ -193,7 +193,7 @@ static void tux3fuse_fill_ep(struct fuse_entry_param *ep, struct inode *inode)
 
 static void tux3fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	trace("(%Lx, '%s')", (L)parent, name);
+	trace("(%lx, '%s')", parent, name);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *dir, *inode;
 
@@ -226,7 +226,7 @@ static void tux3fuse_forget(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -246,7 +246,7 @@ static void tux3fuse_getattr(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			     int to_set, struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -285,7 +285,7 @@ static void tux3fuse_readlink(fuse_req_t req, fuse_ino_t ino)
 	struct inode *inode;
 	int err;
 
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 
 	inode = tux3fuse_iget(sb, ino);
 	if (IS_ERR(inode)) {
@@ -336,8 +336,8 @@ static void tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct inode *inode;
 
-	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o, rdev %llx)",
-	      (L)parent, name, ctx->uid, ctx->gid, mode, (L)rdev);
+	trace("(%lx, '%s', uid = %u, gid = %u, mode = %o, rdev %llx)",
+	      parent, name, ctx->uid, ctx->gid, mode, (u64)rdev);
 
 	inode = __tux3fuse_mknod(req, parent, name, mode, rdev);
 	if (IS_ERR(inode)) {
@@ -358,8 +358,8 @@ static void tux3fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct inode *inode;
 
-	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o)",
-	      (L)parent, name, ctx->uid, ctx->gid, mode);
+	trace("(%lx, '%s', uid = %u, gid = %u, mode = %o)",
+	      parent, name, ctx->uid, ctx->gid, mode);
 
 	inode = __tux3fuse_mknod(req, parent, name, S_IFDIR | mode, 0);
 	if (IS_ERR(inode)) {
@@ -381,7 +381,7 @@ static void tux3fuse_link(fuse_req_t req, fuse_ino_t ino,
 	struct inode *src_inode, *dir, *inode;
 	int err;
 
-	trace("(%Lx, %Lx, '%s')", (L)ino, (L)newparent, newname);
+	trace("(%lx, %lx, '%s')", ino, newparent, newname);
 
 	src_inode = tux3fuse_iget(sb, ino);
 	if (IS_ERR(src_inode)) {
@@ -426,7 +426,7 @@ static void tux3fuse_symlink(fuse_req_t req, const char *link,
 	struct inode *dir, *inode;
 	int err;
 
-	trace("('%s', %Lx, '%s')", link, (L)parent, name);
+	trace("('%s', %lx, '%s')", link, parent, name);
 
 	dir = tux3fuse_iget(sb, parent);
 	if (IS_ERR(dir)) {
@@ -456,7 +456,7 @@ static void tux3fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct inode *dir;
 	int err;
 
-	trace("(%Lx, '%s')", (L)parent, name);
+	trace("(%lx, '%s')", parent, name);
 
 	dir = tux3fuse_iget(sb, parent);
 	err = PTR_ERR(dir);
@@ -476,7 +476,7 @@ static void tux3fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct inode *dir;
 	int err;
 
-	trace("(%Lx, '%s')", (L)parent, name);
+	trace("(%lx, '%s')", parent, name);
 
 	dir = tux3fuse_iget(sb, parent);
 	err = PTR_ERR(dir);
@@ -498,7 +498,7 @@ static void tux3fuse_rename(fuse_req_t req,
 	struct inode *olddir, *newdir;
 	int err;
 
-	trace("(%Lx, '%s', %Lx, '%s')", (L)parent, name, (L)newparent, newname);
+	trace("(%lx, '%s', %lx, '%s')", parent, name, newparent, newname);
 
 	olddir = tux3fuse_iget(sb, parent);
 	if (IS_ERR(olddir)) {
@@ -527,8 +527,8 @@ static void tux3fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct inode *inode;
 
-	trace("(%Lx, '%s', uid = %u, gid = %u, mode = %o)",
-	      (L)parent, name, ctx->uid, ctx->gid, mode);
+	trace("(%lx, '%s', uid = %u, gid = %u, mode = %o)",
+	      parent, name, ctx->uid, ctx->gid, mode);
 
 	inode = __tux3fuse_mknod(req, parent, name, mode, 0);
 	if (IS_ERR(inode)) {
@@ -546,7 +546,7 @@ static void tux3fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 static void tux3fuse_open(fuse_req_t req, fuse_ino_t ino,
 			  struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -570,7 +570,7 @@ static void tux3fuse_flush(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_release(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	iput(inode);
 	fuse_reply_err(req, 0);
@@ -580,12 +580,12 @@ static void tux3fuse_release(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t offset, struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *file = &(struct file){ .f_inode = inode, };
 
 	/* FIXME: better to use map_region() directly */
-	trace("userspace tries to seek to %Li\n", (L)offset);
+	trace("userspace tries to seek to %Li\n", (s64)offset);
 	if (offset >= inode->i_size) {
 		fuse_reply_buf(req, NULL, 0);
 		return;
@@ -622,7 +622,7 @@ error:
 static void tux3fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 			   size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *file = &(struct file){ .f_inode = inode };
 
@@ -643,14 +643,14 @@ static void tux3fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 static void tux3fuse_opendir(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	tux3fuse_open(req, ino, fi);
 }
 
 static void tux3fuse_releasedir(fuse_req_t req, fuse_ino_t ino,
 				struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	tux3fuse_release(req, ino, fi);
 }
 
@@ -675,7 +675,7 @@ static int tux3fuse_filler(void *info, const char *name, int namelen,
 static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			     off_t offset, struct fuse_file_info *fi)
 {
-	trace("(%Lx)", (L)ino);
+	trace("(%lx)", ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *dirfile = &(struct file){ .f_inode = inode, .f_pos = offset };
 	char dirent[TUX_NAME_LEN + 1];
@@ -736,7 +736,7 @@ static void tux3fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 static void tux3fuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			      const char *value, size_t size, int flags)
 {
-	trace("(%Lx, '%s'='%s')", (L)ino, name, value);
+	trace("(%lx, '%s'='%s')", ino, name, value);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -755,7 +755,7 @@ static void tux3fuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 static void tux3fuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			      size_t maxsize)
 {
-	trace("(%Lx, '%s')", (L)ino, name);
+	trace("(%lx, '%s')", ino, name);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -788,7 +788,7 @@ out:
 
 static void tux3fuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	trace("(%Lx, %zu)", (L)ino, size);
+	trace("(%lx, %zu)", ino, size);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
@@ -831,7 +831,7 @@ static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct inode *inode;
 
-	trace("(%Lx, '%s')", (L)ino, name);
+	trace("(%lx, '%s')", ino, name);
 
 	inode = tux3fuse_iget(sb, ino);
 	if (IS_ERR(inode)) {

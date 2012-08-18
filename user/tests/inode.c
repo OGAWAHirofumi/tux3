@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
 	char *name = argv[1];
 	int fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
 	assert(!ftruncate(fd, 1 << 24));
-	u64 size = 0;
+	loff_t size = 0;
 	int err = fdsize64(fd, &size);
 	assert(!err);
 

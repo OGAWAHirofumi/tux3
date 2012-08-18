@@ -399,7 +399,7 @@ static void test04(struct sb *sb, struct inode *inode)
 	test_assert(!btree_probe(cursor, 0));
 	for (int i = 0; i < sb->entries_per_node - 1; i++) {
 		struct buffer_head *buffer = new_leaf(btree);
-		trace("buffer: index %Lx", (L)buffer->index);
+		trace("buffer: index %Lx", buffer->index);
 		test_assert(!IS_ERR(buffer));
 		mark_buffer_dirty_non(buffer);
 		test_assert(btree_insert_leaf(cursor, 100 + i, buffer) == 0);

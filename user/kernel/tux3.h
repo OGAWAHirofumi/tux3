@@ -12,18 +12,24 @@
 #include <linux/mutex.h>
 #include <linux/magic.h>
 
-typedef loff_t block_t;
-
 #define printf		printk
 #define vprintf		vprintk
 #define die(code)	BUG_ON(1)
 
 #include "trace.h"
+
+/*
+ * Choose carefully:
+ * loff_t can be "long" or "long long" in userland. (not printf friendly)
+ * sector_t can be "unsigned long" or "u64". (not printf friendly, and
+ * would be hard to control on 32bits arch)
+ *
+ * we want 48bits for tux3, and error friendly. (FIXME: what is best?)
+ */
+typedef signed long long	block_t;
 #endif /* !__KERNEL__ */
 
 #include "link.h"
-
-typedef long long L; // widen for printf on 64 bit systems
 
 #define fieldtype(compound, field) typeof(((compound *)NULL)->field)
 #define vecset(d, v, n) memset((d), (v), (n) * sizeof(*(d)))

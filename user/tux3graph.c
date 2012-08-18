@@ -144,14 +144,14 @@ static void draw_bnode(struct graph_info *gi, int child_is_leaf,
 	fprintf(gi->f,
 		"%s_bnode_%llu [\n"
 		"label = \"{ <bnode0> [bnode] (blocknr %llu%s) | count %u |",
-		gi->bname, (L)blocknr, (L)blocknr,
+		gi->bname, blocknr, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
 		bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
 		fprintf(gi->f,
 			" %c <f%u> key %llu, block %lld",
 			n ? '|' : '{', n,
-			(L)from_be_u64(index[n].key), (L)from_be_u64(index[n].block));
+			from_be_u64(index[n].key), from_be_u64(index[n].block));
 	}
 	fprintf(gi->f,
 		" }}\"\n"
@@ -164,16 +164,16 @@ static void draw_bnode(struct graph_info *gi, int child_is_leaf,
 		for (n = 0; n < bcount(bnode); n++) {
 			fprintf(gi->f,
 				"%s_bnode_%llu:f%u -> %s_%llu:%s0;\n",
-				gi->bname, (L)blocknr, n,
-				gi->lname, (L)from_be_u64(index[n].block),
+				gi->bname, blocknr, n,
+				gi->lname, from_be_u64(index[n].block),
 				gi->lname);
 		}
 	} else {
 		for (n = 0; n < bcount(bnode); n++) {
 			fprintf(gi->f,
 				"%s_bnode_%llu:f%u -> %s_bnode_%llu:bnode0;\n",
-				gi->bname, (L)blocknr, n,
-				gi->bname, (L)from_be_u64(index[n].block));
+				gi->bname, blocknr, n,
+				gi->bname, from_be_u64(index[n].block));
 		}
 	}
 }
@@ -290,7 +290,7 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 		/* bit offset from index 0 and bit 0 */
 		block_t offset = (index + i) * size;
 
-		fprintf(gi->f, " | index %llu:", (L)(index + i));
+		fprintf(gi->f, " | index %llu:", (index + i));
 		buffer = blockread(mapping(bitmap), index + i);
 		assert(buffer);
 		data = bufdata(buffer);
@@ -304,9 +304,9 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 			end = offset + idx - 1;
 
 			if (start != end)
-				fprintf(gi->f, " %llu-%llu,", (L)start, (L)end);
+				fprintf(gi->f, " %llu-%llu,", start, end);
 			else
-				fprintf(gi->f, " %llu,", (L)start);
+				fprintf(gi->f, " %llu,", start);
 
 			if (idx >= size)
 				break;
@@ -410,7 +410,7 @@ static void draw_dleaf_start(struct graph_info *gi, const char *dleaf_name,
 		"%s [\n"
 		"label = \"{ <%s0> [%s] (blocknr %llu%s)",
 		dleaf_name,
-		gi->lname, gi->lname, (L)blocknr,
+		gi->lname, gi->lname, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "");
 }
 
@@ -515,7 +515,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 					gr, ent, ex,
 					extent_version(extents[ex]),
 					extent_count(extents[ex]),
-					(L)extent_block(extents[ex]),
+					extent_block(extents[ex]),
 					ex);
 			}
 		}
@@ -537,7 +537,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 				" (entry %u, count %u, iblock %llu)",
 				gr, ent, entry_limit(entry), entry_keylo(entry),
 				ent, dleaf_extent_count(entries, ent),
-				(L)get_index(group, entry));
+				get_index(group, entry));
 		}
 	}
 
@@ -615,8 +615,8 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 		fprintf(gi->f,
 			" | verhi 0x%04x, logical %llu,"
 			" verlo 0x%04x, physical %llu",
-			ex.version >> VER_BITS, (L)ex.logical,
-			ex.version & VER_MASK, (L)ex.physical);
+			ex.version >> VER_BITS, ex.logical,
+			ex.version & VER_MASK, ex.physical);
 
 		if (dex == dex_limit - 1)
 			fprintf(gi->f, " (sentinel)");
@@ -640,7 +640,7 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree,
 	drawn |= DRAWN_DLEAF;
 
 	snprintf(dleaf_name, sizeof(dleaf_name), "%s_%llu",
-		 gi->lname, (L)blocknr);
+		 gi->lname, blocknr);
 
 	if (leaf->magic == to_be_u16(TUX3_MAGIC_DLEAF))
 		draw_dleaf1(gi, btree, dleaf_name, buffer, data);
@@ -667,7 +667,7 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 {
 	struct inode *inode = tux3_iget(btree->sb, inum);
 	if (IS_ERR(inode))
-		error("inode couldn't get: inum %Lu", (L)inum);
+		error("inode couldn't get: inum %Lu", inum);
 
 	int orphan = !list_empty(&inode->orphan_list);
 
@@ -676,8 +676,8 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 		"attrs (ino %llu, size %u, block %llu, depth %d%s)"
 		"%s",
 		orphan ? "<font color=\"blue\">" : "",
-		(L)inum, size,
-		(L)inode->btree.root.block,
+		inum, size,
+		inode->btree.root.block,
 		inode->btree.root.depth,
 		orphan ? ", orphan" : "",
 		orphan ? "</font>" : "");
@@ -706,9 +706,9 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		"    <td>magic 0x%04x, count %u, ibase %llu</td>\n"
 		"  </tr>\n",
 		ileaf_name,
-		gi->lname, gi->lname, (L)blocknr,
+		gi->lname, gi->lname, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
-		ileaf->magic, icount(ileaf), (L)ibase(ileaf));
+		ileaf->magic, icount(ileaf), ibase(ileaf));
 
 	/* draw inode attributes */
 	for (at = 0; at < icount(ileaf); at++) {
@@ -741,7 +741,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			"limit %u (offset %u, size %u, ino %llu)</td>\n"
 			"  </tr>\n",
 			at, atdict(dict, at + 1), atdict(dict, at),
-			ileaf_attr_size(dict, at), (L)ibase(ileaf) + at);
+			ileaf_attr_size(dict, at), ibase(ileaf) + at);
 	}
 
 	fprintf(gi->f,
@@ -812,7 +812,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 	drawn |= DRAWN_ILEAF;
 
 	snprintf(ileaf_name, sizeof(ileaf_name), "%s_%llu",
-		 gi->lname, (L)blocknr);
+		 gi->lname, blocknr);
 
 	__draw_ileaf(gi, btree, buffer, ileaf_name, draw_ileaf_attr);
 
@@ -825,7 +825,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		inum_t inum = ibase(ileaf) + at;
 		struct inode *inode = tux3_iget(btree->sb, inum);
 		if (IS_ERR(inode))
-			error("inode couldn't get: inum %Lu", (L)inum);
+			error("inode couldn't get: inum %Lu", inum);
 
 		if (!has_root(&inode->btree))
 			goto out_iput;
@@ -839,7 +839,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 			special_inode = 1;
 		} else {
 			int file_type = (inode->i_mode & S_IFMT) >> S_SHIFT;
-			sprintf(name, "ino%llu_dtree", (L)inum);
+			sprintf(name, "ino%llu_dtree", inum);
 			draw_data_ops = dtree_funcs[file_type];
 			special_inode = 0;
 		}
@@ -848,7 +848,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		/* write link: ileaf -> dtree root bnode */
 		add_link(gi, "%s:a%d:e -> %s_bnode_%llu:n;\n",
 			 ileaf_name, at, name,
-			 (L)inode->btree.root.block);
+			 inode->btree.root.block);
 
 		if (!special_inode) {
 			if (!verbose && (drawn & DRAWN_DTREE)) {
@@ -897,7 +897,7 @@ out_iput:
 static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
 			    inum_t inum, u16 size)
 {
-	fprintf(gi->f, "attrs (ino %llu, size %u)", (L)inum, size);
+	fprintf(gi->f, "attrs (ino %llu, size %u)", inum, size);
 }
 
 static void draw_oleaf(struct graph_info *gi, struct btree *btree,
@@ -911,7 +911,7 @@ static void draw_oleaf(struct graph_info *gi, struct btree *btree,
 	drawn |= DRAWN_OLEAF;
 
 	snprintf(oleaf_name, sizeof(oleaf_name), "%s_%llu",
-		 gi->lname, (L)blocknr);
+		 gi->lname, blocknr);
 
 	__draw_ileaf(gi, btree, buffer, oleaf_name, draw_oleaf_attr);
 }
@@ -953,10 +953,10 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		"logchain_%llu [\n"
 		"label = \"{ <logchain_%llu> [log] (blocknr %llu%s)"
 		" | <f0> magic 0x%04x, bytes %u, logchain %llu",
-		(L)buffer->index, (L)buffer->index, (L)buffer->index,
+		buffer->index, buffer->index, buffer->index,
 		buffer_dirty(buffer) ? ", dirty" : "",
 		from_be_u16(log->magic), from_be_u16(log->bytes),
-		(L)from_be_u64(log->logchain));
+		from_be_u64(log->logchain));
 
 	while (data < log->data + from_be_u16(log->bytes)) {
 		unsigned char code = *data++;
@@ -972,7 +972,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 block;
 			data = decode48(data, &block);
 			fprintf(gi->f, "count %u, block %llu ",
-				count, (L)block);
+				count, block);
 			break;
 		}
 		case LOG_LEAF_REDIRECT:
@@ -981,7 +981,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &old);
 			data = decode48(data, &new);
 			fprintf(gi->f, "old %llu, new %llu ",
-				(L)old, (L)new);
+				old, new);
 			break;
 		}
 		case LOG_LEAF_FREE:
@@ -990,7 +990,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &block);
 			fprintf(gi->f, "%s %llu ",
 				code == LOG_LEAF_FREE ? "leaf" : "bnode",
-				(L)block);
+				block);
 			break;
 		}
 		case LOG_BNODE_ROOT: {
@@ -1003,7 +1003,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			fprintf(gi->f,
 				"count %u, root %llu, left %llu, right %llu, "
 				"right key %llu ",
-				count, (L)root, (L)left, (L)right, (L)rkey);
+				count, root, left, right, rkey);
 			break;
 		}
 		case LOG_BNODE_SPLIT: {
@@ -1013,7 +1013,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &src);
 			data = decode48(data, &dest);
 			fprintf(gi->f, "pos %u, src %llu, dest %llu ",
-				pos, (L)src, (L)dest);
+				pos, src, dest);
 			break;
 		}
 		case LOG_BNODE_ADD:
@@ -1023,7 +1023,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &child);
 			data = decode48(data, &key);
 			fprintf(gi->f, "parent %llu, child %llu, key %llu ",
-				(L)parent, (L)child, (L)key);
+				parent, child, key);
 			break;
 		}
 		case LOG_BNODE_MERGE:
@@ -1031,7 +1031,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 src, dst;
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
-			fprintf(gi->f, "src %llu, dst %llu ", (L)src, (L)dst);
+			fprintf(gi->f, "src %llu, dst %llu ", src, dst);
 			break;
 		}
 		case LOG_BNODE_DEL:
@@ -1042,7 +1042,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &bnode);
 			data = decode48(data, &key);
 			fprintf(gi->f, "count %u, bnode %llu, key %llu ",
-				count, (L)bnode, (L)key);
+				count, bnode, key);
 			break;
 		}
 		case LOG_BNODE_ADJUST:
@@ -1052,7 +1052,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &from);
 			data = decode48(data, &to);
 			fprintf(gi->f, "node %llu, from %llu, to %llu ",
-				(L)node, (L)from, (L)to);
+				node, from, to);
 			break;
 		}
 		case LOG_ORPHAN_ADD:
@@ -1062,13 +1062,13 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode16(data, &version);
 			data = decode48(data, &inum);
 			fprintf(gi->f, "version %x, inum %llu ",
-				version, (L)inum);
+				version, inum);
 			break;
 		}
 		case LOG_FREEBLOCKS: {
 			u64 freeblocks;
 			data = decode48(data, &freeblocks);
-			fprintf(gi->f, "freeblocks %llu ", (L)freeblocks);
+			fprintf(gi->f, "freeblocks %llu ", freeblocks);
 			break;
 		}
 		case LOG_ROLLUP:
@@ -1110,7 +1110,7 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 		if (logcount) {
 			fprintf(gi->f,
 				"logchain_%llu:f0:e -> logchain_%llu:n;\n",
-				(L)nextchain, (L)from_be_u64(log->logchain));
+				nextchain, from_be_u64(log->logchain));
 		}
 		nextchain = from_be_u64(log->logchain);
 		blockput(buffer);
@@ -1144,33 +1144,33 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		"shape = record\n"
 		"];\n"
 		"}\n\n",
-		(L)SB_LOC >> sb->blockbits, (L)sb->freeblocks,
+		(block_t)SB_LOC >> sb->blockbits, sb->freeblocks,
 		txsb->magic,
 		(u8)txsb->magic[4], (u8)txsb->magic[5],
 		(u8)txsb->magic[6], (u8)txsb->magic[7],
-		(L)from_be_u64(txsb->birthdate),
-		(L)from_be_u64(txsb->flags),
-		(L)from_be_u64(txsb->iroot),
-		itable_btree(sb)->root.depth, (L)itable_btree(sb)->root.block,
-		(L)from_be_u64(txsb->oroot),
-		otable_btree(sb)->root.depth, (L)otable_btree(sb)->root.block,
+		from_be_u64(txsb->birthdate),
+		from_be_u64(txsb->flags),
+		from_be_u64(txsb->iroot),
+		itable_btree(sb)->root.depth, itable_btree(sb)->root.block,
+		from_be_u64(txsb->oroot),
+		otable_btree(sb)->root.depth, otable_btree(sb)->root.block,
 		sb->blockbits, sb->blocksize,
-		(L)from_be_u64(txsb->volblocks),
+		from_be_u64(txsb->volblocks),
 #ifndef ATOMIC
-		(L)from_be_u64(txsb->freeblocks),
+		from_be_u64(txsb->freeblocks),
 #endif
-		(L)from_be_u64(txsb->nextalloc),
-		(L)from_be_u64(txsb->atomdictsize),
+		from_be_u64(txsb->nextalloc),
+		from_be_u64(txsb->atomdictsize),
 		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen),
-		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain),
+		from_be_u64(txsb->logchain), from_be_u64(txsb->logchain),
 		from_be_u32(txsb->logcount));
 
 	fprintf(gi->f, "tux3_sb:iroot0:e -> %s_bnode_%llu:n;\n\n",
-		itable_name, (L)itable_btree(sb)->root.block);
+		itable_name, itable_btree(sb)->root.block);
 	fprintf(gi->f, "tux3_sb:oroot0:e -> %s_bnode_%llu:n;\n\n",
-		otable_name, (L)otable_btree(sb)->root.block);
+		otable_name, otable_btree(sb)->root.block);
 	fprintf(gi->f, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
-		(L)from_be_u64(txsb->logchain), (L)from_be_u64(txsb->logchain));
+		from_be_u64(txsb->logchain), from_be_u64(txsb->logchain));
 }
 
 static void usage(void)
