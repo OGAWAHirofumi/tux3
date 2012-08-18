@@ -90,12 +90,7 @@ static inline struct list_head *dirty_head(struct dirty_buffers *dirty)
 	return dirty_head_when(dirty, DEFAULT_DIRTY_WHEN);
 }
 
-/* Can we modify buffer from delta */
-static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
-{
-	return buffer_dirty(buffer);
-}
-
+int buffer_can_modify(struct buffer_head *buffer, unsigned delta);
 void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head);
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);

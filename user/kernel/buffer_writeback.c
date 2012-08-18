@@ -185,6 +185,8 @@ int bufvec_prepare_io(struct bufvec *bufvec, block_t physical, unsigned count)
 		list_del_init(&buffer->b_assoc_buffers);
 
 		lock_buffer(buffer);
+		/* FIXME: hack for save delta */
+		tux3_clear_bufdelta(buffer);
 		if (!test_clear_buffer_dirty(buffer)) {
 			unlock_buffer(buffer);
 			continue;
