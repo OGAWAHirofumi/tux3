@@ -396,7 +396,7 @@ static void walk_dtree(struct graph_info *gi, struct btree *btree,
 {
 	struct cursor *cursor = alloc_cursor(btree, 0);
 	assert(cursor);
-	int err = probe(cursor, 0);
+	int err = btree_probe(cursor, 0);
 	assert(!err);
 	struct buffer_head *leafbuf;
 	int ret;

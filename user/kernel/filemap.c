@@ -15,7 +15,7 @@
  * down_read(itable: btree->lock) (make_inode, save_inode)
  *    balloc()
  *
- * down_write(inode: btree->lock) (tree_chop, map_region for write)
+ * down_write(inode: btree->lock) (btree_chop, map_region for write)
  *     bitmap->i_mutex (balloc, bfree)
  *         down_read(bitmap: btree->lock) (map_region for read)
  * down_read(inode: btree->lock) (map_region for read)
@@ -137,7 +137,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count, struct
 			goto out_unlock;
 		}
 
-		if ((err = probe(cursor, start))) {
+		if ((err = btree_probe(cursor, start))) {
 			segs = err;
 			goto out_unlock;
 		}

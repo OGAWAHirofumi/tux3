@@ -184,14 +184,14 @@ static void test01(struct sb *sb, struct inode *inode)
 	clean_main(sb, inode);
 }
 
-static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
+static void btree_expand_test(struct cursor *cursor, tuxkey_t key)
 {
 	int err;
 
-	err = probe(cursor, key);
+	err = btree_probe(cursor, key);
 	test_assert(!err);
 
-	struct uentry *entry = tree_expand(cursor, key, 1);
+	struct uentry *entry = btree_expand(cursor, key, 1);
 	test_assert(!IS_ERR(entry));
 
 	*entry = (struct uentry){ .key = key, .val = key + 0x100 };
@@ -201,7 +201,7 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	release_cursor(cursor);
 
 	/* probe added key: buffer should be same */
-	err = probe(cursor, key);
+	err = btree_probe(cursor, key);
 	test_assert(!err);
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	test_assert(block == bufindex(leafbuf));
@@ -211,7 +211,7 @@ static void tree_expand_test(struct cursor *cursor, tuxkey_t key)
 	release_cursor(cursor);
 }
 
-/* tree_expand() and tree_chop() test */
+/* btree_expand() and btree_chop() test */
 static void test02(struct sb *sb, struct inode *inode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -228,11 +228,11 @@ static void test02(struct sb *sb, struct inode *inode)
 	int keys = sb->entries_per_node * btree->entries_per_leaf + 1;
 	/* Add keys to test tree_expand() until new depth */
 	for (int key = 0; key < keys; key++)
-		tree_expand_test(cursor, key);
+		btree_expand_test(cursor, key);
 	test_assert(btree->root.depth == 2);
 	/* Check key again after addition completed */
 	for (int key = 0; key < keys; key++) {
-		test_assert(probe(cursor, key) == 0);
+		test_assert(btree_probe(cursor, key) == 0);
 		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 		struct uentry *entry = uleaf_lookup(bufdata(leafbuf), key);
 		test_assert(entry);
@@ -241,18 +241,18 @@ static void test02(struct sb *sb, struct inode *inode)
 	}
 	/* Delte all */
 	{
-		struct delete_info info = { .key = 0 };
-		test_assert(tree_chop(btree, &info, 0) == 0);
+		struct btree_chop_info info = { .key = 0 };
+		test_assert(btree_chop(btree, &info, 0) == 0);
 	}
 	/* btree should have empty root */
 	test_assert(btree->root.depth == 1);
-	/* probe() should return same path always */
-	test_assert(probe(cursor, 0) == 0);
+	/* btree_probe() should return same path always */
+	test_assert(btree_probe(cursor, 0) == 0);
 	block_t root = bufindex(cursor->path[0].buffer);
 	struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 	release_cursor(cursor);
 	for (int key = 0; key < keys; key++) {
-		test_assert(probe(cursor, key) == 0);
+		test_assert(btree_probe(cursor, key) == 0);
 		test_assert(root == bufindex(cursor->path[0].buffer));
 		test_assert(leafbuf == cursor_leafbuf(cursor));
 		/* This should be no key in leaf */
@@ -266,7 +266,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	clean_main(sb, inode);
 }
 
-/* tree_expand() and tree_chop() test (reverse order) */
+/* btree_expand() and btree_chop() test (reverse order) */
 static void test03(struct sb *sb, struct inode *inode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -283,12 +283,12 @@ static void test03(struct sb *sb, struct inode *inode)
 	int keys = sb->entries_per_node * btree->entries_per_leaf * 100;
 
 	for (int key = keys - 1; key >= 0; key--)
-		tree_expand_test(cursor, key);
+		btree_expand_test(cursor, key);
 	assert(btree->root.depth >= 5); /* this test expects more than 5 */
 
 	/* Check key again after addition completed */
 	for (int key = keys - 1; key >= 0; key--) {
-		test_assert(probe(cursor, key) == 0);
+		test_assert(btree_probe(cursor, key) == 0);
 		struct buffer_head *leafbuf = cursor_leafbuf(cursor);
 		struct uentry *entry = uleaf_lookup(bufdata(leafbuf), key);
 		test_assert(entry);
@@ -298,12 +298,12 @@ static void test03(struct sb *sb, struct inode *inode)
 	/* Delete one by one for some keys from end */
 	int left = sb->entries_per_node * btree->entries_per_leaf * 80;
 	for (int key = keys - 1; key >= left; key--) {
-		struct delete_info info = { .key = key };
-		test_assert(tree_chop(btree, &info, 0) == 0);
+		struct btree_chop_info info = { .key = key };
+		test_assert(btree_chop(btree, &info, 0) == 0);
 
 		int ret, check = 0;
 
-		test_assert(probe(cursor, check) == 0);
+		test_assert(btree_probe(cursor, check) == 0);
 		do {
 			struct buffer_head *leafbuf;
 
@@ -335,7 +335,7 @@ static void test04(struct sb *sb, struct inode *inode)
 	struct cursor *cursor = alloc_cursor(btree, 1); /* +1 for new depth */
 	test_assert(cursor);
 
-	test_assert(!probe(cursor, 0));
+	test_assert(!btree_probe(cursor, 0));
 	for (int i = 0; i < sb->entries_per_node - 1; i++) {
 		struct buffer_head *buffer = new_leaf(btree);
 		trace("buffer: index %Lx", (L)buffer->index);
@@ -345,14 +345,14 @@ static void test04(struct sb *sb, struct inode *inode)
 	}
 	release_cursor(cursor);
 	/* Insert key=1 after key=0 */
-	test_assert(!probe(cursor, 0));
+	test_assert(!btree_probe(cursor, 0));
 	struct buffer_head *buffer = new_leaf(btree);
 	test_assert(!IS_ERR(buffer));
 	mark_buffer_dirty_non(buffer);
 	test_assert(btree_insert_leaf(cursor, 1, buffer) == 0);
 	/* probe same key with cursor2 */
 	struct cursor *cursor2 = alloc_cursor(btree, 0);
-	test_assert(!probe(cursor2, 1));
+	test_assert(!btree_probe(cursor2, 1));
 	for (int i = 0; i <= cursor->level; i++) {
 		test_assert(cursor->path[i].buffer == cursor2->path[i].buffer);
 		test_assert(cursor->path[i].next == cursor2->path[i].next);
@@ -361,7 +361,7 @@ static void test04(struct sb *sb, struct inode *inode)
 	release_cursor(cursor2);
 	free_cursor(cursor);
 	free_cursor(cursor2);
-	test_assert(!tree_chop(btree, &(struct delete_info){ .key = 0 }, 0));
+	test_assert(!btree_chop(btree, &(struct btree_chop_info){ .key = 0 }, 0));
 
 	clean_main(sb, inode);
 }
@@ -397,10 +397,10 @@ static void test05(struct sb *sb, struct inode *inode)
 	/* Some depths */
 	int keys = sb->entries_per_node * btree->entries_per_leaf * 100;
 	for (int key = keys - 1; key >= 0; key--)
-		tree_expand_test(cursor, key);
+		btree_expand_test(cursor, key);
 	assert(btree->root.depth >= 5); /* this test expects more than 5 */
 
-	test_assert(probe(cursor, 0) == 0);
+	test_assert(btree_probe(cursor, 0) == 0);
 	orig = malloc(sizeof(*orig) * (cursor->level + 1));
 	memcpy(orig, cursor->path, sizeof(*orig) * (cursor->level + 1));
 
@@ -431,7 +431,7 @@ static void test05(struct sb *sb, struct inode *inode)
 			struct buffer_head *leafbuf;
 			struct uentry *entry;
 
-			test_assert(probe(cursor, key) == 0);
+			test_assert(btree_probe(cursor, key) == 0);
 			leafbuf = cursor_leafbuf(cursor);
 			entry = uleaf_lookup(bufdata(leafbuf), key);
 			test_assert(entry);
@@ -476,7 +476,7 @@ static void test05(struct sb *sb, struct inode *inode)
 			struct buffer_head *leafbuf;
 			struct uentry *entry;
 
-			test_assert(probe(cursor, key) == 0);
+			test_assert(btree_probe(cursor, key) == 0);
 
 			leafbuf = cursor_leafbuf(cursor);
 			entry = uleaf_lookup(bufdata(leafbuf), key);

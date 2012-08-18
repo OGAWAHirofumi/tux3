@@ -161,7 +161,7 @@ retry:
 	if (!has_root(itable))
 		goto skip_itable;
 #endif
-	if ((err = probe(cursor, goal)))
+	if ((err = btree_probe(cursor, goal)))
 		goto out;
 
 	/* FIXME: inum allocation should check min and max */
@@ -273,7 +273,7 @@ static int open_inode(struct inode *inode)
 		return -ENOMEM;
 
 	down_read(&cursor->btree->lock);
-	if ((err = probe(cursor, tux_inode(inode)->inum)))
+	if ((err = btree_probe(cursor, tux_inode(inode)->inum)))
 		goto out;
 	unsigned size;
 	void *attrs = ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
@@ -313,7 +313,7 @@ static int store_attrs(struct inode *inode, struct cursor *cursor)
 	size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
 	assert(size);
 
-	base = tree_expand(cursor, tux_inode(inode)->inum, size);
+	base = btree_expand(cursor, tux_inode(inode)->inum, size);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 
@@ -338,7 +338,7 @@ static int save_inode(struct inode *inode)
 
 #ifndef __KERNEL__
 	/* FIXME: kill this, only mkfs path needs this */
-	/* FIXME: this should be merged to tree_expand()? */
+	/* FIXME: this should be merged to btree_expand()? */
 	down_write(&itable->lock);
 	if (!has_root(itable))
 		err = alloc_empty_btree(itable);
@@ -352,7 +352,7 @@ static int save_inode(struct inode *inode)
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
-	if ((err = probe(cursor, inum)))
+	if ((err = btree_probe(cursor, inum)))
 		goto out;
 	/* paranoia check */
 	if (!is_defer_alloc_inum(inode)) {
@@ -393,7 +393,7 @@ static int purge_inum(struct inode *inode)
 	inum_t inum = tux_inode(inode)->inum;
 	int err;
 	down_write(&cursor->btree->lock);
-	if (!(err = probe(cursor, inum))) {
+	if (!(err = btree_probe(cursor, inum))) {
 		if (!(err = cursor_redirect(cursor))) {
 			/* FIXME: truncate the bnode and leaf if empty. */
 			struct ileaf *ileaf = to_ileaf(bufdata(cursor_leafbuf(cursor)));
@@ -424,7 +424,7 @@ static int tux_can_truncate(struct inode *inode)
 static void __tux3_truncate(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct delete_info del_info = {
+	struct btree_chop_info chop_info = {
 		.key = (inode->i_size + sb->blockmask) >> sb->blockbits,
 	};
 	int err;
@@ -434,7 +434,7 @@ static void __tux3_truncate(struct inode *inode)
 	/* FIXME: must fix expand size */
 	WARN_ON(inode->i_size);
 	block_truncate_page(inode->i_mapping, inode->i_size, tux3_get_block);
-	err = tree_chop(&tux_inode(inode)->btree, &del_info, 0);
+	err = btree_chop(&tux_inode(inode)->btree, &del_info, 0);
 	inode->i_blocks = ((inode->i_size + sb->blockmask)
 			   & ~(loff_t)sb->blockmask) >> 9;
 	inode->i_mtime = inode->i_ctime = gettime();

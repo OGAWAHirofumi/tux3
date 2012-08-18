@@ -361,7 +361,7 @@ static void cursor_bnode_lookup(struct cursor *cursor, tuxkey_t key)
 	at->next = bnode_lookup(bufdata(at->buffer), key);
 }
 
-int probe(struct cursor *cursor, tuxkey_t key)
+int btree_probe(struct cursor *cursor, tuxkey_t key)
 {
 	int ret;
 
@@ -413,7 +413,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 	struct cursor *cursor = alloc_cursor(btree, 0);
 	if (!cursor)
 		error("out of memory");
-	if (probe(cursor, start))
+	if (btree_probe(cursor, start))
 		error("tell me why!!!");
 	struct buffer_head *buffer;
 	do {
@@ -576,7 +576,7 @@ static void blockput_free(struct btree *btree, struct buffer_head *buffer)
 	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
 }
 
-int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline)
+int btree_chop(struct btree *btree, struct btree_chop_info *info, millisecond_t deadline)
 {
 	int depth = btree->root.depth, suspend = 0;
 	struct cursor *cursor;
@@ -593,7 +593,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 	memset(prev, 0, sizeof(*prev) * depth);
 
 	down_write(&btree->lock);
-	probe(cursor, info->key);	/* FIXME: info->resume? */
+	btree_probe(cursor, info->key);	/* FIXME: info->resume? */
 
 	/* Walk leaves */
 	while (1) {
@@ -869,7 +869,7 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key)
 	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
-void *tree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
+void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize)
 {
 	struct btree *btree = cursor->btree;
 	int err;
@@ -942,7 +942,7 @@ error:
 	return PTR_ERR(rootbuf);
 }
 
-/* FIXME: right? and this should be done by tree_chop()? */
+/* FIXME: right? and this should be done by btree_chop()? */
 int free_empty_btree(struct btree *btree)
 {
 	if (!has_root(btree))
