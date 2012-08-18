@@ -212,14 +212,6 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 
 /* Tux3-specific sb is a handle for the entire volume state */
 
-#ifdef __KERNEL__
-/* FIXME */
-static inline int tux3_flush_inodes(struct sb *sb, unsigned delta)
-{
-	return 0;
-}
-#endif
-
 struct sb {
 	union {
 		struct disksuper super;
@@ -897,6 +889,10 @@ void clear_bits(u8 *bitmap, unsigned start, unsigned count);
 int all_set(u8 *bitmap, unsigned start, unsigned count);
 int all_clear(u8 *bitmap, unsigned start, unsigned count);
 int bytebits(u8 c);
+
+/* writeback.c */
+int tux3_flush_inode(struct inode *inode, unsigned delta);
+int tux3_flush_inodes(struct sb *sb, unsigned delta);
 
 /* xattr.c */
 void atable_init_base(struct sb *sb);

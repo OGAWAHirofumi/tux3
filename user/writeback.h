@@ -19,8 +19,6 @@ void __mark_inode_dirty(struct inode *inode, unsigned flags);
 void mark_inode_dirty(struct inode *inode);
 void mark_inode_dirty_sync(struct inode *inode);
 void mark_buffer_dirty(struct buffer_head *buffer);
-int tux3_flush_inode(struct inode *inode, unsigned delta);
-int tux3_flush_inodes(struct sb *sb, unsigned delta);
 int sync_super(struct sb *sb);
 
 #endif /* !TUX3_WRITEBACK_H */
