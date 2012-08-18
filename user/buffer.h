@@ -54,6 +54,7 @@ void show_buffers_state(unsigned state);
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer);
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
+void blockput_free(struct buffer_head *buffer);
 void blockput(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
 struct buffer_head *peekblk(map_t *map, block_t block);

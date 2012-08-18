@@ -134,6 +134,18 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return buffer;
 }
 
+void blockput_free(struct buffer_head *buffer)
+{
+	if (bufcount(buffer) != 1) {
+		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
+		blockput(buffer);
+		assert(bufcount(buffer) == 0);
+		return;
+	}
+	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
+	blockput(buffer);
+}
+
 void blockput(struct buffer_head *buffer)
 {
 	assert(buffer != NULL);

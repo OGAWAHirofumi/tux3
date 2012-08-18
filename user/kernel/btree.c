@@ -549,18 +549,6 @@ static void bnode_merge_nodes(struct bnode *into, struct bnode *from)
 	into->count = to_be_u32(into_count + from_count);
 }
 
-static void blockput_free(struct btree *btree, struct buffer_head *buffer)
-{
-	if (bufcount(buffer) != 1) {
-		warn("free block %Lx/%x still in use!", (L)bufindex(buffer), bufcount(buffer));
-		blockput(buffer);
-		assert(bufcount(buffer) == 0);
-		return;
-	}
-	blockput(buffer);
-	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
-}
-
 static void adjust_parent_sep(struct cursor *cursor, int level, be_u64 newsep)
 {
 	/* Update separating key until nearest common parent */
@@ -757,7 +745,7 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
 				remove_index(cursor, cii);
 				mark_buffer_dirty_non(leafprev);
-				blockput_free(btree, leafbuf);
+				blockput_free(leafbuf);
 				goto keep_prev_leaf;
 			}
 			blockput(leafprev);
@@ -796,7 +784,7 @@ keep_prev_leaf:
 					trace(">>> can merge node %p into node %p", buf, prev[level]);
 					remove_index(cursor, cii);
 					mark_buffer_rollup_non(prev[level]);
-					blockput_free(btree, buf);
+					blockput_free(buf);
 					goto keep_prev_node;
 				}
 				blockput(prev[level]);
@@ -827,7 +815,7 @@ chop_root:
 		/* FIXME: ->derollup (and log_bfree_rollup) or ->defree? */
 		defer_bfree(&sb->defree, bufindex(prev[0]), 1);
 		log_bfree(sb, bufindex(prev[0]), 1);
-		blockput_free(btree, prev[0]);
+		blockput_free(prev[0]);
 
 		vecmove(prev, prev + 1, btree->root.depth);
 	}
