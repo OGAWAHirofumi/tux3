@@ -105,7 +105,8 @@ static loff_t unatom_dict_read(struct inode *atable, atom_t atom)
 
 static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
 {
-	struct buffer_head *buffer;
+	struct sb *sb = tux_sb(atable->i_sb);
+	struct buffer_head *buffer, *clone;
 	loff_t old;
 	unsigned offset;
 
@@ -113,10 +114,17 @@ static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
 	if (!buffer)
 		return -EIO;
 
-	be_u64 *unatom_dict = bufdata(buffer);
+	clone = blockdirty(buffer, sb->delta);
+	if (IS_ERR(clone)) {
+		blockput(buffer);
+		return PTR_ERR(clone);
+	}
+
+	be_u64 *unatom_dict = bufdata(clone);
 	old = from_be_u64(unatom_dict[offset]);
 	unatom_dict[offset] = to_be_u64(where);
-	blockput_dirty(buffer);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
 
 	return old;
 }
@@ -252,6 +260,27 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 	return 0;
 }
 
+/* Modify buffer of refcount, then release buffer */
+static int update_refcount(struct sb *sb, struct buffer_head *buffer,
+			   unsigned offset, u16 val)
+{
+	struct buffer_head *clone;
+	be_u16 *refcount;
+
+	clone = blockdirty(buffer, sb->delta);
+	if (IS_ERR(clone)) {
+		blockput(buffer);
+		return PTR_ERR(clone);
+	}
+
+	refcount = bufdata(clone);
+	refcount[offset] = to_be_u16(val);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
+
+	return 0;
+}
+
 /* Modify atom refcount */
 static int atomref(struct inode *atable, atom_t atom, int use)
 {
@@ -261,6 +290,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
 	struct buffer_head *buffer;
 	be_u16 *refcount;
+	int err;
 
 	buffer = blockread(mapping(atable), block);
 	if (!buffer)
@@ -270,8 +300,11 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 	int low = from_be_u16(refcount[offset]) + use;
 	trace("inc atom %x by %d, offset %x[%x], low = %d",
 	      atom, use, block, offset, low);
-	refcount[offset] = to_be_u16(low);
-	blockput_dirty(buffer);
+
+	/* This releases buffer */
+	err = update_refcount(sb, buffer, offset, low);
+	if (err)
+		return err;
 
 	if (!low || (low & (-1 << 16))) {
 		buffer = blockread(mapping(atable), block + 1);
@@ -280,15 +313,22 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 
 		refcount = bufdata(buffer);
 		int high = from_be_u16(refcount[offset]);
-		if (low) {
+		if (!low)
+			blockput(buffer);
+		else {
 			trace("carry %d, offset %x[%x], high = %d",
 			      (low >> 16), block, offset, high);
 			high += (low >> 16);
 			assert(high >= 0); /* paranoia check */
-			refcount[offset] = to_be_u16(high);
-			mark_buffer_dirty(buffer);
+
+			/* This releases buffer */
+			err = update_refcount(sb, buffer, offset, high);
+			if (err) {
+				/* FIXME: better set a flag that atomref broke
+				 * or something! */
+				return err;
+			}
 		}
-		blockput(buffer);
 
 		kill = !(low | high);
 	}
@@ -315,7 +355,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 		if (entry_atom(entry) == atom) {
 			/* FIXME: better set a flag that unatom broke
 			 * or something! */
-			int err = tux_delete_entry(buffer, entry);
+			err = tux_delete_entry(buffer, entry);
 			if (err)
 				return err;
 		} else {
