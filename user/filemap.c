@@ -164,17 +164,7 @@ static int filemap_extent_io(struct bufvec *bufvec, enum map_mode mode)
 	int segs = map_region(inode, index, count, map, ARRAY_SIZE(map), mode);
 	if (segs < 0)
 		return segs;
-	if (!segs) {
-		if (rw == WRITE)
-			return -EIO;
-
-		trace("unmapped block %Lx", index);
-		/* There was no extent, handle as hole */
-		segs = 1;
-		map[0].block = 0;
-		map[0].count = bufvec_inuse(bufvec);
-		map[0].state = SEG_HOLE;
-	}
+	assert(segs);
 
 	for (int i = 0; i < segs; i++) {
 		block = map[i].block;

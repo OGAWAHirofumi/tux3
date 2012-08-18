@@ -416,10 +416,12 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 	} else {
 		assert(mode == MAP_READ);
 		/* btree doesn't have root yet */
+		segs = 1;
 		seg[0].block = 0;
 		seg[0].count = count;
 		seg[0].state = SEG_HOLE;
 	}
+	assert(segs);
 
 	if (mode == MAP_READ)
 		goto out_release;
@@ -508,7 +510,13 @@ out_unlock:
 	return segs;
 }
 
-/* Map specified logical region to physical region. (overwrite or allocate) */
+/*
+ * Map logical extent to physical extent
+ *
+ * return value:
+ * < 0 - error
+ * 0 < - number of physical extents which were mapped
+ */
 static int map_region(struct inode *inode, block_t start, unsigned count,
 		      struct seg map[], unsigned max_segs, enum map_mode mode)
 {
