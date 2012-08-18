@@ -647,3 +647,4 @@ void free_map(map_t *map)
 }
 
 #include "buffer_writeback.c"
+#include "buffer_fork.c"

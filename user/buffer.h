@@ -220,4 +220,9 @@ void bufvec_complete_without_io(struct bufvec *bufvec, unsigned count);
 int flush_list(struct list_head *head);
 int flush_buffers(map_t *map);
 int flush_state(unsigned state);
+
+/* block_fork.c */
+struct sb;
+void free_forked_buffers(struct sb *sb, int umount);
+struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 #endif

@@ -13,7 +13,6 @@
 struct sb;
 struct inode;
 
-struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 void clear_inode(struct inode *inode);
 void __mark_inode_dirty(struct inode *inode, unsigned flags);
 void mark_inode_dirty(struct inode *inode);
