@@ -276,28 +276,23 @@ static int open_inode(struct inode *inode)
 	down_read(&cursor->btree->lock);
 	if ((err = btree_probe(cursor, tux_inode(inode)->inum)))
 		goto out;
-	unsigned size;
-	void *attrs = ileaf_lookup(itable, tux_inode(inode)->inum, bufdata(cursor_leafbuf(cursor)), &size);
-	if (!attrs) {
-		err = -ENOENT;
-		goto release;
+
+	/* Read inode attribute from inode btree */
+	struct ileaf_req rq = {
+		.key = {
+			.start	= tux_inode(inode)->inum,
+			.len	= 1,
+		},
+		.data	= inode,
+	};
+	err = btree_read(cursor, &rq.key);
+	if (err == -ENOENT)
+		warn("inum %llx couldn't found", (L)tux_inode(inode)->inum);
+	if (!err) {
+		check_present(inode);
+		tux_setup_inode(inode);
 	}
-	trace("found inode 0x%Lx", (L)tux_inode(inode)->inum);
-	//ileaf_dump(itable, bufdata(cursor[depth].buffer));
-	//hexdump(attrs, size);
-	unsigned xsize = decode_xsize(inode, attrs, size);
-	err = -ENOMEM;
-	if (xsize && !(tux_inode(inode)->xcache = new_xcache(xsize)))
-		goto release;
-	decode_attrs(inode, attrs, size); // error???
-	if (tux3_trace)
-		dump_attrs(inode);
-	if (tux_inode(inode)->xcache)
-		xcache_dump(inode);
-	check_present(inode);
-	tux_setup_inode(inode);
-	err = 0;
-release:
+
 	release_cursor(cursor);
 out:
 	up_read(&cursor->btree->lock);

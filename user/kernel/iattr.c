@@ -151,7 +151,7 @@ void *decode_kind(void *attrs, unsigned *kind, unsigned *version)
 	return attrs;
 }
 
-void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
+static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	trace_off("decode %u attr bytes", size);
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -233,7 +233,29 @@ static void iattr_encode(struct btree *btree, void *data, void *attrs, int size)
 	assert(attr == attrs + size);
 }
 
+static int iattr_decode(struct btree *btree, void *data, void *attrs, int size)
+{
+	struct inode *inode = data;
+	unsigned xsize;
+
+	xsize = decode_xsize(inode, attrs, size);
+	if (xsize) {
+		tux_inode(inode)->xcache = new_xcache(xsize);
+		if (tux_inode(inode)->xcache == NULL)
+			return -ENOMEM;
+	}
+
+	decode_attrs(inode, attrs, size); // error???
+	if (tux3_trace)
+		dump_attrs(inode);
+	if (tux_inode(inode)->xcache)
+		xcache_dump(inode);
+
+	return 0;
+}
+
 struct ileaf_attr_ops iattr_ops = {
 	.encoded_size	= iattr_encoded_size,
 	.encode		= iattr_encode,
+	.decode		= iattr_decode,
 };

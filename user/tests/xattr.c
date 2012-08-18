@@ -16,6 +16,7 @@
 #endif
 
 #include "kernel/xattr.c"
+#include "kernel/iattr.c"
 
 static void clean_main(struct sb *sb)
 {

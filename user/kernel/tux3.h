@@ -938,7 +938,6 @@ static inline struct btree_ops *dtree_ops(void)
 void dump_attrs(struct inode *inode);
 void *encode_kind(void *attrs, unsigned kind, unsigned version);
 void *decode_kind(void *attrs, unsigned *kind, unsigned *version);
-void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
 extern struct ileaf_attr_ops iattr_ops;
 
 /* ileaf.c */
