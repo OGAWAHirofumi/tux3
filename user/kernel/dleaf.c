@@ -493,6 +493,15 @@ static void dwalk_check(struct dwalk *walk)
 		assert(walk->entry >= walk->estop);
 		assert(walk->exbase <= walk->extent);
 		assert(walk->extent < walk->exstop);
+		/*
+		 * This checks ->entry has only 1 ->extent.
+		 * FIXME (and re-think): Assuming dleaf->entry has only 1
+		 * ->extent on some functions
+		 */
+		if (walk->entry + 1 == walk->estop + group_count(walk->group))
+			assert(entry_limit(walk->entry) == 1);
+		else
+			assert(entry_limit(walk->entry) - entry_limit(walk->entry + 1) == 1);
 	}
 }
 
@@ -813,6 +822,9 @@ static int dleaf_chop(struct btree *btree, tuxkey_t start, u64 len,vleaf *vleaf)
 	struct sb *sb = btree->sb;
 	struct dleaf *leaf = to_dleaf(vleaf);
 	struct dwalk walk;
+
+	/* FIXME: range chop is unsupported for now */
+	assert(len == TUXKEY_LIMIT);
 
 	if (!dwalk_probe(leaf, sb->blocksize, &walk, start))
 		return 0;
