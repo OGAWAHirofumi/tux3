@@ -327,10 +327,66 @@ static void test03(struct sb *sb)
 	clean_main(sb);
 }
 
+/* Create/write/unlink inode without flush */
+static struct inode *make_orphan_inode(struct sb *sb, const char *name)
+{
+	static struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
+	static char data[1024] = {};
+
+	struct inode *inode;
+	struct file *file;
+	int err, size;
+
+	inode = tuxcreate(sb->rootdir, name, strlen(name), &iattr);
+	test_assert(!IS_ERR(inode));
+
+	file = &(struct file){ .f_inode = inode };
+	size = tuxwrite(file, data, sizeof(data));
+	test_assert(size == sizeof(data));
+
+	err = tuxunlink(sb->rootdir, name, strlen(name));
+	assert(!err);
+
+	return inode;
+}
+
+struct orphan_data {
+	inum_t inum;
+	int err;
+};
+
+static void check_orphan_inum(struct replay *rp, struct orphan_data *data,
+			      int nr_data)
+{
+	struct sb *sb = rp->sb;
+
+	for (int i = 0; i < nr_data; i++) {
+		struct inode *inode;
+		struct list_head *head;
+		int err = -ENOENT;
+		head = &sb->orphan_add;
+		list_for_each_entry(inode, head, orphan_list) {
+			if (data[i].inum == inode->inum) {
+				err = 0;
+				break;
+			}
+		}
+		head = &rp->orphan_in_otable;
+		list_for_each_entry(inode, head, orphan_list) {
+			if (data[i].inum == inode->inum) {
+				err = 0;
+				break;
+			}
+		}
+		test_assert(data[i].err == err);
+	}
+}
+
 /* Test for orphan inodes */
 static void test04(struct sb *sb)
 {
-	struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
+#define NR_ORPHAN	4
+	struct orphan_data *data = test_alloc_shm(sizeof(*data) * NR_ORPHAN);
 
 	test_assert(make_tux3(sb) == 0);
 	test_assert(force_rollup(sb) == 0);
@@ -339,54 +395,126 @@ static void test04(struct sb *sb)
 	pid_t pid = fork();
 	assert(pid >= 0);
 	if (pid == 0) {
-		struct inode *inode;
-		struct file *file;
-		char data[1024] = {};
-		int err, size;
-
+		struct inode *inodes[NR_ORPHAN];
+		LIST_HEAD(orphans);
 		char name[] = "filename";
 
-		/* Create inode and write data without flush */
-		inode = tuxcreate(sb->rootdir, name, strlen(name), &iattr);
-		test_assert(!IS_ERR(inode));
+		/*
+		 * inodes[0] is into sb->otable as orphan.
+		 * inodes[1] is into, then delete from sb->otable
+		 * inodes[2] make LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL
+		 * inodes[3] make LOG_ORPHAN_ADD
+		 */
+		for (int i = 0; i < NR_ORPHAN; i++) {
+			inodes[i] = make_orphan_inode(sb, name);
+			test_assert(!IS_ERR(inodes[i]));
 
-		file = &(struct file){ .f_inode = inode };
-		size = tuxwrite(file, data, sizeof(data));
-		test_assert(size == sizeof(data));
+			data[i].inum = inodes[i]->inum;
 
-		err = tuxunlink(sb->rootdir, name, strlen(name));
-		assert(!err);
-		/* This adds orphan inode to sb->otable */
-		test_assert(force_rollup(sb) == 0);
-		/* iput(inode); */
-
-		/* Create inode and write data without flush */
-		inode = tuxcreate(sb->rootdir, name, strlen(name), &iattr);
-		test_assert(!IS_ERR(inode));
-
-		file = &(struct file){ .f_inode = inode };
-		size = tuxwrite(file, data, sizeof(data));
-		test_assert(size == sizeof(data));
-
-		err = tuxunlink(sb->rootdir, name, strlen(name));
-		assert(!err);
-		/* This adds log for orphan inode */
+			switch (i) {
+			case 0:
+				data[i].err = 0;
+				/* Add into sb->otable */
+				test_assert(force_rollup(sb) == 0);
+				list_move(&inodes[i]->orphan_list, &orphans);
+				break;
+			case 1:
+			case 2:
+				data[i].err = -ENOENT;
+				/* Add into sb->otable */
+				test_assert(force_rollup(sb) == 0);
+				iput(inodes[i]);
+				if (i == 1) {
+					/* Delete from sb->otable */
+					test_assert(force_rollup(sb) == 0);
+				}
+				break;
+			case 3:
+				data[i].err = 0;
+				list_move(&inodes[i]->orphan_list, &orphans);
+				break;
+			}
+		}
 		test_assert(force_delta(sb) == 0);
-		/* iput(inode); */
+
+		/* Hack: clean inodes without destroy */
+		replay_iput_orphan_inodes(sb, &orphans, 0);
 
 		clean_main(sb);
 		/* Simulate crash */
-		raise(SIGKILL);
 		exit(1);
 	}
 	waitpid(pid, NULL, 0);
 	clean_main(sb);
 
-	/* Replay */
-	struct replay *rp = check_replay(sb);
-	test_assert(replay_stage3(rp, 0) == 0);
+	/* Check orphan btree and orphan logs */
+	if (test_start("test04.1")) {
+		/* Replay */
+		struct replay *rp = check_replay(sb);
 
-	clean_main(sb);
+		/* Check orphan inodes */
+		check_orphan_inum(rp, data, NR_ORPHAN);
+
+		int err = replay_stage3(rp, 0);
+		test_assert(!err);
+		clean_main(sb);
+	}
+	test_end();
+
+	/* Destroy orphans indoes and add orphan del log */
+	if (test_start("test04.2")) {
+		/* Replay */
+		struct replay *rp = check_replay(sb);
+
+		/* Destroy orphan inodes */
+		int err = replay_stage3(rp, 1);
+		test_assert(!err);
+
+		/* Just add defer orphan deletion request */
+		test_assert(force_delta(sb) == 0);
+
+		clean_main(sb);
+	}
+	test_end();
+
+	/* test04.2 destroyed orphans */
+	for (int i = 0; i < NR_ORPHAN; i++)
+		data[i].err = -ENOENT;
+
+	/* Apply orphan del logs */
+	if (test_start("test04.3")) {
+		/* Replay */
+		struct replay *rp = check_replay(sb);
+
+		/* Check orphan inodes */
+		check_orphan_inum(rp, data, NR_ORPHAN);
+
+		int err = replay_stage3(rp, 1);
+		test_assert(!err);
+
+		/* Remove orphan from sb->otable */
+		test_assert(force_rollup(sb) == 0);
+
+		clean_main(sb);
+	}
+	test_end();
+
+	/* Check result */
+	if (test_start("test04.4")) {
+		/* Replay */
+		struct replay *rp = check_replay(sb);
+
+		/* Check orphan inodes */
+		check_orphan_inum(rp, data, NR_ORPHAN);
+
+		int err = replay_stage3(rp, 1);
+		test_assert(!err);
+
+		clean_main(sb);
+	}
+	test_end();
+
+	test_free_shm(data, sizeof(*data) * NR_ORPHAN);
 }
 
 int main(int argc, char *argv[])

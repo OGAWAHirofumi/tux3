@@ -21,5 +21,7 @@ void test_assert_failed(void);
 int test_start(const char *name);
 void test_end(void);
 int test_failures(void);
+void *test_alloc_shm(size_t size);
+void test_free_shm(void *ptr, size_t size);
 
 #endif /* !_TEST_H */

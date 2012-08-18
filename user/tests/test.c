@@ -126,3 +126,24 @@ int test_failures(void)
 {
 	return test_env.test_fail_count;
 }
+
+/*
+ * Utility functions for test
+ */
+
+/* Create shared memory to share with child process */
+void *test_alloc_shm(size_t size)
+{
+	void *ptr;
+
+	ptr = mmap(NULL, size, PROT_READ | PROT_WRITE,
+		   MAP_ANONYMOUS | MAP_SHARED, -1, 0);
+	assert(ptr != MAP_FAILED);
+
+	return ptr;
+}
+
+void test_free_shm(void *ptr, size_t size)
+{
+	munmap(ptr, size);
+}
