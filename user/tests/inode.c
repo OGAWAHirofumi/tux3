@@ -111,6 +111,9 @@ int main(int argc, char *argv[])
 		tux_delete_inode(inode4);
 	}
 
+	destroy_defer_bfree(&sb->derollup);
+	destroy_defer_bfree(&sb->defree);
+
 	exit(0);
 eek:
 	return error("Eek! %s", strerror(errno));
