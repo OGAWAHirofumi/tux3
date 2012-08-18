@@ -114,52 +114,6 @@ error:
 	return err;
 }
 
-static void cleanup_garbage_for_debugging(struct sb *sb)
-{
-#ifdef ATOMIC
-	struct buffer_head *buf, *n;
-
-	/*
-	 * Pinned buffer is not flushing always, it is normal. So,
-	 * this clean those for unmount to check buffer debugging
-	 */
-	list_for_each_entry_safe(buf, n, &mapping(sb->bitmap)->dirty, link) {
-		trace(">>> clean bitmap buffer %Lx:%Lx, count %d, state %d",
-		      (L)tux_inode(buffer_inode(buf))->inum,
-		      (L)bufindex(buf), bufcount(buf),
-		      buf->state);
-		assert(buffer_dirty(buf));
-		set_buffer_clean(buf);
-	}
-
-	list_for_each_entry_safe(buf, n, &sb->pinned, link) {
-		trace(">>> clean pinned buffer %Lx:%Lx, count %d, state %d",
-		      (L)tux_inode(buffer_inode(buf))->inum,
-		      (L)bufindex(buf), bufcount(buf),
-		      buf->state);
-		assert(buffer_dirty(buf));
-		set_buffer_clean(buf);
-	}
-#else /* !ATOMIC */
-	/*
-	 * Clean garbage (atomic commit) stuff. Don't forget to update
-	 * this, if you update the atomic commit.
-	 */
-	log_finish(sb);
-
-	sb->logchain = 0;
-	sb->logbase = sb->next_logbase = 0;
-	sb->logthis = sb->lognext = 0;
-	invalidate_buffers(sb->logmap->map);
-
-	assert(flink_empty(&sb->defree.head));
-	assert(flink_empty(&sb->derollup.head));
-	assert(flink_empty(&sb->decycle.head));
-	assert(flink_empty(&sb->new_decycle.head));
-	assert(list_empty(&sb->pinned));
-#endif /* !ATOMIC */
-}
-
 int sync_super(struct sb *sb)
 {
 	int err;
@@ -175,8 +129,5 @@ int sync_super(struct sb *sb)
 	if ((err = save_sb(sb)))
 		return err;
 #endif /* !ATOMIC */
-
-	cleanup_garbage_for_debugging(sb);
-
 	return 0;
 }

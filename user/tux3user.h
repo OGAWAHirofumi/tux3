@@ -173,6 +173,7 @@ int devio(int rw, struct dev *dev, loff_t offset, void *data, unsigned len);
 int blockio(int rw, struct buffer_head *buffer, block_t block);
 
 /* super.c */
+int put_super(struct sb *sb);
 int make_tux3(struct sb *sb);
 
 #endif /* !TUX3_USER_H */

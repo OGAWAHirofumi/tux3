@@ -1010,10 +1010,7 @@ int main(int argc, char *argv[])
 	fprintf(ginfo.f, "}\n");
 	fclose(ginfo.f);
 
-	iput(sb->bitmap);
-	iput(sb->rootdir);
-	iput(sb->atable);
-	iput(sb->volmap);
+	put_super(sb);
 
 out:
 	return ret;

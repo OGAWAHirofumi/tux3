@@ -14,6 +14,78 @@
 #define trace trace_on
 #endif
 
+#ifdef ATOMIC
+static void clean_dirty_buffer(const char *str, struct list_head *head)
+{
+	struct buffer_head *buf, *n;
+
+	list_for_each_entry_safe(buf, n, head, link) {
+		trace(">>> clean %s buffer %Lx:%Lx, count %d, state %d",
+		      str, (L)tux_inode(buffer_inode(buf))->inum,
+		      (L)bufindex(buf), bufcount(buf),
+		      buf->state);
+		assert(buffer_dirty(buf));
+		set_buffer_clean(buf);
+	}
+}
+#endif
+
+static void cleanup_garbage_for_debugging(struct sb *sb)
+{
+#ifdef ATOMIC
+	/*
+	 * Pinned buffer is not flushing always, it is normal. So,
+	 * this clean those for unmount to check buffer debugging
+	 */
+	if (sb->bitmap)
+		clean_dirty_buffer("bitmap", &mapping(sb->bitmap)->dirty);
+	clean_dirty_buffer("pinned", &sb->pinned);
+#else /* !ATOMIC */
+	/*
+	 * Clean garbage (atomic commit) stuff. Don't forget to update
+	 * this, if you update the atomic commit.
+	 */
+	log_finish(sb);
+
+	sb->logchain = 0;
+	sb->logbase = sb->next_logbase = 0;
+	sb->logthis = sb->lognext = 0;
+	if (sb->logmap)
+		invalidate_buffers(sb->logmap->map);
+
+	assert(flink_empty(&sb->defree.head));
+	assert(flink_empty(&sb->derollup.head));
+	assert(flink_empty(&sb->decycle.head));
+	assert(flink_empty(&sb->new_decycle.head));
+	assert(list_empty(&sb->pinned));
+#endif /* !ATOMIC */
+}
+
+int put_super(struct sb *sb)
+{
+	/*
+	 * FIXME: Some test programs may not be loading inodes.
+	 * All programs should load all internal inodes.
+	 */
+
+	cleanup_garbage_for_debugging(sb);
+
+	if (sb->vtable)
+		iput(sb->vtable);
+	if (sb->rootdir)
+		iput(sb->rootdir);
+	if (sb->atable)
+		iput(sb->atable);
+	if (sb->bitmap)
+		iput(sb->bitmap);
+	if (sb->logmap)
+		iput(sb->logmap);
+	if (sb->volmap)
+		iput(sb->volmap);
+
+	return 0;
+}
+
 static int clear_other_magic(struct sb *sb)
 {
 	int err;

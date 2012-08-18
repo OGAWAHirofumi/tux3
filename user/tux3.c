@@ -52,12 +52,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	int err = make_tux3(sb);
 	if (!err) {
 		show_tree_range(itable_btree(sb), 0, -1);
-		iput(sb->vtable);
-		iput(sb->rootdir);
-		iput(sb->atable);
-		iput(sb->bitmap);
-		iput(sb->logmap);
-		iput(sb->volmap);
+		put_super(sb);
 	}
 	return err;
 }
@@ -134,7 +129,7 @@ int main(int argc, char *argv[])
 	if (!strcmp(command, "replay")) {
 		if ((errno = -replay(sb)))
 			goto eek;
-		return 0;
+		goto out;
 	}
 
 	sb->bitmap = iget(sb, TUX_BITMAP_INO);
@@ -308,14 +303,11 @@ int main(int argc, char *argv[])
 			goto eek;
 	}
 
+out:
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->volmap->map);
-	iput(sb->rootdir);
-	iput(sb->atable);
-	iput(sb->bitmap);
-	iput(sb->logmap);
-	iput(sb->volmap);
+	put_super(sb);
 
 	return 0;
 eek:
