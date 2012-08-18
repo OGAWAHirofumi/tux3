@@ -157,9 +157,9 @@ static void test01(struct sb *sb, struct btree *btree)
 
 	/* Remove inode */
 	data[2].size = 0;
-	ileaf_purge(btree, data[2].inum, leaf);
+	ileaf_chop(btree, data[2].inum, 1, leaf);
 	data[4].size = 0;
-	ileaf_purge(btree, data[4].inum, leaf);
+	ileaf_chop(btree, data[4].inum, 1, leaf);
 	/* Check */
 	check_ileaf_with_data(btree, leaf, data, ARRAY_SIZE(data));
 

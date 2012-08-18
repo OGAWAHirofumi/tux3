@@ -352,6 +352,49 @@ void ileaf_purge(struct btree *btree, inum_t inum, struct ileaf *leaf)
 	ileaf_trim(btree, leaf);
 }
 
+/*
+ * Chop inums
+ * return value:
+ * < 0 - error
+ *   1 - modified
+ *   0 - not modified
+ */
+static int ileaf_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
+{
+	struct ileaf *ileaf = leaf;
+	be_u16 *dict = ileaf_dict(btree, leaf);
+	tuxkey_t base = ibase(ileaf);
+	unsigned count = icount(ileaf);
+	unsigned at = start - base;
+	void *startp, *endp, *tailp;
+	unsigned size;
+
+	if (at + 1 > count)
+		return 0;
+
+	len = min_t(u64, len, count - at);
+
+	startp = ileaf->table + atdict(dict, at);
+	endp = ileaf->table + atdict(dict, at + len);
+	if (startp == endp)
+		return 0;
+
+	/* Remove data */
+	tailp = ileaf->table + atdict(dict, count);
+	memmove(startp, endp, tailp - endp);
+
+	/* Adjust dict */
+	size = endp - startp;
+	while (at < count) {
+		at++;
+		add_idict(dict - at, -size);
+	}
+
+	ileaf_trim(btree, leaf);
+
+	return 1;
+}
+
 static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 			  unsigned newsize)
 {
@@ -421,6 +464,7 @@ struct btree_ops itable_ops = {
 	.leaf_split	= ileaf_split,
 	.leaf_merge	= ileaf_merge,
 	.leaf_resize	= ileaf_resize,
+	.leaf_chop	= ileaf_chop,
 	.balloc		= balloc,
 
 	.leaf_sniff	= ileaf_sniff,
