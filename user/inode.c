@@ -64,11 +64,10 @@ static void free_inode(struct inode *inode)
 	assert(list_empty(&inode->alloc_list));
 	assert(hlist_unhashed(&inode->i_hash));
 	assert(list_empty(&inode->list));
-	assert(!inode->i_state);
-	assert(mapping(inode)); /* some inodes are not malloced */
-	free_map(mapping(inode)); // invalidate dirty buffers!!!
-	if (inode->xcache)
-		free(inode->xcache);
+	assert(inode->i_state == I_FREEING);
+	assert(mapping(inode));
+
+	free_map(mapping(inode));
 	free(inode);
 }
 
@@ -97,9 +96,49 @@ static void tux_setup_inode(struct inode *inode)
 	}
 }
 
+static int evict_inode(struct inode *inode)
+{
+	int err = 0;
+
+	if (inode->i_nlink > 0) {
+		truncate_inode_pages(mapping(inode), 0);
+		assert(!(inode->i_state & I_DIRTY));
+	} else {
+		/*
+		 * FIXME: since in-core inode is freed, we should do
+		 * something for freeing inode even if error happened.
+		 */
+
+		err = tuxtruncate(inode, 0);
+		if (err)
+			goto error;
+		/* FIXME: we have to free dtree-root, atable entry, etc too */
+		free_empty_btree(&tux_inode(inode)->btree);
+		clear_inode(inode);
+
+		err = purge_inum(inode);
+		if (err)
+			goto error;
+	}
+
+error:
+	if (inode->xcache)
+		free(inode->xcache);
+
+	return err;
+}
+
 void iput(struct inode *inode)
 {
 	if (atomic_dec_and_test(&inode->i_count)) {
+		if (inode->i_nlink > 0 && inode->i_state & I_DIRTY) {
+			/* Keep the inode on dirty list */
+			return;
+		}
+
+		inode->i_state |= I_FREEING;
+		evict_inode(inode);
+
 		remove_inode_hash(inode);
 		free_inode(inode);
 	}
@@ -107,12 +146,14 @@ void iput(struct inode *inode)
 
 void __iget(struct inode *inode)
 {
+	assert(!(inode->i_state & I_FREEING));
 	if (atomic_read(&inode->i_count)) {
 		atomic_inc(&inode->i_count);
 		return;
 	}
-	/* this shouldn't happen on userspace */
-	assert(atomic_read(&inode->i_count) > 0);
+	/* i_count == 0 should happen only dirty inode */
+	assert(inode->i_state & I_DIRTY);
+	atomic_inc(&inode->i_count);
 }
 
 static struct inode *find_inode(struct sb *sb, inum_t inum)
@@ -329,21 +370,6 @@ struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux
 	return inode;
 }
 
-int tux_delete_inode(struct inode *inode)
-{
-	int err;
-	assert(inode->i_nlink == 0);
-	if ((err = tuxtruncate(inode, 0)))
-		return err;
-	/* FIXME: we have to free dtree-root, atable entry, etc too */
-	free_empty_btree(&tux_inode(inode)->btree);
-	if ((err = purge_inum(inode)))
-		return err;
-	clear_inode(inode);
-	iput(inode);
-	return 0;
-}
-
 int tuxunlink(struct inode *dir, const char *name, int len)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
@@ -360,13 +386,16 @@ int tuxunlink(struct inode *dir, const char *name, int len)
 		err = PTR_ERR(inode);
 		goto error_iget;
 	}
-	if ((err = tux_delete_dirent(buffer, entry)))
+	err = tux_delete_dirent(buffer, entry);
+	if (err)
 		goto error_open;
 	inode->i_ctime = dir->i_ctime;
 	inode->i_nlink--;
-	/* FIXME: this should be done by tuxsync() or sync_super()? */
-	if ((err = tux_delete_inode(inode)))
-		goto error_open;
+	/* FIXME: we shouldn't write inode for i_nlink = 0? */
+	mark_inode_dirty_sync(inode);
+	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */
+	iput(inode);
+
 	return 0;
 
 error_open:

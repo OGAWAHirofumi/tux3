@@ -6,22 +6,16 @@
 
 void clear_inode(struct inode *inode)
 {
-	int has_refcnt = !list_empty(&inode->list);
-
 	list_del_init(&inode->list);
-	inode->i_state = 0;
-	if (has_refcnt)
-		iput(inode);
+	inode->i_state &= ~I_DIRTY;
 }
 
 void __mark_inode_dirty(struct inode *inode, unsigned flags)
 {
 	if ((inode->i_state & flags) != flags) {
 		inode->i_state |= flags;
-		if (list_empty(&inode->list)) {
-			__iget(inode);
+		if (list_empty(&inode->list))
 			list_add_tail(&inode->list, &inode->i_sb->dirty_inodes);
-		}
 	}
 }
 
@@ -48,6 +42,12 @@ int sync_inode(struct inode *inode)
 	unsigned dirty = inode->i_state;
 	int err;
 
+	/*
+	 * iput() doesn't free inode if I_DIRTY. Grab refcount to tell
+	 * inode state was changed to iput().
+	 */
+	__iget(inode);
+
 	if (inode->i_state & I_DIRTY_PAGES) {
 		/* To handle redirty, this clears before flushing */
 		inode->i_state &= ~I_DIRTY_PAGES;
@@ -62,11 +62,10 @@ int sync_inode(struct inode *inode)
 		if (err)
 			goto error;
 	}
-
-	if (dirty && !(inode->i_state & I_DIRTY)) {
+	if (!(inode->i_state & I_DIRTY))
 		list_del_init(&inode->list);
-		iput(inode);
-	}
+
+	iput(inode);
 
 	return 0;
 

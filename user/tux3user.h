@@ -164,7 +164,6 @@ struct inode *tuxopen(struct inode *dir, const char *name, int len);
 struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 				 struct tux_iattr *iattr, dev_t rdev);
 struct inode *tuxcreate(struct inode *dir, const char *name, int len, struct tux_iattr *iattr);
-int tux_delete_inode(struct inode *inode);
 int tuxunlink(struct inode *dir, const char *name, int len);
 int write_inode(struct inode *inode);
 
