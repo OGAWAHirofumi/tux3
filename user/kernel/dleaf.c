@@ -82,17 +82,12 @@ int dleaf_init(struct btree *btree, vleaf *leaf)
 	return 0;
 }
 
-static int dleaf_sniff(struct btree *btree, vleaf *leaf)
-{
-	return to_dleaf(leaf)->magic == to_be_u16(TUX3_MAGIC_DLEAF);
-}
-
 unsigned dleaf_free(struct btree *btree, vleaf *leaf)
 {
 	return from_be_u16(to_dleaf(leaf)->used) - from_be_u16(to_dleaf(leaf)->free);
 }
 
-unsigned dleaf_need(struct btree *btree, vleaf *vleaf)
+static unsigned dleaf_need(struct btree *btree, vleaf *vleaf)
 {
 	struct dleaf *leaf = to_dleaf(vleaf);
 	return btree->sb->blocksize - dleaf_free(btree, leaf) - sizeof(struct dleaf);
@@ -101,6 +96,16 @@ unsigned dleaf_need(struct btree *btree, vleaf *vleaf)
 static inline tuxkey_t get_index(struct group *group, struct entry *entry)
 {
 	return ((tuxkey_t)group_keyhi(group) << 24) | entry_keylo(entry);
+}
+
+static int dleaf_sniff(struct btree *btree, vleaf *leaf)
+{
+	return to_dleaf(leaf)->magic == to_be_u16(TUX3_MAGIC_DLEAF);
+}
+
+static int dleaf_can_free(struct btree *btree, vleaf *vleaf)
+{
+	return dleaf_need(btree, vleaf) == 0;
 }
 
 void dleaf_dump(struct btree *btree, vleaf *vleaf)
@@ -869,16 +874,16 @@ out:
 }
 
 struct btree_ops dtree1_ops = {
-	.btree_init = dleaf_btree_init,
-	.leaf_sniff = dleaf_sniff,
-	.leaf_init = dleaf_init,
-	.leaf_dump = dleaf_dump,
-	.leaf_need = dleaf_need,
-	.leaf_free = dleaf_free,
-	.leaf_split = dleaf_split,
-//	.leaf_resize = dleaf_resize,
-	.leaf_chop = dleaf_chop,
-	.leaf_merge = dleaf_merge,
-	.balloc = balloc,
-	.bfree = bfree,
+	.btree_init	= dleaf_btree_init,
+	.leaf_init	= dleaf_init,
+	.leaf_split	= dleaf_split,
+//	.leaf_resize	= dleaf_resize,
+	.leaf_chop	= dleaf_chop,
+	.leaf_merge	= dleaf_merge,
+	.balloc		= balloc,
+	.bfree		= bfree,
+
+	.leaf_sniff	= dleaf_sniff,
+	.leaf_can_free	= dleaf_can_free,
+	.leaf_dump	= dleaf_dump,
 };

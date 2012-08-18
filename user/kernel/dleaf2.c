@@ -126,30 +126,19 @@ static int dleaf2_sniff(struct btree *btree, void *leaf)
 	return 0;
 }
 
-static void dleaf2_dump(struct btree *btree, void *leaf)
-{
-}
-
-static unsigned dleaf2_need(struct btree *btree, void *leaf)
+static int dleaf2_can_free(struct btree *btree, void *leaf)
 {
 	struct dleaf2 *dleaf = leaf;
 	unsigned count = from_be_u16(dleaf->count);
-	/* Return number of diskextent2 except sentinel */
-	if (count > 0) {
-		/* paranoia check */
-		struct extent ex;
-		get_extent(dleaf->table + count - 1, &ex);
-		assert(ex.physical == 0);
-		return (count - 1) * sizeof(struct diskextent2);
-	}
-	return 0;
+
+	assert(dleaf2_sniff(btree, dleaf));
+	if (count > 1)
+		return 0;
+	return 1;
 }
 
-static unsigned dleaf2_free(struct btree *btree, void *leaf)
+static void dleaf2_dump(struct btree *btree, void *leaf)
 {
-	struct dleaf2 *dleaf = leaf;
-	unsigned count = btree->entries_per_leaf - from_be_u16(dleaf->count);
-	return count * sizeof(struct diskextent2);
 }
 
 /* Lookup logical address in diskextent2 <= index */
@@ -607,10 +596,6 @@ fill_seg:
 struct btree_ops dtree2_ops = {
 	.btree_init	= dleaf2_btree_init,
 	.leaf_init	= dleaf2_init,
-	.leaf_sniff	= dleaf2_sniff,
-	.leaf_dump	= dleaf2_dump,
-	.leaf_need	= dleaf2_need,
-	.leaf_free	= dleaf2_free,
 	.leaf_split	= dleaf2_split,
 	.leaf_merge	= dleaf2_merge,
 	.leaf_chop	= dleaf2_chop,
@@ -618,4 +603,8 @@ struct btree_ops dtree2_ops = {
 	.leaf_read	= dleaf2_read,
 	.balloc		= balloc,
 	.bfree		= bfree,
+
+	.leaf_sniff	= dleaf2_sniff,
+	.leaf_can_free	= dleaf2_can_free,
+	.leaf_dump	= dleaf2_dump,
 };

@@ -588,13 +588,9 @@ struct btree_key_range {
 
 struct btree_ops {
 	void (*btree_init)(struct btree *btree);
-	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
 	int (*leaf_init)(struct btree *btree, vleaf *leaf);
 	tuxkey_t (*leaf_split)(struct btree *btree, tuxkey_t hint, vleaf *from, vleaf *into);
 	void *(*leaf_resize)(struct btree *btree, tuxkey_t key, vleaf *leaf, unsigned size);
-	void (*leaf_dump)(struct btree *btree, vleaf *leaf);
-	unsigned (*leaf_need)(struct btree *btree, vleaf *leaf);
-	unsigned (*leaf_free)(struct btree *btree, vleaf *leaf);
 	/* return value: 1 - modified, 0 - not modified, < 0 - error */
 	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, vleaf *leaf);
 	/* return value: 1 - merged, 0 - couldn't merge */
@@ -603,6 +599,13 @@ struct btree_ops {
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
 	int (*bfree)(struct sb *sb, block_t block, unsigned blocks);
+	/*
+	 * for debugging
+	 */
+	int (*leaf_sniff)(struct btree *btree, vleaf *leaf);
+	/* return value: 1 - can free, 0 - can't free */
+	int (*leaf_can_free)(struct btree *btree, vleaf *leaf);
+	void (*leaf_dump)(struct btree *btree, vleaf *leaf);
 };
 
 /*
@@ -907,7 +910,6 @@ int dleaf_init(struct btree *btree, vleaf *leaf);
 unsigned dleaf_free(struct btree *btree, vleaf *leaf);
 void dleaf_dump(struct btree *btree, vleaf *vleaf);
 int dleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom);
-unsigned dleaf_need(struct btree *btree, vleaf *vleaf);
 extern struct btree_ops dtree1_ops;
 
 void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst);

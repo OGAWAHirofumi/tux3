@@ -1172,6 +1172,8 @@ error:
 /* FIXME: right? and this should be done by btree_chop()? */
 int free_empty_btree(struct btree *btree)
 {
+	struct btree_ops *ops = btree->ops;
+
 	if (!has_root(btree))
 		return 0;
 
@@ -1197,13 +1199,13 @@ int free_empty_btree(struct btree *btree)
 		 */
 		bfree(sb, leaf, 1);
 		log_leaf_free(sb, leaf);
-		assert(!btree->ops->leaf_need(btree, bufdata(leafbuf)));
+		assert(ops->leaf_can_free(btree, bufdata(leafbuf)));
 		blockput_free(leafbuf);
 	} else {
 		defer_bfree(&sb->defree, leaf, 1);
 		log_bfree(sb, leaf, 1);
 		if (leafbuf) {
-			assert(!btree->ops->leaf_need(btree, bufdata(leafbuf)));
+			assert(ops->leaf_can_free(btree, bufdata(leafbuf)));
 			blockput(leafbuf);
 		}
 	}

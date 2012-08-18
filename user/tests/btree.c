@@ -44,25 +44,25 @@ static void uleaf_btree_init(struct btree *btree)
 	btree->entries_per_leaf = (sb->blocksize - offsetof(struct uleaf, entries)) / sizeof(struct uentry);
 }
 
-static int uleaf_sniff(struct btree *btree, vleaf *leaf)
-{
-	return to_uleaf(leaf)->magic == 0xc0de;
-}
-
 static int uleaf_init(struct btree *btree, vleaf *leaf)
 {
 	*to_uleaf(leaf) = (struct uleaf){ .magic = 0xc0de };
 	return 0;
 }
 
-static unsigned uleaf_need(struct btree *btree, vleaf *leaf)
-{
-	return to_uleaf(leaf)->count;
-}
-
 static unsigned uleaf_free(struct btree *btree, vleaf *leaf)
 {
 	return btree->entries_per_leaf - to_uleaf(leaf)->count;
+}
+
+static int uleaf_sniff(struct btree *btree, vleaf *leaf)
+{
+	return to_uleaf(leaf)->magic == 0xc0de;
+}
+
+static int uleaf_can_free(struct btree *btree, vleaf *leaf)
+{
+	return to_uleaf(leaf)->count == 0;
 }
 
 static void uleaf_dump(struct btree *btree, vleaf *data)
@@ -147,18 +147,18 @@ static int uleaf_merge(struct btree *btree, vleaf *vinto, vleaf *vfrom)
 }
 
 static struct btree_ops ops = {
-	.btree_init = uleaf_btree_init,
-	.leaf_sniff = uleaf_sniff,
-	.leaf_init = uleaf_init,
-	.leaf_split = uleaf_split,
-	.leaf_resize = uleaf_resize,
-	.leaf_dump = uleaf_dump,
-	.leaf_need = uleaf_need,
-	.leaf_free = uleaf_free,
-	.leaf_merge = uleaf_merge,
-	.leaf_chop = uleaf_chop,
-	.balloc = balloc,
-	.bfree = bfree,
+	.btree_init	= uleaf_btree_init,
+	.leaf_init	= uleaf_init,
+	.leaf_split	= uleaf_split,
+	.leaf_resize	= uleaf_resize,
+	.leaf_merge	= uleaf_merge,
+	.leaf_chop	= uleaf_chop,
+	.balloc		= balloc,
+	.bfree		= bfree,
+
+	.leaf_sniff	= uleaf_sniff,
+	.leaf_can_free	= uleaf_can_free,
+	.leaf_dump	= uleaf_dump,
 };
 
 static int uleaf_insert(struct btree *btree, struct uleaf *leaf, unsigned key, unsigned val)
