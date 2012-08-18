@@ -13,9 +13,9 @@
 #include <linux/magic.h>
 #include <linux/slab.h>
 
-#define printf		printk
-#define vprintf		vprintk
-#define die(code)	BUG_ON(1)
+#define printf(fmt, args...)	printk(fmt , ##args)
+#define vprintf(fmt, args...)	vprintk(fmt , ##args)
+#define die(code)		BUG_ON(1)
 
 #include "trace.h"
 
