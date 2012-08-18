@@ -732,6 +732,7 @@ static void tux3fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_reply_err(req, ENOSYS);
 }
 
+/* FIXME: xattr should check prefix like 'user.' */
 static void tux3fuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			      const char *value, size_t size, int flags)
 {
@@ -827,8 +828,21 @@ static void tux3fuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,
 				 const char *name)
 {
-	warn("not implemented");
-	fuse_reply_err(req, ENOSYS);
+	struct sb *sb = tux3fuse_get_sb(req);
+	struct inode *inode;
+
+	trace("(%Lx, '%s')", (L)ino, name);
+
+	inode = tux3fuse_iget(sb, ino);
+	if (IS_ERR(inode)) {
+		fuse_reply_err(req, -PTR_ERR(inode));
+		return;
+	}
+
+	int err = del_xattr(inode, name, strlen(name));
+	iput(inode);
+
+	fuse_reply_err(req, -err);
 }
 
 static void tux3fuse_getlk(fuse_req_t req, fuse_ino_t ino,
