@@ -1191,7 +1191,7 @@ int alloc_empty_btree(struct btree *btree)
 	log_bnode_root(sb, rootblock, 1, leafblock, 0, 0);
 	log_balloc(sb, leafblock, 1);
 
-	mark_buffer_dirty_non(rootbuf);
+	mark_buffer_rollup_non(rootbuf);
 	blockput(rootbuf);
 	mark_buffer_dirty_non(leafbuf);
 	blockput(leafbuf);
