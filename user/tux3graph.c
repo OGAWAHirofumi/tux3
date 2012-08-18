@@ -339,31 +339,24 @@ static void draw_cursor(struct graph_info *gi, struct cursor *cursor)
 
 static int draw_advance(struct graph_info *gi, struct cursor *cursor)
 {
-	struct btree *btree = cursor->btree;
-	int depth = btree->root.depth, level = depth;
-	struct buffer_head *buffer;
+	int ret, depth = cursor->btree->root.depth;
 	do {
-		level_pop_blockput(cursor);
-		if (!level)
+		if (!cursor_advance_up(cursor))
 			return 0;
-		level--;
-	} while (level_finished(cursor, level));
-	while (1) {
-		buffer = vol_bread(btree->sb, from_be_u64(cursor->path[level].next->block));
-		if (!buffer)
-			goto eek;
-		cursor->path[level].next++;
-		if (level + 1 == depth)
-			break;
-		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
-		level++;
-		draw_bnode(gi, depth, level, buffer);
-	}
-	level_push(cursor, buffer, NULL);
+	} while (cursor_level_finished(cursor));
+	do {
+		ret = cursor_advance_down(cursor);
+		if (ret < 0) {
+			release_cursor(cursor);
+			return ret;
+		}
+		if (ret) {
+			int level = cursor->len - 1;
+			struct buffer_head *buffer = cursor->path[level].buffer;
+			draw_bnode(gi, depth, level, buffer);
+		}
+	} while (ret);
 	return 1;
-eek:
-	release_cursor(cursor);
-	return -EIO;
 }
 
 static void draw_btree(struct graph_info *gi, struct btree *btree, draw_leaf_t draw_leaf)
@@ -414,6 +407,7 @@ static void walk_dtree(struct graph_info *gi, struct btree *btree,
 	int err = probe(cursor, 0);
 	assert(!err);
 	struct buffer_head *leafbuf;
+	int ret;
 	do {
 		leafbuf = cursor_leafbuf(cursor);
 		assert((btree->ops->leaf_sniff)(btree, bufdata(leafbuf)));
@@ -425,7 +419,10 @@ static void walk_dtree(struct graph_info *gi, struct btree *btree,
 		do {
 			walk_dleaf(gi, btree, &walk);
 		} while (dwalk_next(&walk));
-	} while (advance(cursor));
+
+		ret = cursor_advance(cursor);
+		assert(ret >= 0);
+	} while (ret);
 	free_cursor(cursor);
 }
 

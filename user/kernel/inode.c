@@ -174,7 +174,7 @@ retry:
 		trace("result inum is %Lx, limit is %Lx", (L)goal, (L)next_key(cursor, depth));
 		if (goal < next_key(cursor, depth))
 			break;
-		int more = advance(cursor);
+		int more = cursor_advance(cursor);
 		if (more < 0) {
 			err = more;
 			goto release;

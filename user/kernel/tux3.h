@@ -825,8 +825,8 @@ void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btr
 int alloc_empty_btree(struct btree *btree);
 int free_empty_btree(struct btree *btree);
 struct buffer_head *new_leaf(struct btree *btree);
+int cursor_advance(struct cursor *cursor);
 int probe(struct cursor *cursor, tuxkey_t key);
-int advance(struct cursor *cursor);
 tuxkey_t next_key(struct cursor *cursor, int depth);
 int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline);
 int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);

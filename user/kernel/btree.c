@@ -97,7 +97,7 @@ static inline struct bnode *cursor_node(struct cursor *cursor, int level)
 
 struct buffer_head *cursor_leafbuf(struct cursor *cursor)
 {
-	assert(cursor->len >= 2); /* root-bnode + leaf >= 2 */
+	assert(cursor->len - 1 == cursor->btree->root.depth);
 	return cursor->path[cursor->len - 1].buffer;
 }
 
@@ -193,8 +193,9 @@ static void cursor_check(struct cursor *cursor)
 
 	for (int i = 0; i < cursor->len; i++) {
 		assert(bufindex(cursor->path[i].buffer) == block);
-		if (!cursor->path[i].next)
+		if (i + 1 == cursor->len)
 			break;
+
 		struct bnode *node = cursor_node(cursor, i);
 		assert(node->entries < cursor->path[i].next);
 		assert(cursor->path[i].next <= node->entries + bcount(node));
@@ -249,6 +250,81 @@ static struct index_entry *bnode_lookup(struct bnode *node, tuxkey_t key)
 	return next - 1;
 }
 
+static int cursor_level_finished(struct cursor *cursor)
+{
+	/* must not be leaf */
+	assert(cursor->len - 1 < cursor->btree->root.depth);
+	return level_finished(cursor, cursor->len - 1);
+}
+
+/*
+ * Cursor up to parent node.
+ * 0 - there is no further parent (root was popped)
+ * 1 - there is parent
+ */
+static int cursor_advance_up(struct cursor *cursor)
+{
+	assert(cursor->len != 0);
+	level_pop_blockput(cursor);
+	return cursor->len != 0;
+}
+
+/*
+ * Cursor down to child node or leaf, and update ->next.
+ * < 0 - error
+ *   0 - there is no further child (leaf was pushed)
+ *   1 - there is child
+ */
+static int cursor_advance_down(struct cursor *cursor)
+{
+	struct btree *btree = cursor->btree;
+	int level = cursor->len - 1;
+	struct buffer_head *buffer;
+	block_t child;
+
+	assert(cursor->len - 1 < btree->root.depth);
+
+	child = from_be_u64(cursor->path[level].next->block);
+	buffer = vol_bread(btree->sb, child);
+	if (!buffer)
+		return -EIO; /* FIXME: error code */
+	cursor->path[level].next++;
+
+	if (cursor->len - 1 < btree->root.depth - 1) {
+		struct bnode *node = bufdata(buffer);
+		level_push(cursor, buffer, node->entries);
+		cursor_check(cursor);
+		return 1;
+	}
+
+	level_push(cursor, buffer, NULL);
+	cursor_check(cursor);
+	return 0;
+}
+
+/*
+ * Cursor advance for btree traverse.
+ * < 0 - error
+ *   0 - Finished traverse
+ *   1 - Reached leaf
+ */
+int cursor_advance(struct cursor *cursor)
+{
+	int ret;
+
+	do {
+		if (!cursor_advance_up(cursor))
+			return 0;
+	} while (cursor_level_finished(cursor));
+	do {
+		ret = cursor_advance_down(cursor);
+		if (ret < 0)
+			return ret;
+	} while (ret);
+
+	return 1;
+}
+
 int probe(struct cursor *cursor, tuxkey_t key)
 {
 	struct btree *btree = cursor->btree;
@@ -275,33 +351,6 @@ int probe(struct cursor *cursor, tuxkey_t key)
 eek:
 	release_cursor(cursor);
 	return -EIO; /* stupid, it might have been NOMEM */
-}
-
-int advance(struct cursor *cursor)
-{
-	struct btree *btree = cursor->btree;
-	int depth = btree->root.depth, level = depth;
-	struct buffer_head *buffer;
-
-	do {
-		level_pop_blockput(cursor);
-		if (!level)
-			return 0;
-		level--;
-	} while (level_finished(cursor, level));
-	while (1) {
-		buffer = vol_bread(btree->sb, from_be_u64(cursor->path[level].next->block));
-		if (!buffer)
-			return -EIO;
-		cursor->path[level].next++;
-		if (level + 1 == depth)
-			break;
-		level_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
-		level++;
-	}
-	level_push(cursor, buffer, NULL);
-	cursor_check(cursor);
-	return 1;
 }
 
 /*
@@ -343,7 +392,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 		//tuxkey_t *next = pnext_key(cursor, btree->depth);
 		//printf("next key = %Lx:\n", next ? (L)*next : 0);
-	} while (--count && advance(cursor));
+	} while (--count && cursor_advance(cursor));
 	free_cursor(cursor);
 }
 

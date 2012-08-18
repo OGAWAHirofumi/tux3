@@ -310,7 +310,7 @@ static void test03(struct sb *sb, struct inode *inode)
 			leafbuf = cursor_leafbuf(cursor);
 			while (uleaf_lookup(bufdata(leafbuf), check))
 				check++;
-			ret = advance(cursor);
+			ret = cursor_advance(cursor);
 			test_assert(ret >= 0);
 		} while (ret);
 		test_assert(check == key);
