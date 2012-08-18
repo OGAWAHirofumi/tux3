@@ -917,6 +917,46 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 }
 
 /*
+ * Before this replay, replay should already dirty the buffer of src.
+ * (e.g. by redirect)
+ */
+int replay_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
+{
+	struct buffer_head *srcbuf, *dstbuf;
+	struct bnode *dstnode, *srcnode;
+	int err = 0;
+
+	srcbuf = vol_getblk(sb, src);
+	if (IS_ERR(srcbuf)) {
+		err = -ENOMEM;
+		goto error;
+	}
+
+	dstbuf = vol_getblk(sb, dst);
+	if (IS_ERR(dstbuf)) {
+		err = -ENOMEM;
+		goto error_put_srcbuf;
+	}
+	memset(bufdata(dstbuf), 0, bufsize(dstbuf));
+
+	srcnode = bufdata(srcbuf);
+	dstnode = bufdata(dstbuf);
+
+	dstnode->count = to_be_u32(bcount(srcnode) - pos);
+	memcpy(&dstnode->entries[0], &srcnode->entries[pos], bcount(dstnode) * sizeof(struct index_entry));
+	srcnode->count = to_be_u32(pos);
+
+	mark_buffer_rollup_non(srcbuf);
+	mark_buffer_rollup_atomic(dstbuf);
+
+	blockput(dstbuf);
+error_put_srcbuf:
+	blockput(srcbuf);
+error:
+	return err;
+}
+
+/*
  * Before this replay, replay should already dirty the buffer of parent.
  * (e.g. by redirect)
  */
