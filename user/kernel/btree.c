@@ -1182,29 +1182,29 @@ error:
 }
 
 /*
- * Before this replay, replay should already dirty the buffer of parent.
+ * Before this replay, replay should already dirty the buffer of bnodeblock.
  * (e.g. by redirect)
  */
-static int replay_bnode_change(struct sb *sb, block_t parent, block_t child,
-			tuxkey_t key,
-			void (*change)(struct bnode *, block_t, tuxkey_t))
+static int replay_bnode_change(struct sb *sb, block_t bnodeblock,
+			       u64 val1, u64 val2,
+			       void (*change)(struct bnode *, u64, u64))
 {
-	struct buffer_head *parentbuf;
+	struct buffer_head *bnodebuf;
 
-	parentbuf = vol_getblk(sb, parent);
-	if (IS_ERR(parentbuf))
-		return PTR_ERR(parentbuf);
+	bnodebuf = vol_getblk(sb, bnodeblock);
+	if (IS_ERR(bnodebuf))
+		return PTR_ERR(bnodebuf);
 
-	struct bnode *bnode = bufdata(parentbuf);
-	change(bnode, child, key);
+	struct bnode *bnode = bufdata(bnodebuf);
+	change(bnode, val1, val2);
 
-	mark_buffer_rollup_non(parentbuf);
-	blockput(parentbuf);
+	mark_buffer_rollup_non(bnodebuf);
+	blockput(bnodebuf);
 
 	return 0;
 }
 
-static void add_func(struct bnode *bnode, block_t child, tuxkey_t key)
+static void add_func(struct bnode *bnode, u64 child, u64 key)
 {
 	struct index_entry *entry = bnode_lookup(bnode, key) + 1;
 	bnode_add_index(bnode, entry, child, key);
@@ -1215,7 +1215,7 @@ int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 	return replay_bnode_change(sb, parent, child, key, add_func);
 }
 
-static void update_func(struct bnode *bnode, block_t child, tuxkey_t key)
+static void update_func(struct bnode *bnode, u64 child, u64 key)
 {
 	struct index_entry *entry = bnode_lookup(bnode, key);
 	assert(from_be_u64(entry->key) == key);
@@ -1225,4 +1225,16 @@ static void update_func(struct bnode *bnode, block_t child, tuxkey_t key)
 int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 {
 	return replay_bnode_change(sb, parent, child, key, update_func);
+}
+
+static void del_func(struct bnode *bnode, u64 key, u64 count)
+{
+	struct index_entry *entry = bnode_lookup(bnode, key);
+	assert(from_be_u64(entry->key) == key);
+	bnode_remove_index(bnode, entry, count);
+}
+
+int replay_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
+{
+	return replay_bnode_change(sb, bnode, key, count, del_func);
 }

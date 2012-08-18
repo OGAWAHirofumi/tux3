@@ -840,6 +840,7 @@ int replay_bnode_root(struct sb *sb, block_t root, unsigned count,
 int replay_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst);
 int replay_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
 int replay_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key);
+int replay_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count);
 
 /* commit.c */
 void setup_sb(struct sb *sb, struct disksuper *super);

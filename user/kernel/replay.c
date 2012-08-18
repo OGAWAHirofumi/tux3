@@ -235,13 +235,26 @@ static int replay_log_stage1(struct sb *sb, struct buffer_head *logbuf,
 				return err;
 			break;
 		}
+		case LOG_BNODE_DEL:
+		{
+			unsigned count;
+			u64 bnode, key;
+			data = decode16(data, &count);
+			data = decode48(data, &bnode);
+			data = decode48(data, &key);
+			trace("%s: bnode 0x%Lx, count 0x%x, key 0x%Lx",
+			      log_name[code], (L)bnode, count, (L)key);
+			err = replay_bnode_del(sb, bnode, key, count);
+			if (err)
+				return err;
+			break;
+		}
 		case LOG_BALLOC:
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
 		case LOG_BNODE_MERGE:
-		case LOG_BNODE_DEL:
 		case LOG_BNODE_ADJUST:
 		case LOG_FREEBLOCKS:
 		case LOG_ROLLUP:
