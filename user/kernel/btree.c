@@ -509,8 +509,9 @@ parent_level:
 
 /* Deletion */
 
-static void remove_index(struct cursor *cursor, int level)
+static void remove_index(struct cursor *cursor)
 {
+	int level = cursor->level;
 	struct bnode *node = cursor_node(cursor, level);
 	int count = bcount(node), i;
 
@@ -522,7 +523,7 @@ static void remove_index(struct cursor *cursor, int level)
 	mark_buffer_rollup_non(cursor->path[level].buffer);
 
 	/* no separator for last entry */
-	if (level_finished(cursor, level))
+	if (cursor_level_finished(cursor))
 		return;
 	/*
 	 * Climb up to common parent and set separating key to deleted key.
@@ -567,7 +568,7 @@ static void blockput_free(struct btree *btree, struct buffer_head *buffer)
 
 int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadline)
 {
-	int depth = btree->root.depth, level = depth - 1, suspend = 0;
+	int depth = btree->root.depth, suspend = 0;
 	struct cursor *cursor;
 	struct buffer_head *leafbuf, **prev, *leafprev = NULL;
 	struct btree_ops *ops = btree->ops;
@@ -605,7 +606,7 @@ int tree_chop(struct btree *btree, struct delete_info *info, millisecond_t deadl
 			if ((ops->leaf_need)(btree, this) <= (ops->leaf_free)(btree, that)) {
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
 				(ops->leaf_merge)(btree, that, this);
-				remove_index(cursor, level);
+				remove_index(cursor);
 				mark_buffer_dirty_non(leafprev);
 				blockput_free(btree, leafbuf);
 				//dirty_buffer_count_check(sb);
@@ -624,11 +625,16 @@ keep_prev_leaf:
 			suspend = -1;
 
 		/* pop and try to merge finished nodes */
-		while (suspend || level_finished(cursor, level)) {
+		while (suspend || cursor_level_finished(cursor)) {
+			struct buffer_head *buf;
+			int level = cursor->level;
+
+			/* Get merge src buffer, and go parent level */
+			buf = level_pop(cursor);
 			/* try to merge node with prev */
 			if (prev[level]) {
-				assert(level); /* node has no prev */
-				struct bnode *this = cursor_node(cursor, level);
+				assert(level);
+				struct bnode *this = bufdata(buf);
 				struct bnode *that = bufdata(prev[level]);
 				trace_off("check node %p against %p", this, that);
 				trace_off("this count = %i prev count = %i", bcount(this), bcount(that));
@@ -636,19 +642,19 @@ keep_prev_leaf:
 				if (bcount(this) <= sb->entries_per_node - bcount(that)) {
 					trace(">>> can merge node %p into node %p", this, that);
 					merge_nodes(that, this);
-					remove_index(cursor, level - 1);
+					remove_index(cursor);
 					mark_buffer_rollup_non(prev[level]);
-					blockput_free(btree, level_pop(cursor));
+					blockput_free(btree, buf);
 					//dirty_buffer_count_check(sb);
 					goto keep_prev_node;
 				}
 				blockput(prev[level]);
 			}
-			prev[level] = level_pop(cursor);
+			prev[level] = buf;
 keep_prev_node:
 
 			/* deepest key in the cursor is the resume address */
-			if (suspend == -1 && !level_finished(cursor, level)) {
+			if (suspend == -1 && !cursor_level_finished(cursor)) {
 				suspend = 1; /* only set resume once */
 				info->resume = from_be_u64((cursor->path[level].next)->key);
 			}
@@ -669,8 +675,6 @@ keep_prev_node:
 				ret = suspend;
 				goto out;
 			}
-			level--;
-			trace_off("pop to level %i, block %Lx, %i of %i nodes", level, bufindex(cursor->path[level].buffer), cursor->path[level].next - cursor_node(cursor, level)->entries, bcount(cursor_node(cursor, level)));
 		}
 
 		/* push back down to leaf level */
@@ -679,7 +683,6 @@ keep_prev_node:
 			if (ret < 0)
 				goto out;
 		} while (ret);
-		level = cursor->level - 1;
 	}
 
 error_leaf_chop:
@@ -738,7 +741,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 {
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
-	int depth = btree->root.depth;
+	int level = btree->root.depth;
 	block_t childblock = bufindex(leafbuf);
 
 	if (keep)
@@ -747,8 +750,8 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		level_pop_blockput(cursor);
 		level_push(cursor, leafbuf, NULL);
 	}
-	while (depth--) {
-		struct path_level *at = cursor->path + depth;
+	while (level--) {
+		struct path_level *at = &cursor->path[level];
 		struct buffer_head *parentbuf = at->buffer;
 		struct bnode *parent = bufdata(parentbuf);
 
@@ -781,7 +784,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			mark_buffer_rollup_non(parentbuf);
 			newnext = newnode->entries + (at->next - &parent->entries[half]);
 			get_bh(newbuf);
-			level_replace_blockput(cursor, depth, newbuf, newnext);
+			level_replace_blockput(cursor, level, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else
