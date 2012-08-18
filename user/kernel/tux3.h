@@ -656,8 +656,6 @@ static inline int buffer_clean(struct buffer_head *buffer)
 	return !buffer_dirty(buffer) || buffer_uptodate(buffer);
 }
 
-#include "dirty-buffer.h"	/* remove this after atomic commit */
-
 /* dir.c */
 extern const struct file_operations tux_dir_fops;
 extern const struct inode_operations tux_dir_iops;
@@ -902,6 +900,8 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count);
 int bytebits(u8 c);
 
 /* writeback.c */
+void tux3_mark_buffer_dirty(struct buffer_head *buffer);
+void tux3_mark_buffer_rollup(struct buffer_head *buffer);
 int tux3_flush_inode(struct inode *inode, unsigned delta);
 int tux3_flush_inodes(struct sb *sb, unsigned delta);
 
@@ -943,4 +943,6 @@ static inline struct buffer_head *vol_bread(struct sb *sb, block_t block)
 {
 	return blockread(mapping(sb->volmap), block);
 }
-#endif
+
+#include "dirty-buffer.h"	/* remove this after atomic commit */
+#endif /* !TUX3_H */

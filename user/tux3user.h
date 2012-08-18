@@ -22,8 +22,6 @@
 #include "libklib/fs.h"
 #include "writeback.h"
 
-#include "kernel/tux3.h"
-
 static inline struct inode *buffer_inode(struct buffer_head *buffer)
 {
 	return buffer->map->inode;
@@ -36,7 +34,7 @@ static inline struct timespec gettime(void)
 	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
 }
 
-#include "kernel/dirty-buffer.h"	/* remove this after atomic commit */
+#include "kernel/tux3.h"
 
 #ifdef ATOMIC
 #define INIT_DISKSB_FREEBLOCKS(_blocks)

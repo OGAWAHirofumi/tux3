@@ -29,11 +29,23 @@ void mark_inode_dirty_sync(struct inode *inode)
 	__mark_inode_dirty(inode, I_DIRTY_SYNC);
 }
 
-void mark_buffer_dirty(struct buffer_head *buffer)
+/* Mark buffer as dirty to flush at delta flush */
+void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
 	if (!buffer_dirty(buffer)) {
 		set_buffer_dirty(buffer);
 		__mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
+	}
+}
+
+/* Mark buffer as dirty to flush at rollup flush */
+void tux3_mark_buffer_rollup(struct buffer_head *buffer)
+{
+	if (!buffer_dirty(buffer)) {
+		struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+		unsigned rollup = sb->rollup;
+		set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(rollup),
+				      dirty_head_when(&sb->pinned, rollup));
 	}
 }
 
