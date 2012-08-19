@@ -690,6 +690,7 @@ int apply_defered_bfree(struct sb *sb, u64 val);
 int force_rollup(struct sb *sb);
 int force_delta(struct sb *sb);
 int change_begin(struct sb *sb);
+int change_end_without_commit(struct sb *sb);
 int change_end(struct sb *sb);
 
 /* dir.c */

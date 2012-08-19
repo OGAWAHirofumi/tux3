@@ -552,6 +552,22 @@ static int purge_inode(struct inode *inode)
  */
 void tux3_evict_inode(struct inode *inode)
 {
+	struct sb *sb = tux_sb(inode->i_sb);
+	unsigned delete_inode = !(inode->i_nlink > 0 || is_bad_inode(inode));
+	unsigned unlock = 0;
+
+	/*
+	 * iput() might be called inside change_{begin,end}.  And if
+	 * this was called, this will be deadlock. So, we use
+	 * change_end_without_commit() instead.
+	 * FIXME: this is fragile way. we should remove iput() from
+	 * backend instead.
+	 */
+	if (delete_inode || !list_empty(&tux_inode(inode)->dirty_list)) {
+		change_begin(sb);
+		unlock = 1;
+	}
+
 #ifdef __KERNEL__
 	/* Block device special file is still overwriting i_mapping */
 	truncate_inode_pages(&inode->i_data, 0);
@@ -559,7 +575,7 @@ void tux3_evict_inode(struct inode *inode)
 	truncate_inode_pages(mapping(inode), 0);
 #endif
 
-	if (inode->i_nlink > 0 || is_bad_inode(inode)) {
+	if (!delete_inode) {
 		tux3_clear_dirty_inode(inode);
 		end_writeback(inode);
 	} else {
@@ -570,10 +586,7 @@ void tux3_evict_inode(struct inode *inode)
 		 * truncate might take long time, we should do
 		 * something to prevent it.
 		 */
-		struct sb *sb = tux_sb(inode->i_sb);
 		int err;
-
-		change_begin(sb);
 
 		/*
 		 * FIXME: i_blocks (if implemented) would be better way
@@ -615,9 +628,10 @@ error:
 		 */
 		tux3_clear_dirty_inode(inode);
 		end_writeback(inode);
-
-		change_end(sb);
 	}
+
+	if (unlock)
+		change_end_without_commit(sb);
 
 	free_xcache(inode);
 }

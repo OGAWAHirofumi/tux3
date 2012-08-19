@@ -427,6 +427,13 @@ int change_begin(struct sb *sb)
 	return 0;
 }
 
+/* change_end() without starting do_commit(). Use this only if necessary. */
+int change_end_without_commit(struct sb *sb)
+{
+	up_read(&sb->delta_lock);
+	return 0;
+}
+
 int change_end(struct sb *sb)
 {
 	int err = 0;
