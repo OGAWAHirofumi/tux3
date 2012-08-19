@@ -5,6 +5,44 @@
  * We should check the update of original functions, and sync with it.
  */
 
+/* Copy of page_zero_new_buffers() (changed to call tux3_mark_buffer_dirty()) */
+static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
+				       unsigned to)
+{
+	unsigned int block_start, block_end;
+	struct buffer_head *head, *bh;
+
+	BUG_ON(!PageLocked(page));
+	if (!page_has_buffers(page))
+		return;
+
+	bh = head = page_buffers(page);
+	block_start = 0;
+	do {
+		block_end = block_start + bh->b_size;
+
+		if (buffer_new(bh)) {
+			if (block_end > from && block_start < to) {
+				if (!PageUptodate(page)) {
+					unsigned start, size;
+
+					start = max(from, block_start);
+					size = min(to, block_end) - start;
+
+					zero_user(page, start, size);
+					set_buffer_uptodate(bh);
+				}
+
+				clear_buffer_new(bh);
+				tux3_mark_buffer_dirty(bh);
+			}
+		}
+
+		block_start = block_end;
+		bh = bh->b_this_page;
+	} while (bh != head);
+}
+
 /*
  * Copy of __block_write_begin() (changed to call tux3_mark_buffer_dirty(),
  * and to remove unmap_underlying_metadata())
@@ -92,7 +130,7 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 			err = -EIO;
 	}
 	if (unlikely(err))
-		page_zero_new_buffers(page, from, to);
+		tux3_page_zero_new_buffers(page, from, to);
 	return err;
 }
 
@@ -182,7 +220,7 @@ static int __tux3_write_end(struct file *file, struct address_space *mapping,
 		if (!PageUptodate(page))
 			copied = 0;
 
-		page_zero_new_buffers(page, start+copied, start+len);
+		tux3_page_zero_new_buffers(page, start+copied, start+len);
 	}
 	flush_dcache_page(page);
 
