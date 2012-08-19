@@ -94,6 +94,7 @@ void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 
 	if (!buffer->b_assoc_map) {
 		spin_lock(&buffer_mapping->private_lock);
+		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 		list_move_tail(&buffer->b_assoc_buffers, head);
 		buffer->b_assoc_map = mapping;
 		/* FIXME: hack for save delta */
@@ -137,7 +138,8 @@ void tux3_invalidate_buffer(struct buffer_head *buffer)
 		buffer->b_assoc_map = NULL;
 		tux3_clear_bufdelta(buffer);
 		spin_unlock(&buffer->b_page->mapping->private_lock);
-	}
+	} else
+		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 }
 
 void init_dirty_buffers(struct dirty_buffers *dirty)
