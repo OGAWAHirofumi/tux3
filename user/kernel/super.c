@@ -329,8 +329,8 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	sb->s_root = d_make_root(sbi->rootdir);
+	sbi->rootdir = NULL;	/* vfs takes care rootdir inode */
 	if (!sb->s_root) {
-		sbi->rootdir = NULL;
 		err = -ENOMEM;
 		goto error;
 	}
