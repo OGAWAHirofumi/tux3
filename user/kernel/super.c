@@ -5,6 +5,84 @@
  */
 
 #include "tux3.h"
+#ifdef __KERNEL__
+#include <linux/module.h>
+#include <linux/statfs.h>
+
+/* This will go to include/linux/magic.h */
+#ifndef TUX3_SUPER_MAGIC
+#define TUX3_SUPER_MAGIC	0x74757833
+#endif
+
+#define trace trace_on
+
+/* FIXME: this should be mount option? */
+int tux3_trace;
+module_param(tux3_trace, int, 0644);
+#endif
+
+#ifdef ATOMIC
+#ifdef __KERNEL__
+#define BUFFER_LINK	b_assoc_buffers
+#else
+#define BUFFER_LINK	link
+#endif
+static void cleanup_dirty_buffers(struct list_head *head)
+{
+	struct buffer_head *buffer, *n;
+
+	list_for_each_entry_safe(buffer, n, head, BUFFER_LINK) {
+		trace(">>> clean inum %Lx, buffer %Lx, count %d",
+		      tux_inode(buffer_inode(buffer))->inum,
+		      bufindex(buffer), bufcount(buffer));
+		assert(buffer_dirty(buffer));
+		tux3_clear_buffer_dirty(buffer);
+	}
+}
+
+static void cleanup_dirty_inode(struct inode *inode)
+{
+	if (!list_empty(&tux_inode(inode)->dirty_list)) {
+		trace(">>> clean inum %Lx, i_count %d, i_state %lx",
+		      tux_inode(inode)->inum, atomic_read(&inode->i_count),
+		      inode->i_state);
+		del_defer_alloc_inum(inode);
+		tux3_clear_dirty_inode(inode);
+	}
+}
+
+/*
+ * Some inode/buffers are always (re-)dirtied, so we have to cleanup
+ * those for umount.
+ */
+static void cleanup_dirty_for_umount(struct sb *sb)
+{
+	unsigned rollup = sb->rollup;
+
+	/*
+	 * Pinned buffer and bitmap are not flushing always, it is
+	 * normal. So, this clean those for unmount.
+	 */
+	if (sb->bitmap) {
+		struct dirty_buffers *dirty = inode_dirty_heads(sb->bitmap);
+		cleanup_dirty_buffers(dirty_head_when(dirty, rollup));
+		cleanup_dirty_inode(sb->bitmap);
+	}
+	cleanup_dirty_buffers(dirty_head_when(&sb->pinned, rollup));
+
+	/* orphan_add should be empty */
+	assert(list_empty(&sb->orphan_add));
+	/* Deferred orphan deletion request is not flushed for each delta  */
+	clean_orphan_list(&sb->orphan_del);
+
+	/* defree must be flushed for each delta */
+	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
+}
+#else /* !ATOMIC */
+static inline void cleanup_dirty_for_umount(struct sb *sb)
+{
+}
+#endif /* !ATOMIC */
 
 static void __tux3_put_super(struct sb *sbi)
 {
@@ -128,20 +206,6 @@ error:
 }
 
 #ifdef __KERNEL__
-#include <linux/module.h>
-#include <linux/statfs.h>
-
-/* This will go to include/linux/magic.h */
-#ifndef TUX3_SUPER_MAGIC
-#define TUX3_SUPER_MAGIC	0x74757833
-#endif
-
-#define trace trace_on
-
-/* FIXME: this should be mount option? */
-int tux3_trace;
-module_param(tux3_trace, int, 0644);
-
 static struct kmem_cache *tux_inode_cachep;
 
 static void tux3_inode_init_once(void *mem)
@@ -229,6 +293,8 @@ static int tux3_sync_fs(struct super_block *sb, int wait)
 static void tux3_put_super(struct super_block *sb)
 {
 	struct sb *sbi = tux_sb(sb);
+
+	cleanup_dirty_for_umount(sbi);
 
 	__tux3_put_super(sbi);
 	sb->s_fs_info = NULL;

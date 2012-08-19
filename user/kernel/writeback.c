@@ -24,6 +24,16 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 	spin_unlock(&sb->dirty_inodes_lock);
 }
 
+void tux3_clear_dirty_inode(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	/* FIXME: if we saved flags, we should clear it here. */
+	spin_lock(&sb->dirty_inodes_lock);
+	list_del_init(&tux_inode(inode)->dirty_list);
+	spin_unlock(&sb->dirty_inodes_lock);
+}
+
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
 	/*
