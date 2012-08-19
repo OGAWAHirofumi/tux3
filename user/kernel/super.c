@@ -199,6 +199,7 @@ static void tux3_destroy_inode(struct inode *inode)
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 
+#ifndef ATOMIC
 static void tux3_write_super(struct super_block *sb)
 {
 	lock_super(sb);
@@ -210,17 +211,24 @@ static void tux3_write_super(struct super_block *sb)
 	unlock_super(sb);
 }
 
+/* Just a glue to be called to write sb for non-atomic mode ->sync_fs(). */
+int force_delta(struct sb *sb)
+{
+	tux3_write_super(vfs_sb(sb)); /* FIXME: error handling */
+	return 0;
+}
+#endif
+
 static int tux3_sync_fs(struct super_block *sb, int wait)
 {
-	tux3_write_super(sb); /* FIXME: error handling */
-	return 0;
+	/* FIXME: We should support "wait" parameter. */
+	trace_on("wait (%u) parameter is unsupported for now", wait);
+	return force_delta(tux_sb(sb));
 }
 
 static void tux3_put_super(struct super_block *sb)
 {
 	struct sb *sbi = tux_sb(sb);
-
-	tux3_write_super(sb);
 
 	__tux3_put_super(sbi);
 	sb->s_fs_info = NULL;
@@ -256,7 +264,9 @@ static const struct super_operations tux3_super_ops = {
 	.evict_inode	= tux3_evict_inode,
 	/* FIXME: we have to handle write_inode of sync (e.g. cache pressure) */
 //	.write_inode	= tux3_write_inode,
+#ifndef ATOMIC
 	.write_super	= tux3_write_super,
+#endif
 	.sync_fs	= tux3_sync_fs,
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,
