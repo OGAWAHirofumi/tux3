@@ -43,7 +43,7 @@ typedef u32 atom_t;
 
 /* see dir.c */
 #define HEAD_ALIGN		sizeof(inum_t)
-#define HEAD_SIZE		ALIGN(sizeof(tux_dirent), HEAD_ALIGN)
+#define HEAD_SIZE		offsetof(tux_dirent, name)
 /* FIXME: probably, we should limit maximum name length */
 #define MAX_ATOM_NAME_LEN	(256 - HEAD_SIZE)
 

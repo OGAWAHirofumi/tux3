@@ -470,6 +470,11 @@ typedef struct {
 	__be16 rec_len;
 	u8 name_len, type;
 	char name[];
+	/*
+	 * On 64bit arch sizeof(tux_dirent) == 16. We should use
+	 * offsetof(tux_dirent, name) instead.
+	 */
+	/* u32 __pad; */
 } tux_dirent;
 
 struct btree_key_range {
