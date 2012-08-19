@@ -559,9 +559,10 @@ void tux3_evict_inode(struct inode *inode)
 	truncate_inode_pages(mapping(inode), 0);
 #endif
 
-	if (inode->i_nlink > 0 || is_bad_inode(inode))
+	if (inode->i_nlink > 0 || is_bad_inode(inode)) {
+		tux3_clear_dirty_inode(inode);
 		end_writeback(inode);
-	else {
+	} else {
 		/*
 		 * FIXME: since in-core inode is freed, we should do
 		 * something for freeing inode even if error happened.
@@ -607,11 +608,12 @@ void tux3_evict_inode(struct inode *inode)
 		err = purge_inode(inode);
 error:
 		/*
-		 * Clean inode (clear I_DIRTY) before change_end() to
-		 * prevent to flush removed inode. (Since this is
-		 * protected by change_begin/end(), there shouldn't be
-		 * no writeback process for this inode)
+		 * Clear dirty of inode before change_end() to prevent
+		 * to flush removed inode. (Since this is protected by
+		 * change_begin/end(), there shouldn't be no writeback
+		 * process for this inode)
 		 */
+		tux3_clear_dirty_inode(inode);
 		end_writeback(inode);
 
 		change_end(sb);
