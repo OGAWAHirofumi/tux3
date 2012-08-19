@@ -234,7 +234,9 @@ struct sb {
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 
+	spinlock_t orphan_add_lock;  /* lock of orphan_add for frontend */
 	struct list_head orphan_add; /* defered orphan inode add list */
+	spinlock_t orphan_del_lock;  /* lock of orphan_del for frontend */
 	struct list_head orphan_del; /* defered orphan inode del list */
 
 	struct stash defree;	/* defer extent frees until after delta */

@@ -44,6 +44,7 @@ static void free_orphan(struct orphan *orphan)
 	free(orphan);
 }
 
+/* Caller must care about locking if needed */
 void clean_orphan_list(struct list_head *head)
 {
 	while (!list_empty(head)) {
@@ -106,6 +107,7 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
+	/* FIXME: ->orphan_list has no race with frontend for now */
 	while (!list_empty(orphan_add)) {
 		tuxnode_t *tuxnode;
 		tuxnode = list_entry(orphan_add->next, tuxnode_t, orphan_list);
@@ -174,8 +176,11 @@ int tux3_mark_inode_orphan(struct inode *inode)
 	struct sb *sb = tux_sb(inode->i_sb);
 	tuxnode_t *tuxnode = tux_inode(inode);
 
+	spin_lock(&sb->orphan_add_lock);
 	assert(list_empty(&tuxnode->orphan_list));
 	list_add(&tuxnode->orphan_list, &sb->orphan_add);
+	spin_unlock(&sb->orphan_add_lock);
+
 	log_orphan_add(sb, sb->version, tuxnode->inum);
 
 	return 0;
@@ -193,7 +198,9 @@ static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
 		return PTR_ERR(orphan);
 
 	/* Add orphan deletion (from sb->otable) request. */
+	spin_lock(&sb->orphan_del_lock);
 	list_add(&orphan->list, &sb->orphan_del);
+	spin_unlock(&sb->orphan_del_lock);
 
 	return 0;
 }
@@ -204,9 +211,12 @@ int tux3_clear_inode_orphan(struct inode *inode)
 	struct sb *sb = tux_sb(inode->i_sb);
 	tuxnode_t *tuxnode = tux_inode(inode);
 
+	/* Since referencer is only me, so we can check empty without lock */
 	if (!list_empty(&tuxnode->orphan_list)) {
 		/* This orphan is not applied to sb->otable yet. */
+		spin_lock(&sb->orphan_add_lock);
 		list_del_init(&tuxnode->orphan_list);
+		spin_unlock(&sb->orphan_add_lock);
 	} else {
 		/* This orphan was already applied to sb->otable. */
 		int err = add_defer_oprhan_del(sb, tuxnode->inum);

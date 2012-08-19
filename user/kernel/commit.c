@@ -24,7 +24,9 @@ static void init_sb(struct sb *sb)
 	init_rwsem(&sb->delta_lock);
 	mutex_init(&sb->loglock);
 	INIT_LIST_HEAD(&sb->alloc_inodes);
+	spin_lock_init(&sb->orphan_add_lock);
 	INIT_LIST_HEAD(&sb->orphan_add);
+	spin_lock_init(&sb->orphan_del_lock);
 	INIT_LIST_HEAD(&sb->orphan_del);
 	spin_lock_init(&sb->dirty_inodes_lock);
 	INIT_LIST_HEAD(&sb->dirty_inodes);
@@ -183,6 +185,7 @@ static int rollup_log(struct sb *sb)
 	 * [If we may want to have two orphan_{add,del} lists for
 	 * frontend and backend.]
 	 */
+	/* FIXME: orphan_add/del has no race with frontend for now */
 	list_splice_init(&sb->orphan_add, &orphan_add);
 	list_splice_init(&sb->orphan_del, &orphan_del);
 
