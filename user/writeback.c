@@ -4,7 +4,7 @@
 #define trace trace_on
 #endif
 
-void clear_inode(struct inode *inode)
+void tux3_clear_dirty_inode(struct inode *inode)
 {
 	list_del_init(&inode->dirty_list);
 	inode->i_state &= ~I_DIRTY;

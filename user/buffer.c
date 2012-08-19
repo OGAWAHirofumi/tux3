@@ -192,6 +192,12 @@ struct buffer_head *set_buffer_clean(struct buffer_head *buffer)
 	return buffer;
 }
 
+void tux3_clear_buffer_dirty(struct buffer_head *buffer)
+{
+	/* FIXME: this should be set_buffer_empty()? */
+	set_buffer_clean(buffer);
+}
+
 struct buffer_head *__set_buffer_empty(struct buffer_head *buffer)
 {
 	set_buffer_state(buffer, BUFFER_EMPTY);

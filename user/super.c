@@ -16,56 +16,9 @@
 
 #include "kernel/super.c"
 
-#ifdef ATOMIC
-static void clean_dirty_buffer(const char *str, struct list_head *head)
-{
-	struct buffer_head *buf, *n;
-
-	list_for_each_entry_safe(buf, n, head, link) {
-		trace(">>> clean %s buffer %Lx:%Lx, count %d, state %d",
-		      str, tux_inode(buffer_inode(buf))->inum,
-		      bufindex(buf), bufcount(buf),
-		      buf->state);
-		assert(buffer_dirty(buf));
-		set_buffer_clean(buf);
-	}
-}
-
-static void clean_dirty_inode(const char *str, struct inode *inode)
-{
-	if (inode->i_state & I_DIRTY) {
-		trace(">>> clean %s inode i_count %d, i_state %lx",
-		      str, atomic_read(&inode->i_count), inode->i_state);
-		del_defer_alloc_inum(inode);
-		clear_inode(inode);
-	}
-}
-#endif
-
 static void cleanup_garbage_for_debugging(struct sb *sb)
 {
-#ifdef ATOMIC
-	int rollup = sb->rollup;
-
-	/*
-	 * Pinned buffer is not flushing always, it is normal. So,
-	 * this clean those for unmount to check buffer debugging
-	 */
-	if (sb->bitmap) {
-		struct dirty_buffers *dirty = &mapping(sb->bitmap)->dirty;
-		clean_dirty_buffer("bitmap", dirty_head_when(dirty, rollup));
-		clean_dirty_inode("bitmap", sb->bitmap);
-	}
-	clean_dirty_buffer("pinned", dirty_head_when(&sb->pinned, rollup));
-
-	/* orphan_add should be empty */
-	assert(&sb->orphan_add);
-	/* Deferred orphan deletion request is not flushed for each delta  */
-	clean_orphan_list(&sb->orphan_del);
-
-	/* defree must be flushed for each delta */
-	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
-#else /* !ATOMIC */
+#ifndef ATOMIC
 	/*
 	 * Clean garbage (atomic commit) stuff. Don't forget to update
 	 * this, if you update the atomic commit.
@@ -90,6 +43,7 @@ int put_super(struct sb *sb)
 	 */
 
 	cleanup_garbage_for_debugging(sb);
+	cleanup_dirty_for_umount(sb);
 
 	__tux3_put_super(sb);
 

@@ -206,7 +206,7 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 
 static void end_writeback(struct inode *inode)
 {
-	clear_inode(inode);
+	tux3_clear_dirty_inode(inode);
 }
 
 #include "kernel/inode.c"
