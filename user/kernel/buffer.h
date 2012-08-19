@@ -49,11 +49,11 @@ static inline void blockput(struct buffer_head *buffer)
 	put_bh(buffer);
 }
 
+void tux3_clear_buffer_dirty(struct buffer_head *buffer);
 static inline void blockput_free(struct buffer_head *buffer)
 {
-	/* Untested */
-	WARN_ON(1);
-	bforget(buffer);
+	/* FIXME: Untested. buffer was freed, so we would like to free cache */
+	tux3_clear_buffer_dirty(buffer);
 	blockput(buffer);
 }
 

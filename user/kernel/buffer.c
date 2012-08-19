@@ -111,6 +111,24 @@ void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
+static void __tux3_clear_buffer_dirty(struct buffer_head *buffer)
+{
+	if (buffer->b_assoc_map) {
+		spin_lock(&buffer->b_page->mapping->private_lock);
+		list_del_init(&buffer->b_assoc_buffers);
+		buffer->b_assoc_map = NULL;
+		tux3_clear_bufdelta(buffer);
+		spin_unlock(&buffer->b_page->mapping->private_lock);
+	} else
+		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
+}
+
+void tux3_clear_buffer_dirty(struct buffer_head *buffer)
+{
+	__tux3_clear_buffer_dirty(buffer);
+	clear_buffer_dirty(buffer);
+}
+
 /* Copied from fs/buffer.c */
 static void discard_buffer(struct buffer_head *buffer)
 {
@@ -130,16 +148,8 @@ static void discard_buffer(struct buffer_head *buffer)
 void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
 	/* FIXME: we should check buffer_can_modify() to invalidate */
+	__tux3_clear_buffer_dirty(buffer);
 	discard_buffer(buffer);
-
-	if (buffer->b_assoc_map) {
-		spin_lock(&buffer->b_page->mapping->private_lock);
-		list_del_init(&buffer->b_assoc_buffers);
-		buffer->b_assoc_map = NULL;
-		tux3_clear_bufdelta(buffer);
-		spin_unlock(&buffer->b_page->mapping->private_lock);
-	} else
-		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 }
 
 void init_dirty_buffers(struct dirty_buffers *dirty)
