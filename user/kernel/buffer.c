@@ -158,5 +158,14 @@ void init_dirty_buffers(struct dirty_buffers *dirty)
 		INIT_LIST_HEAD(&dirty->heads[i]);
 }
 
+int dirty_buffers_is_empty(struct dirty_buffers *dirty)
+{
+	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++) {
+		if (!list_empty(&dirty->heads[i]))
+			return 0;
+	}
+	return 1;
+}
+
 #include "buffer_writeback.c"
 #include "buffer_fork.c"

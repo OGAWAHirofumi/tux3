@@ -167,6 +167,7 @@ void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
 int dev_errio(int rw, struct bufvec *bufvec);
 void init_dirty_buffers(struct dirty_buffers *dirty);
+int dirty_buffers_is_empty(struct dirty_buffers *dirty);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
 

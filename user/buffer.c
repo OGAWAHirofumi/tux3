@@ -624,6 +624,15 @@ void init_dirty_buffers(struct dirty_buffers *dirty)
 		INIT_LIST_HEAD(&dirty->heads[i]);
 }
 
+int dirty_buffers_is_empty(struct dirty_buffers *dirty)
+{
+	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++) {
+		if (!list_empty(&dirty->heads[i]))
+			return 0;
+	}
+	return 1;
+}
+
 map_t *new_map(struct dev *dev, blockio_t *io)
 {
 	map_t *map = malloc(sizeof(*map)); // error???
@@ -639,8 +648,7 @@ map_t *new_map(struct dev *dev, blockio_t *io)
 
 void free_map(map_t *map)
 {
-	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)
-		assert(list_empty(dirty_head_when(&map->dirty, i)));
+	assert(dirty_buffers_is_empty(&map->dirty));
 
 	for (int i = 0; i < BUFFER_BUCKETS; i++) {
 		struct hlist_head *bucket = &map->hash[i];

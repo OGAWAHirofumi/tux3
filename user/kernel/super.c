@@ -260,6 +260,7 @@ static void tux3_destroy_inode(struct inode *inode)
 	BUG_ON(!list_empty(&tux_inode(inode)->dirty_list));
 	BUG_ON(!list_empty(&tux_inode(inode)->alloc_list));
 	BUG_ON(!list_empty(&tux_inode(inode)->orphan_list));
+	BUG_ON(!dirty_buffers_is_empty(inode_dirty_heads(inode)));
 	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
 }
 
