@@ -283,9 +283,10 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	if (!blocksize) {
 		if (!silent)
 			printk(KERN_ERR "TUX3: unable to set blocksize\n");
-		goto error;
+		goto error_free;
 	}
 
+	/* Initialize and load sbi */
 	if ((err = load_sb(sbi))) {
 		if (!silent) {
 			if (err == -EINVAL)
@@ -330,6 +331,7 @@ error:
 	if (!IS_ERR_OR_NULL(rp))
 		replay_stage3(rp, 0);
 	__tux3_put_super(sbi);
+error_free:
 	kfree(sbi);
 
 	return err;

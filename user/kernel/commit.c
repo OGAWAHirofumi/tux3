@@ -18,15 +18,8 @@
  */
 #define ALLOW_FRONTEND_MODIFY
 
-static void setup_roots(struct sb *sb, struct disksuper *super)
-{
-	u64 iroot_val = be64_to_cpu(super->iroot);
-	u64 oroot_val = be64_to_cpu(sb->super.oroot);
-	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
-	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
-}
-
-void setup_sb(struct sb *sb, struct disksuper *super)
+/* Initialize the lock and list */
+static void init_sb(struct sb *sb)
 {
 	init_rwsem(&sb->delta_lock);
 	mutex_init(&sb->loglock);
@@ -40,7 +33,19 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	init_dirty_buffers(&sb->pinned);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
+}
 
+static void setup_roots(struct sb *sb, struct disksuper *super)
+{
+	u64 iroot_val = be64_to_cpu(super->iroot);
+	u64 oroot_val = be64_to_cpu(sb->super.oroot);
+	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
+	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
+}
+
+/* Setup sb by on-disk super block */
+static void __setup_sb(struct sb *sb, struct disksuper *super)
+{
 	sb->blockbits = be16_to_cpu(super->blockbits);
 	sb->volblocks = be64_to_cpu(super->volblocks);
 	sb->version = 0;	/* FIXME: not yet implemented */
@@ -74,10 +79,21 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	setup_roots(sb, super);
 }
 
+/* Initialize and setup sb by on-disk super block */
+void setup_sb(struct sb *sb, struct disksuper *super)
+{
+	init_sb(sb);
+	__setup_sb(sb, super);
+}
+
+/* Load on-disk super block, and call setup_sb() with it */
 int load_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 	int err;
+
+	/* At least initialize sb, even if load is failed */
+	init_sb(sb);
 
 	err = devio(READ, sb_dev(sb), SB_LOC, super, SB_LEN);
 	if (err)
@@ -85,7 +101,8 @@ int load_sb(struct sb *sb)
 	if (memcmp(super->magic, TUX3_MAGIC, sizeof(super->magic)))
 		return -EINVAL;
 
-	setup_sb(sb, super);
+	__setup_sb(sb, super);
+
 	return 0;
 }
 
