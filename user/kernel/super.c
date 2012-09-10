@@ -255,13 +255,19 @@ static struct inode *tux3_alloc_inode(struct super_block *sb)
 	return &tuxi->vfs_inode;
 }
 
+static void tux3_i_callback(struct rcu_head *head)
+{
+	struct inode *inode = container_of(head, struct inode, i_rcu);
+	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
+}
+
 static void tux3_destroy_inode(struct inode *inode)
 {
 	BUG_ON(!list_empty(&tux_inode(inode)->dirty_list));
 	BUG_ON(!list_empty(&tux_inode(inode)->alloc_list));
 	BUG_ON(!list_empty(&tux_inode(inode)->orphan_list));
 	BUG_ON(!dirty_buffers_is_empty(inode_dirty_heads(inode)));
-	kmem_cache_free(tux_inode_cachep, tux_inode(inode));
+	call_rcu(&inode->i_rcu, tux3_i_callback);
 }
 
 #ifndef ATOMIC
