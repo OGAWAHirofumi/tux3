@@ -787,15 +787,16 @@ static int tux3_da_write_end(struct file *file, struct address_space *mapping,
 	return ret;
 }
 
+#if 0 /* disabled writeback for now */
 static int tux3_writepage(struct page *page, struct writeback_control *wbc)
 {
 	struct sb *sb = tux_sb(page->mapping->host->i_sb);
 	change_begin(sb);
 	int err = block_write_full_page(page, tux3_get_block, wbc);
-
 	change_end(sb);
 	return err;
 }
+#endif
 #if 0
 /* mpage_writepages() uses dummy bh, so we can't check buffer_delay. */
 static int tux3_writepages(struct address_space *mapping,
@@ -804,6 +805,37 @@ static int tux3_writepages(struct address_space *mapping,
 	return mpage_writepages(mapping, wbc, tux3_get_block);
 }
 #endif
+
+static int tux3_disable_writepage(struct page *page,
+				  struct writeback_control *wbc)
+{
+	/*
+	 * FIXME: disable writeback for now. We would have to handle
+	 * writeback for sync (e.g. by cache pressure).
+	 * FIXME: we should use AOP_WRITEPAGE_ACTIVATE if for_reclaim?
+	 * Or just set .writepage = NULL to page keep dirty and active?
+	 */
+	trace("writepage disabled for now (%d)", wbc->sync_mode);
+	redirty_page_for_writepage(wbc, page);
+#if 0
+	if (wbc->for_reclaim)
+		return AOP_WRITEPAGE_ACTIVATE;	/* Return with page locked */
+#endif
+	unlock_page(page);
+	return 0;
+}
+
+static int tux3_disable_writepages(struct address_space *mapping,
+				   struct writeback_control *wbc)
+{
+	/*
+	 * FIXME: disable writeback for now. We would have to handle
+	 * writeback for sync (e.g. by cache pressure)
+	 */
+	trace("writepages disabled for now (%d)", wbc->sync_mode);
+	return 0;
+}
+
 static ssize_t tux3_direct_IO(int rw, struct kiocb *iocb,
 			      const struct iovec *iov,
 			      loff_t offset, unsigned long nr_segs)
@@ -834,8 +866,10 @@ static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
 const struct address_space_operations tux_aops = {
 	.readpage		= tux3_readpage,
 	.readpages		= tux3_readpages,
-	.writepage		= tux3_writepage,
+//	.writepage		= tux3_writepage,
 //	.writepages		= tux3_writepages,
+	.writepage		= tux3_disable_writepage,
+	.writepages		= tux3_disable_writepages,
 	.write_begin		= tux3_da_write_begin,
 	.write_end		= tux3_da_write_end,
 	.bmap			= tux3_bmap,
@@ -851,15 +885,19 @@ static int tux3_blk_readpage(struct file *file, struct page *page)
 	return block_read_full_page(page, tux3_get_block);
 }
 
+#if 0 /* disabled writeback for now */
 static int tux3_blk_writepage(struct page *page, struct writeback_control *wbc)
 {
 	return block_write_full_page(page, tux3_get_block, wbc);
 }
+#endif
 
 const struct address_space_operations tux_blk_aops = {
 	.readpage	= tux3_blk_readpage,
-	.writepage	= tux3_blk_writepage,
+//	.writepage	= tux3_blk_writepage,
 //	.writepages	= tux3_writepages,
+	.writepage	= tux3_disable_writepage,
+	.writepages	= tux3_disable_writepages,
 	.write_begin	= tux3_da_write_begin,
 	.bmap		= tux3_bmap,
 };
@@ -880,10 +918,12 @@ static int tux3_vol_readpage(struct file *file, struct page *page)
 	return block_read_full_page(page, tux3_vol_get_block);
 }
 
+#if 0 /* disabled writeback for now */
 static int tux3_vol_writepage(struct page *page, struct writeback_control *wbc)
 {
 	return block_write_full_page(page, tux3_vol_get_block, wbc);
 }
+#endif
 
 static int tux3_vol_write_begin(struct file *file,
 				struct address_space *mapping,
@@ -896,7 +936,9 @@ static int tux3_vol_write_begin(struct file *file,
 
 const struct address_space_operations tux_vol_aops = {
 	.readpage	= tux3_vol_readpage,
-	.writepage	= tux3_vol_writepage,
+//	.writepage	= tux3_vol_writepage,
+	.writepage	= tux3_disable_writepage,
+	.writepages	= tux3_disable_writepages,
 	.write_begin	= tux3_vol_write_begin,
 };
 #endif /* __KERNEL__ */
