@@ -1018,6 +1018,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 				at->next++;
 			log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
 			mark_buffer_rollup_non(parentbuf);
+			cursor_check(cursor);
 			return 0;
 		}
 
@@ -1057,11 +1058,11 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		blockput(newbuf);
 
 		/*
-		 * if child is in left bnode, we should keep the
-		 * cursor position to child, not splited new bnode.
+		 * If child is in left bnode, we should keep the
+		 * cursor position to child, otherwise adjust cursor
+		 * to new bnode.
 		 */
-		if (child_is_left)
-			keep = 1;
+		keep = child_is_left;
 	}
 
 	/* Make new root bnode */
