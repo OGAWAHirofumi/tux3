@@ -1,8 +1,6 @@
 #ifndef LIBKLIB_LOCKDEBUG_H
 #define LIBKLIB_LOCKDEBUG_H
 
-#define LOCK_DEBUG
-
 #define SPINLOCK_MAGIC		0xdead4ead
 typedef struct {
 #ifdef LOCK_DEBUG

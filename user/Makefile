@@ -25,6 +25,8 @@ CFLAGS	+= -D_FORTIFY_SOURCE=2
 ifneq ($(GCOV),)
 CFLAGS	+= --coverage
 endif
+# use LOCK_DEBUG
+CFLAGS	+= -DLOCK_DEBUG=1
 # use atomic-commit
 CFLAGS	+= -DATOMIC=1
 # user flags
