@@ -43,6 +43,11 @@ typedef struct {
 #define ATOMIC_INIT(i)	{ (i) }
 #define atomic_read(v)	((v)->counter)
 
+static inline void atomic_set(atomic_t *v, int i)
+{
+	v->counter = i;
+}
+
 static inline void atomic_inc(atomic_t *v)
 {
 	v->counter++;
