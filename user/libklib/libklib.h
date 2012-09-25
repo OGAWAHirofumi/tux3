@@ -15,6 +15,7 @@
 #include <libklib/byteorder.h>
 #include <libklib/hash.h>
 #include <libklib/kdev_t.h>
+#include <libklib/list_sort.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)
