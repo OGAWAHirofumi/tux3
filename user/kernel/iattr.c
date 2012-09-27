@@ -9,6 +9,7 @@
  */
 
 #include "tux3.h"
+#include "ileaf.h"
 
 /*
  * Variable size attribute format:
@@ -30,7 +31,7 @@ unsigned atsize[MAX_ATTRS] = {
 	[XATTR_ATTR] = 4,
 };
 
-unsigned encode_asize(unsigned bits)
+static unsigned encode_asize(unsigned bits)
 {
 	unsigned need = 0;
 
@@ -102,7 +103,7 @@ void *encode_kind(void *attrs, unsigned kind, unsigned version)
 	return encode16(attrs, (kind << 12) | version);
 }
 
-void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
+static void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 {
 	trace_off("encode %u attr bytes", size);
 	tuxnode_t *tuxnode = tux_inode(inode);
@@ -217,3 +218,22 @@ void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	}
 	return attrs;
 }
+
+static int iattr_encoded_size(struct btree *btree, void *data)
+{
+	struct inode *inode = data;
+	return encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
+}
+
+static void iattr_encode(struct btree *btree, void *data, void *attrs, int size)
+{
+	struct inode *inode = data;
+	void *attr = encode_attrs(inode, attrs, size);
+	attr = encode_xattrs(inode, attr, attrs + size - attr);
+	assert(attr == attrs + size);
+}
+
+struct ileaf_attr_ops iattr_ops = {
+	.encoded_size	= iattr_encoded_size,
+	.encode		= iattr_encode,
+};

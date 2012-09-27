@@ -9,6 +9,7 @@
  */
 
 #include "tux3.h"
+#include "ileaf.h"
 
 #ifndef trace
 #define trace trace_on
@@ -305,27 +306,6 @@ out:
 	return err;
 }
 
-static int store_attrs(struct inode *inode, struct cursor *cursor)
-{
-	unsigned size;
-	void *base;
-
-	size = encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
-	assert(size);
-
-	base = btree_expand(cursor, tux_inode(inode)->inum, size);
-	if (IS_ERR(base))
-		return PTR_ERR(base);
-
-	void *attr = encode_attrs(inode, base, size);
-	attr = encode_xattrs(inode, attr, base + size - attr);
-	assert(attr == base + size);
-
-	mark_buffer_dirty_non(cursor_leafbuf(cursor));
-
-	return 0;
-}
-
 static int save_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -359,9 +339,21 @@ static int save_inode(struct inode *inode)
 		unsigned size;
 		assert(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size));
 	}
-	if ((err = store_attrs(inode, cursor)))
+
+	/* Write inode attributes to inode btree */
+	struct ileaf_req rq = {
+		.key = {
+			.start	= inum,
+			.len	= 1,
+		},
+		.data		= inode,
+	};
+	err = btree_write(cursor, &rq.key);
+	if (err)
 		goto error_release;
+
 	del_defer_alloc_inum(inode);
+
 error_release:
 	release_cursor(cursor);
 out:

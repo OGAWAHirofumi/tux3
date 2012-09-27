@@ -482,6 +482,7 @@ struct btree_ops itable_ops = {
 	.leaf_chop	= ileaf_chop,
 	.leaf_write	= ileaf_write,
 	.balloc		= balloc,
+	.private_ops	= &iattr_ops,
 
 	.leaf_sniff	= ileaf_sniff,
 	.leaf_dump	= ileaf_dump,

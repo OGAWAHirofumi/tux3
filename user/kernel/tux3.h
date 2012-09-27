@@ -936,12 +936,11 @@ static inline struct btree_ops *dtree_ops(void)
 }
 
 /* iattr.c */
-unsigned encode_asize(unsigned bits);
 void dump_attrs(struct inode *inode);
 void *encode_kind(void *attrs, unsigned kind, unsigned version);
-void *encode_attrs(struct inode *inode, void *attrs, unsigned size);
 void *decode_kind(void *attrs, unsigned *kind, unsigned *version);
 void *decode_attrs(struct inode *inode, void *attrs, unsigned size);
+extern struct ileaf_attr_ops iattr_ops;
 
 /* ileaf.c */
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result);
