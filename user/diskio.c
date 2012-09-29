@@ -7,6 +7,44 @@
 #include "trace.h"
 #include "diskio.h"
 
+static ssize_t iov_length(struct iovec *iov, int iovcnt)
+{
+	ssize_t size = 0;
+	int i;
+
+	for (i = 0; i < iovcnt; i++)
+		size += iov[i].iov_len;
+	return size;
+}
+
+int iovabs(int fd, struct iovec *iov, int iovcnt, int out, off_t offset)
+{
+	while (1) {
+		int count = min(iovcnt, UIO_MAXIOV);
+		ssize_t ret;
+
+		if (out)
+			ret = pwritev(fd, iov, count, offset);
+		else
+			ret = preadv(fd, iov, count, offset);
+		if (ret == -1) {
+			if (errno == EAGAIN || errno == EINTR)
+				continue;
+			return -errno;
+		}
+		if (ret != iov_length(iov, count))
+			return -EIO;
+		if (iovcnt == count)
+			break;
+
+		iov += count;
+		iovcnt -= count;
+		offset += ret;
+	}
+
+	return 0;
+}
+
 int ioabs(int fd, void *data, size_t count, int out, off_t offset)
 {
 	while (count) {

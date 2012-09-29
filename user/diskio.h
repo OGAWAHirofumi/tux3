@@ -3,7 +3,9 @@
 
 #include <inttypes.h>
 #include <sys/types.h>
+#include <sys/uio.h>
 
+int iovabs(int fd, struct iovec *iov, int iovcnt, int out, off_t offset);
 int ioabs(int fd, void *data, size_t count, int out, off_t offset);
 int diskread(int fd, void *data, size_t count, off_t offset);
 int diskwrite(int fd, void *data, size_t count, off_t offset);
