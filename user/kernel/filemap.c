@@ -669,7 +669,7 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	return __tux3_get_block(inode, iblock, bh_result, create);
 }
 
-static struct buffer_head *find_get_buffer(struct page *page, int offset)
+static struct buffer_head *get_buffer(struct page *page, int offset)
 {
 	struct buffer_head *bh = page_buffers(page);
 
@@ -679,19 +679,20 @@ static struct buffer_head *find_get_buffer(struct page *page, int offset)
 	return bh;
 }
 
-static struct buffer_head *get_buffer(struct address_space *mapping,
-				      pgoff_t index, int offset)
+static struct buffer_head *__find_get_buffer(struct address_space *mapping,
+					     pgoff_t index, int offset,
+					     int need_uptodate)
 {
 	struct buffer_head *bh = NULL;
 	struct page *page;
 
 	page = find_get_page(mapping, index);
 	if (page) {
-		if (PageUptodate(page)) {
+		if (!need_uptodate || PageUptodate(page)) {
 			spin_lock(&mapping->private_lock);
 			if (page_has_buffers(page)) {
-				bh = find_get_buffer(page, offset);
-				assert(buffer_uptodate(bh));
+				bh = get_buffer(page, offset);
+				assert(!need_uptodate || buffer_uptodate(bh));
 			}
 			spin_unlock(&mapping->private_lock);
 		}
@@ -700,24 +701,22 @@ static struct buffer_head *get_buffer(struct address_space *mapping,
 	return bh;
 }
 
+static struct buffer_head *find_get_buffer(struct address_space *mapping,
+					   pgoff_t index, int offset)
+{
+	return __find_get_buffer(mapping, index, offset, 1);
+}
+
 struct buffer_head *peekblk(struct address_space *mapping, block_t iblock)
 {
 	struct inode *inode = mapping->host;
-	struct buffer_head *bh;
 	pgoff_t index;
 	int offset;
-
-	/* Untested */
-	WARN_ON(1);
 
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
 	offset = iblock & ((1 << (PAGE_CACHE_SHIFT - inode->i_blkbits)) - 1);
 
-	bh = get_buffer(mapping, index, offset);
-	if (bh)
-		return bh;
-
-	return NULL;
+	return __find_get_buffer(mapping, index, offset, 0);
 }
 
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
@@ -732,7 +731,7 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
 	offset = iblock & ((1 << (PAGE_CACHE_SHIFT - inode->i_blkbits)) - 1);
 
-	bh = get_buffer(mapping, index, offset);
+	bh = find_get_buffer(mapping, index, offset);
 	if (bh)
 		return bh;
 
@@ -744,7 +743,7 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 
 	if (!page_has_buffers(page))
 		create_empty_buffers(page, tux_sb(inode->i_sb)->blocksize, 0);
-	bh = find_get_buffer(page, offset);
+	bh = get_buffer(page, offset);
 
 	if (PageUptodate(page))
 		unlock_page(page);
@@ -796,7 +795,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 
 	assert(page_has_buffers(page));
 
-	bh = find_get_buffer(page, offset);
+	bh = get_buffer(page, offset);
 	/* Clear new, so the caller must initialize buffer. */
 	clear_buffer_new(bh);
 	/* FIXME: maybe, we shouldn't set uptodate unconditionally? */
