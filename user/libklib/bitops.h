@@ -13,10 +13,20 @@
 
 #include <libklib/bitops/__ffs.h>
 #include <libklib/bitops/ffz.h>
+#include <libklib/bitops/fls.h>
+#include <libklib/bitops/__fls.h>
+#include <libklib/bitops/fls64.h>
 #include <libklib/bitops/find.h>
 
 #include <libklib/bitops/atomic.h>
 #include <libklib/bitops/non-atomic.h>
 #include <libklib/bitops/le.h>
+
+static inline unsigned fls_long(unsigned long l)
+{
+	if (sizeof(l) == 4)
+		return fls(l);
+	return fls64(l);
+}
 
 #endif /* !LIBKLIB_BITOPS_H */
