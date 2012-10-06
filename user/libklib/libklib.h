@@ -2,6 +2,7 @@
 #define LIBKLIB_H
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <endian.h>
@@ -17,6 +18,7 @@
 #include <libklib/kdev_t.h>
 #include <libklib/list_sort.h>
 #include <libklib/barrier.h>
+#include <libklib/log2.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)
