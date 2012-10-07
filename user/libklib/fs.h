@@ -3,7 +3,32 @@
 
 /* depending on tux3 */
 
+#include <libklib/lockdebug.h>
+
 struct nameidata {
+};
+
+/* Generic inode */
+struct inode {
+	struct sb		*i_sb;
+
+	struct mutex		i_mutex;
+	unsigned long		i_state;
+	atomic_t		i_count;
+
+	umode_t			i_mode;
+	unsigned		i_uid;
+	unsigned		i_gid;
+	unsigned int		i_nlink;
+	dev_t			i_rdev;
+	loff_t			i_size;
+	struct timespec		i_atime;
+	struct timespec		i_mtime;
+	struct timespec		i_ctime;
+	u64			i_version;
+
+	map_t			*map;
+	struct hlist_node	i_hash;
 };
 
 /*

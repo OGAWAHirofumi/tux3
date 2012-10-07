@@ -34,29 +34,10 @@ static inline struct timespec gettime(void)
 	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
 }
 
-/* Generic inode */
-struct inode {
-	struct sb	*i_sb;
-
-	struct mutex	i_mutex;
-	unsigned long	i_state;
-	atomic_t	i_count;
-
-	loff_t		i_size;
-	struct timespec	i_mtime, i_ctime, i_atime;
-	unsigned	i_uid, i_gid, i_nlink;
-	umode_t		i_mode;
-	dev_t		i_rdev;
-	unsigned	i_version;
-
-	map_t		*map;
-	struct hlist_node i_hash;
-};
-
 /* File handle */
 struct file {
 	struct inode	*f_inode;
-	unsigned	f_version;
+	u64		f_version;
 	loff_t		f_pos;
 };
 
