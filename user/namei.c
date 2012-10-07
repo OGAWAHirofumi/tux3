@@ -17,7 +17,7 @@ static int tuxlookup(struct inode *dir, struct dentry *dentry)
 {
 	struct dentry *result;
 
-	result = tux3_lookup(dir, dentry, NULL);
+	result = tux3_lookup(dir, dentry, 0);
 	if (result && IS_ERR(result))
 		return PTR_ERR(result);
 	assert(result == NULL);

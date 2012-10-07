@@ -7,7 +7,7 @@
 #include "tux3.h"
 
 static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
-				  struct nameidata *nd)
+				  unsigned int flags)
 {
 	struct buffer_head *buffer;
 	struct inode *inode;
@@ -90,7 +90,7 @@ static int tux3_mknod(struct inode *dir, struct dentry *dentry, umode_t mode,
 }
 
 static int tux3_create(struct inode *dir, struct dentry *dentry, umode_t mode,
-		       struct nameidata *nd)
+		       bool excl)
 {
 	return tux3_mknod(dir, dentry, mode, 0);
 }
