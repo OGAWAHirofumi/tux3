@@ -13,7 +13,7 @@
 struct sb;
 struct inode;
 
-void end_writeback(struct inode *inode);
+void clear_inode(struct inode *inode);
 void __mark_inode_dirty(struct inode *inode, unsigned flags);
 void mark_inode_dirty(struct inode *inode);
 void mark_inode_dirty_sync(struct inode *inode);

@@ -577,7 +577,7 @@ void tux3_evict_inode(struct inode *inode)
 
 	if (!delete_inode) {
 		tux3_clear_dirty_inode(inode);
-		end_writeback(inode);
+		clear_inode(inode);
 	} else {
 		/*
 		 * FIXME: since in-core inode is freed, we should do
@@ -627,7 +627,7 @@ error:
 		 * process for this inode)
 		 */
 		tux3_clear_dirty_inode(inode);
-		end_writeback(inode);
+		clear_inode(inode);
 	}
 
 	if (unlock)

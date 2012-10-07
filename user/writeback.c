@@ -6,7 +6,7 @@
 
 #include "kernel/writeback.c"
 
-void end_writeback(struct inode *inode)
+void clear_inode(struct inode *inode)
 {
 	inode->i_state = I_FREEING;
 }
