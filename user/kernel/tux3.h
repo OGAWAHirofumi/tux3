@@ -385,8 +385,8 @@ static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
 #endif /* !__KERNEL__ */
 
 struct tux_iattr {
-	uid_t	uid;
-	gid_t	gid;
+	kuid_t	uid;
+	kgid_t	gid;
 	umode_t	mode;
 };
 

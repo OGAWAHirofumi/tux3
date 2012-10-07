@@ -109,7 +109,7 @@ void dump_attrs(struct inode *inode)
 			printf("rdev %x:%x ", MAJOR(inode->i_rdev), MINOR(inode->i_rdev));
 			break;
 		case MODE_OWNER_ATTR:
-			printf("mode %07ho uid %x gid %x ", inode->i_mode, inode->i_uid, inode->i_gid);
+			printf("mode %07ho uid %x gid %x ", inode->i_mode, i_uid_read(inode), i_gid_read(inode));
 			break;
 		case CTIME_SIZE_ATTR:
 			printf("ctime %Lx size %Lx ", tuxtime(inode->i_ctime), (s64)inode->i_size);
@@ -158,8 +158,8 @@ static void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
 		case MODE_OWNER_ATTR:
 			/* FIXME: i_mode is enough with 16bits */
 			attrs = encode32(attrs, inode->i_mode);
-			attrs = encode32(attrs, inode->i_uid);
-			attrs = encode32(attrs, inode->i_gid);
+			attrs = encode32(attrs, i_uid_read(inode));
+			attrs = encode32(attrs, i_gid_read(inode));
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = encode64(attrs, tuxtime(inode->i_ctime) >> TIME_ATTR_SHIFT);
@@ -214,9 +214,9 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode32(attrs, &v32);
 			inode->i_mode = v32;
 			attrs = decode32(attrs, &v32);
-			inode->i_uid = v32;
+			i_uid_write(inode, v32);
 			attrs = decode32(attrs, &v32);
-			inode->i_gid = v32;
+			i_gid_write(inode, v32);
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = decode64(attrs, &v64);

@@ -138,8 +138,8 @@ static void tux3fuse_fill_stat(struct stat *stat, struct inode *inode)
 		.st_ino		= tux_inode(inode)->inum,
 		.st_mode	= inode->i_mode,
 		.st_nlink	= inode->i_nlink,
-		.st_uid		= inode->i_uid,
-		.st_gid		= inode->i_gid,
+		.st_uid		= i_uid_read(inode),
+		.st_gid		= i_gid_read(inode),
 		.st_rdev	= inode->i_rdev,
 		.st_size	= inode->i_size,
 		/* FIXME: might be better to use ->i_blkbits? */
@@ -237,9 +237,9 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	if (to_set & FUSE_SET_ATTR_MODE)
 		inode->i_mode = attr->st_mode;
 	if (to_set & FUSE_SET_ATTR_UID)
-		inode->i_uid = attr->st_uid;
+		i_uid_write(inode, attr->st_uid);
 	if (to_set & FUSE_SET_ATTR_GID)
-		inode->i_gid = attr->st_gid;
+		i_gid_write(inode, attr->st_gid);
 	if (to_set & FUSE_SET_ATTR_ATIME)
 		inode->i_atime = attr->st_atim;
 	if (to_set & FUSE_SET_ATTR_MTIME)
@@ -292,8 +292,8 @@ static struct inode *__tux3fuse_mknod(fuse_req_t req, fuse_ino_t parent,
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct tux_iattr iattr = {
-		.uid	= ctx->uid,
-		.gid	= ctx->gid,
+		.uid	= make_kuid(&init_user_ns, ctx->uid),
+		.gid	= make_kgid(&init_user_ns, ctx->gid),
 		.mode	= mode,
 	};
 	struct inode *dir, *inode;
@@ -397,8 +397,8 @@ static void tux3fuse_symlink(fuse_req_t req, const char *link,
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	struct sb *sb = tux3fuse_get_sb(req);
 	struct tux_iattr iattr = {
-		.uid	= ctx->uid,
-		.gid	= ctx->gid,
+		.uid	= make_kuid(&init_user_ns, ctx->uid),
+		.gid	= make_kgid(&init_user_ns, ctx->gid),
 	};
 	struct inode *dir, *inode;
 	int err;

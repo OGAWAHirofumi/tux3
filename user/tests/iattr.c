@@ -25,8 +25,8 @@ static void test01(struct sb *sb)
 	struct inode *inode2 = rapid_open_inode(sb, NULL, 0x666);
 
 	inode1->i_rdev	= MKDEV(1, 3);
-	inode1->i_uid	= 0x12121212;
-	inode1->i_gid	= 0x34343434;
+	i_uid_write(inode1, 0x12121212);
+	i_gid_write(inode1, 0x34343434);
 	inode1->i_size	= 0x123456789ULL;
 	inode1->i_ctime	= spectime(0xdec0de01dec0de02ULL);
 	inode1->i_mtime	= spectime(0xbadface1badface2ULL);
@@ -51,8 +51,8 @@ static void test01(struct sb *sb)
 	test_assert(tuxnode1->present == tuxnode2->present);
 	test_assert(inode1->i_rdev == inode2->i_rdev);
 	test_assert(inode1->i_mode == inode2->i_mode);
-	test_assert(inode1->i_uid == inode2->i_uid);
-	test_assert(inode1->i_gid == inode2->i_gid);
+	test_assert(uid_eq(inode1->i_uid, inode2->i_uid));
+	test_assert(gid_eq(inode1->i_gid, inode2->i_gid));
 	test_assert(inode1->i_size == inode2->i_size);
 	test_assert(inode1->i_ctime.tv_sec == inode2->i_ctime.tv_sec);
 	test_assert(inode1->i_ctime.tv_nsec == inode2->i_ctime.tv_nsec);
