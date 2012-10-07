@@ -4,6 +4,7 @@
 /* depending on tux3 */
 
 #include <libklib/lockdebug.h>
+#include <libklib/uidgid.h>
 
 struct nameidata {
 };
@@ -17,8 +18,8 @@ struct inode {
 	atomic_t		i_count;
 
 	umode_t			i_mode;
-	unsigned		i_uid;
-	unsigned		i_gid;
+	kuid_t			i_uid;
+	kgid_t			i_gid;
 	unsigned int		i_nlink;
 	dev_t			i_rdev;
 	loff_t			i_size;
@@ -30,6 +31,32 @@ struct inode {
 	map_t			*map;
 	struct hlist_node	i_hash;
 };
+
+/*
+ * Helper functions so that in most cases filesystems will
+ * not need to deal directly with kuid_t and kgid_t and can
+ * instead deal with the raw numeric values that are stored
+ * in the filesystem.
+ */
+static inline uid_t i_uid_read(const struct inode *inode)
+{
+	return from_kuid(&init_user_ns, inode->i_uid);
+}
+
+static inline gid_t i_gid_read(const struct inode *inode)
+{
+	return from_kgid(&init_user_ns, inode->i_gid);
+}
+
+static inline void i_uid_write(struct inode *inode, uid_t uid)
+{
+	inode->i_uid = make_kuid(&init_user_ns, uid);
+}
+
+static inline void i_gid_write(struct inode *inode, gid_t gid)
+{
+	inode->i_gid = make_kgid(&init_user_ns, gid);
+}
 
 /*
  * dentry stuff
