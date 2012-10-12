@@ -6,12 +6,15 @@
 static void test01(void)
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
+	struct sb sb = { .dev = dev, };
 
 	/* This expect buffer is never reclaimed */
 	init_buffers(dev, NR_BUF << dev->bits, 1);
 
-	map_t *map1 = new_map(dev, NULL);
-	map_t *map2 = new_map(dev, NULL);
+	struct inode *inode1 = rapid_open_inode(&sb, NULL, 0);
+	struct inode *inode2 = rapid_open_inode(&sb, NULL, 0);
+	map_t *map1 = inode1->map;
+	map_t *map2 = inode2->map;
 
 	struct buffer_head *map1_bufs[NR_BUF], *map2_bufs[NR_BUF];
 
