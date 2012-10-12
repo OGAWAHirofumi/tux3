@@ -205,19 +205,54 @@ error:
 	return ERR_PTR(err);
 }
 
-#ifdef __KERNEL__
-static struct kmem_cache *tux_inode_cachep;
-
 static void tux3_inode_init_once(void *mem)
 {
 	struct tux3_inode *tuxnode = mem;
+	struct inode *inode = &tuxnode->vfs_inode;
 
 	INIT_LIST_HEAD(&tuxnode->dirty_list);
 	INIT_LIST_HEAD(&tuxnode->alloc_list);
 	INIT_LIST_HEAD(&tuxnode->orphan_list);
-	init_dirty_buffers(inode_dirty_heads(&tuxnode->vfs_inode));
-	inode_init_once(&tuxnode->vfs_inode);
+#ifdef __KERNEL__
+	init_dirty_buffers(inode_dirty_heads(inode));
+#endif
+
+	/* Initialize generic part */
+	inode_init_once(inode);
 }
+
+static void tux3_inode_init_always(struct tux3_inode *tuxnode)
+{
+	static struct timespec epoch;
+	struct inode *inode = &tuxnode->vfs_inode;
+
+	tuxnode->btree		= (struct btree){ };
+	tuxnode->present	= 0;
+	tuxnode->xcache		= NULL;
+#ifdef __KERNEL__
+	tuxnode->io		= NULL;
+#endif
+
+	/* uninitialized stuff by alloc_inode() */
+	inode->i_version	= 1;
+	inode->i_atime		= epoch;
+	inode->i_mtime		= epoch;
+	inode->i_ctime		= epoch;
+	inode->i_mode		= 0;
+}
+
+static void tux3_check_destroy_inode(struct inode *inode)
+{
+	assert(list_empty(&tux_inode(inode)->dirty_list));
+	assert(list_empty(&tux_inode(inode)->alloc_list));
+	assert(list_empty(&tux_inode(inode)->orphan_list));
+#ifdef __KERNEL__
+	assert(dirty_buffers_is_empty(inode_dirty_heads(inode)));
+#endif
+}
+
+#ifdef __KERNEL__
+static struct kmem_cache *tux_inode_cachep;
 
 static int __init tux3_init_inodecache(void)
 {
@@ -237,28 +272,15 @@ static void __exit tux3_destroy_inodecache(void)
 
 static struct inode *tux3_alloc_inode(struct super_block *sb)
 {
-	static struct timespec epoch;
 	struct tux3_inode *tuxnode;
-	struct inode *inode;
 
 	tuxnode = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
 	if (!tuxnode)
 		return NULL;
 
-	tuxnode->btree		= (struct btree){ };
-	tuxnode->present	= 0;
-	tuxnode->xcache		= NULL;
-	tuxnode->io		= NULL;
+	tux3_inode_init_always(tuxnode);
 
-	inode = &tuxnode->vfs_inode;
-	/* uninitialized stuff by alloc_inode() */
-	inode->i_version	= 1;
-	inode->i_atime		= epoch;
-	inode->i_mtime		= epoch;
-	inode->i_ctime		= epoch;
-	inode->i_mode		= 0;
-
-	return inode;
+	return &tuxnode->vfs_inode;
 }
 
 static void tux3_i_callback(struct rcu_head *head)
@@ -269,10 +291,7 @@ static void tux3_i_callback(struct rcu_head *head)
 
 static void tux3_destroy_inode(struct inode *inode)
 {
-	BUG_ON(!list_empty(&tux_inode(inode)->dirty_list));
-	BUG_ON(!list_empty(&tux_inode(inode)->alloc_list));
-	BUG_ON(!list_empty(&tux_inode(inode)->orphan_list));
-	BUG_ON(!dirty_buffers_is_empty(inode_dirty_heads(inode)));
+	tux3_check_destroy_inode(inode);
 	call_rcu(&inode->i_rcu, tux3_i_callback);
 }
 

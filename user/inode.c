@@ -68,7 +68,7 @@ static struct inode *new_inode(struct sb *sb)
 	if (!tuxnode)
 		goto error;
 
-	tux3_inode_init(tuxnode, sb, 0);
+	inode_init(tuxnode, sb, 0);
 	inode = &tuxnode->vfs_inode;
 
 	inode->map = new_map(sb->dev, NULL);
@@ -90,12 +90,8 @@ static void free_inode(struct inode *inode)
 	struct tux3_inode *tuxnode = tux_inode(inode);
 
 	inode->i_state &= ~I_BAD;
-	assert(list_empty(&tuxnode->dirty_list));
-	assert(list_empty(&tuxnode->alloc_list));
-	assert(list_empty(&tuxnode->orphan_list));
-	assert(hlist_unhashed(&inode->i_hash));
-	assert(inode->i_state == I_FREEING);
-	assert(mapping(inode));
+
+	free_inode_check(tuxnode);
 
 	free_map(mapping(inode));
 	free(tuxnode);

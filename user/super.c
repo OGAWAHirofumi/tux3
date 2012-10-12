@@ -14,7 +14,39 @@
 #define trace trace_on
 #endif
 
+static void inode_init_once(struct inode *inode)
+{
+	memset(inode, 0, sizeof(*inode));
+
+	mutex_init(&inode->i_mutex);
+	INIT_HLIST_NODE(&inode->i_hash);
+}
+
 #include "kernel/super.c"
+
+void inode_init(struct tux3_inode *tuxnode, struct sb *sb, umode_t mode)
+{
+	struct inode *inode = &tuxnode->vfs_inode;
+
+	tux3_inode_init_once(tuxnode);
+	tux3_inode_init_always(tuxnode);
+
+	inode->i_sb	= sb;
+	inode->i_mode	= mode;
+	inode->i_nlink	= 1;
+	atomic_set(&inode->i_count, 1);
+}
+
+void free_inode_check(struct tux3_inode *tuxnode)
+{
+	struct inode *inode = &tuxnode->vfs_inode;
+
+	tux3_check_destroy_inode(inode);
+
+	assert(hlist_unhashed(&inode->i_hash));
+	assert(inode->i_state == I_FREEING);
+	assert(mapping(inode));
+}
 
 static void cleanup_garbage_for_debugging(struct sb *sb)
 {

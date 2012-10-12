@@ -83,32 +83,13 @@ struct file {
 	INIT_DISKSB_FREEBLOCKS(_blocks)				\
 }
 
-static inline void tux3_inode_init(struct tux3_inode *tuxnode,
-				   struct sb *sb, umode_t mode)
-{
-	struct inode *inode = &tuxnode->vfs_inode;
-
-	memset(tuxnode, 0, sizeof(*tuxnode));
-
-	INIT_LIST_HEAD(&tuxnode->dirty_list);
-	INIT_LIST_HEAD(&tuxnode->alloc_list);
-	INIT_LIST_HEAD(&tuxnode->orphan_list);
-	init_rwsem(&tuxnode->btree.lock);
-
-	inode->i_sb		= sb;
-	inode->i_mode		= mode;
-	inode->i_version	= 1;
-	inode->i_nlink		= 1;
-	atomic_set(&inode->i_count, 1);
-	mutex_init(&inode->i_mutex);
-	INIT_HLIST_NODE(&inode->i_hash);
-}
-
 #define rapid_open_inode(sb, io, mode) ({			\
 	struct tux3_inode *__tux = &(struct tux3_inode){};	\
 	struct inode *__inode = &__tux->vfs_inode;		\
 								\
-	tux3_inode_init(__tux, sb, mode);			\
+	inode_init(__tux, sb, mode);				\
+	/* Initialize lock for convenience. */			\
+	init_rwsem(&__tux->btree.lock);				\
 								\
 	__inode->map = new_map((sb)->dev, io);			\
 	assert(__inode->map);					\
@@ -157,6 +138,8 @@ int tuxrename(struct inode *old_dir, const char *old_name, unsigned old_len,
 	      struct inode *new_dir, const char *new_name, unsigned new_len);
 
 /* super.c */
+void inode_init(struct tux3_inode *tuxnode, struct sb *sb, umode_t mode);
+void free_inode_check(struct tux3_inode *tuxnode);
 int put_super(struct sb *sb);
 int make_tux3(struct sb *sb);
 
