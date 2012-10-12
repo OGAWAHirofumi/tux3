@@ -17,6 +17,10 @@
 #define __attribute_const__		__attribute__((__const__))
 #endif
 
+/* Optimization barrier */
+/* The "volatile" is due to gcc bugs */
+#define barrier() __asm__ __volatile__("": : :"memory")
+
 #if __GNUC__ < 3
 /* gcc 2.x */
 #elif __GNUC__ == 3
