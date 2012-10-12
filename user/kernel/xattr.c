@@ -9,6 +9,7 @@
  */
 
 #include "tux3.h"
+#include "iattr.h"
 
 #ifndef trace
 #define trace trace_on

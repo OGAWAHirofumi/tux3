@@ -10,6 +10,7 @@
 
 #include "tux3.h"
 #include "ileaf.h"
+#include "iattr.h"
 
 /*
  * Variable size attribute format:
