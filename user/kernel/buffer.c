@@ -3,6 +3,7 @@
  */
 
 #include "tux3.h"
+#include "tux3_fork.h"
 
 #ifndef trace
 #define trace trace_on
@@ -10,12 +11,11 @@
 
 /*
  * FIXME: Setting delta is not atomic with dirty for this buffer_head,
- * so this maps the delta 0-3 to 1-4. And 0 is used to tell "delta is
- * not set yet"
  */
-#define DELTA_STATES	(((TUX3_MAX_DELTA << 1) - 1) << BH_PrivateStart)
-#define DELTA_MASK	((unsigned long)DELTA_STATES)
-#define DELTA_VAL(x)	((unsigned long)((x) + 1) << BH_PrivateStart)
+#define BUFDELTA_AVAIL		1
+#define BUFDELTA_BITS		order_base_2(BUFDELTA_AVAIL + TUX3_MAX_DELTA)
+TUX3_DEFINE_STATE_FNS(unsigned long, buf, BUFDELTA_AVAIL, BUFDELTA_BITS,
+		      BH_PrivateStart);
 
 /*
  * FIXME: this is hack to save delta to linux buffer_head.
@@ -32,7 +32,7 @@ static void tux3_set_bufdelta(struct buffer_head *buffer, int delta)
 	state = buffer->b_state;
 	for (;;) {
 		old_state = state;
-		state = (old_state & ~DELTA_MASK) | DELTA_VAL(delta);
+		state = tux3_bufsta_update(old_state, delta);
 		state = cmpxchg(&buffer->b_state, old_state, state);
 		if (state == old_state)
 			break;
@@ -46,7 +46,7 @@ static void tux3_clear_bufdelta(struct buffer_head *buffer)
 	state = buffer->b_state;
 	for (;;) {
 		old_state = state;
-		state = (old_state & ~DELTA_MASK);
+		state = tux3_bufsta_clear(old_state);
 		state = cmpxchg(&buffer->b_state, old_state, state);
 		if (state == old_state)
 			break;
@@ -55,13 +55,11 @@ static void tux3_clear_bufdelta(struct buffer_head *buffer)
 
 static int tux3_bufdelta(struct buffer_head *buffer)
 {
-	int delta;
-
 	assert(buffer_dirty(buffer));
 	while (1) {
-		delta = (buffer->b_state & DELTA_MASK) >> BH_PrivateStart;
-		if (delta)
-			return delta - 1;
+		unsigned long state = buffer->b_state;
+		if (tux3_bufsta_has_delta(state))
+			return tux3_bufsta_get_delta(state);
 		/* The delta is not yet set. Retry */
 		cpu_relax();
 	}

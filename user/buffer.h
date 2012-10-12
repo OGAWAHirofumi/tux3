@@ -9,6 +9,7 @@
 
 static inline unsigned tux3_delta(unsigned delta);
 #endif
+#include "kernel/tux3_fork.h"
 #include "libklib/list.h"
 #include <sys/uio.h>
 
@@ -28,6 +29,10 @@ enum {
 	BUFFER_FREED, BUFFER_EMPTY, BUFFER_CLEAN, BUFFER_DIRTY,
 	BUFFER_STATES = BUFFER_DIRTY + BUFFER_DIRTY_STATES
 };
+
+/* Define buffer fork state helpers */
+#define BUFFER_STATE_BITS	order_base_2(BUFFER_STATES)
+TUX3_DEFINE_STATE_FNS(unsigned, buf, BUFFER_DIRTY, BUFFER_STATE_BITS, 0);
 
 #define BUFFER_BUCKETS 999
 
@@ -105,7 +110,7 @@ static inline int buffer_clean(struct buffer_head *buffer)
 
 static inline int buffer_dirty(struct buffer_head *buffer)
 {
-	return buffer->state >= BUFFER_DIRTY;
+	return tux3_bufsta_has_delta(buffer->state);
 }
 
 /* When buffer was dirtied */
@@ -114,7 +119,7 @@ static inline unsigned tux3_bufdelta(struct buffer_head *buffer)
 #ifdef assert
 	assert(buffer_dirty(buffer));
 #endif
-	return buffer->state - BUFFER_DIRTY;
+	return tux3_bufsta_get_delta(buffer->state);
 }
 
 /* Can we modify buffer from delta */

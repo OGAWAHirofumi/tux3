@@ -170,7 +170,7 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head)
 {
-	set_buffer_state_list(buffer, BUFFER_DIRTY + tux3_delta(delta), head);
+	set_buffer_state_list(buffer, tux3_bufsta_delta(delta), head);
 }
 
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
@@ -513,7 +513,7 @@ static void __destroy_buffers(void)
 	if (!list_empty(&lru_buffers)) {
 		warn("dirty buffer leak, or list corruption?");
 		list_for_each_entry(buffer, &lru_buffers, lru) {
-			if (BUFFER_DIRTY <= buffer->state) {
+			if (buffer_dirty(buffer)) {
 				printf("map [%p] ", buffer->map);
 				show_buffer(buffer);
 			}
