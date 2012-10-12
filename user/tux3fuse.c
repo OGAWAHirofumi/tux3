@@ -135,7 +135,7 @@ static void tux3fuse_fill_stat(struct stat *stat, struct inode *inode)
 
 	*stat = (struct stat){
 		/* .st_dev; */
-		.st_ino		= inode->inum,
+		.st_ino		= tux_inode(inode)->inum,
 		.st_mode	= inode->i_mode,
 		.st_nlink	= inode->i_nlink,
 		.st_uid		= inode->i_uid,
@@ -155,7 +155,7 @@ static void tux3fuse_fill_stat(struct stat *stat, struct inode *inode)
 static void tux3fuse_fill_ep(struct fuse_entry_param *ep, struct inode *inode)
 {
 	*ep = (struct fuse_entry_param){
-		.ino		= inode->inum,
+		.ino		= tux_inode(inode)->inum,
 		.generation	= 1,
 		.attr_timeout	= 0.0,
 		.entry_timeout	= 0.0,

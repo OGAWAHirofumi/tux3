@@ -34,6 +34,32 @@ static inline struct timespec gettime(void)
 	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
 }
 
+/* Generic inode */
+struct inode {
+	struct sb	*i_sb;
+
+	struct mutex	i_mutex;
+	unsigned long	i_state;
+	atomic_t	i_count;
+
+	loff_t		i_size;
+	struct timespec	i_mtime, i_ctime, i_atime;
+	unsigned	i_uid, i_gid, i_nlink;
+	umode_t		i_mode;
+	dev_t		i_rdev;
+	unsigned	i_version;
+
+	map_t		*map;
+	struct hlist_node i_hash;
+};
+
+/* File handle */
+struct file {
+	struct inode	*f_inode;
+	unsigned	f_version;
+	loff_t		f_pos;
+};
+
 #include "kernel/tux3.h"
 
 #ifdef ATOMIC
@@ -57,32 +83,38 @@ static inline struct timespec gettime(void)
 	INIT_DISKSB_FREEBLOCKS(_blocks)				\
 }
 
-#define INIT_INODE(inode, sb, mode)				\
-	.i_sb = sb,						\
-	.i_mode = mode,						\
-	.i_mutex = __MUTEX_INITIALIZER,				\
-	.i_version = 1,						\
-	.i_nlink = 1,						\
-	.i_count = ATOMIC_INIT(1),				\
-	.dirty_list = LIST_HEAD_INIT((inode).dirty_list),	\
-	.alloc_list = LIST_HEAD_INIT((inode).alloc_list),	\
-	.orphan_list = LIST_HEAD_INIT((inode).orphan_list)
+static inline void tux3_inode_init(struct tux3_inode *tuxnode,
+				   struct sb *sb, umode_t mode)
+{
+	struct inode *inode = &tuxnode->vfs_inode;
 
-#define rapid_open_inode(sb, io, mode, init_defs...) ({		\
-	struct inode *__inode = &(struct inode){};		\
-	*__inode = (struct inode){				\
-		INIT_INODE(*__inode, sb, mode),			\
-		.btree = {					\
-			.lock = __RWSEM_INITIALIZER,		\
-		},						\
-		init_defs					\
-	};							\
-	INIT_HLIST_NODE(&__inode->i_hash);			\
+	memset(tuxnode, 0, sizeof(*tuxnode));
+
+	INIT_LIST_HEAD(&tuxnode->dirty_list);
+	INIT_LIST_HEAD(&tuxnode->alloc_list);
+	INIT_LIST_HEAD(&tuxnode->orphan_list);
+	init_rwsem(&tuxnode->btree.lock);
+
+	inode->i_sb		= sb;
+	inode->i_mode		= mode;
+	inode->i_version	= 1;
+	inode->i_nlink		= 1;
+	atomic_set(&inode->i_count, 1);
+	mutex_init(&inode->i_mutex);
+	INIT_HLIST_NODE(&inode->i_hash);
+}
+
+#define rapid_open_inode(sb, io, mode) ({			\
+	struct tux3_inode *__tux = &(struct tux3_inode){};	\
+	struct inode *__inode = &__tux->vfs_inode;		\
+								\
+	tux3_inode_init(__tux, sb, mode);			\
+								\
 	__inode->map = new_map((sb)->dev, io);			\
 	assert(__inode->map);					\
 	__inode->map->inode = __inode;				\
 	__inode;						\
-	})
+})
 
 #define rapid_sb(x)	(&(struct sb){ .dev = x })
 

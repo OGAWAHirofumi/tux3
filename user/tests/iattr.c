@@ -21,18 +21,17 @@
 static void test01(struct sb *sb)
 {
 	unsigned abits = RDEV_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT|MTIME_BIT;
-	struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFCHR | 0644,
-		.present	= abits,
-		.i_rdev		= MKDEV(1, 3),
-		.i_uid		= 0x12121212,
-		.i_gid		= 0x34343434,
-		.i_size		= 0x123456789ULL,
-		.i_ctime	= spectime(0xdec0de01dec0de02ULL),
-		.i_mtime	= spectime(0xbadface1badface2ULL),
-		);
+	struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFCHR | 0644);
 	struct inode *inode2 = rapid_open_inode(sb, NULL, 0x666);
 
-	inode1->btree = (struct btree){
+	inode1->i_rdev	= MKDEV(1, 3);
+	inode1->i_uid	= 0x12121212;
+	inode1->i_gid	= 0x34343434;
+	inode1->i_size	= 0x123456789ULL;
+	inode1->i_ctime	= spectime(0xdec0de01dec0de02ULL);
+	inode1->i_mtime	= spectime(0xbadface1badface2ULL);
+	tux_inode(inode1)->present = abits;
+	tux_inode(inode1)->btree = (struct btree){
 		.root = { .block = 0xcaba1f00dULL, .depth = 3 },
 	};
 
@@ -47,7 +46,9 @@ static void test01(struct sb *sb)
 	test_assert(p - attrs == size);
 
 	/* Compare inode1 and inode2 */
-	test_assert(inode1->present == inode2->present);
+	struct tux3_inode *tuxnode1 = tux_inode(inode1);
+	struct tux3_inode *tuxnode2 = tux_inode(inode2);
+	test_assert(tuxnode1->present == tuxnode2->present);
 	test_assert(inode1->i_rdev == inode2->i_rdev);
 	test_assert(inode1->i_mode == inode2->i_mode);
 	test_assert(inode1->i_uid == inode2->i_uid);
@@ -57,8 +58,8 @@ static void test01(struct sb *sb)
 	test_assert(inode1->i_ctime.tv_nsec == inode2->i_ctime.tv_nsec);
 	test_assert(inode1->i_mtime.tv_sec == inode2->i_mtime.tv_sec);
 	test_assert(inode1->i_mtime.tv_nsec == inode2->i_mtime.tv_nsec);
-	test_assert(inode1->btree.root.block == inode2->btree.root.block);
-	test_assert(inode1->btree.root.depth == inode2->btree.root.depth);
+	test_assert(tuxnode1->btree.root.block == tuxnode2->btree.root.block);
+	test_assert(tuxnode1->btree.root.depth == tuxnode2->btree.root.depth);
 
 	free_map(inode1->map);
 	free_map(inode2->map);

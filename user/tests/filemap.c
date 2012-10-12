@@ -110,7 +110,8 @@ static void test01(struct sb *sb, struct inode *inode)
 		/* btree_chop and dleaf_chop test */
 		int index = 31*2;
 		while (index--) {
-			err = btree_chop(&inode->btree, index, TUXKEY_LIMIT);
+			err = btree_chop(&tux_inode(inode)->btree, index,
+					 TUXKEY_LIMIT);
 			test_assert(!err);
 #ifdef CAN_HANDLE_A_LEAF
 			for (int i = 0; i < 30; i++) {
@@ -156,7 +157,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(segs == i*2);
 #endif
 
-		err = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
+		err = btree_chop(&tux_inode(inode)->btree, 0, TUXKEY_LIMIT);
 		test_assert(!err);
 
 		/* Check if truncated all */
@@ -326,7 +327,7 @@ static void test05(struct sb *sb, struct inode *inode)
 	for (int test = 0; test < ARRAY_SIZE(data); test++) {
 		__test05(data[test], ARRAY_SIZE(data[test]), inode);
 
-		int err = btree_chop(&inode->btree, 0, TUXKEY_LIMIT);
+		int err = btree_chop(&tux_inode(inode)->btree, 0, TUXKEY_LIMIT);
 		test_assert(!err);
 	}
 

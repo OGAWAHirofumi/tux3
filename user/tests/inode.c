@@ -82,7 +82,7 @@ static void test02(struct sb *sb)
 	test_assert(is_defer_alloc_inum(inode2));
 
 	/* Test inum allocation */
-	test_assert(inode1->inum != inode2->inum);
+	test_assert(tux_inode(inode1)->inum != tux_inode(inode2)->inum);
 	/* Save first inode */
 	err = tux3_flush_inode(inode1, sb->delta);
 	test_assert(!err);
@@ -105,10 +105,10 @@ static void test02(struct sb *sb)
 	test_assert(!is_defer_alloc_inum(inode3));
 
 	/* Test inum allocation */
-	test_assert(inode1->inum == 0x1000);
-	test_assert(inode2->inum == 0x1001);
-	test_assert(inode3->inum == 0x1002);
-	test_assert(inode4->inum == 0x10000000);
+	test_assert(tux_inode(inode1)->inum == 0x1000);
+	test_assert(tux_inode(inode2)->inum == 0x1001);
+	test_assert(tux_inode(inode3)->inum == 0x1002);
+	test_assert(tux_inode(inode4)->inum == 0x10000000);
 	iput(inode1);
 	iput(inode2);
 	iput(inode3);

@@ -210,20 +210,21 @@ static struct kmem_cache *tux_inode_cachep;
 
 static void tux3_inode_init_once(void *mem)
 {
-	tuxnode_t *tuxi = mem;
+	struct tux3_inode *tuxnode = mem;
 
-	INIT_LIST_HEAD(&tuxi->dirty_list);
-	INIT_LIST_HEAD(&tuxi->alloc_list);
-	INIT_LIST_HEAD(&tuxi->orphan_list);
-	init_dirty_buffers(inode_dirty_heads(&tuxi->vfs_inode));
-	inode_init_once(&tuxi->vfs_inode);
+	INIT_LIST_HEAD(&tuxnode->dirty_list);
+	INIT_LIST_HEAD(&tuxnode->alloc_list);
+	INIT_LIST_HEAD(&tuxnode->orphan_list);
+	init_dirty_buffers(inode_dirty_heads(&tuxnode->vfs_inode));
+	inode_init_once(&tuxnode->vfs_inode);
 }
 
 static int __init tux3_init_inodecache(void)
 {
 	tux_inode_cachep = kmem_cache_create("tux3_inode_cache",
-		sizeof(tuxnode_t), 0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
-		tux3_inode_init_once);
+			sizeof(struct tux3_inode), 0,
+			(SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
+			tux3_inode_init_once);
 	if (tux_inode_cachep == NULL)
 		return -ENOMEM;
 	return 0;
@@ -237,22 +238,27 @@ static void __exit tux3_destroy_inodecache(void)
 static struct inode *tux3_alloc_inode(struct super_block *sb)
 {
 	static struct timespec epoch;
-	tuxnode_t *tuxi = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
+	struct tux3_inode *tuxnode;
+	struct inode *inode;
 
-	if (!tuxi)
+	tuxnode = kmem_cache_alloc(tux_inode_cachep, GFP_KERNEL);
+	if (!tuxnode)
 		return NULL;
-	tuxi->btree = (struct btree){ };
-	tuxi->present = 0;
-	tuxi->xcache = NULL;
-	tuxi->io = NULL;
 
+	tuxnode->btree		= (struct btree){ };
+	tuxnode->present	= 0;
+	tuxnode->xcache		= NULL;
+	tuxnode->io		= NULL;
+
+	inode = &tuxnode->vfs_inode;
 	/* uninitialized stuff by alloc_inode() */
-	tuxi->vfs_inode.i_version = 1;
-	tuxi->vfs_inode.i_atime = epoch;
-	tuxi->vfs_inode.i_mtime = epoch;
-	tuxi->vfs_inode.i_ctime = epoch;
-	tuxi->vfs_inode.i_mode = 0;
-	return &tuxi->vfs_inode;
+	inode->i_version	= 1;
+	inode->i_atime		= epoch;
+	inode->i_mtime		= epoch;
+	inode->i_ctime		= epoch;
+	inode->i_mode		= 0;
+
+	return inode;
 }
 
 static void tux3_i_callback(struct rcu_head *head)

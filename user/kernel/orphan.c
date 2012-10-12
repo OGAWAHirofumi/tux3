@@ -28,6 +28,11 @@ struct orphan {
 	struct list_head list;
 };
 
+/* list_entry() for orphan inode list */
+#define orphan_list_entry(x)	list_entry(x, struct tux3_inode, orphan_list)
+/* list_entry() for orphan object (orphan del, LOG_ORPHAN_ADD on replay) list */
+#define orphan_entry(x)		list_entry(x, struct orphan, list)
+
 static struct orphan *alloc_orphan(inum_t inum)
 {
 	struct orphan *orphan = malloc(sizeof(struct orphan));
@@ -48,8 +53,7 @@ static void free_orphan(struct orphan *orphan)
 void clean_orphan_list(struct list_head *head)
 {
 	while (!list_empty(head)) {
-		struct orphan *orphan =
-			list_entry(head->next, struct orphan, list);
+		struct orphan *orphan = orphan_entry(head->next);
 		list_del(&orphan->list);
 		free_orphan(orphan);
 	}
@@ -109,8 +113,7 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 	down_write(&cursor->btree->lock);
 	/* FIXME: ->orphan_list has no race with frontend for now */
 	while (!list_empty(orphan_add)) {
-		tuxnode_t *tuxnode;
-		tuxnode = list_entry(orphan_add->next, tuxnode_t, orphan_list);
+		struct tux3_inode *tuxnode =orphan_list_entry(orphan_add->next);
 
 		/* FIXME: what to do if error? */
 		err = btree_probe(cursor, tuxnode->inum);
@@ -146,8 +149,7 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 
 	/* FIXME: we don't want to remove inum one by one */
 	while (!list_empty(orphan_del)) {
-		struct orphan *orphan =
-			list_entry(orphan_del->next, struct orphan, list);
+		struct orphan *orphan = orphan_entry(orphan_del->next);
 
 		/* Remove inum from orphan btree */
 		err = btree_chop(otable, orphan->inum, 1);
@@ -174,7 +176,7 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 int tux3_mark_inode_orphan(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	tuxnode_t *tuxnode = tux_inode(inode);
+	struct tux3_inode *tuxnode = tux_inode(inode);
 
 	spin_lock(&sb->orphan_add_lock);
 	assert(list_empty(&tuxnode->orphan_list));
@@ -209,7 +211,7 @@ static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
 int tux3_clear_inode_orphan(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	tuxnode_t *tuxnode = tux_inode(inode);
+	struct tux3_inode *tuxnode = tux_inode(inode);
 
 	/* Since referencer is only me, so we can check empty without lock */
 	if (!list_empty(&tuxnode->orphan_list)) {
@@ -297,31 +299,31 @@ void replay_iput_orphan_inodes(struct sb *sb,
 	/* orphan inodes not in sb->otable */
 	head = &sb->orphan_add;
 	while (!list_empty(head)) {
-		tuxnode_t *tuxnode;
-		tuxnode = list_entry(head->next, tuxnode_t, orphan_list);
+		struct tux3_inode *tuxnode = orphan_list_entry(head->next);
+		struct inode *inode = &tuxnode->vfs_inode;
 
 		if (!destroy) {
 			/* Set i_nlink = 1 prevent to destroy inode. */
-			set_nlink(vfs_inode(tuxnode), 1);
+			set_nlink(inode, 1);
 			list_del_init(&tuxnode->orphan_list);
 		}
-		iput(vfs_inode(tuxnode));
+		iput(inode);
 	}
 
 	/* orphan inodes in sb->otable */
 	head = orphan_in_otable;
 	while (!list_empty(head)) {
-		tuxnode_t *tuxnode;
-		tuxnode = list_entry(head->next, tuxnode_t, orphan_list);
+		struct tux3_inode *tuxnode = orphan_list_entry(head->next);
+		struct inode *inode = &tuxnode->vfs_inode;
 
 		/* list_empty(&inode->orphan_list) tells it is in otable */
 		list_del_init(&tuxnode->orphan_list);
 
 		if (!destroy) {
 			/* Set i_nlink = 1 prevent to destroy inode. */
-			set_nlink(vfs_inode(tuxnode), 1);
+			set_nlink(inode, 1);
 		}
-		iput(vfs_inode(tuxnode));
+		iput(inode);
 	}
 }
 
@@ -402,8 +404,7 @@ int replay_load_orphan_inodes(struct replay *rp)
 
 	head = &rp->log_orphan_add;
 	while (!list_empty(head)) {
-		struct orphan *orphan =
-			list_entry(head->next, struct orphan, list);
+		struct orphan *orphan = orphan_entry(head->next);
 
 		err = load_orphan_inode(sb, orphan->inum, &sb->orphan_add);
 		if (err)

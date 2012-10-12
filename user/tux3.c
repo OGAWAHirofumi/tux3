@@ -116,8 +116,8 @@ int main(int argc, char *argv[])
 		errno = -PTR_ERR(rp);
 		goto eek;
 	}
-	show_tree_range(&sb->rootdir->btree, 0, -1);
-	show_tree_range(&sb->bitmap->btree, 0, -1);
+	show_tree_range(&tux_inode(sb->rootdir)->btree, 0, -1);
+	show_tree_range(&tux_inode(sb->bitmap)->btree, 0, -1);
 
 	if ((errno = -replay_stage3(rp, 1)))
 		goto eek;

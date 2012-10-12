@@ -13,7 +13,7 @@ static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
 	trace("%s inode 0x%Lx block 0x%Lx",
 	      (mode == MAP_READ) ? "read" :
 			(mode == MAP_WRITE) ? "write" : "redirect",
-	      buffer_inode(bufvec_contig_buf(bufvec))->inum,
+	      tux_inode(buffer_inode(bufvec_contig_buf(bufvec)))->inum,
 	      bufvec_contig_index(bufvec));
 
 	if (bufvec_contig_last_index(bufvec) & (-1LL << MAX_BLOCKS_BITS))

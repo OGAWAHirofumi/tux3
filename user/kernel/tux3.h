@@ -293,32 +293,33 @@ enum {
 };
 
 struct xcache;
-#ifdef __KERNEL__
-/*
- * In kernel an inode has a generic part and a filesystem-specific part
- * with conversions between them, in order to support multiple different
- * kinds of filesystem.  In userspace there is only one kind of filesystem,
- * Tux3, so no need for two kinds of inodes, and a big pain to initialize
- * inodes for testing if there were.  We use a typedef here so that the
- * filesystem-specific type can be transparently aliased to the generic
- * inode type in userspace and be a separate type in kernel.
- */
-
-typedef struct {
+struct tux3_inode {
 	struct btree btree;
-	inum_t inum;		/* Inode number */
-	unsigned present;	/* Attributes decoded from or to be encoded to inode table */
-	struct xcache *xcache;	/* Extended attribute cache */
-	struct list_head dirty_list; /* link for dirty inode list */
-	struct list_head alloc_list; /* link for deferred inum allocation */
-	struct list_head orphan_list; /* link for orphan inode list */
-
-	struct dirty_buffers dirty; /* list for dirty buffers */
+	inum_t inum;			/* Inode number */
+	unsigned present;		/* Attributes decoded from or
+					 * to be encoded to inode table */
+	struct xcache *xcache;		/* Extended attribute cache */
+	struct list_head dirty_list;	/* link for dirty inode list */
+	struct list_head alloc_list;	/* link for deferred inum allocation */
+	struct list_head orphan_list;	/* link for orphan inode list */
+#ifdef __KERNEL__
+	struct dirty_buffers dirty;	/* list for dirty buffers */
 	int (*io)(int rw, struct bufvec *bufvec);
+#endif
+	/* Generic inode */
+	struct inode vfs_inode;
+};
 
-	struct inode vfs_inode;	/* Generic kernel inode */
-} tuxnode_t;
+static inline struct tux3_inode *tux_inode(struct inode *inode)
+{
+	return container_of(inode, struct tux3_inode, vfs_inode);
+}
 
+static inline struct inode *btree_inode(struct btree *btree)
+{
+	return &container_of(btree, struct tux3_inode, btree)->vfs_inode;
+}
+#ifdef __KERNEL__
 static inline struct sb *tux_sb(struct super_block *sb)
 {
 	return sb->s_fs_info;
@@ -327,21 +328,6 @@ static inline struct sb *tux_sb(struct super_block *sb)
 static inline struct super_block *vfs_sb(struct sb *sb)
 {
 	return sb->vfs_sb;
-}
-
-static inline tuxnode_t *tux_inode(struct inode *inode)
-{
-	return container_of(inode, tuxnode_t, vfs_inode);
-}
-
-static inline struct inode *vfs_inode(tuxnode_t *tuxnode)
-{
-	return &tuxnode->vfs_inode;
-}
-
-static inline struct inode *btree_inode(struct btree *btree)
-{
-	return &container_of(btree, tuxnode_t, btree)->vfs_inode;
 }
 
 typedef struct address_space map_t;
@@ -372,37 +358,6 @@ static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
 	return &tux_inode(inode)->dirty;
 }
 #else /* !__KERNEL__ */
-typedef struct inode {
-	struct btree btree;
-	inum_t inum;
-	unsigned present;
-	struct xcache *xcache;
-	struct list_head dirty_list; /* link for dirty inode list */
-	struct list_head alloc_list; /* link for deferred inum allocation */
-	struct list_head orphan_list; /* link for orphan inode list */
-
-	/* generic part of inode */
-	struct sb *i_sb;
-	map_t *map;
-	loff_t i_size;
-	unsigned i_version;
-	struct timespec i_mtime, i_ctime, i_atime;
-	unsigned i_uid, i_gid, i_nlink;
-	umode_t i_mode;
-	struct mutex i_mutex;
-	dev_t i_rdev;
-	atomic_t i_count;
-	unsigned long i_state;
-	struct hlist_node i_hash;
-	unsigned state;
-} tuxnode_t;
-
-struct file {
-	struct inode *f_inode;
-	unsigned f_version;
-	loff_t f_pos;
-};
-
 static inline struct sb *tux_sb(struct sb *sb)
 {
 	return sb;
@@ -411,21 +366,6 @@ static inline struct sb *tux_sb(struct sb *sb)
 static inline struct sb *vfs_sb(struct sb *sb)
 {
 	return sb;
-}
-
-static inline struct inode *tux_inode(struct inode *inode)
-{
-	return inode;
-}
-
-static inline struct inode *vfs_inode(struct inode *inode)
-{
-	return inode;
-}
-
-static inline struct inode *btree_inode(struct btree *btree)
-{
-	return container_of(btree, struct inode, btree);
 }
 
 static inline map_t *mapping(struct inode *inode)

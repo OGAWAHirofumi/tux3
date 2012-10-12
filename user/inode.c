@@ -38,7 +38,8 @@ void inode_leak_check(void)
 		struct inode *inode;
 		hlist_for_each_entry(inode, node, head, i_hash) {
 			trace_on("possible leak inode inum %Lu, i_count %d",
-				 inode->inum, atomic_read(&inode->i_count));
+				 tux_inode(inode)->inum,
+				 atomic_read(&inode->i_count));
 			leaks++;
 		}
 	}
@@ -48,7 +49,7 @@ void inode_leak_check(void)
 
 static void insert_inode_hash(struct inode *inode)
 {
-	struct hlist_head *b = inode_hashtable + hash(inode->inum);
+	struct hlist_head *b = inode_hashtable + hash(tux_inode(inode)->inum);
 	hlist_add_head(&inode->i_hash, b);
 }
 
@@ -60,35 +61,44 @@ static void remove_inode_hash(struct inode *inode)
 
 static struct inode *new_inode(struct sb *sb)
 {
-	struct inode *inode = malloc(sizeof(*inode));
-	if (!inode)
+	struct tux3_inode *tuxnode;
+	struct inode *inode;
+
+	tuxnode = malloc(sizeof(*tuxnode));
+	if (!tuxnode)
 		goto error;
-	*inode = (struct inode){ INIT_INODE(*inode, sb, 0), };
-	INIT_HLIST_NODE(&inode->i_hash);
+
+	tux3_inode_init(tuxnode, sb, 0);
+	inode = &tuxnode->vfs_inode;
+
 	inode->map = new_map(sb->dev, NULL);
 	if (!inode->map)
 		goto error_map;
+
 	inode->map->inode = inode;
+
 	return inode;
 
 error_map:
-	free(inode);
+	free(tuxnode);
 error:
 	return NULL;
 }
 
 static void free_inode(struct inode *inode)
 {
+	struct tux3_inode *tuxnode = tux_inode(inode);
+
 	inode->i_state &= ~I_BAD;
-	assert(list_empty(&inode->dirty_list));
-	assert(list_empty(&inode->alloc_list));
-	assert(list_empty(&inode->orphan_list));
+	assert(list_empty(&tuxnode->dirty_list));
+	assert(list_empty(&tuxnode->alloc_list));
+	assert(list_empty(&tuxnode->orphan_list));
 	assert(hlist_unhashed(&inode->i_hash));
 	assert(inode->i_state == I_FREEING);
 	assert(mapping(inode));
 
 	free_map(mapping(inode));
-	free(inode);
+	free(tuxnode);
 }
 
 /* This is just to clean inode is partially initialized */
@@ -215,7 +225,7 @@ static void tux_setup_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 
-	assert(inode->inum != TUX_INVALID_INO);
+	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFSOCK:
 	case S_IFIFO:

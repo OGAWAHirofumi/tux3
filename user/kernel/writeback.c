@@ -120,7 +120,7 @@ error:
 
 int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
-	tuxnode_t *tuxnode, *safe;
+	struct tux3_inode *tuxnode, *safe;
 	LIST_HEAD(dirty_inodes);
 	int err;
 
@@ -131,7 +131,7 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	spin_unlock(&sb->dirty_inodes_lock);
 
 	list_for_each_entry_safe(tuxnode, safe, &dirty_inodes, dirty_list) {
-		struct inode *inode = vfs_inode(tuxnode);
+		struct inode *inode = &tuxnode->vfs_inode;
 		/*
 		 * FIXME: this is hack. those inodes can be dirtied by
 		 * tux3_flush_inode() of other inodes, so it should be

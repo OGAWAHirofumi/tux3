@@ -98,7 +98,7 @@ static int is_defer_alloc_inum(struct inode *inode)
 /* must hold itable->btree.lock */
 static int find_defer_alloc_inum(struct sb *sb, inum_t inum)
 {
-	tuxnode_t *tuxnode;
+	struct tux3_inode *tuxnode;
 
 	list_for_each_entry(tuxnode, &sb->alloc_inodes, alloc_list) {
 		if (tuxnode->inum == inum)
@@ -299,7 +299,7 @@ struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 
 static int check_present(struct inode *inode)
 {
-	tuxnode_t *tuxnode = tux_inode(inode);
+	struct tux3_inode *tuxnode = tux_inode(inode);
 
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFSOCK:

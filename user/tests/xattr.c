@@ -86,9 +86,11 @@ static void test01(struct sb *sb)
 	test_assert(atom1 == atom3);
 
 	struct inode *inode;
+	struct tux3_inode *tuxnode;
 	struct tux_iattr iattr = { .mode = S_IFREG, };
 	inode = tuxcreate(sb->rootdir, "foo", 3, &iattr);
 	test_assert(inode);
+	tuxnode = tux_inode(inode);
 
 	struct xcache_data data[] = {
 		{ .buf = "hello ", .len = strlen("hello "), .atom = 0x666, },
@@ -109,9 +111,9 @@ static void test01(struct sb *sb)
 
 	/* Remove xcache */
 	data[0].len = -1;
-	xattr = xcache_lookup(inode->xcache, data[0].atom);
+	xattr = xcache_lookup(tuxnode->xcache, data[0].atom);
 	test_assert(xattr);
-	int removed = remove_old(inode->xcache, xattr);
+	int removed = remove_old(tuxnode->xcache, xattr);
 	test_assert(removed);
 	check_xcache(inode, data);
 
@@ -129,7 +131,7 @@ static void test01(struct sb *sb)
 	test_assert(top1 - attrs == xsize1);
 
 	/* Remove all xcache by hand */
-	inode->xcache->size = 0;
+	tuxnode->xcache->size = 0;
 
 	/* Test xattr inode table decode */
 	char *top2 = decode_attrs(inode, attrs, xsize1);

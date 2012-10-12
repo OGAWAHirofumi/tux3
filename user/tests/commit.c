@@ -96,7 +96,7 @@ static void check_files(struct sb *sb, struct open_result *results, int nr)
 		if (IS_ERR(inode))
 			test_assert(PTR_ERR(inode) == r->err);
 		else {
-			test_assert(inode->inum == r->inum);
+			test_assert(tux_inode(inode)->inum == r->inum);
 			iput(inode);
 		}
 	}
@@ -143,7 +143,7 @@ static void test01(struct sb *sb)
 		inode = tuxcreate(sb->rootdir, r->name, r->namelen, &iattr);
 		test_assert(!IS_ERR(inode));
 		r->err = 0;
-		r->inum = inode->inum;
+		r->inum = tux_inode(inode)->inum;
 
 		/*
 		 * This should make at least:
@@ -348,19 +348,19 @@ static void check_orphan_inum(struct replay *rp, struct orphan_data *data,
 	struct sb *sb = rp->sb;
 
 	for (int i = 0; i < nr_data; i++) {
-		struct inode *inode;
+		struct tux3_inode *tuxnode;
 		struct list_head *head;
 		int err = -ENOENT;
 		head = &sb->orphan_add;
-		list_for_each_entry(inode, head, orphan_list) {
-			if (data[i].inum == inode->inum) {
+		list_for_each_entry(tuxnode, head, orphan_list) {
+			if (data[i].inum == tuxnode->inum) {
 				err = 0;
 				break;
 			}
 		}
 		head = &rp->orphan_in_otable;
-		list_for_each_entry(inode, head, orphan_list) {
-			if (data[i].inum == inode->inum) {
+		list_for_each_entry(tuxnode, head, orphan_list) {
+			if (data[i].inum == tuxnode->inum) {
 				err = 0;
 				break;
 			}
@@ -393,17 +393,20 @@ static void test04(struct sb *sb)
 		 * inodes[3] make LOG_ORPHAN_ADD
 		 */
 		for (int i = 0; i < NR_ORPHAN; i++) {
+			struct tux3_inode *tuxnode;
+
 			inodes[i] = make_orphan_inode(sb, name);
 			test_assert(!IS_ERR(inodes[i]));
+			tuxnode = tux_inode(inodes[i]);
 
-			data[i].inum = inodes[i]->inum;
+			data[i].inum = tuxnode->inum;
 
 			switch (i) {
 			case 0:
 				data[i].err = 0;
 				/* Add into sb->otable */
 				test_assert(force_rollup(sb) == 0);
-				list_move(&inodes[i]->orphan_list, &orphans);
+				list_move(&tuxnode->orphan_list, &orphans);
 				break;
 			case 1:
 			case 2:
@@ -418,7 +421,7 @@ static void test04(struct sb *sb)
 				break;
 			case 3:
 				data[i].err = 0;
-				list_move(&inodes[i]->orphan_list, &orphans);
+				list_move(&tuxnode->orphan_list, &orphans);
 				break;
 			}
 		}
@@ -608,7 +611,7 @@ static void test06(struct sb *sb)
 	struct inode *subdir;
 	subdir = tuxcreate(sb->rootdir, r[0].name, r[0].namelen, &iattr);
 	test_assert(!IS_ERR(subdir));
-	r[0].inum = subdir->inum;
+	r[0].inum = tux_inode(subdir)->inum;
 	iput(subdir);
 
 	/*
@@ -617,12 +620,12 @@ static void test06(struct sb *sb)
 	 */
 	subdir = tuxcreate(sb->rootdir, r[2].name, r[2].namelen, &iattr);
 	test_assert(!IS_ERR(subdir));
-	r[2].inum = subdir->inum;
+	r[2].inum = tux_inode(subdir)->inum;
 	iput(subdir);
 
 	subdir = tuxcreate(sb->rootdir, r[3].name, r[3].namelen, &iattr);
 	test_assert(!IS_ERR(subdir));
-	r[3].inum = subdir->inum;
+	r[3].inum = tux_inode(subdir)->inum;
 	iput(subdir);
 	/* Check inum is not same */
 	test_assert(r[2].inum != r[3].inum);

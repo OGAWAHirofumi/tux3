@@ -829,7 +829,7 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 	struct inode *cache_inode = tux3_ilookup(sb, inum);
 	int orphan = 0;
 	if (cache_inode) {
-		orphan = !list_empty(&cache_inode->orphan_list);
+		orphan = !list_empty(&tux_inode(cache_inode)->orphan_list);
 		iput(cache_inode);
 	}
 
@@ -841,8 +841,8 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 		"%s",
 		orphan ? "<font color=\"blue\">" : "",
 		inum, size,
-		inode->btree.root.block,
-		inode->btree.root.depth,
+		tux_inode(inode)->btree.root.block,
+		tux_inode(inode)->btree.root.depth,
 		orphan ? ", orphan" : "",
 		orphan ? "</font>" : "");
 
@@ -994,7 +994,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		if (IS_ERR(inode))
 			error("inode couldn't get: inum %Lu", inum);
 
-		if (!has_root(&inode->btree))
+		if (!has_root(&tux_inode(inode)->btree))
 			goto out_iput;
 
 		struct draw_data_ops *draw_data_ops;
@@ -1015,7 +1015,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		/* write link: ileaf -> dtree root bnode */
 		add_link(gi, "volmap_%llu:a%d:e -> volmap_%llu:n;\n",
 			 blocknr, at,
-			 inode->btree.root.block);
+			 tux_inode(inode)->btree.root.block);
 
 		if (!special_inode) {
 			if (!verbose && (drawn & DRAWN_DTREE)) {
@@ -1049,7 +1049,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 
 		draw_data_ops->draw_start(&ginfo_data, btree);
 
-		draw_btree(&ginfo_dtree, &inode->btree, draw_dleaf,
+		draw_btree(&ginfo_dtree, &tux_inode(inode)->btree, draw_dleaf,
 			   &ginfo_data);
 
 		draw_data_ops->draw_end(&ginfo_data, btree);

@@ -49,7 +49,7 @@
 void tux_dump_entries(struct buffer_head *buffer)
 {
 	unsigned blocksize = bufsize(buffer);
-	printf("entries <%Lx:%Lx>: ", buffer->map->inode->inum, bufindex(buffer));
+	printf("entries <%Lx:%Lx>: ", tux_inode(buffer->map->inode)->inum, bufindex(buffer));
 	tux_dirent *entry = (tux_dirent *)bufdata(buffer);
 	tux_dirent *limit = bufdata(buffer) + blocksize;
 	while (entry < limit) {

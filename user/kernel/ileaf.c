@@ -127,12 +127,14 @@ static void ileaf_dump(struct btree *btree, void *vleaf)
 			trace_on("  0x%Lx: <empty>\n", inum);
 		else if (attr_ops == &iattr_ops) {
 			/* FIXME: this doesn't work in kernel */
-			struct inode inode = { .i_sb = vfs_sb(btree->sb) };
+			struct tux3_inode tuxnode = {};
+			struct inode *inode = &tuxnode.vfs_inode;
 			void *attrs = leaf->table + offset;
 
-			attr_ops->decode(btree, &inode, attrs, size);
+			inode->i_sb = vfs_sb(btree->sb),
+			attr_ops->decode(btree, inode, attrs, size);
 
-			free_xcache(&inode);
+			free_xcache(inode);
 		}
 		offset = limit;
 	}
