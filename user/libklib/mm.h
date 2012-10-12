@@ -7,8 +7,9 @@
  * gfp stuff
  */
 
-#define GFP_KERNEL	(__force gfp_t)0x10u
-#define GFP_NOFS	(__force gfp_t)0x20u
+#define GFP_KERNEL	((__force gfp_t)0x10u)
+#define GFP_NOFS	((__force gfp_t)0x20u)
+#define __GFP_ZERO	((__force gfp_t)0x8000u)
 
 struct page {
 	void *address;
