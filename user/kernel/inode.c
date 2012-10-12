@@ -770,7 +770,7 @@ const struct inode_operations tux_symlink_iops = {
 
 static void tux_setup_inode(struct inode *inode)
 {
-//	struct sb *sbi = tux_sb(inode->i_sb);
+	struct sb *sb = tux_sb(inode->i_sb);
 
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 
@@ -814,7 +814,7 @@ static void tux_setup_inode(struct inode *inode)
 			tux_inode(inode)->io = tux3_volmap_io;
 		} else {
 			/* set fake i_size to escape the check of block_* */
-			inode->i_size = MAX_LFS_FILESIZE;
+			inode->i_size = vfs_sb(sb)->s_maxbytes;
 			inode->i_mapping->a_ops = &tux_blk_aops;
 			tux_inode(inode)->io = tux3_filemap_redirect_io;
 		}

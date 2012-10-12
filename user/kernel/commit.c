@@ -45,6 +45,11 @@ static void setup_roots(struct sb *sb, struct disksuper *super)
 	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
 }
 
+static loff_t calc_maxbytes(loff_t blocksize)
+{
+	return min_t(loff_t, blocksize << MAX_BLOCKS_BITS, MAX_LFS_FILESIZE);
+}
+
 /* Setup sb by on-disk super block */
 static void __setup_sb(struct sb *sb, struct disksuper *super)
 {
@@ -57,6 +62,9 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
 	/* Initialize base indexes for atable */
 	atable_init_base(sb);
+
+	/* vfs fields */
+	vfs_sb(sb)->s_maxbytes = calc_maxbytes(sb->blocksize);
 
 	/* Probably does not belong here (maybe metablock) */
 #ifdef ATOMIC

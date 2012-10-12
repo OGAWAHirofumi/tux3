@@ -221,7 +221,7 @@ static int tuxio(struct file *file, void *data, unsigned len, int write)
 	trace("%s %u bytes at %Lu, isize = 0x%Lx",
 	      write ? "write" : "read", len, (s64)pos, (s64)inode->i_size);
 
-	if (write && pos + len > MAX_FILESIZE)
+	if (write && pos + len > sb->s_maxbytes)
 		return -EFBIG;
 	if (!write && pos + len > inode->i_size) {
 		if (pos >= inode->i_size)
