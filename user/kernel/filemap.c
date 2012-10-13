@@ -923,7 +923,7 @@ const struct address_space_operations tux_aops = {
 	.write_begin		= tux3_da_write_begin,
 	.write_end		= tux3_da_write_end,
 	.bmap			= tux3_bmap,
-//	.invalidatepage		= ext4_da_invalidatepage,
+	.invalidatepage		= tux3_invalidatepage,
 //	.releasepage		= ext4_releasepage,
 	.direct_IO		= tux3_direct_IO,
 	.migratepage		= buffer_migrate_page,
@@ -950,6 +950,7 @@ const struct address_space_operations tux_blk_aops = {
 	.writepages	= tux3_disable_writepages,
 	.write_begin	= tux3_da_write_begin,
 	.bmap		= tux3_bmap,
+	.invalidatepage	= tux3_invalidatepage,
 };
 
 static int tux3_vol_get_block(struct inode *inode, sector_t iblock,
@@ -990,5 +991,6 @@ const struct address_space_operations tux_vol_aops = {
 	.writepage	= tux3_disable_writepage,
 	.writepages	= tux3_disable_writepages,
 	.write_begin	= tux3_vol_write_begin,
+	.invalidatepage	= tux3_invalidatepage,
 };
 #endif /* __KERNEL__ */

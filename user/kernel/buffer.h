@@ -94,6 +94,7 @@ int buffer_can_modify(struct buffer_head *buffer, unsigned delta);
 void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head);
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);
+void tux3_invalidate_buffer(struct buffer_head *buffer);
 void init_dirty_buffers(struct dirty_buffers *dirty);
 
 /* buffer_writeback.c */

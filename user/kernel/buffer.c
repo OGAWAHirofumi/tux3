@@ -110,6 +110,36 @@ void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
+/* Copied from fs/buffer.c */
+static void discard_buffer(struct buffer_head *buffer)
+{
+	/* FIXME: we need lock_buffer()? */
+	lock_buffer(buffer);
+	clear_buffer_dirty(buffer);
+	buffer->b_bdev = NULL;
+	clear_buffer_mapped(buffer);
+	clear_buffer_req(buffer);
+	clear_buffer_new(buffer);
+	clear_buffer_delay(buffer);
+	clear_buffer_unwritten(buffer);
+	unlock_buffer(buffer);
+}
+
+/* Invalidate buffer, this is called from truncate, error path on write, etc */
+void tux3_invalidate_buffer(struct buffer_head *buffer)
+{
+	/* FIXME: we should check buffer_can_modify() to invalidate */
+	discard_buffer(buffer);
+
+	if (buffer->b_assoc_map) {
+		spin_lock(&buffer->b_page->mapping->private_lock);
+		list_del_init(&buffer->b_assoc_buffers);
+		buffer->b_assoc_map = NULL;
+		tux3_clear_bufdelta(buffer);
+		spin_unlock(&buffer->b_page->mapping->private_lock);
+	}
+}
+
 void init_dirty_buffers(struct dirty_buffers *dirty)
 {
 	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)

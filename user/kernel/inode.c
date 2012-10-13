@@ -494,6 +494,7 @@ void tux3_write_failed(struct address_space *mapping, loff_t to)
 }
 #endif /* !__KERNEL__ */
 
+/* FIXME: we wait page under I/O though, we would like to fork it instead */
 static int tux3_truncate(struct inode *inode, loff_t newsize)
 {
 	/* FIXME: expanding size is not tested */
