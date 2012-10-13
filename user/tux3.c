@@ -52,6 +52,7 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	if (!err) {
 		show_tree_range(itable_btree(sb), 0, -1);
 		put_super(sb);
+		tux3_exit_mem();
 	}
 	return err;
 }
@@ -87,6 +88,9 @@ int main(int argc, char *argv[])
 
 	if (argc - optind < 2)
 		goto usage;
+
+	if ((errno = -tux3_init_mem()))
+		goto eek;
 
 	/* open volume, create superblock */
 	const char *command = argv[optind++];
@@ -289,6 +293,7 @@ out:
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->volmap->map);
 	put_super(sb);
+	tux3_exit_mem();
 
 	return 0;
 eek:

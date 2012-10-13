@@ -16,6 +16,7 @@ static void clean_main(struct sb *sb)
 {
 	log_finish_cycle(sb);
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 static void check(struct sb *sb, u8 intent)
@@ -93,6 +94,9 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 8 };
 	init_buffers(dev, 1 << 20, 2);
+
+	int err = tux3_init_mem();
+	assert(!err);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 2048);
 	struct sb *sb = rapid_sb(dev);

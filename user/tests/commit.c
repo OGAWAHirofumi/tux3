@@ -102,13 +102,20 @@ static void check_files(struct sb *sb, struct open_result *results, int nr)
 	}
 }
 
-/* cleanup of main() */
-static void clean_main(struct sb *sb)
+/* cleanup of sb */
+static void clean_sb(struct sb *sb)
 {
 	/* Check if it didn't make strange dirty buffer */
 	check_dirty(sb);
 
 	put_super(sb);
+}
+
+/* cleanup of main() */
+static void clean_main(struct sb *sb)
+{
+	clean_sb(sb);
+	tux3_exit_mem();
 }
 
 /* Generate all type of logs, and replay. */
@@ -180,7 +187,7 @@ static void test01(struct sb *sb)
 
 	if (test_start("test01.1")) {
 		test_assert(force_delta(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please */
 		/* fsck(); */
@@ -192,7 +199,7 @@ static void test01(struct sb *sb)
 
 	if (test_start("test01.2")) {
 		test_assert(force_rollup(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please */
 		/* fsck(); */
@@ -238,7 +245,7 @@ static void test02(struct sb *sb)
 
 	/* Flush */
 	test_assert(force_delta(sb) == 0);
-	clean_main(sb);
+	clean_sb(sb);
 
 	/* FIXME: fsck please */
 	/* fsck(); */
@@ -281,7 +288,7 @@ static void test03(struct sb *sb)
 
 		/* Flush */
 		test_assert(force_delta(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please, check leak */
 		/* fsck(); */
@@ -301,7 +308,7 @@ static void test03(struct sb *sb)
 
 		/* Flush */
 		test_assert(force_rollup(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please, check leak */
 		/* fsck(); */
@@ -435,7 +442,7 @@ static void test04(struct sb *sb)
 		exit(1);
 	}
 	waitpid(pid, NULL, 0);
-	clean_main(sb);
+	clean_sb(sb);
 
 	/* Check orphan btree and orphan logs */
 	if (test_start("test04.1")) {
@@ -504,6 +511,7 @@ static void test04(struct sb *sb)
 	}
 	test_end();
 
+	tux3_exit_mem();
 	test_free_shm(data, sizeof(*data) * NR_ORPHAN);
 }
 
@@ -545,7 +553,7 @@ static void test05(struct sb *sb)
 
 		/* Flush */
 		test_assert(force_delta(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please, check leak */
 		/* fsck(); */
@@ -562,7 +570,7 @@ static void test05(struct sb *sb)
 
 		/* Flush */
 		test_assert(force_delta(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please, check leak */
 		/* fsck(); */
@@ -653,7 +661,7 @@ static void test06(struct sb *sb)
 
 		/* Flush */
 		test_assert(force_delta(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please, check leak */
 		/* fsck(); */
@@ -683,7 +691,7 @@ static void test06(struct sb *sb)
 
 		/* Flush */
 		test_assert(force_delta(sb) == 0);
-		clean_main(sb);
+		clean_sb(sb);
 
 		/* FIXME: fsck please, check leak */
 		/* fsck(); */
@@ -706,6 +714,9 @@ int main(int argc, char *argv[])
 	assert(fd >= 0);
 	u64 volsize = 1 << 24;
 	int err = ftruncate(fd, volsize);
+	assert(!err);
+
+	err = tux3_init_mem();
 	assert(!err);
 
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };

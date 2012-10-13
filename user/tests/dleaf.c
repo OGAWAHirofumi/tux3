@@ -28,6 +28,7 @@ static void clean_main(struct sb *sb)
 	destroy_defer_bfree(&sb->derollup);
 	destroy_defer_bfree(&sb->defree);
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 static struct dleaf *dleaf_create(struct btree *btree)
@@ -379,6 +380,9 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 10 };
 	init_buffers(dev, 1 << 20, 2);
+
+	int err = tux3_init_mem();
+	assert(!err);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 150);
 	struct sb *sb = rapid_sb(dev);

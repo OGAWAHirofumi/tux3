@@ -12,6 +12,7 @@ static void clean_main(struct sb *sb, struct inode *dir)
 	invalidate_buffers(dir->map);
 	free_map(dir->map);
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 /* Test basic dir operations */
@@ -103,6 +104,9 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 8 };
 
 	init_buffers(dev, 1 << 20, 2);
+
+	int err = tux3_init_mem();
+	assert(!err);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 150);
 	struct sb *sb = rapid_sb(dev);

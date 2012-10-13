@@ -11,6 +11,7 @@
 static void clean_main(struct sb *sb)
 {
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 static void test01(struct sb *sb)
@@ -136,6 +137,9 @@ int main(int argc, char *argv[])
 	assert(!ftruncate(fd, 1 << 24));
 	loff_t size = 0;
 	int err = fdsize64(fd, &size);
+	assert(!err);
+
+	err = tux3_init_mem();
 	assert(!err);
 
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };

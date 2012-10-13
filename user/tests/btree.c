@@ -29,6 +29,7 @@ static void clean_main(struct sb *sb, struct inode *inode)
 	invalidate_buffers(sb->volmap->map);
 	tux3_clear_dirty_inode(sb->volmap);
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 struct uleaf { u32 magic, count; struct uentry { u16 key, val; } entries[]; };
@@ -791,6 +792,9 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 6 };
 	init_buffers(dev, 1 << 20, 2);
+
+	int err = tux3_init_mem();
+	assert(!err);
 
 	struct disksuper super = INIT_DISKSB(dev->bits, 1024);
 	struct sb *sb = rapid_sb(dev);

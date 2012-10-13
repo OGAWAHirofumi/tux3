@@ -21,6 +21,7 @@
 static void clean_main(struct sb *sb)
 {
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 struct xcache_data {
@@ -284,6 +285,9 @@ int main(int argc, char *argv[])
 
 	fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
 	assert(!ftruncate(fd, volsize));
+
+	err = tux3_init_mem();
+	assert(!err);
 
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = fd, };
 	init_buffers(dev, volsize, 2);

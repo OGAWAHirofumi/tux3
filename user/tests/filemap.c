@@ -9,6 +9,7 @@ static void clean_main(struct sb *sb, struct inode *inode)
 {
 	iput(inode);
 	put_super(sb);
+	tux3_exit_mem();
 }
 
 static void add_maps(struct inode *inode, block_t index, struct seg *seg,
@@ -344,6 +345,9 @@ int main(int argc, char *argv[])
 	int fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
 	u64 size = 1 << 24;
 	assert(!ftruncate(fd, size));
+
+	int err = tux3_init_mem();
+	assert(!err);
 
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 8 };
 	init_buffers(dev, 1 << 20, 2);

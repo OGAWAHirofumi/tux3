@@ -1373,6 +1373,9 @@ int main(int argc, char *argv[])
 	if (argc - optind < 1)
 		goto usage;
 
+	if ((errno = -tux3_init_mem()))
+		goto eek;
+
 	/* open volume, create superblock */
 	volname = argv[optind++];
 	int fd = open(volname, O_RDONLY);
@@ -1433,6 +1436,7 @@ int main(int argc, char *argv[])
 		goto eek;
 
 	put_super(sb);
+	tux3_exit_mem();
 
 out:
 	return ret;

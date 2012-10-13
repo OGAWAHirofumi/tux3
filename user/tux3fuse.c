@@ -59,13 +59,17 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 	const char *volname = tux3fuse->volname;
 	struct dev *dev;
 	struct sb *sb;
-	int fd;
+	int err, fd;
 
 	fd = open(volname, O_RDWR);
 	if (fd < 0) {
 		error("volume %s not found", volname);
 		goto error;
 	}
+
+	err = tux3_init_mem();
+	if (err)
+		goto error;
 
 	dev = malloc(sizeof(*dev));
 	if (!dev)
@@ -108,6 +112,7 @@ static void tux3fuse_destroy(void *userdata)
 	struct sb *sb = tux3fuse->sb;
 	sync_super(sb);
 	put_super(sb);
+	tux3_exit_mem();
 
 	if (tux3fuse->sb->dev)
 		free(tux3fuse->sb->dev);
