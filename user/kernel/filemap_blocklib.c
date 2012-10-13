@@ -96,11 +96,11 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 							bh->b_blocknr);
 #endif
 				if (PageUptodate(page)) {
-					clear_buffer_new(bh);
-					set_buffer_uptodate(bh);
 					/* FIXME: do we have to mark this dirty?
 					 * re-think after mmap support */
-					tux3_mark_buffer_dirty(bh);
+					//clear_buffer_new(bh);
+					set_buffer_uptodate(bh);
+					//tux3_mark_buffer_dirty(bh);
 					continue;
 				}
 				if (block_end > to || block_start < from)
