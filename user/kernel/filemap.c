@@ -633,8 +633,17 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 			 */
 			break;
 		}
+#ifdef ATOMIC
+		/*
+		 * We doesn't use get_block() on write path in
+		 * atomic-commit, so SEG_NEW never happen.
+		 * (FIXME: Current direct I/O implementation is using
+		 * this path.)
+		 */
+		dump_stack();
+#endif
 		set_buffer_new(bh_result);
-		/* FALLTHROUGH */
+		/* FALLTHRU */
 	default:
 		map_bh(bh_result, inode->i_sb, seg.block);
 		bh_result->b_size = blocks << sb->blockbits;
@@ -886,6 +895,11 @@ static int tux3_disable_writepages(struct address_space *mapping,
 	return 0;
 }
 
+#ifdef TUX3_DIRECT_IO
+/*
+ * Direct I/O is unsupport for now. Since this is for
+ * non-atomic-commit mode, so this allocates blocks from frontend.
+ */
 static ssize_t tux3_direct_IO(int rw, struct kiocb *iocb,
 			      const struct iovec *iov,
 			      loff_t offset, unsigned long nr_segs)
@@ -901,6 +915,7 @@ static ssize_t tux3_direct_IO(int rw, struct kiocb *iocb,
 		tux3_write_failed(mapping, offset + iov_length(iov, nr_segs));
 	return ret;
 }
+#endif
 
 static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
 {
@@ -925,7 +940,9 @@ const struct address_space_operations tux_aops = {
 	.bmap			= tux3_bmap,
 	.invalidatepage		= tux3_invalidatepage,
 //	.releasepage		= ext4_releasepage,
+#ifdef TUX3_DIRECT_IO
 	.direct_IO		= tux3_direct_IO,
+#endif
 	.migratepage		= buffer_migrate_page,
 //	.is_partially_uptodate	= block_is_partially_uptodate,
 };
