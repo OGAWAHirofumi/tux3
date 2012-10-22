@@ -239,9 +239,6 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	assert(PageDirty(page));
 	assert(!PageWriteback(page));
 
-	/* Set it before clearing dirty, so dirty or writeback are presented */
-	set_page_writeback(page);
-
 	/*
 	 * NOTE: This has the race if there is concurrent mark
 	 * dirty. But we shouldn't use concurrent dirty [B] on volmap.
@@ -257,6 +254,15 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 		ret = clear_page_dirty_for_io(page);
 		assert(ret);
 	}
+
+	/*
+	 * set_page_writeback() is assuming to be called after clearing dirty.
+	 * This is under lock_page, so, buffer fork will see the dirty
+	 * or writeback are presented.
+	 *
+	 * And writeback flag prevents vmscan releases page.
+	 */
+	set_page_writeback(page);
 }
 
 static void bufvec_prepare_and_unlock_page(struct page *page)
