@@ -159,3 +159,78 @@ void tux3_clear_hole(struct inode *inode)
 		tux3_destroy_hole(hole);
 	}
 }
+
+/* Is the region a hole? */
+static int tux3_is_hole(struct inode *inode, block_t start, unsigned count)
+{
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	struct hole_extent *hole;
+	int whole = 0;
+
+	spin_lock(&tuxnode->hole_extents_lock);
+	list_for_each_entry(hole, &tuxnode->hole_extents, list) {
+		/* FIXME: for now, support truncate only */
+		assert(hole->start + hole->count == MAX_BLOCKS);
+
+		if (hole->start <= start) {
+			whole = 1;
+			break;
+		}
+	}
+	spin_unlock(&tuxnode->hole_extents_lock);
+
+	return whole;
+}
+
+/* Update specified map[] with holes. */
+static int tux3_map_hole(struct inode *inode, block_t start, unsigned count,
+			 struct seg map[], unsigned segs, unsigned max_segs)
+{
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	struct hole_extent *hole;
+	block_t hole_start = MAX_BLOCKS;
+	int i;
+
+	/* Search start of hole */
+	spin_lock(&tuxnode->hole_extents_lock);
+	list_for_each_entry(hole, &tuxnode->hole_extents, list) {
+		/* FIXME: for now, support truncate only */
+		assert(hole->start + hole->count == MAX_BLOCKS);
+
+		hole_start = min(hole_start, hole->start);
+	}
+	spin_unlock(&tuxnode->hole_extents_lock);
+
+	/* Outside of hole */
+	if (start + count <= hole_start)
+		return segs;
+
+	/* Update map[] */
+	for (i = 0; i < segs; i++) {
+		/* Matched start of hole */
+		if (hole_start < start + map[i].count) {
+			if (map[i].state == SEG_HOLE) {
+				/* Expand if hole */
+				map[i].count = count;
+				i++;
+			} else {
+				/* Update region */
+				map[i].count = hole_start - start;
+				i++;
+
+				/* If there is space, add hole region */
+				if (i < max_segs) {
+					map[i].state = SEG_HOLE;
+					map[i].block = 0;
+					map[i].count = count;
+					i++;
+				}
+			}
+			break;
+		}
+		start += map[i].count;
+		count -= map[i].count;
+	}
+
+	return i;
+}
