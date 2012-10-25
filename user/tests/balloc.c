@@ -22,7 +22,7 @@ static int bitmap_all_test(struct sb *sb, block_t start, unsigned count,
 {
 	struct inode *bitmap = sb->bitmap;
 	block_t start_block = start >> (3 + sb->blockbits);
-	block_t end_block = (((start + count + 7) >> 3) + sb->blocksize - 1) >> sb->blockbits;
+	block_t end_block = (((start + count + 7) >> 3) + sb->blockmask) >> sb->blockbits;
 	int ret = 1;
 
 	for (block_t block = start_block; block < end_block; block++) {

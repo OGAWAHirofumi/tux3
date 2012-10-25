@@ -135,11 +135,12 @@ void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry,
 loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 			inum_t inum, umode_t mode, loff_t *size)
 {
+	struct sb *sb = tux_sb(dir->i_sb);
 	tux_dirent *entry;
 	struct buffer_head *buffer, *clone;
 	unsigned reclen = TUX_REC_LEN(len), rec_len, name_len, offset;
-	unsigned blockbits = tux_sb(dir->i_sb)->blockbits, blocksize = 1 << blockbits;
-	unsigned blocks = *size >> blockbits, block;
+	unsigned blocksize = sb->blocksize;
+	unsigned blocks = *size >> sb->blockbits, block;
 
 	for (block = 0; block < blocks; block++) {
 		buffer = blockread(mapping(dir), block);
@@ -199,7 +200,7 @@ create:
 	/* this releases buffer */
 	tux_update_entry(clone, entry, inum, mode);
 
-	return (block << blockbits) + offset; /* only needed for xattr create */
+	return (block << sb->blockbits) + offset; /* only for xattr create */
 }
 
 int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
@@ -221,9 +222,9 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
 			   struct buffer_head **result, loff_t size)
 {
+	struct sb *sb = tux_sb(dir->i_sb);
 	unsigned reclen = TUX_REC_LEN(len);
-	unsigned blocksize = 1 << tux_sb(dir->i_sb)->blockbits;
-	unsigned blocks = size >> tux_sb(dir->i_sb)->blockbits, block;
+	unsigned blocks = size >> sb->blockbits, block;
 	int err = -ENOENT;
 
 	for (block = 0; block < blocks; block++) {
@@ -233,7 +234,7 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
 			goto error;
 		}
 		tux_dirent *entry = bufdata(buffer);
-		tux_dirent *limit = (void *)entry + blocksize - reclen;
+		tux_dirent *limit = (void *)entry + sb->blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				blockput(buffer);
@@ -281,11 +282,10 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 	struct inode *dir = file->f_inode;
 #endif
 	int revalidate = file->f_version != dir->i_version;
-	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
-	unsigned blocksize = 1 << blockbits;
-	unsigned blockmask = blocksize - 1;
+	struct sb *sb = tux_sb(dir->i_sb);
+	unsigned blockbits = sb->blockbits;
 	unsigned blocks = dir->i_size >> blockbits;
-	unsigned offset = pos & blockmask;
+	unsigned offset = pos & sb->blockmask;
 
 	for (unsigned block = pos >> blockbits ; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
@@ -295,7 +295,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 		if (revalidate) {
 			if (offset) {
 				tux_dirent *entry = base + offset;
-				tux_dirent *p = base + (offset & blockmask);
+				tux_dirent *p = base + (offset & sb->blockmask);
 				while (p < entry && p->rec_len)
 					p = next_entry(p);
 				offset = (void *)p - base;
@@ -305,7 +305,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 			revalidate = 0;
 		}
 		unsigned size = dir->i_size - (block << blockbits);
-		tux_dirent *limit = base + min(size, blocksize) - TUX_REC_LEN(1);
+		tux_dirent *limit = base + min(size, sb->blocksize) - TUX_REC_LEN(1);
 		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (entry->rec_len == 0) {
 				blockput(buffer);
@@ -380,8 +380,8 @@ int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry)
 
 int tux_dir_is_empty(struct inode *dir)
 {
-	unsigned blockbits = tux_sb(dir->i_sb)->blockbits;
-	unsigned blocks = dir->i_size >> blockbits, blocksize = 1 << blockbits;
+	struct sb *sb = tux_sb(dir->i_sb);
+	unsigned blocks = dir->i_size >> sb->blockbits;
 	be_u64 self = to_be_u64(tux_inode(dir)->inum);
 	struct buffer_head *buffer;
 
@@ -391,7 +391,7 @@ int tux_dir_is_empty(struct inode *dir)
 			return -EIO;
 
 		tux_dirent *entry = bufdata(buffer);
-		tux_dirent *limit = bufdata(buffer) + blocksize - TUX_REC_LEN(1);
+		tux_dirent *limit = bufdata(buffer) + sb->blocksize - TUX_REC_LEN(1);
 		for (; entry <= limit; entry = next_entry(entry)) {
 			if (!entry->rec_len) {
 				blockput(buffer);

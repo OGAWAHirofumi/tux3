@@ -26,9 +26,9 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 	for (int i = 0; i < sizeof(ones); i++)
 		ones[i] = bytebits(i);
 
+	struct sb *sb = tux_sb(inode->i_sb);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
-	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
+	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
@@ -39,7 +39,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
-		unsigned bytes = blocksize - offset;
+		unsigned bytes = sb->blocksize - offset;
 		if (bytes > tail)
 			bytes = tail;
 		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes;
@@ -54,9 +54,9 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
+	struct sb *sb = tux_sb(inode->i_sb);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << tux_sb(inode->i_sb)->blockbits;
-	unsigned mapshift = tux_sb(inode->i_sb)->blockbits + 3;
+	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned blocks = (limit + mapmask) >> mapshift, active = 0;
 	unsigned offset = (start & mapmask) >> 3;
@@ -69,7 +69,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
-		unsigned bytes = blocksize - offset;
+		unsigned bytes = sb->blocksize - offset;
 		if (bytes > tail)
 			bytes = tail;
 		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes;
@@ -119,7 +119,6 @@ block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned
 	trace_off("balloc %i blocks from [%Lx/%x]", blocks, start, count);
 	assert(blocks > 0);
 	block_t limit = start + count;
-	unsigned blocksize = 1 << sb->blockbits;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	unsigned mapblocks = (limit + mapmask) >> mapshift;
@@ -135,7 +134,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned
 			return -1;
 		}
 		mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
-		unsigned bytes = blocksize - offset, run = 0;
+		unsigned bytes = sb->blocksize - offset, run = 0;
 		if (bytes > tail)
 			bytes = tail;
 		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes, c;
