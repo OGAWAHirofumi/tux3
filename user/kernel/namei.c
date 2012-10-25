@@ -231,7 +231,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 {
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	struct buffer_head *old_buffer, *new_buffer;
+	struct sb *sb = old_inode->i_sb;
+	struct buffer_head *old_buffer, *new_buffer, *clone;
 	tux_dirent *old_entry, *new_entry;
 	int err, new_subdir = 0;
 
@@ -242,7 +243,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	/* FIXME: is this needed? */
 	assert(from_be_u64(old_entry->inum) == tux_inode(old_inode)->inum);
 
-	change_begin(tux_sb(old_inode->i_sb));
+	change_begin(sb);
 	if (new_inode) {
 		int old_is_dir = S_ISDIR(old_inode->i_mode);
 		if (old_is_dir) {
@@ -258,8 +259,18 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			err = PTR_ERR(new_entry);
 			goto error;
 		}
+
+		clone = blockdirty(new_buffer, sb->delta);
+		if (IS_ERR(clone)) {
+			blockput(new_buffer);
+			err = PTR_ERR(clone);
+			goto error;
+		}
+		new_entry = ptr_redirect(new_entry, bufdata(new_buffer),
+					 bufdata(clone));
+
 		/* this releases new_buffer */
-		tux_update_dirent(new_buffer, new_entry, old_inode);
+		tux_update_dirent(clone, new_entry, old_inode);
 		new_inode->i_ctime = new_dir->i_ctime;
 		if (old_is_dir)
 			drop_nlink(new_inode);
@@ -291,11 +302,11 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (!err && new_subdir)
 		inode_dec_link_count(old_dir);
 
-	change_end(tux_sb(old_inode->i_sb));
+	change_end(sb);
 	return err;
 
 error:
-	change_end(tux_sb(old_inode->i_sb));
+	change_end(sb);
 	blockput(old_buffer);
 	return err;
 }
