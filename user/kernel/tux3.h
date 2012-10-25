@@ -841,7 +841,8 @@ static inline struct buffer_head *blockdirty(struct buffer_head *buffer, unsigne
 
 /* balloc.c */
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
-block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks);
+block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
+			  unsigned blocks);
 int balloc(struct sb *sb, unsigned blocks, block_t *block);
 int bfree(struct sb *sb, block_t start, unsigned blocks);
 int replay_update_bitmap(struct replay *rp, block_t start, unsigned count, int set);

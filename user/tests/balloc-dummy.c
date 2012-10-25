@@ -1,4 +1,5 @@
-block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
+block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
+			  unsigned blocks)
 {
 	block_t block = sb->nextalloc;
 	sb->nextalloc += blocks;

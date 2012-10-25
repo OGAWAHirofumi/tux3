@@ -27,14 +27,14 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 		ones[i] = bytebits(i);
 
 	struct sb *sb = tux_sb(inode->i_sb);
-	block_t limit = start + count;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned blocks = (limit + mapmask) >> mapshift;
-	unsigned offset = (start & mapmask) >> 3;
+	block_t limit = start + count;
+	block_t blocks = (limit + mapmask) >> mapshift;
 	block_t tail = (count + 7) >> 3, total = 0;
+	unsigned offset = (start & mapmask) >> 3;
 
-	for (unsigned block = start >> mapshift; block < blocks; block++) {
+	for (block_t block = start >> mapshift; block < blocks; block++) {
 		//trace("count block %x/%x", block, blocks);
 		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
@@ -55,16 +55,16 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	block_t limit = start + count;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned blocks = (limit + mapmask) >> mapshift, active = 0;
+	block_t limit = start + count;
+	block_t blocks = (limit + mapmask) >> mapshift, active = 0;
 	unsigned offset = (start & mapmask) >> 3;
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3, begin = -1;
 
-	printf("%i bitmap blocks:\n", blocks);
-	for (unsigned block = start >> mapshift; block < blocks; block++) {
+	printf("%Ld bitmap blocks:\n", blocks);
+	for (block_t block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
 		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
@@ -76,7 +76,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		for (; p < top; p++, startbit = 0) {
 			unsigned c = *p;
 			if (!any && c)
-				printf("[%x] ", block);
+				printf("[%Lx] ", block);
 			any |= c;
 			if ((!c && begin < 0) || (c == 0xff && begin >= 0))
 				continue;
@@ -107,26 +107,27 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		if (any)
 			printf("\n");
 	}
-	printf("(%i active)\n", active);
+	printf("(%Ld active)\n", active);
 	return -1;
 }
 #endif
 
 /* userland only */
-block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned blocks)
+block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
+			  unsigned blocks)
 {
 	struct inode *inode = sb->bitmap;
 	trace_off("balloc %i blocks from [%Lx/%x]", blocks, start, count);
 	assert(blocks > 0);
-	block_t limit = start + count;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned mapblocks = (limit + mapmask) >> mapshift;
+	block_t limit = start + count;
+	block_t mapblocks = (limit + mapmask) >> mapshift;
 	unsigned offset = (start & mapmask) >> 3;
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
 
-	for (unsigned mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
+	for (block_t mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
 		struct buffer_head *buffer = blockread(mapping(inode), mapblock);
 		if (!buffer) {
@@ -199,7 +200,8 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	assert(blocks > 0);
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
-	unsigned mapblock = start >> mapshift;
+	block_t mapblock = start >> mapshift;
+	unsigned mapoffset = start & mapmask;
 	struct buffer_head *buffer;
 
 	buffer = blockread(mapping(sb->bitmap), mapblock);
@@ -209,12 +211,12 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	}
 
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
-	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
+	if (!all_set(bufdata(buffer), mapoffset, blocks))
 		goto double_free;
 	trace("bfree extent <- [%Lx/%x], ", start, blocks);
 	buffer = blockdirty(buffer, sb->rollup);
 	// FIXME: error check of buffer
-	clear_bits(bufdata(buffer), start, blocks);
+	clear_bits(bufdata(buffer), mapoffset, blocks);
 	mark_buffer_dirty_non(buffer);
 	blockput(buffer);
 	sb->freeblocks += blocks;
@@ -235,13 +237,17 @@ int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
 			 int set)
 {
 	struct sb *sb = rp->sb;
-	unsigned shift = sb->blockbits + 3, mask = (1 << shift) - 1;
-	struct buffer_head *buffer = blockread(mapping(sb->bitmap), start >> shift);
+	unsigned mapshift = sb->blockbits + 3;
+	unsigned mapmask = (1 << mapshift) - 1;
+	block_t mapblock = start >> mapshift;
+	unsigned mapoffset = start & mapmask;
+	struct buffer_head *buffer;
 
+	buffer = blockread(mapping(sb->bitmap), mapblock);
 	if (!buffer)
 		return -ENOMEM;
 
-	if (!(set ? all_clear : all_set)(bufdata(buffer), start & mask, count)) {
+	if (!(set ? all_clear : all_set)(bufdata(buffer), mapoffset, count)) {
 		blockput(buffer);
 
 		error("%s: start 0x%Lx, count %x",
@@ -250,8 +256,9 @@ int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
 		return -EINVAL;
 	}
 
+	/* FIXME: error check */
 	buffer = blockdirty(buffer, sb->rollup);
-	(set ? set_bits : clear_bits)(bufdata(buffer), start & mask, count);
+	(set ? set_bits : clear_bits)(bufdata(buffer), mapoffset, count);
 	mark_buffer_dirty_non(buffer);
 	blockput(buffer);
 
