@@ -26,6 +26,7 @@ struct inode {
 	struct timespec		i_atime;
 	struct timespec		i_mtime;
 	struct timespec		i_ctime;
+	spinlock_t		i_lock;
 	u64			i_version;
 
 	map_t			*map;

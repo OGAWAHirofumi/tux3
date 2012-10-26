@@ -18,6 +18,7 @@ static void inode_init_once(struct inode *inode)
 {
 	memset(inode, 0, sizeof(*inode));
 
+	spin_lock_init(&inode->i_lock);
 	mutex_init(&inode->i_mutex);
 	INIT_HLIST_NODE(&inode->i_hash);
 }
