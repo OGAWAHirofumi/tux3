@@ -29,7 +29,6 @@ struct inode *tux_new_volmap(struct sb *sb)
 {
 	struct inode *inode = new_inode(vfs_sb(sb));
 	if (inode) {
-		inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
 		tux_set_inum(inode, TUX_VOLMAP_INO);
 		insert_inode_hash(inode);
 		tux_setup_inode(inode);
@@ -809,14 +808,24 @@ static void tux_setup_inode(struct inode *inode)
 		gfp_t gfp_mask = GFP_USER;
 
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
-		if (inum == TUX_VOLMAP_INO) {
-			inode->i_mapping->a_ops = &tux_vol_aops;
-			tux_inode(inode)->io = tux3_volmap_io;
-		} else {
+		switch (inum) {
+		case TUX_BITMAP_INO:
+		case TUX_VTABLE_INO:
+		case TUX_ATABLE_INO:
+		case TUX_LOGMAP_INO:
 			/* set fake i_size to escape the check of block_* */
 			inode->i_size = vfs_sb(sb)->s_maxbytes;
 			inode->i_mapping->a_ops = &tux_blk_aops;
 			tux_inode(inode)->io = tux3_filemap_redirect_io;
+			break;
+		case TUX_VOLMAP_INO:
+			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
+			inode->i_mapping->a_ops = &tux_vol_aops;
+			tux_inode(inode)->io = tux3_volmap_io;
+			break;
+		default:
+			BUG();
+			break;
 		}
 
 		/* Prevent reentering into our fs recursively by mem reclaim */
@@ -824,6 +833,7 @@ static void tux_setup_inode(struct inode *inode)
 		case TUX_VOLMAP_INO:
 		case TUX_BITMAP_INO:
 		case TUX_LOGMAP_INO:
+			/* FIXME: we should use non-__GFP_FS for all? */
 			gfp_mask &= ~__GFP_FS;
 			break;
 		}

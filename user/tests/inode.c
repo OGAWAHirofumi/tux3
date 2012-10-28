@@ -69,7 +69,7 @@ static void test01(struct sb *sb)
 /* Test try to allocate same inum */
 static void test02(struct sb *sb)
 {
-	struct tux_iattr *iattr = &(struct tux_iattr){};
+	struct tux_iattr *iattr = &(struct tux_iattr){ .mode = S_IFREG };
 	struct inode *inode1, *inode2, *inode3, *inode4;
 	int err;
 

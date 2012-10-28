@@ -235,19 +235,21 @@ static void tux_setup_inode(struct inode *inode)
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
 		switch (tux_inode(inode)->inum) {
 		case TUX_BITMAP_INO:
-			/* set maximum bitmap size */
-			/* FIXME: should this, tuxtruncate();? */
-			inode->i_size = (sb->volblocks + 7) >> 3;
-			/* FALLTHRU */
-		case TUX_ATABLE_INO:
 		case TUX_VTABLE_INO:
+		case TUX_ATABLE_INO:
+			/* set fake i_size to escape the check of block_* */
+			inode->i_size = vfs_sb(sb)->s_maxbytes;
 			inode->map->io = tux3_filemap_redirect_io;
-			break;
-		case TUX_VOLMAP_INO:
-			/* use default handler */;
 			break;
 		case TUX_LOGMAP_INO:
 			inode->map->io = dev_errio;
+			break;
+		case TUX_VOLMAP_INO:
+			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
+			/* use default handler for map->io */;
+			break;
+		default:
+			assert(0);
 			break;
 		}
 		break;
