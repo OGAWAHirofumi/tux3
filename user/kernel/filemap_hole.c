@@ -52,7 +52,6 @@ void tux3_destroy_hole_cache(void)
 	kmem_cache_destroy(tux_hole_cachep);
 }
 
-#if 0
 static struct hole_extent *tux3_alloc_hole(void)
 {
 	struct hole_extent *hole;
@@ -70,4 +69,93 @@ static void tux3_destroy_hole(struct hole_extent *hole)
 	assert(list_empty(&hole->dirty_list));
 	kmem_cache_free(tux_hole_cachep, hole);
 }
-#endif
+
+/*
+ * Add new hole extent.
+ *
+ * Find holes, and merge if possible (caller must hold ->i_mutex)
+ * FIXME: we can use RCU for this?
+ * FIXME: list doesn't scale, use better algorithm
+ */
+static int tux3_add_hole(struct inode *inode, block_t start, block_t count)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
+	struct hole_extent *hole, *safe, *merged = NULL, *removed = NULL;
+
+	/* FIXME: for now, support truncate only */
+	assert(start + count == MAX_BLOCKS);
+
+	/*
+	 * Find frontend dirty holes, and merge if possible
+	 * (->dirty_holes is protected by ->i_mutex)
+	 */
+	list_for_each_entry_safe(hole, safe, &i_ddc->dirty_holes, dirty_list) {
+		block_t end = start + count;
+		/* Can merge? */
+		if (end < hole->start || hole->start + hole->count < start)
+			continue;
+
+		/* Calculate merged extent */
+		start = min(start, hole->start);
+		count = max(end, hole->start + hole->count) - start;
+
+		/* Update hole */
+		spin_lock(&tuxnode->hole_extents_lock);
+		if (!merged)
+			merged = hole;
+		else {
+			/* Remove old hole */
+			list_del_init(&hole->dirty_list);
+			list_del_init(&hole->list);
+			removed = hole;
+		}
+		merged->start = start;
+		merged->count = count;
+		spin_unlock(&tuxnode->hole_extents_lock);
+
+		if (removed)
+			tux3_destroy_hole(hole);
+	}
+	if (merged)
+		return 0;
+
+	hole = tux3_alloc_hole();
+	if (!hole)
+		return -ENOMEM;
+
+	hole->start = start;
+	hole->count = count;
+	list_add(&hole->dirty_list, &i_ddc->dirty_holes);
+	/* Add hole */
+	spin_lock(&tuxnode->hole_extents_lock);
+	list_add(&hole->list, &tux_inode(inode)->hole_extents);
+	spin_unlock(&tuxnode->hole_extents_lock);
+
+	return 0;
+}
+
+int tux3_add_truncate_hole(struct inode *inode, loff_t newsize)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	block_t start = (newsize + sb->blockmask) >> sb->blockbits;
+
+	return tux3_add_hole(inode, start, MAX_BLOCKS - start);
+}
+
+/* Clear hole extents for frontend (called from iput path) */
+void tux3_clear_hole(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
+	struct hole_extent *hole, *safe;
+
+	/* This is iput path, so we don't need locks. */
+	list_for_each_entry_safe(hole, safe, &i_ddc->dirty_holes, dirty_list) {
+		list_del_init(&hole->dirty_list);
+		list_del_init(&hole->list);
+
+		tux3_destroy_hole(hole);
+	}
+}

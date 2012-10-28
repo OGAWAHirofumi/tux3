@@ -110,6 +110,7 @@ static inline void *decode48(void *at, u64 *val)
 
 #define MAX_INODES_BITS		48
 #define MAX_BLOCKS_BITS		48
+#define MAX_BLOCKS		((block_t)1 << 48)
 #define MAX_EXTENT		(1 << 6)
 
 #define SB_LOC			(1 << 12)

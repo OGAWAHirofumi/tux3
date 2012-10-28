@@ -9,6 +9,7 @@
  */
 
 #include "tux3.h"
+#include "filemap_hole.h"
 #include "ileaf.h"
 #include "iattr.h"
 
@@ -536,7 +537,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	truncate_setsize(inode, newsize);
 
 	if (!is_expand) {
-		err = tux3_truncate_blocks(inode, newsize);
+		err = tux3_add_truncate_hole(inode, newsize);
 		if (err)
 			goto error;
 	}
@@ -607,6 +608,7 @@ void tux3_evict_inode(struct inode *inode)
 		 */
 		int err;
 
+		tux3_clear_hole(inode);
 		/*
 		 * FIXME: i_blocks (if implemented) would be better way
 		 * than inode->i_size to know whether we have to
