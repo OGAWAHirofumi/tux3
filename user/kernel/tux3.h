@@ -301,14 +301,25 @@ enum {
 struct inode_delta_dirty {
 	struct list_head dirty_buffers;	/* list for dirty buffers */
 	struct list_head dirty_list;	/* link for dirty inode list */
+
+	unsigned	present;
+	/* inode attributes */
+	umode_t		i_mode;
+	uid_t		i_uid;
+	gid_t		i_gid;
+	unsigned int	i_nlink;
+	dev_t		i_rdev;
+	loff_t		i_size;
+//	struct timespec	i_atime;
+	struct timespec	i_mtime;
+	struct timespec	i_ctime;
+	u64		i_version;
 };
 
 struct xcache;
 struct tux3_inode {
 	struct btree btree;
 	inum_t inum;			/* Inode number */
-	unsigned present;		/* Attributes decoded from or
-					 * to be encoded to inode table */
 	struct xcache *xcache;		/* Extended attribute cache */
 	struct list_head alloc_list;	/* link for deferred inum allocation */
 	struct list_head orphan_list;	/* link for orphan inode list */
@@ -316,6 +327,8 @@ struct tux3_inode {
 	spinlock_t lock;		/* lock for inode metadata */
 	/* Per-delta dirty data for inode */
 	unsigned flags;			/* flags for inode state */
+	unsigned present;		/* Attributes decoded from or
+					 * to be encoded to inode table */
 	struct inode_delta_dirty i_ddc[TUX3_MAX_DELTA];
 #ifdef __KERNEL__
 	int (*io)(int rw, struct bufvec *bufvec);
@@ -727,6 +740,7 @@ extern struct btree_ops itable_ops;
 extern struct btree_ops otable_ops;
 
 /* inode.c */
+void tux3_inode_copy_attrs(struct inode *inode, unsigned delta);
 struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
 void del_defer_alloc_inum(struct inode *inode);
