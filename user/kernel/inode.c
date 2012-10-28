@@ -487,29 +487,11 @@ int tux3_save_inode(struct inode *inode, unsigned delta)
 	return save_inode(inode, delta);
 }
 
-static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	tuxkey_t index = (newsize + sb->blockmask) >> sb->blockbits;
-
-	return btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
-}
-
 #ifdef __KERNEL__
 /* Truncate partial block. If partial, we have to update last block. */
 static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 {
 	return tux3_truncate_page(inode->i_mapping, newsize, tux3_get_block);
-}
-
-void tux3_write_failed(struct address_space *mapping, loff_t to)
-{
-	struct inode *inode = mapping->host;
-
-	if (to > inode->i_size) {
-		truncate_pagecache(inode, to, inode->i_size);
-		tux3_truncate_blocks(inode, inode->i_size);
-	}
 }
 #endif /* !__KERNEL__ */
 
@@ -564,6 +546,14 @@ static int purge_inode(struct inode *inode)
 
 	/* Remove inum from inode btree */
 	return btree_chop(itable, tux_inode(inode)->inum, 1);
+}
+
+static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	tuxkey_t index = (newsize + sb->blockmask) >> sb->blockbits;
+
+	return btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
 }
 
 /*

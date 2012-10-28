@@ -141,7 +141,7 @@ static void discard_buffer(struct buffer_head *buffer)
 	unlock_buffer(buffer);
 }
 
-/* Invalidate buffer, this is called from truncate, error path on write, etc */
+/* Invalidate buffer, this is called from truncate, etc */
 void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
 	/* FIXME: we should check buffer_can_modify() to invalidate */

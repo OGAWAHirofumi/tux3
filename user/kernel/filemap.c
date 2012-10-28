@@ -848,6 +848,22 @@ static int tux3_readpages(struct file *file, struct address_space *mapping,
 
 #include "filemap_blocklib.c"
 
+static void tux3_write_failed(struct address_space *mapping, loff_t to)
+{
+	struct inode *inode = mapping->host;
+
+	if (to > inode->i_size) {
+		/*
+		 * write_{begin,end}() is protected by change_{begin,end},
+		 * so there is no new blocks here on this page.
+		 * No need to adjust the dtree.
+		 *
+		 * FIXME: right?
+		 */
+		truncate_pagecache(inode, to, inode->i_size);
+	}
+}
+
 static int tux3_da_write_begin(struct file *file, struct address_space *mapping,
 			       loff_t pos, unsigned len, unsigned flags,
 			       struct page **pagep, void **fsdata)
