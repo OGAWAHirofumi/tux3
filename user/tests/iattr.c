@@ -20,7 +20,7 @@
 /* Test encode_attrs() and decode_attrs() */
 static void test01(struct sb *sb)
 {
-	unsigned abits = RDEV_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT|MTIME_BIT;
+	unsigned abits = RDEV_BIT|MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFCHR | 0644);
 	struct inode *inode2 = rapid_open_inode(sb, NULL, 0x666);
 
@@ -42,11 +42,11 @@ static void test01(struct sb *sb)
 
 	struct iattr_req_data iattr_data = {
 		.i_ddc	= tux3_inode_ddc(inode1, sb->delta),
-		.root	= &tux_inode(inode1)->btree.root,
+		.btree	= &tux_inode(inode1)->btree,
 	};
 
 	/* encode inode1 to attrs, then decode attrs to inode2 */
-	size = encode_asize(tux_inode(inode1)->present);
+	size = encode_asize(calc_present(&iattr_data));
 	p = encode_attrs(itable_btree(sb), &iattr_data, attrs, size);
 	test_assert(p - attrs == size);
 	p = decode_attrs(inode2, attrs, size);

@@ -99,7 +99,7 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 		inc_nlink(inode);
 		break;
 	}
-	tux_inode(inode)->present |= CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|DATA_BTREE_BIT|LINK_COUNT_BIT;
+	tux_inode(inode)->present |= CTIME_SIZE_BIT|MTIME_BIT|MODE_OWNER_BIT|LINK_COUNT_BIT;
 
 	/* Just for debug, will rewrite by alloc_inum() */
 	tux_set_inum(inode, TUX_INVALID_INO);
@@ -269,10 +269,7 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 			goal++;
 	}
 
-	/* FIXME: should use conditional inode->present. But,
-	 * btree->lock is needed to initialize. */
-	if (tux_inode(inode)->present & DATA_BTREE_BIT)
-		init_btree(&tux_inode(inode)->btree, sb, no_root, dtree_ops());
+	init_btree(&tux_inode(inode)->btree, sb, no_root, dtree_ops());
 
 	/* Final initialization of inode */
 	tux_set_inum(inode, goal);
@@ -335,24 +332,20 @@ static int check_present(struct inode *inode)
 		break;
 	case S_IFREG:
 		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(tuxnode->present & DATA_BTREE_BIT);
 		assert(!(tuxnode->present & RDEV_BIT));
 		break;
 	case S_IFDIR:
 		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(tuxnode->present & DATA_BTREE_BIT);
 		assert(!(tuxnode->present & RDEV_BIT));
 		break;
 	case S_IFLNK:
 		assert(tuxnode->present & MODE_OWNER_BIT);
-		assert(tuxnode->present & DATA_BTREE_BIT);
 		assert(!(tuxnode->present & RDEV_BIT));
 		break;
 	case 0: /* internal inode */
 		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
 			assert(tuxnode->present == 0);
 		else {
-			assert(tuxnode->present & DATA_BTREE_BIT);
 			assert(!(tuxnode->present & RDEV_BIT));
 		}
 		break;
@@ -469,7 +462,7 @@ static int save_inode(struct inode *inode, unsigned delta)
 	/* Write inode attributes to inode btree */
 	struct iattr_req_data iattr_data = {
 		.i_ddc	= tux3_inode_ddc(inode, delta),
-		.root	= &tux_inode(inode)->btree.root,
+		.btree	= &tux_inode(inode)->btree,
 		.inode	= inode,
 	};
 	struct ileaf_req rq = {

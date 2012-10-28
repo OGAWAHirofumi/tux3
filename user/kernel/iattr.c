@@ -115,9 +115,6 @@ void dump_attrs(struct inode *inode)
 		case CTIME_SIZE_ATTR:
 			printf("ctime %Lx size %Lx ", tuxtime(inode->i_ctime), (s64)inode->i_size);
 			break;
-		case DATA_BTREE_ATTR:
-			printf("root %Lx:%u ", tuxnode->btree.root.block, tuxnode->btree.root.depth);
-			break;
 		case LINK_COUNT_ATTR:
 			printf("links %u ", inode->i_nlink);
 			break;
@@ -132,6 +129,8 @@ void dump_attrs(struct inode *inode)
 			break;
 		}
 	}
+	if (has_root(&tuxnode->btree))
+		printf("root %Lx:%u ", tuxnode->btree.root.block, tuxnode->btree.root.depth);
 	printf("\n");
 }
 
@@ -140,16 +139,26 @@ void *encode_kind(void *attrs, unsigned kind, unsigned version)
 	return encode16(attrs, (kind << 12) | version);
 }
 
+static inline unsigned calc_present(struct iattr_req_data *iattr_data)
+{
+	unsigned present = iattr_data->i_ddc->present;
+	if (has_root(iattr_data->btree))
+		present |= DATA_BTREE_BIT;
+	return present;
+}
+
 static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 			  unsigned size)
 {
+	struct sb *sb = btree->sb;
 	struct iattr_req_data *iattr_data = data;
 	struct inode_delta_dirty *i_ddc = iattr_data->i_ddc;
-	struct sb *sb = btree->sb;
+	struct btree *attr_btree = iattr_data->btree;
+	unsigned present = calc_present(iattr_data);
 	void *limit = attrs + size - 3;
 
 	for (int kind = 0; kind < VAR_ATTRS; kind++) {
-		if (!(i_ddc->present & (1 << kind)))
+		if (!(present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
 			break;
@@ -169,7 +178,7 @@ static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 			attrs = encode64(attrs, i_ddc->i_size);
 			break;
 		case DATA_BTREE_ATTR:
-			attrs = encode64(attrs, pack_root(iattr_data->root));
+			attrs = encode64(attrs, pack_root(&attr_btree->root));
 			break;
 		case LINK_COUNT_ATTR:
 			attrs = encode32(attrs, i_ddc->i_nlink);
@@ -196,6 +205,7 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	trace_off("decode %u attr bytes", size);
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct tux3_inode *tuxnode = tux_inode(inode);
+	struct root btree_root = no_root;
 	void *limit = attrs + size;
 	u64 v64;
 	u32 v32;
@@ -229,7 +239,8 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = decode64(attrs, &v64);
-			init_btree(&tuxnode->btree, sb, unpack_root(v64), dtree_ops());
+			btree_root = unpack_root(v64);
+			goto skip_present;
 			break;
 		case LINK_COUNT_ATTR: {
 			unsigned nlink;
@@ -247,18 +258,25 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		default:
 			return NULL;
 		}
+
 		tuxnode->present |= 1 << kind;
+	skip_present:
+		;
 	}
+
+	/* We don't use ->present for btree root */
+	init_btree(&tuxnode->btree, sb, btree_root, dtree_ops());
+
 	return attrs;
 }
 
 static int iattr_encoded_size(struct btree *btree, void *data)
 {
 	struct iattr_req_data *iattr_data = data;
-	struct inode_delta_dirty *i_ddc = iattr_data->i_ddc;
 	struct inode *inode = iattr_data->inode;
+	unsigned present = calc_present(iattr_data);
 
-	return encode_asize(i_ddc->present) + encode_xsize(inode);
+	return encode_asize(present) + encode_xsize(inode);
 }
 
 static void iattr_encode(struct btree *btree, void *data, void *attrs, int size)
