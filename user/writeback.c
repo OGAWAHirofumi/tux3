@@ -32,7 +32,7 @@ void mark_inode_dirty_sync(struct inode *inode)
 
 int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
-	unsigned dirty = inode->i_state;
+	unsigned dirty;
 	int err;
 
 	/*
@@ -41,29 +41,31 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	 */
 	__iget(inode);
 
-	if (inode->i_state & I_DIRTY_PAGES) {
-		/* To handle redirty, this clears before flushing */
-		inode->i_state &= ~I_DIRTY_PAGES;
-		err = tux3_flush_buffers(inode, delta);
-		if (err)
-			goto error;
-	}
-	if (inode->i_state & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
-		/* To handle redirty, this clears before flushing */
-		inode->i_state &= ~(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+	list_del_init(&tux_inode(inode)->dirty_list);
+
+	err = tux3_flush_buffers(inode, delta);
+	if (err)
+		goto out;
+
+	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
+	dirty = tux3_dirty_flags(inode, delta);
+
+	if (dirty & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
 		err = write_inode(inode);
 		if (err)
-			goto error;
+			goto out;
 	}
-	if (!(inode->i_state & I_DIRTY))
-		list_del_init(&tux_inode(inode)->dirty_list);
 
+	/*
+	 * We can clear dirty flags after flush. We have per-delta
+	 * flags, or volmap is not re-dirtied while flushing.
+	 */
+	__tux3_clear_dirty_inode(inode, delta);
+out:
+	/* FIXME: In the error path, dirty state is still remaining,
+	 * we have to do something. */
 	iput(inode);
 
-	return 0;
-
-error:
-	inode->i_state = dirty;
 	return err;
 }
 

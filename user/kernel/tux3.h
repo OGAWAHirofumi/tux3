@@ -301,6 +301,9 @@ struct tux3_inode {
 	struct list_head dirty_list;	/* link for dirty inode list */
 	struct list_head alloc_list;	/* link for deferred inum allocation */
 	struct list_head orphan_list;	/* link for orphan inode list */
+
+	spinlock_t lock;		/* lock for inode metadata */
+	unsigned flags;			/* flags for inode state */
 #ifdef __KERNEL__
 	struct dirty_buffers dirty;	/* list for dirty buffers */
 	int (*io)(int rw, struct bufvec *bufvec);

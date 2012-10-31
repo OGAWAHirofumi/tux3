@@ -213,6 +213,7 @@ static void tux3_inode_init_once(void *mem)
 	INIT_LIST_HEAD(&tuxnode->dirty_list);
 	INIT_LIST_HEAD(&tuxnode->alloc_list);
 	INIT_LIST_HEAD(&tuxnode->orphan_list);
+	spin_lock_init(&tuxnode->lock);
 #ifdef __KERNEL__
 	init_dirty_buffers(inode_dirty_heads(inode));
 #endif
@@ -229,6 +230,7 @@ static void tux3_inode_init_always(struct tux3_inode *tuxnode)
 	tuxnode->btree		= (struct btree){ };
 	tuxnode->present	= 0;
 	tuxnode->xcache		= NULL;
+	tuxnode->flags		= 0;
 #ifdef __KERNEL__
 	tuxnode->io		= NULL;
 #endif
@@ -246,6 +248,7 @@ static void tux3_check_destroy_inode(struct inode *inode)
 	assert(list_empty(&tux_inode(inode)->dirty_list));
 	assert(list_empty(&tux_inode(inode)->alloc_list));
 	assert(list_empty(&tux_inode(inode)->orphan_list));
+	assert(tux_inode(inode)->flags == 0);
 #ifdef __KERNEL__
 	assert(dirty_buffers_is_empty(inode_dirty_heads(inode)));
 #endif

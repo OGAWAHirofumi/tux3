@@ -1,5 +1,10 @@
 /*
  * Writeback for inodes
+ *
+ * lock order:
+ *     inode->i_lock
+ *         tuxnode->lock
+ *         sb->dirty_inodes_lock
  */
 
 #include "tux3.h"
@@ -11,30 +16,122 @@
 
 /* FIXME: probably, we should rewrite with own buffer management. */
 
+#if I_DIRTY != ((1 << 0) | (1 << 1) | (1 << 2))
+#error "I_DIRTY was changed"
+#endif
+
+/* I_DIRTY_SYNC, I_DIRTY_DATASYNC, and I_DIRTY_PAGES */
+#define NUM_DIRTY_BITS		3
+
+static inline unsigned tux3_delta(unsigned delta)
+{
+	return delta & (BUFFER_DIRTY_STATES - 1);
+}
+
+static inline unsigned tux3_dirty_shift(unsigned delta)
+{
+	return tux3_delta(delta) * NUM_DIRTY_BITS;
+}
+
+static inline unsigned tux3_dirty_mask(int flags, unsigned delta)
+{
+	return flags << tux3_dirty_shift(delta);
+}
+
+static inline unsigned tux3_dirty_flags(struct inode *inode, unsigned delta)
+{
+	unsigned flags;
+	flags = (tux_inode(inode)->flags >> tux3_dirty_shift(delta)) & I_DIRTY;
+	return flags;
+}
+
+/* Choice sb->delta or sb->rollup from inode */
+static inline int tux3_inode_delta(struct inode *inode)
+{
+	unsigned delta;
+
+	switch (tux_inode(inode)->inum) {
+	case TUX_VOLMAP_INO:
+		/* volmap are special buffer, and always DEFAULT_DIRTY_WHEN */
+		delta = DEFAULT_DIRTY_WHEN;
+		break;
+	case TUX_BITMAP_INO:
+		delta = tux_sb(inode->i_sb)->rollup;
+		break;
+	default:
+		delta = tux_sb(inode->i_sb)->delta;
+		break;
+	}
+
+	return delta;
+}
+
 /* This is hook of __mark_inode_dirty() and called I_DIRTY_PAGES too */
 void tux3_dirty_inode(struct inode *inode, int flags)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	unsigned mask = tux3_dirty_mask(flags, tux3_inode_delta(inode));
 
-	/* FIXME: we should save flags. And use it to know whether we
-	 * have to write inode data or not */
-	spin_lock(&sb->dirty_inodes_lock);
-	if (list_empty(&tux_inode(inode)->dirty_list))
-		list_add_tail(&tux_inode(inode)->dirty_list, &sb->dirty_inodes);
-	spin_unlock(&sb->dirty_inodes_lock);
+	if ((tuxnode->flags & mask) == mask)
+		return;
+
+	spin_lock(&tuxnode->lock);
+	if ((tuxnode->flags & mask) != mask) {
+		tuxnode->flags |= mask;
+
+		spin_lock(&sb->dirty_inodes_lock);
+		if (list_empty(&tuxnode->dirty_list))
+			list_add_tail(&tuxnode->dirty_list, &sb->dirty_inodes);
+		spin_unlock(&sb->dirty_inodes_lock);
+	}
+	spin_unlock(&tuxnode->lock);
 }
 
-void tux3_clear_dirty_inode(struct inode *inode)
+/* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
+static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	unsigned mask = tux3_dirty_mask(I_DIRTY, delta);
 
-	/* FIXME: if we saved flags, we should clear it here. */
-	spin_lock(&sb->dirty_inodes_lock);
-	list_del_init(&tux_inode(inode)->dirty_list);
-	spin_unlock(&sb->dirty_inodes_lock);
-#ifndef __KERNEL__
-	inode->i_state &= ~I_DIRTY;
-#endif
+	/* Clear dirty flags for delta */
+	tuxnode->flags &= ~mask;
+
+	/* Remove inode from list */
+	if (!tuxnode->flags) {
+		spin_lock(&sb->dirty_inodes_lock);
+		list_del_init(&tuxnode->dirty_list);
+		spin_unlock(&sb->dirty_inodes_lock);
+	}
+
+	/* Update inode state */
+	if (tuxnode->flags)
+		inode->i_state |= I_DIRTY;
+	else
+		inode->i_state &= ~I_DIRTY;
+}
+
+/* Clear dirty flags for delta */
+static void __tux3_clear_dirty_inode(struct inode *inode, unsigned delta)
+{
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	spin_lock(&inode->i_lock);
+	spin_lock(&tuxnode->lock);
+	tux3_clear_dirty_inode_nolock(inode, delta);
+	spin_unlock(&tuxnode->lock);
+	spin_unlock(&inode->i_lock);
+}
+
+/* Clear dirty flags for frontend delta */
+void tux3_clear_dirty_inode(struct inode *inode)
+{
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	spin_lock(&inode->i_lock);
+	spin_lock(&tuxnode->lock);
+	tux3_clear_dirty_inode_nolock(inode, tux3_inode_delta(inode));
+	spin_unlock(&tuxnode->lock);
+	spin_unlock(&inode->i_lock);
 }
 
 void __tux3_mark_inode_dirty(struct inode *inode, int flags)
@@ -106,39 +203,35 @@ static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
 	/* FIXME: linux writeback doesn't allow to control writeback
-	 * timing. And it clears inode dirty state with own timing, so
-	 * we would want to know those somehow.
-	 *
-	 * For now, we are using this dummy state. */
-	unsigned long state = I_DIRTY;
+	 * timing. */
+	unsigned dirty;
 	int err;
-
-	/* FIXME: see above comment. sb->volmap metadata should never
-	 * be marked as dirty actually */
-	if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
-		state = I_DIRTY_PAGES;
 
 	list_del_init(&tux_inode(inode)->dirty_list);
 	trace("inum %Lu", tux_inode(inode)->inum);
 
-	if (state & I_DIRTY_PAGES) {
-		/* To handle redirty, this clears before flushing */
-		state &= ~I_DIRTY_PAGES;
-		err = tux3_flush_buffers(inode, delta);
-		if (err)
-			goto error;
-	}
-	if (state & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
-		/* To handle redirty, this clears before flushing */
-		state &= ~(I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+	err = tux3_flush_buffers(inode, delta);
+	if (err)
+		goto out;
+
+	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
+	dirty = tux3_dirty_flags(inode, delta);
+
+	if (dirty & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
 		err = tux3_write_inode(inode, NULL);
 		if (err)
-			goto error;
+			goto out;
 	}
 
-	return 0;
+	/*
+	 * We can clear dirty flags after flush. We have per-delta
+	 * flags, or volmap is not re-dirtied while flushing.
+	 */
+	__tux3_clear_dirty_inode(inode, delta);
+out:
+	/* FIXME: In the error path, dirty state is still remaining,
+	 * we have to do something. */
 
-error:
 	return err;
 }
 
