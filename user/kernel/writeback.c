@@ -69,23 +69,40 @@ static inline int tux3_inode_delta(struct inode *inode)
 void tux3_dirty_inode(struct inode *inode, int flags)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	unsigned delta = tux3_inode_delta(inode);
-	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
-	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, delta);
 	struct tux3_inode *tuxnode = tux_inode(inode);
+	unsigned delta = tux3_inode_delta(inode);
 	unsigned mask = tux3_dirty_mask(flags, delta);
+	struct sb_delta_dirty *s_ddc;
+	struct inode_delta_dirty *i_ddc;
 
 	if ((tuxnode->flags & mask) == mask)
 		return;
+
+	/*
+	 * If inode is bitmap or volmap, delta is different cycle with
+	 * sb->delta. So those can race. And those inodes are flushed
+	 * by do_commit().
+	 *
+	 * So, don't bother s_ddc->dirty_inodes by adding those inodes.
+	 */
+	if (tuxnode->inum == TUX_BITMAP_INO || tuxnode->inum == TUX_VOLMAP_INO)
+		s_ddc = NULL;
+	else {
+		s_ddc = tux3_sb_ddc(sb, delta);
+		i_ddc = tux3_inode_ddc(inode, delta);
+	}
 
 	spin_lock(&tuxnode->lock);
 	if ((tuxnode->flags & mask) != mask) {
 		tuxnode->flags |= mask;
 
-		spin_lock(&sb->dirty_inodes_lock);
-		if (list_empty(&i_ddc->dirty_list))
-			list_add_tail(&i_ddc->dirty_list, &s_ddc->dirty_inodes);
-		spin_unlock(&sb->dirty_inodes_lock);
+		if (s_ddc) {
+			spin_lock(&sb->dirty_inodes_lock);
+			if (list_empty(&i_ddc->dirty_list))
+				list_add_tail(&i_ddc->dirty_list,
+					      &s_ddc->dirty_inodes);
+			spin_unlock(&sb->dirty_inodes_lock);
+		}
 	}
 	spin_unlock(&tuxnode->lock);
 }
@@ -276,29 +293,14 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
 		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
-		/*
-		 * FIXME: this is hack. those inodes can be dirtied by
-		 * tux3_flush_inode() of other inodes, so it should be
-		 * flushed after other inodes.
-		 */
-		switch (tuxnode->inum) {
-		case TUX_BITMAP_INO:
-		case TUX_VOLMAP_INO:
-			continue;
-		}
+
+		assert(tuxnode->inum != TUX_BITMAP_INO &&
+		       tuxnode->inum != TUX_VOLMAP_INO);
 
 		err = tux3_flush_inode(inode, delta);
 		if (err)
 			goto error;
 	}
-
-	/* The bitmap and volmap inode is handled in do_commit. Just remove. */
-	i_ddc = tux3_inode_ddc(sb->bitmap, delta);
-	if (!list_empty(&i_ddc->dirty_list))
-		list_del_init(&i_ddc->dirty_list);
-	i_ddc = tux3_inode_ddc(sb->volmap, delta);
-	if (!list_empty(&i_ddc->dirty_list))
-		list_del_init(&i_ddc->dirty_list);
 
 	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 

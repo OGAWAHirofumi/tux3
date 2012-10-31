@@ -77,30 +77,15 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
 		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
-		/*
-		 * FIXME: this is hack. those inodes can be dirtied by
-		 * tux3_flush_inode() of other inodes, so it should be
-		 * flushed after other inodes.
-		 */
-		switch (tuxnode->inum) {
-		case TUX_BITMAP_INO:
-		case TUX_VOLMAP_INO:
-			continue;
-		}
+
+		assert(tuxnode->inum != TUX_BITMAP_INO &&
+		       tuxnode->inum != TUX_VOLMAP_INO);
 
 		err = tux3_flush_inode(inode, delta);
 		if (err)
 			goto error;
 	}
-#ifdef ATOMIC
-	/* The bitmap and volmap inode is handled in do_commit. Just remove. */
-	i_ddc = tux3_inode_ddc(sb->bitmap, delta);
-	if (!list_empty(&i_ddc->dirty_list))
-		list_del_init(&i_ddc->dirty_list);
-	i_ddc = tux3_inode_ddc(sb->volmap, delta);
-	if (!list_empty(&i_ddc->dirty_list))
-		list_del_init(&i_ddc->dirty_list);
-#else
+#ifndef ATOMIC
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)
 		goto error;
