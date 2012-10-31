@@ -22,6 +22,8 @@
 
 /* I_DIRTY_SYNC, I_DIRTY_DATASYNC, and I_DIRTY_PAGES */
 #define NUM_DIRTY_BITS		3
+/* btree root is modified from only backend, so no need per-delta flag */
+#define TUX3_DIRTY_BTREE	(1 << 31)
 
 static inline unsigned tux3_delta(unsigned delta)
 {
@@ -40,9 +42,12 @@ static inline unsigned tux3_dirty_mask(int flags, unsigned delta)
 
 static inline unsigned tux3_dirty_flags(struct inode *inode, unsigned delta)
 {
-	unsigned flags;
-	flags = (tux_inode(inode)->flags >> tux3_dirty_shift(delta)) & I_DIRTY;
-	return flags;
+	unsigned flags = tux_inode(inode)->flags;
+	unsigned ret;
+
+	ret = (flags >> tux3_dirty_shift(delta)) & I_DIRTY;
+	ret |= flags & TUX3_DIRTY_BTREE;
+	return ret;
 }
 
 /* Choice sb->delta or sb->rollup from inode */
@@ -88,6 +93,24 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 	spin_unlock(&tuxnode->lock);
 }
 
+/*
+ * Called from backend only to mark btree as dirty. (usually from the
+ * path of flushing buffers)
+ */
+void tux3_mark_btree_dirty(struct btree *btree)
+{
+	if (btree != itable_btree(btree->sb) &&
+	    btree != otable_btree(btree->sb)) {
+		struct tux3_inode *tuxnode = tux_inode(btree_inode(btree));
+
+		spin_lock(&tuxnode->lock);
+		/* FIXME: Frontend modify btree for now, so this is not true */
+		//assert(tuxnode->flags);
+		tuxnode->flags |= TUX3_DIRTY_BTREE;
+		spin_unlock(&tuxnode->lock);
+	}
+}
+
 /* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
 static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta)
 {
@@ -95,8 +118,11 @@ static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta)
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	unsigned mask = tux3_dirty_mask(I_DIRTY, delta);
 
+	/* FIXME: Purge inode is from frontend for now, so this is not true */
+	//assert(!(tuxnode->flags & TUX3_DIRTY_BTREE) || (tuxnode->flags & mask));
+
 	/* Clear dirty flags for delta */
-	tuxnode->flags &= ~mask;
+	tuxnode->flags &= ~(TUX3_DIRTY_BTREE | mask);
 
 	/* Remove inode from list */
 	if (!tuxnode->flags) {
@@ -217,7 +243,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
 	dirty = tux3_dirty_flags(inode, delta);
 
-	if (dirty & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
+	if (dirty & (TUX3_DIRTY_BTREE | I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
 		err = tux3_write_inode(inode, NULL);
 		if (err)
 			goto out;

@@ -50,7 +50,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
 	dirty = tux3_dirty_flags(inode, delta);
 
-	if (dirty & (I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
+	if (dirty & (TUX3_DIRTY_BTREE | I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
 		err = write_inode(inode);
 		if (err)
 			goto out;

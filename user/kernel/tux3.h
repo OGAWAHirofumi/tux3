@@ -771,6 +771,7 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count);
 int bytebits(u8 c);
 
 /* writeback.c */
+void tux3_mark_btree_dirty(struct btree *btree);
 void __tux3_mark_inode_dirty(struct inode *inode, int flags);
 static inline void tux3_mark_inode_dirty(struct inode *inode)
 {
@@ -804,14 +805,6 @@ unsigned encode_xsize(struct inode *inode);
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size);
 unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size);
 void *decode_xattr(struct inode *inode, void *attrs);
-
-static inline void mark_btree_dirty(struct btree *btree)
-{
-	/* FIXME: we shouldn't dirty inode from backend */
-	if (btree != itable_btree(btree->sb) &&
-	    btree != otable_btree(btree->sb))
-		tux3_mark_inode_dirty_sync(btree_inode(btree));
-}
 
 static inline struct buffer_head *vol_find_get_block(struct sb *sb, block_t block)
 {

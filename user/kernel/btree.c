@@ -611,7 +611,7 @@ parent_level:
 			trace("redirect root");
 			assert(oldblock == btree->root.block);
 			btree->root.block = newblock;
-			mark_btree_dirty(btree);
+			tux3_mark_btree_dirty(btree);
 			cursor_check(cursor);
 			return 0;
 		}
@@ -920,7 +920,7 @@ chop_root:
 		trace("drop btree level");
 		btree->root.block = bufindex(prev[1]);
 		btree->root.depth--;
-		mark_btree_dirty(btree);
+		tux3_mark_btree_dirty(btree);
 
 		/*
 		 * We know prev[0] is redirected and dirty. So, in
@@ -1084,7 +1084,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.depth++;
 
 	mark_buffer_rollup_non(newbuf);
-	mark_btree_dirty(btree);
+	tux3_mark_btree_dirty(btree);
 	cursor_check(cursor);
 
 	return 0;
@@ -1216,7 +1216,7 @@ int alloc_empty_btree(struct btree *btree)
 	blockput(leafbuf);
 
 	btree->root = (struct root){ .block = rootblock, .depth = 1 };
-	mark_btree_dirty(btree);
+	tux3_mark_btree_dirty(btree);
 
 	return 0;
 
@@ -1244,7 +1244,7 @@ int free_empty_btree(struct btree *btree)
 	assert(bnode_sniff(bufdata(rootbuf)));
 	/* Make btree has no root */
 	btree->root = no_root;
-	mark_btree_dirty(btree);
+	tux3_mark_btree_dirty(btree);
 
 	struct bnode *rootnode = bufdata(rootbuf);
 	assert(bcount(rootnode) == 1);
