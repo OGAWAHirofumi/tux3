@@ -268,7 +268,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	dirty = tux3_dirty_flags(inode, delta);
 
 	if (dirty & (TUX3_DIRTY_BTREE | I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
-		err = tux3_write_inode(inode, NULL);
+		err = tux3_save_inode(inode, delta);
 		if (err)
 			goto out;
 	}

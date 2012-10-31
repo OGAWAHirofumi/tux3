@@ -35,12 +35,19 @@ static void test01(struct sb *sb)
 		.root = { .block = 0xcaba1f00dULL, .depth = 3 },
 	};
 
+	tux3_mark_inode_dirty(inode1);
+
 	char *p, attrs[1000] = { };
 	int size;
 
+	struct iattr_req_data iattr_data = {
+		.i_ddc	= tux3_inode_ddc(inode1, sb->delta),
+		.root	= &tux_inode(inode1)->btree.root,
+	};
+
 	/* encode inode1 to attrs, then decode attrs to inode2 */
 	size = encode_asize(tux_inode(inode1)->present);
-	p = encode_attrs(inode1, attrs, size);
+	p = encode_attrs(itable_btree(sb), &iattr_data, attrs, size);
 	test_assert(p - attrs == size);
 	p = decode_attrs(inode2, attrs, size);
 	test_assert(p - attrs == size);

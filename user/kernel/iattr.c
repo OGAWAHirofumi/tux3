@@ -140,40 +140,42 @@ void *encode_kind(void *attrs, unsigned kind, unsigned version)
 	return encode16(attrs, (kind << 12) | version);
 }
 
-static void *encode_attrs(struct inode *inode, void *attrs, unsigned size)
+static void *encode_attrs(struct btree *btree, void *data, void *attrs,
+			  unsigned size)
 {
-	trace_off("encode %u attr bytes", size);
-	struct tux3_inode *tuxnode = tux_inode(inode);
+	struct iattr_req_data *iattr_data = data;
+	struct inode_delta_dirty *i_ddc = iattr_data->i_ddc;
+	struct sb *sb = btree->sb;
 	void *limit = attrs + size - 3;
 
 	for (int kind = 0; kind < VAR_ATTRS; kind++) {
-		if (!(tuxnode->present & (1 << kind)))
+		if (!(i_ddc->present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
 			break;
-		attrs = encode_kind(attrs, kind, tux_sb(inode->i_sb)->version);
+		attrs = encode_kind(attrs, kind, sb->version);
 		switch (kind) {
 		case RDEV_ATTR:
-			attrs = encode64(attrs, huge_encode_dev(inode->i_rdev));
+			attrs = encode64(attrs, huge_encode_dev(i_ddc->i_rdev));
 			break;
 		case MODE_OWNER_ATTR:
 			/* FIXME: i_mode is enough with 16bits */
-			attrs = encode32(attrs, inode->i_mode);
-			attrs = encode32(attrs, i_uid_read(inode));
-			attrs = encode32(attrs, i_gid_read(inode));
+			attrs = encode32(attrs, i_ddc->i_mode);
+			attrs = encode32(attrs, i_ddc->i_uid);
+			attrs = encode32(attrs, i_ddc->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = encode64(attrs, tuxtime(inode->i_ctime) >> TIME_ATTR_SHIFT);
-			attrs = encode64(attrs, inode->i_size);
+			attrs = encode64(attrs, tuxtime(i_ddc->i_ctime) >> TIME_ATTR_SHIFT);
+			attrs = encode64(attrs, i_ddc->i_size);
 			break;
 		case DATA_BTREE_ATTR:
-			attrs = encode64(attrs, pack_root(&tuxnode->btree.root));
+			attrs = encode64(attrs, pack_root(iattr_data->root));
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = encode32(attrs, inode->i_nlink);
+			attrs = encode32(attrs, i_ddc->i_nlink);
 			break;
 		case MTIME_ATTR:
-			attrs = encode64(attrs, tuxtime(inode->i_mtime) >> TIME_ATTR_SHIFT);
+			attrs = encode64(attrs, tuxtime(i_ddc->i_mtime) >> TIME_ATTR_SHIFT);
 			break;
 		}
 	}
@@ -252,14 +254,20 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 
 static int iattr_encoded_size(struct btree *btree, void *data)
 {
-	struct inode *inode = data;
-	return encode_asize(tux_inode(inode)->present) + encode_xsize(inode);
+	struct iattr_req_data *iattr_data = data;
+	struct inode_delta_dirty *i_ddc = iattr_data->i_ddc;
+	struct inode *inode = iattr_data->inode;
+
+	return encode_asize(i_ddc->present) + encode_xsize(inode);
 }
 
 static void iattr_encode(struct btree *btree, void *data, void *attrs, int size)
 {
-	struct inode *inode = data;
-	void *attr = encode_attrs(inode, attrs, size);
+	struct iattr_req_data *iattr_data = data;
+	struct inode *inode = iattr_data->inode;
+	void *attr;
+
+	attr = encode_attrs(btree, data, attrs, size);
 	attr = encode_xattrs(inode, attr, attrs + size - attr);
 	assert(attr == attrs + size);
 }

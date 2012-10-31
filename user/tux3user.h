@@ -99,7 +99,6 @@ void ihold(struct inode *inode);
 struct inode *tux3_ilookup(struct sb *sb, inum_t inum);
 void iput(struct inode *inode);
 int tuxtruncate(struct inode *inode, loff_t size);
-int write_inode(struct inode *inode);
 
 /* namei.c */
 struct inode *tuxopen(struct inode *dir, const char *name, unsigned len);
