@@ -8,6 +8,7 @@
  */
 
 #include "tux3.h"
+#include "filemap_hole.h"
 
 #ifndef trace
 #define trace trace_on
@@ -267,7 +268,18 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 
 static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 {
-	return flush_list(tux3_dirty_buffers(inode, delta));
+	int err;
+
+	/* FIXME: error handling */
+
+	/* Apply hole extents before page caches */
+	err = tux3_flush_hole(inode, delta);
+	if (!err) {
+		/* Apply page caches */
+		err = flush_list(tux3_dirty_buffers(inode, delta));
+	}
+
+	return err;
 }
 
 #ifdef __KERNEL__

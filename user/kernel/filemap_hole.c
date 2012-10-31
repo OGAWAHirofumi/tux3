@@ -71,6 +71,50 @@ static void tux3_destroy_hole(struct hole_extent *hole)
 }
 
 /*
+ * Backend functions
+ */
+
+/* Apply hole extents to dtree */
+int tux3_flush_hole(struct inode *inode, unsigned delta)
+{
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, delta);
+	struct hole_extent *hole, *safe;
+	int err = 0;
+
+	/*
+	 * This is called by backend, it means ->dirty_holes should be
+	 * stable. So, we don't need lock for dirty_holes list.
+	 */
+	list_for_each_entry_safe(hole, safe, &i_ddc->dirty_holes, dirty_list) {
+		int ret;
+
+		assert(hole->start + hole->count == MAX_BLOCKS);
+		/* FIXME: we would want to delay to free blocks */
+		ret = btree_chop(&tuxnode->btree, hole->start, TUXKEY_LIMIT);
+		if (ret && !err)
+			err = ret;		/* FIXME: error handling */
+
+		/*
+		 * Hole extent was applied to btree. Remove from
+		 * ->hole_extents list.
+		 */
+		spin_lock(&tuxnode->hole_extents_lock);
+		list_del_init(&hole->list);
+		spin_unlock(&tuxnode->hole_extents_lock);
+
+		list_del_init(&hole->dirty_list);
+		tux3_destroy_hole(hole);
+	}
+
+	return err;
+}
+
+/*
+ * Frontend functions
+ */
+
+/*
  * Add new hole extent.
  *
  * Find holes, and merge if possible (caller must hold ->i_mutex)
