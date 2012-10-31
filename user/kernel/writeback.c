@@ -138,6 +138,7 @@ void tux3_mark_btree_dirty(struct btree *btree)
 }
 
 #include "writeback_iattrfork.c"
+#include "writeback_xattrfork.c"
 
 /* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
 static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,

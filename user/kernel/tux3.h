@@ -795,6 +795,8 @@ static inline void tux3_mark_inode_dirty_sync(struct inode *inode)
 void tux3_dirty_inode(struct inode *inode, int flags);
 void tux3_iattrdirty(struct inode *inode);
 void tux3_iattr_read_and_clear(struct inode *inode);
+void tux3_xattrdirty(struct inode *inode);
+void tux3_xattr_read_and_clear(struct inode *inode);
 void tux3_clear_dirty_inode(struct inode *inode);
 void tux3_mark_buffer_dirty(struct buffer_head *buffer);
 void tux3_mark_buffer_rollup(struct buffer_head *buffer);

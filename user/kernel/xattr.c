@@ -594,9 +594,13 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data,
 	if (IS_ERR(xattr)) {
 		if (PTR_ERR(xattr) != -ENOATTR || (flags & XATTR_REPLACE))
 			return PTR_ERR(xattr);
+
+		tux3_xattrdirty(inode);
 	} else {
 		if (flags & XATTR_CREATE)
 			return -EEXIST;
+
+		tux3_xattrdirty(inode);
 		/* FIXME: if we can't insert new one, the xattr will lose */
 		use -= remove_old(xcache, xattr);
 	}
@@ -722,6 +726,8 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 			err = PTR_ERR(xattr);
 			goto out;
 		}
+
+		tux3_xattrdirty(inode);
 		int used = remove_old(xcache, xattr);
 		if (used) {
 			tux3_mark_inode_dirty(inode);
