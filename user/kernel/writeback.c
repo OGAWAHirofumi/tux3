@@ -71,6 +71,7 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 	struct sb *sb = tux_sb(inode->i_sb);
 	unsigned delta = tux3_inode_delta(inode);
 	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, delta);
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	unsigned mask = tux3_dirty_mask(flags, delta);
 
@@ -82,8 +83,8 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 		tuxnode->flags |= mask;
 
 		spin_lock(&sb->dirty_inodes_lock);
-		if (list_empty(&tuxnode->dirty_list))
-			list_add_tail(&tuxnode->dirty_list, &s_ddc->dirty_inodes);
+		if (list_empty(&i_ddc->dirty_list))
+			list_add_tail(&i_ddc->dirty_list, &s_ddc->dirty_inodes);
 		spin_unlock(&sb->dirty_inodes_lock);
 	}
 	spin_unlock(&tuxnode->lock);
@@ -108,23 +109,30 @@ void tux3_mark_btree_dirty(struct btree *btree)
 }
 
 /* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
-static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta)
+static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
+					  int frontend)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	unsigned mask = tux3_dirty_mask(I_DIRTY, delta);
+	unsigned old_dirty;
 
-	/* FIXME: Purge inode is from frontend for now, so this is not true */
-	//assert(!(tuxnode->flags & TUX3_DIRTY_BTREE) || (tuxnode->flags & mask));
-
+	old_dirty = tuxnode->flags & (TUX3_DIRTY_BTREE | mask);
 	/* Clear dirty flags for delta */
 	tuxnode->flags &= ~(TUX3_DIRTY_BTREE | mask);
+	/* FIXME: Purge inode is from frontend for now, so this is not true */
+	//assert(!(old_dirty & TUX3_DIRTY_BTREE) || (old_dirty & mask));
 
 	/* Remove inode from list */
-	if (!tuxnode->flags) {
-		spin_lock(&sb->dirty_inodes_lock);
-		list_del_init(&tuxnode->dirty_list);
-		spin_unlock(&sb->dirty_inodes_lock);
+	if (old_dirty) {
+		/* Only if called from frontend, we need to lock */
+		if (frontend)
+			spin_lock(&sb->dirty_inodes_lock);
+
+		list_del_init(&tux3_inode_ddc(inode, delta)->dirty_list);
+
+		if (frontend)
+			spin_unlock(&sb->dirty_inodes_lock);
 	}
 
 	/* Update inode state */
@@ -140,7 +148,7 @@ static void __tux3_clear_dirty_inode(struct inode *inode, unsigned delta)
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	spin_lock(&inode->i_lock);
 	spin_lock(&tuxnode->lock);
-	tux3_clear_dirty_inode_nolock(inode, delta);
+	tux3_clear_dirty_inode_nolock(inode, delta, 0);
 	spin_unlock(&tuxnode->lock);
 	spin_unlock(&inode->i_lock);
 }
@@ -151,7 +159,7 @@ void tux3_clear_dirty_inode(struct inode *inode)
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	spin_lock(&inode->i_lock);
 	spin_lock(&tuxnode->lock);
-	tux3_clear_dirty_inode_nolock(inode, tux3_inode_delta(inode));
+	tux3_clear_dirty_inode_nolock(inode, tux3_inode_delta(inode), 1);
 	spin_unlock(&tuxnode->lock);
 	spin_unlock(&inode->i_lock);
 }
@@ -229,7 +237,6 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	unsigned dirty;
 	int err;
 
-	list_del_init(&tux_inode(inode)->dirty_list);
 	trace("inum %Lu", tux_inode(inode)->inum);
 
 	err = tux3_flush_buffers(inode, delta);
@@ -261,12 +268,13 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
 	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
 	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
-	struct tux3_inode *tuxnode, *safe;
+	struct inode_delta_dirty *i_ddc, *safe;
 	int err;
 
 	/* ->dirty_inodes owned by backend. No need to lock here */
 
-	list_for_each_entry_safe(tuxnode, safe, dirty_inodes, dirty_list) {
+	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
+		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
 		/*
 		 * FIXME: this is hack. those inodes can be dirtied by
@@ -285,12 +293,12 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	}
 
 	/* The bitmap and volmap inode is handled in do_commit. Just remove. */
-	tuxnode = tux_inode(sb->bitmap);
-	if (!list_empty(&tuxnode->dirty_list))
-		list_del_init(&tuxnode->dirty_list);
-	tuxnode = tux_inode(sb->volmap);
-	if (!list_empty(&tuxnode->dirty_list))
-		list_del_init(&tuxnode->dirty_list);
+	i_ddc = tux3_inode_ddc(sb->bitmap, delta);
+	if (!list_empty(&i_ddc->dirty_list))
+		list_del_init(&i_ddc->dirty_list);
+	i_ddc = tux3_inode_ddc(sb->volmap, delta);
+	if (!list_empty(&i_ddc->dirty_list))
+		list_del_init(&i_ddc->dirty_list);
 
 	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 

@@ -210,13 +210,14 @@ static void tux3_inode_init_once(void *mem)
 	struct inode *inode = &tuxnode->vfs_inode;
 	int i;
 
-	INIT_LIST_HEAD(&tuxnode->dirty_list);
 	INIT_LIST_HEAD(&tuxnode->alloc_list);
 	INIT_LIST_HEAD(&tuxnode->orphan_list);
 	spin_lock_init(&tuxnode->lock);
 	/* Initialize inode_delta_dirty */
-	for (i = 0; i < ARRAY_SIZE(tuxnode->i_ddc); i++)
+	for (i = 0; i < ARRAY_SIZE(tuxnode->i_ddc); i++) {
 		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_buffers);
+		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_list);
+	}
 
 	/* Initialize generic part */
 	inode_init_once(inode);
@@ -243,12 +244,14 @@ static void tux3_inode_init_always(struct tux3_inode *tuxnode)
 	inode->i_mode		= 0;
 }
 
-static int dirty_buffers_is_empty(struct inode *inode)
+static int i_ddc_is_clean(struct inode *inode)
 {
+	struct tux3_inode *tuxnode = tux_inode(inode);
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(tux_inode(inode)->i_ddc); i++) {
-		if (!list_empty(&tux_inode(inode)->i_ddc[i].dirty_buffers))
+	for (i = 0; i < ARRAY_SIZE(tuxnode->i_ddc); i++) {
+		if (!list_empty(&tuxnode->i_ddc[i].dirty_buffers) ||
+		    !list_empty(&tuxnode->i_ddc[i].dirty_list))
 			return 0;
 	}
 
@@ -257,11 +260,10 @@ static int dirty_buffers_is_empty(struct inode *inode)
 
 static void tux3_check_destroy_inode(struct inode *inode)
 {
-	assert(list_empty(&tux_inode(inode)->dirty_list));
 	assert(list_empty(&tux_inode(inode)->alloc_list));
 	assert(list_empty(&tux_inode(inode)->orphan_list));
 	assert(tux_inode(inode)->flags == 0);
-	assert(dirty_buffers_is_empty(inode));
+	assert(i_ddc_is_clean(inode));
 }
 
 #ifdef __KERNEL__

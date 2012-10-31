@@ -41,8 +41,6 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	 */
 	__iget(inode);
 
-	list_del_init(&tux_inode(inode)->dirty_list);
-
 	err = tux3_flush_buffers(inode, delta);
 	if (err)
 		goto out;
@@ -73,10 +71,11 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
 	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
 	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
-	struct tux3_inode *tuxnode, *safe;
+	struct inode_delta_dirty *i_ddc, *safe;
 	int err;
 
-	list_for_each_entry_safe(tuxnode, safe, dirty_inodes, dirty_list) {
+	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
+		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
 		/*
 		 * FIXME: this is hack. those inodes can be dirtied by
@@ -95,12 +94,12 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	}
 #ifdef ATOMIC
 	/* The bitmap and volmap inode is handled in do_commit. Just remove. */
-	tuxnode = tux_inode(sb->bitmap);
-	if (!list_empty(&tuxnode->dirty_list))
-		list_del_init(&tuxnode->dirty_list);
-	tuxnode = tux_inode(sb->volmap);
-	if (!list_empty(&tuxnode->dirty_list))
-		list_del_init(&tuxnode->dirty_list);
+	i_ddc = tux3_inode_ddc(sb->bitmap, delta);
+	if (!list_empty(&i_ddc->dirty_list))
+		list_del_init(&i_ddc->dirty_list);
+	i_ddc = tux3_inode_ddc(sb->volmap, delta);
+	if (!list_empty(&i_ddc->dirty_list))
+		list_del_init(&i_ddc->dirty_list);
 #else
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)

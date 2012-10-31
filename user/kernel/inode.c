@@ -552,6 +552,7 @@ static int purge_inode(struct inode *inode)
 void tux3_evict_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
 	unsigned delete_inode = !(inode->i_nlink > 0 || is_bad_inode(inode));
 	unsigned unlock = 0;
 
@@ -562,7 +563,7 @@ void tux3_evict_inode(struct inode *inode)
 	 * FIXME: this is fragile way. we should remove iput() from
 	 * backend instead.
 	 */
-	if (delete_inode || !list_empty(&tux_inode(inode)->dirty_list)) {
+	if (delete_inode || !list_empty(&i_ddc->dirty_list)) {
 		change_begin(sb);
 		unlock = 1;
 	}

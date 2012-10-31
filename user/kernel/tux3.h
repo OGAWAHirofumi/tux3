@@ -300,6 +300,7 @@ enum {
 /* Per-delta data structure for inode */
 struct inode_delta_dirty {
 	struct list_head dirty_buffers;	/* list for dirty buffers */
+	struct list_head dirty_list;	/* link for dirty inode list */
 };
 
 struct xcache;
@@ -309,7 +310,6 @@ struct tux3_inode {
 	unsigned present;		/* Attributes decoded from or
 					 * to be encoded to inode table */
 	struct xcache *xcache;		/* Extended attribute cache */
-	struct list_head dirty_list;	/* link for dirty inode list */
 	struct list_head alloc_list;	/* link for deferred inum allocation */
 	struct list_head orphan_list;	/* link for orphan inode list */
 
@@ -405,6 +405,12 @@ static inline struct inode_delta_dirty *tux3_inode_ddc(struct inode *inode,
 						       unsigned delta)
 {
 	return &tux_inode(inode)->i_ddc[tux3_delta(delta)];
+}
+
+static inline struct tux3_inode *i_ddc_to_inode(struct inode_delta_dirty *i_ddc,
+						unsigned delta)
+{
+	return container_of(i_ddc, struct tux3_inode, i_ddc[tux3_delta(delta)]);
 }
 
 /* Get per-delta dirty buffers list from inode */
