@@ -42,7 +42,7 @@ static void cleanup_dirty_buffers(struct list_head *head)
 
 static void cleanup_dirty_inode(struct inode *inode)
 {
-	if (!list_empty(&tux_inode(inode)->dirty_list)) {
+	if (inode->i_state & I_DIRTY) {
 		trace(">>> clean inum %Lx, i_count %d, i_state %lx",
 		      tux_inode(inode)->inum, atomic_read(&inode->i_count),
 		      inode->i_state);

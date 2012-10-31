@@ -71,13 +71,12 @@ out:
 
 int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
+	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
+	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
 	struct tux3_inode *tuxnode, *safe;
-	LIST_HEAD(dirty_inodes);
 	int err;
 
-	list_splice_init(&sb->dirty_inodes, &dirty_inodes);
-
-	list_for_each_entry_safe(tuxnode, safe, &dirty_inodes, dirty_list) {
+	list_for_each_entry_safe(tuxnode, safe, dirty_inodes, dirty_list) {
 		struct inode *inode = &tuxnode->vfs_inode;
 		/*
 		 * FIXME: this is hack. those inodes can be dirtied by
@@ -95,13 +94,13 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 			goto error;
 	}
 #ifdef ATOMIC
-	/* The bitmap and volmap inode is handled in the delta */
+	/* The bitmap and volmap inode is handled in do_commit. Just remove. */
 	tuxnode = tux_inode(sb->bitmap);
 	if (!list_empty(&tuxnode->dirty_list))
-		list_move(&tuxnode->dirty_list, &sb->dirty_inodes);
+		list_del_init(&tuxnode->dirty_list);
 	tuxnode = tux_inode(sb->volmap);
 	if (!list_empty(&tuxnode->dirty_list))
-		list_move(&tuxnode->dirty_list, &sb->dirty_inodes);
+		list_del_init(&tuxnode->dirty_list);
 #else
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)
@@ -113,12 +112,12 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	if (err)
 		goto error;
 #endif
-	assert(list_empty(&dirty_inodes)); /* someone redirtied own inode? */
+	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 
 	return 0;
 
 error:
-	list_splice_init(&dirty_inodes, &sb->dirty_inodes);
+	/* FIXME: what to do for dirty_inodes on error path */
 	return err;
 }
 

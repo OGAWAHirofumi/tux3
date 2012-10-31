@@ -21,6 +21,9 @@
 /* Initialize the lock and list */
 static void init_sb(struct sb *sb)
 {
+	int i;
+
+	/* Initialize sb */
 	init_rwsem(&sb->delta_lock);
 	mutex_init(&sb->loglock);
 	INIT_LIST_HEAD(&sb->alloc_inodes);
@@ -28,13 +31,16 @@ static void init_sb(struct sb *sb)
 	INIT_LIST_HEAD(&sb->orphan_add);
 	spin_lock_init(&sb->orphan_del_lock);
 	INIT_LIST_HEAD(&sb->orphan_del);
-	spin_lock_init(&sb->dirty_inodes_lock);
-	INIT_LIST_HEAD(&sb->dirty_inodes);
 	spin_lock_init(&sb->forked_buffers_lock);
 	init_link_circular(&sb->forked_buffers);
 	INIT_LIST_HEAD(&sb->rollup_buffers);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
+	spin_lock_init(&sb->dirty_inodes_lock);
+
+	/* Initialize sb_delta_dirty */
+	for (i = 0; i < ARRAY_SIZE(sb->s_ddc); i++)
+		INIT_LIST_HEAD(&sb->s_ddc[i].dirty_inodes);
 }
 
 static void setup_roots(struct sb *sb, struct disksuper *super)
@@ -53,6 +59,9 @@ static loff_t calc_maxbytes(loff_t blocksize)
 /* Setup sb by on-disk super block */
 static void __setup_sb(struct sb *sb, struct disksuper *super)
 {
+	sb->delta = TUX3_INIT_DELTA;
+	sb->rollup = TUX3_INIT_DELTA;
+
 	sb->blockbits = be16_to_cpu(super->blockbits);
 	sb->volblocks = be64_to_cpu(super->volblocks);
 	sb->version = 0;	/* FIXME: not yet implemented */

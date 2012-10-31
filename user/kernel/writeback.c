@@ -25,11 +25,6 @@
 /* btree root is modified from only backend, so no need per-delta flag */
 #define TUX3_DIRTY_BTREE	(1 << 31)
 
-static inline unsigned tux3_delta(unsigned delta)
-{
-	return delta & (BUFFER_DIRTY_STATES - 1);
-}
-
 static inline unsigned tux3_dirty_shift(unsigned delta)
 {
 	return tux3_delta(delta) * NUM_DIRTY_BITS;
@@ -75,8 +70,10 @@ static inline int tux3_inode_delta(struct inode *inode)
 void tux3_dirty_inode(struct inode *inode, int flags)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	unsigned delta = tux3_inode_delta(inode);
+	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
 	struct tux3_inode *tuxnode = tux_inode(inode);
-	unsigned mask = tux3_dirty_mask(flags, tux3_inode_delta(inode));
+	unsigned mask = tux3_dirty_mask(flags, delta);
 
 	if ((tuxnode->flags & mask) == mask)
 		return;
@@ -87,7 +84,7 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 
 		spin_lock(&sb->dirty_inodes_lock);
 		if (list_empty(&tuxnode->dirty_list))
-			list_add_tail(&tuxnode->dirty_list, &sb->dirty_inodes);
+			list_add_tail(&tuxnode->dirty_list, &s_ddc->dirty_inodes);
 		spin_unlock(&sb->dirty_inodes_lock);
 	}
 	spin_unlock(&tuxnode->lock);
@@ -263,17 +260,14 @@ out:
 
 int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
+	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
+	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
 	struct tux3_inode *tuxnode, *safe;
-	LIST_HEAD(dirty_inodes);
 	int err;
 
-	/* FIXME: we would want to use per-delta dirty_inodes lists,
-	 * to separate dirty inodes for the delta */
-	spin_lock(&sb->dirty_inodes_lock);
-	list_splice_init(&sb->dirty_inodes, &dirty_inodes);
-	spin_unlock(&sb->dirty_inodes_lock);
+	/* ->dirty_inodes owned by backend. No need to lock here */
 
-	list_for_each_entry_safe(tuxnode, safe, &dirty_inodes, dirty_list) {
+	list_for_each_entry_safe(tuxnode, safe, dirty_inodes, dirty_list) {
 		struct inode *inode = &tuxnode->vfs_inode;
 		/*
 		 * FIXME: this is hack. those inodes can be dirtied by
@@ -290,25 +284,21 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 		if (err)
 			goto error;
 	}
-	/* The bitmap and volmap inode is handled in the delta */
-	spin_lock(&sb->dirty_inodes_lock);
+
+	/* The bitmap and volmap inode is handled in do_commit. Just remove. */
 	tuxnode = tux_inode(sb->bitmap);
 	if (!list_empty(&tuxnode->dirty_list))
-		list_move(&tuxnode->dirty_list, &sb->dirty_inodes);
+		list_del_init(&tuxnode->dirty_list);
 	tuxnode = tux_inode(sb->volmap);
 	if (!list_empty(&tuxnode->dirty_list))
-		list_move(&tuxnode->dirty_list, &sb->dirty_inodes);
-	spin_unlock(&sb->dirty_inodes_lock);
+		list_del_init(&tuxnode->dirty_list);
 
-	assert(list_empty(&dirty_inodes)); /* someone redirtied own inode? */
+	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 
 	return 0;
 
 error:
-	spin_lock(&sb->dirty_inodes_lock);
-	list_splice_init(&dirty_inodes, &sb->dirty_inodes);
-	spin_unlock(&sb->dirty_inodes_lock);
-
+	/* FIXME: what to do for dirty_inodes on error path */
 	return err;
 }
 #endif /* !__KERNEL__ */

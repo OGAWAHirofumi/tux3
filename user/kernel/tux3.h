@@ -118,6 +118,10 @@ static inline void *decode48(void *at, u64 *val)
 #define MAX_TUXKEY		(((tuxkey_t)1 << 48) - 1)
 #define TUXKEY_LIMIT		(MAX_TUXKEY + 1)
 
+/* Maximum delta number (must be power of 2) */
+#define TUX3_MAX_DELTA		2	/* 1 frontend + 1 backend */
+#define TUX3_INIT_DELTA		0	/* initial delta number */
+
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
 #define TUX_VTABLE_INO		1
@@ -198,8 +202,12 @@ struct cursor {
 
 struct stash { struct flink_head head; u64 *pos, *top; };
 
-/* Tux3-specific sb is a handle for the entire volume state */
+/* Per-delta data structure for sb */
+struct sb_delta_dirty {
+	struct list_head dirty_inodes;	/* dirty inodes list */
+};
 
+/* Tux3-specific sb is a handle for the entire volume state */
 struct sb {
 	union {
 		struct disksuper super;
@@ -243,12 +251,14 @@ struct sb {
 	struct list_head rollup_buffers; /* dirty metadata flushed at rollup */
 
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
-	spinlock_t dirty_inodes_lock;
-	struct list_head dirty_inodes;	/* dirty inodes list */
 	struct iowait *iowait;		/* helper for waiting I/O */
 
 	spinlock_t forked_buffers_lock;
 	struct link forked_buffers;	/* forked buffers list */
+
+	spinlock_t dirty_inodes_lock;	/* lock of dirty_inodes for frontend */
+	/* Per-delta dirty data for sb */
+	struct sb_delta_dirty s_ddc[TUX3_MAX_DELTA];
 #ifdef __KERNEL__
 	struct super_block *vfs_sb; /* Generic kernel superblock */
 #else
@@ -385,6 +395,18 @@ static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
 	return &mapping(inode)->dirty;
 }
 #endif /* !__KERNEL__ */
+
+/* Get delta from free running counter */
+static inline unsigned tux3_delta(unsigned delta)
+{
+	return delta & (TUX3_MAX_DELTA - 1);
+}
+
+/* Get per-delta dirty data control for sb */
+static inline struct sb_delta_dirty *tux3_sb_ddc(struct sb *sb, unsigned delta)
+{
+	return &sb->s_ddc[tux3_delta(delta)];
+}
 
 struct tux_iattr {
 	kuid_t	uid;
