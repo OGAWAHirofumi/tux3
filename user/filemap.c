@@ -229,8 +229,10 @@ static int tuxio(struct file *file, void *data, unsigned len, int write)
 		len = inode->i_size - pos;
 	}
 
-	if (write)
+	if (write) {
+		tux3_iattrdirty(inode);
 		inode->i_mtime = inode->i_ctime = gettime();
+	}
 
 	unsigned bbits = sb->blockbits;
 	unsigned bsize = sb->blocksize;

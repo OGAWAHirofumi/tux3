@@ -105,12 +105,14 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 		     struct dentry *dentry)
 {
 	struct inode *inode = old_dentry->d_inode;
+	struct sb *sb = tux_sb(inode->i_sb);
 	int err;
 
 	if (inode->i_nlink >= TUX_LINK_MAX)
 		return -EMLINK;
 
-	change_begin(tux_sb(inode->i_sb));
+	change_begin(sb);
+	tux3_iattrdirty(inode);
 	inode->i_ctime = gettime();
 	inode_inc_link_count(inode);
 	ihold(inode);
@@ -119,7 +121,7 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 		inode_dec_link_count(inode);
 		iput(inode);
 	}
-	change_end(tux_sb(inode->i_sb));
+	change_end(sb);
 
 	return err;
 }
@@ -184,10 +186,12 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
+	struct sb *sb = tux_sb(inode->i_sb);
 
-	change_begin(tux_sb(inode->i_sb));
+	change_begin(sb);
 	int err = tux_del_dirent(dir, dentry);
 	if (!err) {
+		tux3_iattrdirty(inode);
 		inode->i_ctime = dir->i_ctime;
 		/* FIXME: we shouldn't write inode for i_nlink = 0? */
 		inode_dec_link_count(inode);
@@ -196,20 +200,22 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 			err = tux3_mark_inode_orphan(inode);
 		}
 	}
-	change_end(tux_sb(inode->i_sb));
+	change_end(sb);
 
 	return err;
 }
 
 static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 {
+	struct sb *sb = tux_sb(dir->i_sb);
 	struct inode *inode = dentry->d_inode;
 	int err = tux_dir_is_empty(inode);
 
 	if (!err) {
-		change_begin(tux_sb(inode->i_sb));
+		change_begin(sb);
 		err = tux_del_dirent(dir, dentry);
 		if (!err) {
+			tux3_iattrdirty(inode);
 			inode->i_ctime = dir->i_ctime;
 			/* FIXME: we need to do this for POSIX? */
 			/* inode->i_size = 0; */
@@ -221,7 +227,7 @@ static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 
 			inode_dec_link_count(dir);
 		}
-		change_end(tux_sb(inode->i_sb));
+		change_end(sb);
 	}
 	return err;
 }
@@ -271,6 +277,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 		/* this releases new_buffer */
 		tux_update_dirent(clone, new_entry, old_inode);
+
+		tux3_iattrdirty(new_inode);
 		new_inode->i_ctime = new_dir->i_ctime;
 		if (old_is_dir)
 			drop_nlink(new_inode);
@@ -289,6 +297,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		if (new_subdir)
 			inode_inc_link_count(new_dir);
 	}
+	tux3_iattrdirty(old_inode);
 	old_inode->i_ctime = new_dir->i_ctime;
 	tux3_mark_inode_dirty(old_inode);
 

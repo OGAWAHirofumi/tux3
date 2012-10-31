@@ -19,6 +19,14 @@
 #error "I_DIRTY was changed"
 #endif
 
+/*
+ * inode->flag usage from LSB:
+ * - inode dirty flags for NUM_DIRTY_BITS * TUX3_MAX_DELTA bits
+ * - iattr flags for TUX3_MAX_DELTA + 1 bits
+ * - xattr flags for TUX3_MAX_DELTA + 1 bits
+ * - btree dirty at MSB for TUX3_DIRTY_BTREE bit
+ */
+
 /* I_DIRTY_SYNC, I_DIRTY_DATASYNC, and I_DIRTY_PAGES */
 #define NUM_DIRTY_BITS		3
 /* btree root is modified from only backend, so no need per-delta flag */
@@ -128,6 +136,8 @@ void tux3_mark_btree_dirty(struct btree *btree)
 		spin_unlock(&tuxnode->lock);
 	}
 }
+
+#include "writeback_iattrfork.c"
 
 /* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
 static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,

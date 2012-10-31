@@ -1,7 +1,7 @@
 /*
  * Copied some block library functions, to replace mark_buffer_dirty()
- * by temp_blockdirty(), and to replace discard_buffer() by
- * tux3_invalidate_buffer().
+ * by temp_blockdirty(), to replace discard_buffer() by
+ * tux3_invalidate_buffer(), and add tux3_iattrdirty().
  *
  * We should check the update of original functions, and sync with it.
  */
@@ -244,7 +244,7 @@ static int __tux3_write_end(struct file *file, struct address_space *mapping,
 	return copied;
 }
 
-/* Copy of generic_write_end() */
+/* Copy of generic_write_end() (added tux3_iattrdirty()) */
 static int tux3_write_end(struct file *file, struct address_space *mapping,
 			  loff_t pos, unsigned len, unsigned copied,
 			  struct page *page, void *fsdata)
@@ -262,6 +262,7 @@ static int tux3_write_end(struct file *file, struct address_space *mapping,
 	 * page writeout could otherwise come in and zero beyond i_size.
 	 */
 	if (pos+copied > inode->i_size) {
+		tux3_iattrdirty(inode);
 		i_size_write(inode, pos+copied);
 		i_size_changed = 1;
 	}

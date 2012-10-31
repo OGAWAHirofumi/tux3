@@ -304,6 +304,7 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 	 * The unhashed inode ignores mark_inode_dirty(), so it should
 	 * be called after insert_inode_hash().
 	 */
+	tux3_iattrdirty(inode);
 	tux3_mark_inode_dirty(inode);
 
 	return inode;
@@ -712,6 +713,8 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 	}
 
 	change_begin(sb);
+
+	tux3_iattrdirty(inode);
 
 	if (need_truncate) {
 		err = tux3_truncate(inode, iattr->ia_size);

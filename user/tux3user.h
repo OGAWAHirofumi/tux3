@@ -98,6 +98,7 @@ void __iget(struct inode *inode);
 void ihold(struct inode *inode);
 struct inode *tux3_ilookup(struct sb *sb, inum_t inum);
 void iput(struct inode *inode);
+int __tuxtruncate(struct inode *inode, loff_t size);
 int tuxtruncate(struct inode *inode, loff_t size);
 
 /* namei.c */

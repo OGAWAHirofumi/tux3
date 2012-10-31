@@ -1,12 +1,16 @@
 /*
- * Copied some vfs library functions to add change_{begin,end}.
+ * Copied some vfs library functions to add change_{begin,end} and
+ * tux3_iattrdirty().
  *
  * We should check the update of original functions, and sync with it.
  */
 
 #include <linux/splice.h>
 
-/* Almost copy of generic_file_aio_write() (added changed_begin/end). */
+/*
+ * Almost copy of generic_file_aio_write() (added changed_begin/end,
+ * tux3_iattrdirty()).
+ */
 static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 				   unsigned long nr_segs, loff_t pos)
 {
@@ -22,6 +26,8 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	blk_start_plug(&plug);
 	/* FIXME: we would like to separate change_begin/end to small chunk */
 	change_begin(sb);
+	/* For timestamp. FIXME: convert this to ->update_time handler? */
+	tux3_iattrdirty(inode);
 	ret = __generic_file_aio_write(iocb, iov, nr_segs, &iocb->ki_pos);
 	change_end(sb);
 	mutex_unlock(&inode->i_mutex);
@@ -37,7 +43,10 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	return ret;
 }
 
-/* Almost copy of generic_splice_write() (added changed_begin/end). */
+/*
+ * Almost copy of generic_splice_write() (added changed_begin/end,
+ * tux3_iattrdirty()).
+ */
 static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
 				      struct file *out, loff_t *ppos,
 				      size_t len, unsigned int flags)
@@ -67,6 +76,9 @@ static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
 		/* FIXME: we would like to separate change_begin/end
 		 * to small chunk */
 		change_begin(sb);
+		/* For timestamp. FIXME: convert this to ->update_time
+		 * handler? */
+		tux3_iattrdirty(inode);
 		ret = file_remove_suid(out);
 		if (!ret) {
 			ret = file_update_time(out);

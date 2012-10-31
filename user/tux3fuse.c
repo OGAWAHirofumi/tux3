@@ -228,12 +228,12 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		return;
 	}
 
-	if (to_set & FUSE_SET_ATTR_SIZE) {
-		tuxtruncate(inode, attr->st_size);
-		to_set &= ~FUSE_SET_ATTR_SIZE;
-	}
-
 	change_begin(sb);
+
+	tux3_iattrdirty(inode);
+
+	if (to_set & FUSE_SET_ATTR_SIZE)
+		__tuxtruncate(inode, attr->st_size);
 	if (to_set & FUSE_SET_ATTR_MODE)
 		inode->i_mode = attr->st_mode;
 	if (to_set & FUSE_SET_ATTR_UID)
