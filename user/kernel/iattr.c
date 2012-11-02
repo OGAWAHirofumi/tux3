@@ -141,7 +141,7 @@ void *encode_kind(void *attrs, unsigned kind, unsigned version)
 
 static inline unsigned calc_present(struct iattr_req_data *iattr_data)
 {
-	unsigned present = iattr_data->i_ddc->present;
+	unsigned present = iattr_data->idata->present;
 	if (has_root(iattr_data->btree))
 		present |= DATA_BTREE_BIT;
 	return present;
@@ -152,7 +152,7 @@ static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 {
 	struct sb *sb = btree->sb;
 	struct iattr_req_data *iattr_data = data;
-	struct inode_delta_dirty *i_ddc = iattr_data->i_ddc;
+	struct tux3_iattr_data *idata = iattr_data->idata;
 	struct btree *attr_btree = iattr_data->btree;
 	unsigned present = calc_present(iattr_data);
 	void *limit = attrs + size - 3;
@@ -165,26 +165,26 @@ static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 		attrs = encode_kind(attrs, kind, sb->version);
 		switch (kind) {
 		case RDEV_ATTR:
-			attrs = encode64(attrs, huge_encode_dev(i_ddc->i_rdev));
+			attrs = encode64(attrs, huge_encode_dev(idata->i_rdev));
 			break;
 		case MODE_OWNER_ATTR:
 			/* FIXME: i_mode is enough with 16bits */
-			attrs = encode32(attrs, i_ddc->i_mode);
-			attrs = encode32(attrs, i_ddc->i_uid);
-			attrs = encode32(attrs, i_ddc->i_gid);
+			attrs = encode32(attrs, idata->i_mode);
+			attrs = encode32(attrs, idata->i_uid);
+			attrs = encode32(attrs, idata->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = encode64(attrs, tuxtime(i_ddc->i_ctime) >> TIME_ATTR_SHIFT);
-			attrs = encode64(attrs, i_ddc->i_size);
+			attrs = encode64(attrs, tuxtime(idata->i_ctime) >> TIME_ATTR_SHIFT);
+			attrs = encode64(attrs, idata->i_size);
 			break;
 		case DATA_BTREE_ATTR:
 			attrs = encode64(attrs, pack_root(&attr_btree->root));
 			break;
 		case LINK_COUNT_ATTR:
-			attrs = encode32(attrs, i_ddc->i_nlink);
+			attrs = encode32(attrs, idata->i_nlink);
 			break;
 		case MTIME_ATTR:
-			attrs = encode64(attrs, tuxtime(i_ddc->i_mtime) >> TIME_ATTR_SHIFT);
+			attrs = encode64(attrs, tuxtime(idata->i_mtime) >> TIME_ATTR_SHIFT);
 			break;
 		}
 	}

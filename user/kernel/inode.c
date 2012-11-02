@@ -18,27 +18,6 @@
 
 static void tux_setup_inode(struct inode *inode);
 
-/*
- * Caller must hold tuxnode->lock. timestamp is updated without
- * i_mutex, so a bit racy.
- * FIXME: We should use attr forking instead.
- */
-void tux3_inode_copy_attrs(struct inode *inode, unsigned delta)
-{
-	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, delta);
-
-	i_ddc->present	= tux_inode(inode)->present;
-	i_ddc->i_mode	= inode->i_mode;
-	i_ddc->i_uid	= i_uid_read(inode);
-	i_ddc->i_gid	= i_gid_read(inode);
-	i_ddc->i_nlink	= inode->i_nlink;
-	i_ddc->i_rdev	= inode->i_rdev;
-	i_ddc->i_size	= inode->i_size;
-	i_ddc->i_mtime	= inode->i_mtime;
-	i_ddc->i_ctime	= inode->i_ctime;
-	i_ddc->i_version = inode->i_version;
-}
-
 static inline void tux_set_inum(struct inode *inode, inum_t inum)
 {
 #ifdef __KERNEL__
@@ -461,8 +440,11 @@ static int save_inode(struct inode *inode, unsigned delta)
 	}
 
 	/* Write inode attributes to inode btree */
+	struct tux3_iattr_data idata;
+	tux3_iattr_read_and_clear(inode, &idata, delta);
+
 	struct iattr_req_data iattr_data = {
-		.i_ddc	= tux3_inode_ddc(inode, delta),
+		.idata	= &idata,
 		.btree	= &tux_inode(inode)->btree,
 		.inode	= inode,
 	};

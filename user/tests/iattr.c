@@ -24,6 +24,8 @@ static void test01(struct sb *sb)
 	struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFCHR | 0644);
 	struct inode *inode2 = rapid_open_inode(sb, NULL, 0x666);
 
+	tux3_iattrdirty(inode1);
+
 	inode1->i_rdev	= MKDEV(1, 3);
 	i_uid_write(inode1, 0x12121212);
 	i_gid_write(inode1, 0x34343434);
@@ -40,8 +42,11 @@ static void test01(struct sb *sb)
 	char *p, attrs[1000] = { };
 	int size;
 
+	struct tux3_iattr_data idata;
+	tux3_iattr_read_and_clear(inode1, &idata, sb->delta);
+
 	struct iattr_req_data iattr_data = {
-		.i_ddc	= tux3_inode_ddc(inode1, sb->delta),
+		.idata	= &idata,
 		.btree	= &tux_inode(inode1)->btree,
 	};
 

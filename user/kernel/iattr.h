@@ -40,7 +40,7 @@ enum atbit {
 extern unsigned atsize[MAX_ATTRS];
 
 struct iattr_req_data {
-	struct inode_delta_dirty *i_ddc;	/* inode attributes */
+	struct tux3_iattr_data *idata;		/* inode attributes */
 	struct btree *btree;			/* inode dtree */
 	struct inode *inode;			/* extended attributes */
 };

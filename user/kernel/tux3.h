@@ -297,13 +297,10 @@ enum {
 	LOG_TYPES
 };
 
-/* Per-delta data structure for inode */
-struct inode_delta_dirty {
-	struct list_head dirty_buffers;	/* list for dirty buffers */
-	struct list_head dirty_list;	/* link for dirty inode list */
-
+/* Inode attributes data */
+struct tux3_iattr_data {
 	unsigned	present;
-	/* inode attributes */
+
 	umode_t		i_mode;
 	uid_t		i_uid;
 	gid_t		i_gid;
@@ -314,6 +311,17 @@ struct inode_delta_dirty {
 	struct timespec	i_mtime;
 	struct timespec	i_ctime;
 	u64		i_version;
+};
+
+/* Per-delta data structure for inode */
+struct inode_delta_dirty {
+	struct list_head dirty_buffers;	/* list for dirty buffers */
+	struct list_head dirty_list;	/* link for dirty inode list */
+
+	/* Forked data storage */
+	/* FIXME: we don't need this for frontend delta. We would want
+	 * to allocate dynamically */
+	struct tux3_iattr_data idata;
 };
 
 struct xcache;
@@ -794,7 +802,9 @@ static inline void tux3_mark_inode_dirty_sync(struct inode *inode)
 
 void tux3_dirty_inode(struct inode *inode, int flags);
 void tux3_iattrdirty(struct inode *inode);
-void tux3_iattr_read_and_clear(struct inode *inode);
+void tux3_iattr_read_and_clear(struct inode *inode,
+			       struct tux3_iattr_data *result,
+			       unsigned delta);
 void tux3_xattrdirty(struct inode *inode);
 void tux3_xattr_read_and_clear(struct inode *inode);
 void tux3_clear_dirty_inode(struct inode *inode);
