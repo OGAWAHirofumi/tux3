@@ -411,6 +411,7 @@ static int save_inode(struct inode *inode, unsigned delta)
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	inum_t inum = tux_inode(inode)->inum;
+	struct tux3_iattr_data idata;
 	int err = 0;
 
 	trace("save inode 0x%Lx", inum);
@@ -439,10 +440,10 @@ static int save_inode(struct inode *inode, unsigned delta)
 		assert(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size));
 	}
 
-	/* Write inode attributes to inode btree */
-	struct tux3_iattr_data idata;
+	/* Get iattr data */
 	tux3_iattr_read_and_clear(inode, &idata, delta);
 
+	/* Write inode attributes to inode btree */
 	struct iattr_req_data iattr_data = {
 		.idata	= &idata,
 		.btree	= &tux_inode(inode)->btree,

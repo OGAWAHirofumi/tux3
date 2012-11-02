@@ -139,14 +139,6 @@ void *encode_kind(void *attrs, unsigned kind, unsigned version)
 	return encode16(attrs, (kind << 12) | version);
 }
 
-static inline unsigned calc_present(struct iattr_req_data *iattr_data)
-{
-	unsigned present = iattr_data->idata->present;
-	if (has_root(iattr_data->btree))
-		present |= DATA_BTREE_BIT;
-	return present;
-}
-
 static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 			  unsigned size)
 {
@@ -154,11 +146,10 @@ static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 	struct iattr_req_data *iattr_data = data;
 	struct tux3_iattr_data *idata = iattr_data->idata;
 	struct btree *attr_btree = iattr_data->btree;
-	unsigned present = calc_present(iattr_data);
 	void *limit = attrs + size - 3;
 
 	for (int kind = 0; kind < VAR_ATTRS; kind++) {
-		if (!(present & (1 << kind)))
+		if (!(idata->present & (1 << kind)))
 			continue;
 		if (attrs >= limit)
 			break;
@@ -274,9 +265,8 @@ static int iattr_encoded_size(struct btree *btree, void *data)
 {
 	struct iattr_req_data *iattr_data = data;
 	struct inode *inode = iattr_data->inode;
-	unsigned present = calc_present(iattr_data);
 
-	return encode_asize(present) + encode_xsize(inode);
+	return encode_asize(iattr_data->idata->present) + encode_xsize(inode);
 }
 
 static void iattr_encode(struct btree *btree, void *data, void *attrs, int size)

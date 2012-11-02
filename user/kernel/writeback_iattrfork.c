@@ -19,6 +19,7 @@
  */
 
 #include "tux3_fork.h"
+#include "iattr.h"
 
 TUX3_DEFINE_STATE_FNS(unsigned, iattr, IATTR_DIRTY,
 		      IFLAGS_IATTR_BITS, IFLAGS_IATTR_SHIFT);
@@ -100,8 +101,8 @@ void tux3_iattr_read_and_clear(struct inode *inode,
 	if (!tux3_iattrsta_has_delta(flags) ||
 	    tux3_iattrsta_get_delta(flags) == tux3_delta(delta)) {
 		/*
-		 * If clean, btree is only dirtied, use inode.
-		 * If dirty and no fork, use inode.
+		 * If btree is only dirtied, or if dirty and no fork,
+		 * use inode.
 		 */
 		idata_copy(inode, result);
 		tuxnode->flags = tux3_iattrsta_clear(flags);
@@ -111,5 +112,9 @@ void tux3_iattr_read_and_clear(struct inode *inode,
 			&tux3_inode_ddc(inode, delta)->idata;
 		*result = *idata;
 	}
+
+	/* If there is btree root, adjust present */
+	if (has_root(&tuxnode->btree))
+		result->present |= DATA_BTREE_BIT;
 	spin_unlock(&tuxnode->lock);
 }

@@ -51,7 +51,7 @@ static void test01(struct sb *sb)
 	};
 
 	/* encode inode1 to attrs, then decode attrs to inode2 */
-	size = encode_asize(calc_present(&iattr_data));
+	size = encode_asize(idata.present);
 	p = encode_attrs(itable_btree(sb), &iattr_data, attrs, size);
 	test_assert(p - attrs == size);
 	p = decode_attrs(inode2, attrs, size);
