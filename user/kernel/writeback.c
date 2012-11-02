@@ -21,14 +21,26 @@
 
 /*
  * inode->flag usage from LSB:
- * - inode dirty flags for NUM_DIRTY_BITS * TUX3_MAX_DELTA bits
- * - iattr flags for TUX3_MAX_DELTA + 1 bits
- * - xattr flags for TUX3_MAX_DELTA + 1 bits
- * - btree dirty at MSB for TUX3_DIRTY_BTREE bit
+ * - inode dirty flags
+ * - iattr flags
+ * - xattr flags
+ * - btree dirty
  */
 
 /* I_DIRTY_SYNC, I_DIRTY_DATASYNC, and I_DIRTY_PAGES */
 #define NUM_DIRTY_BITS		3
+/* Iattr fork dirty base */
+#define IATTR_DIRTY		1
+/* Xattr fork dirty base */
+#define XATTR_DIRTY		1
+/* Bits usage of inode->flags */
+#define IFLAGS_DIRTY_BITS	(NUM_DIRTY_BITS * TUX3_MAX_DELTA)
+#define IFLAGS_IATTR_BITS	(order_base_2(IATTR_DIRTY + TUX3_MAX_DELTA))
+#define IFLAGS_XATTR_BITS	(order_base_2(XATTR_DIRTY + TUX3_MAX_DELTA))
+/* Bit shift for inode->flags */
+#define IFLAGS_IATTR_SHIFT	IFLAGS_DIRTY_BITS
+#define IFLAGS_XATTR_SHIFT	(IFLAGS_IATTR_SHIFT + IFLAGS_IATTR_BITS)
+
 /* btree root is modified from only backend, so no need per-delta flag */
 #define TUX3_DIRTY_BTREE	(1 << 31)
 
