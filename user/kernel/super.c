@@ -381,6 +381,11 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 		return -ENOMEM;
 	sbi->vfs_sb = sb;
 	sb->s_fs_info = sbi;
+	/*
+	 * FIXME: atime can insert inode into dirty list unexpectedly.
+	 * For now, doesn't support and disable atime.
+	 */
+	sb->s_flags |= MS_NOATIME;
 	sb->s_magic = TUX3_SUPER_MAGIC;
 	sb->s_op = &tux3_super_ops;
 	sb->s_time_gran = 1;
