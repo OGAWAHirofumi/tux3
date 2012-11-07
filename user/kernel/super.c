@@ -5,6 +5,7 @@
  */
 
 #include "tux3.h"
+#include "filemap_hole.h"
 #ifdef __KERNEL__
 #include <linux/module.h>
 #include <linux/statfs.h>
@@ -212,10 +213,13 @@ static void tux3_inode_init_once(void *mem)
 
 	INIT_LIST_HEAD(&tuxnode->alloc_list);
 	INIT_LIST_HEAD(&tuxnode->orphan_list);
+	spin_lock_init(&tuxnode->hole_extents_lock);
+	INIT_LIST_HEAD(&tuxnode->hole_extents);
 	spin_lock_init(&tuxnode->lock);
 	/* Initialize inode_delta_dirty */
 	for (i = 0; i < ARRAY_SIZE(tuxnode->i_ddc); i++) {
 		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_buffers);
+		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_holes);
 		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_list);
 	}
 
@@ -280,7 +284,7 @@ static int __init tux3_init_inodecache(void)
 	return 0;
 }
 
-static void __exit tux3_destroy_inodecache(void)
+static void tux3_destroy_inodecache(void)
 {
 	kmem_cache_destroy(tux_inode_cachep);
 }
@@ -482,15 +486,34 @@ static struct file_system_type tux3_fs_type = {
 
 static int __init init_tux3(void)
 {
-	int err = tux3_init_inodecache();
+	int err;
+
+	err = tux3_init_inodecache();
 	if (err)
-		return err;
-	return register_filesystem(&tux3_fs_type);
+		goto error;
+
+	err = tux3_init_hole_cache();
+	if (err)
+		goto error_hole;
+
+	err = register_filesystem(&tux3_fs_type);
+	if (err)
+		goto error_fs;
+
+	return 0;
+
+error_fs:
+	tux3_destroy_inodecache();
+error_hole:
+	tux3_destroy_hole_cache();
+error:
+	return err;
 }
 
 static void __exit exit_tux3(void)
 {
 	unregister_filesystem(&tux3_fs_type);
+	tux3_destroy_hole_cache();
 	tux3_destroy_inodecache();
 }
 

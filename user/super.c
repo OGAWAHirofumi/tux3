@@ -172,3 +172,13 @@ eek:
 	sb->bitmap = NULL;
 	return err ? err : -ENOSPC; // just guess
 }
+
+int tux3_init_mem(void)
+{
+	return tux3_init_hole_cache();
+}
+
+void tux3_exit_mem(void)
+{
+	tux3_destroy_hole_cache();
+}

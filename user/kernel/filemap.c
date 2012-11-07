@@ -57,6 +57,8 @@ enum map_mode {
 				 * (copy-on-write) */
 };
 
+#include "filemap_hole.c"
+
 #if 1
 /* FIXME: this is temporary fix */
 #ifndef __KERNEL__

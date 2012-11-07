@@ -316,6 +316,7 @@ struct tux3_iattr_data {
 /* Per-delta data structure for inode */
 struct inode_delta_dirty {
 	struct list_head dirty_buffers;	/* list for dirty buffers */
+	struct list_head dirty_holes;	/* list for hole extents */
 	struct list_head dirty_list;	/* link for dirty inode list */
 
 	/* Forked data storage */
@@ -331,6 +332,10 @@ struct tux3_inode {
 	struct xcache *xcache;		/* Extended attribute cache */
 	struct list_head alloc_list;	/* link for deferred inum allocation */
 	struct list_head orphan_list;	/* link for orphan inode list */
+
+	/* FIXME: we can use RCU for hole_extents? */
+	spinlock_t hole_extents_lock;	/* lock for hole_extents */
+	struct list_head hole_extents;	/* hole extents list */
 
 	spinlock_t lock;		/* lock for inode metadata */
 	/* Per-delta dirty data for inode */

@@ -19,6 +19,7 @@
 #include "libklib/libklib.h"
 #include "libklib/lockdebug.h"
 #include "libklib/mm.h"
+#include "libklib/slab.h"
 #include "libklib/fs.h"
 #include "writeback.h"
 
@@ -125,6 +126,8 @@ void inode_init(struct tux3_inode *tuxnode, struct sb *sb, umode_t mode);
 void free_inode_check(struct tux3_inode *tuxnode);
 int put_super(struct sb *sb);
 int make_tux3(struct sb *sb);
+int tux3_init_mem(void);
+void tux3_exit_mem(void);
 
 /* utility.c */
 void stacktrace(void);
