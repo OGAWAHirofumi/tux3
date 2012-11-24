@@ -480,7 +480,7 @@ static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
 /* Truncate partial block. If partial, we have to update last block. */
 static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 {
-	return block_truncate_page(inode->i_mapping, newsize, tux3_get_block);
+	return tux3_truncate_page(inode->i_mapping, newsize, tux3_get_block);
 }
 
 void tux3_write_failed(struct address_space *mapping, loff_t to)

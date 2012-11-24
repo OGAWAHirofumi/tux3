@@ -1,7 +1,7 @@
 /*
- * Copied some *_write_begin and *_write_end() to replace
- * mark_buffer_dirty() by tux3_mark_buffer_dirty(), and to replace
- * discard_buffer() by tux3_invalidate_buffer().
+ * Copied some block library functions, to replace mark_buffer_dirty()
+ * by tux3_mark_buffer_dirty(), and to replace discard_buffer() by
+ * tux3_invalidate_buffer().
  *
  * We should check the update of original functions, and sync with it.
  */
@@ -302,4 +302,80 @@ static void tux3_invalidatepage(struct page *page, unsigned long offset)
 		try_to_release_page(page, 0);
 out:
 	return;
+}
+
+/* Copy of block_truncate_page() (changed to call tux3_mark_buffer_dirty()) */
+int tux3_truncate_page(struct address_space *mapping,
+		       loff_t from, get_block_t *get_block)
+{
+	pgoff_t index = from >> PAGE_CACHE_SHIFT;
+	unsigned offset = from & (PAGE_CACHE_SIZE-1);
+	unsigned blocksize;
+	sector_t iblock;
+	unsigned length, pos;
+	struct inode *inode = mapping->host;
+	struct page *page;
+	struct buffer_head *bh;
+	int err;
+
+	blocksize = 1 << inode->i_blkbits;
+	length = offset & (blocksize - 1);
+
+	/* Block boundary? Nothing to do */
+	if (!length)
+		return 0;
+
+	length = blocksize - length;
+	iblock = (sector_t)index << (PAGE_CACHE_SHIFT - inode->i_blkbits);
+
+	page = grab_cache_page(mapping, index);
+	err = -ENOMEM;
+	if (!page)
+		goto out;
+
+	if (!page_has_buffers(page))
+		create_empty_buffers(page, blocksize, 0);
+
+	/* Find the buffer that contains "offset" */
+	bh = page_buffers(page);
+	pos = blocksize;
+	while (offset >= pos) {
+		bh = bh->b_this_page;
+		iblock++;
+		pos += blocksize;
+	}
+
+	err = 0;
+	if (!buffer_mapped(bh)) {
+		WARN_ON(bh->b_size != blocksize);
+		err = get_block(inode, iblock, bh, 0);
+		if (err)
+			goto unlock;
+		/* unmapped? It's a hole - nothing to do */
+		if (!buffer_mapped(bh))
+			goto unlock;
+	}
+
+	/* Ok, it's mapped. Make sure it's up-to-date */
+	if (PageUptodate(page))
+		set_buffer_uptodate(bh);
+
+	if (!buffer_uptodate(bh) && !buffer_delay(bh) && !buffer_unwritten(bh)) {
+		err = -EIO;
+		ll_rw_block(READ, 1, &bh);
+		wait_on_buffer(bh);
+		/* Uhhuh. Read error. Complain and punt. */
+		if (!buffer_uptodate(bh))
+			goto unlock;
+	}
+
+	zero_user(page, offset, length);
+	tux3_mark_buffer_dirty(bh);
+	err = 0;
+
+unlock:
+	unlock_page(page);
+	page_cache_release(page);
+out:
+	return err;
 }
