@@ -46,9 +46,17 @@ void __tux3_mark_inode_dirty(struct inode *inode, int flags)
 	__mark_inode_dirty(inode, flags);
 }
 
+static int volmap_buffer(struct buffer_head *buffer)
+{
+	struct inode *inode = buffer_inode(buffer);
+	return inode == tux_sb(inode->i_sb)->volmap;
+}
+
 /* Mark buffer as dirty to flush at delta flush */
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
+	assert(volmap_buffer(buffer));
+
 	/*
 	 * Very *carefully* optimize the it-is-already-dirty case.
 	 *
@@ -71,6 +79,8 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+
+	assert(volmap_buffer(buffer));
 
 	/*
 	 * Very *carefully* optimize the it-is-already-dirty case.
