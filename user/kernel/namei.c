@@ -68,7 +68,7 @@ static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
 			goto out;
 		}
 		clear_nlink(inode);
-		mark_inode_dirty(inode);
+		tux3_mark_inode_dirty(inode);
 		iput(inode);
 	}
 out:
@@ -215,7 +215,7 @@ static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 			/* inode->i_size = 0; */
 			clear_nlink(inode);
 			/* FIXME: we shouldn't write inode for i_nlink = 0? */
-			mark_inode_dirty_sync(inode);
+			tux3_mark_inode_dirty_sync(inode);
 			/* FIXME: can't avoid this? what to do if error? */
 			err = tux3_mark_inode_orphan(inode);
 
@@ -290,7 +290,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			inode_inc_link_count(new_dir);
 	}
 	old_inode->i_ctime = new_dir->i_ctime;
-	mark_inode_dirty(old_inode);
+	tux3_mark_inode_dirty(old_inode);
 
 	err = tux_delete_dirent(old_buffer, old_entry);
 	if (err) {

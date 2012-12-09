@@ -286,7 +286,7 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 	 * The unhashed inode ignores mark_inode_dirty(), so it should
 	 * be called after insert_inode_hash().
 	 */
-	mark_inode_dirty(inode);
+	tux3_mark_inode_dirty(inode);
 
 	return inode;
 }
@@ -524,7 +524,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	}
 
 	inode->i_mtime = inode->i_ctime = gettime();
-	mark_inode_dirty(inode);
+	tux3_mark_inode_dirty(inode);
 error:
 
 	return err;
@@ -702,7 +702,7 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 	}
 
 	setattr_copy(inode, iattr);
-	mark_inode_dirty(inode);
+	tux3_mark_inode_dirty(inode);
 
 	change_end(sb);
 

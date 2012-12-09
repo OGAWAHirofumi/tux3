@@ -4,21 +4,20 @@
 #define trace trace_on
 #endif
 
-void tux3_clear_dirty_inode(struct inode *inode)
+#include "kernel/writeback.c"
+
+void end_writeback(struct inode *inode)
 {
-	list_del_init(&tux_inode(inode)->dirty_list);
-	inode->i_state &= ~I_DIRTY;
+	inode->i_state = I_FREEING;
 }
 
 void __mark_inode_dirty(struct inode *inode, unsigned flags)
 {
-	if ((inode->i_state & flags) != flags) {
-		struct sb *sb = inode->i_sb;
-		struct tux3_inode *tuxnode = tux_inode(inode);
+	if (flags & (I_DIRTY_SYNC | I_DIRTY_DATASYNC))
+		tux3_dirty_inode(inode, flags);
+
+	if ((inode->i_state & flags) != flags)
 		inode->i_state |= flags;
-		if (list_empty(&tuxnode->dirty_list))
-			list_add_tail(&tuxnode->dirty_list, &sb->dirty_inodes);
-	}
 }
 
 void mark_inode_dirty(struct inode *inode)
@@ -29,30 +28,6 @@ void mark_inode_dirty(struct inode *inode)
 void mark_inode_dirty_sync(struct inode *inode)
 {
 	__mark_inode_dirty(inode, I_DIRTY_SYNC);
-}
-
-/* Mark buffer as dirty to flush at delta flush */
-void tux3_mark_buffer_dirty(struct buffer_head *buffer)
-{
-	if (!buffer_dirty(buffer)) {
-		tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
-		__mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
-	}
-}
-
-/* Mark buffer as dirty to flush at rollup flush */
-void tux3_mark_buffer_rollup(struct buffer_head *buffer)
-{
-	if (!buffer_dirty(buffer)) {
-		struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
-		unsigned rollup = sb->rollup;
-		tux3_set_buffer_dirty_list(buffer, rollup, &sb->rollup_buffers);
-	}
-}
-
-static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
-{
-	return flush_list(dirty_head_when(inode_dirty_heads(inode), delta));
 }
 
 int tux3_flush_inode(struct inode *inode, unsigned delta)

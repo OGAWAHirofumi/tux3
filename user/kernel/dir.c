@@ -129,7 +129,7 @@ void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry,
 	tux_update_entry(buffer, entry, new_inum, new_inode->i_mode);
 
 	dir->i_mtime = dir->i_ctime = gettime();
-	mark_inode_dirty(dir);
+	tux3_mark_inode_dirty(dir);
 }
 
 loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
@@ -214,7 +214,7 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
 		return where;
 
 	dir->i_mtime = dir->i_ctime = gettime();
-	mark_inode_dirty(dir);
+	tux3_mark_inode_dirty(dir);
 
 	return 0;
 }
@@ -374,7 +374,7 @@ int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry)
 	int err = tux_delete_entry(buffer, entry); /* this releases buffer */
 	if (!err) {
 		dir->i_ctime = dir->i_mtime = gettime();
-		mark_inode_dirty(dir);
+		tux3_mark_inode_dirty(dir);
 	}
 	return err;
 }

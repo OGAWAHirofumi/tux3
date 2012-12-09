@@ -613,7 +613,7 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data,
 	tux_inode(inode)->xcache->size += more;
 	memcpy(xattr->body, data, (xattr->size = len));
 	xattr->atom = atom;
-	mark_inode_dirty(inode);
+	tux3_mark_inode_dirty(inode);
 
 	use++;
 	if (use) {
@@ -723,7 +723,7 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 		}
 		int used = remove_old(xcache, xattr);
 		if (used) {
-			mark_inode_dirty(inode);
+			tux3_mark_inode_dirty(inode);
 			/* FIXME: error check */
 			atomref(atable, atom, -used);
 		}

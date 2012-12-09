@@ -769,6 +769,16 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count);
 int bytebits(u8 c);
 
 /* writeback.c */
+void __tux3_mark_inode_dirty(struct inode *inode, int flags);
+static inline void tux3_mark_inode_dirty(struct inode *inode)
+{
+	__tux3_mark_inode_dirty(inode, I_DIRTY);
+}
+static inline void tux3_mark_inode_dirty_sync(struct inode *inode)
+{
+	__tux3_mark_inode_dirty(inode, I_DIRTY_SYNC);
+}
+
 void tux3_dirty_inode(struct inode *inode, int flags);
 void tux3_clear_dirty_inode(struct inode *inode);
 void tux3_mark_buffer_dirty(struct buffer_head *buffer);
@@ -795,9 +805,10 @@ void *decode_xattr(struct inode *inode, void *attrs);
 
 static inline void mark_btree_dirty(struct btree *btree)
 {
+	/* FIXME: we shouldn't dirty inode from backend */
 	if (btree != itable_btree(btree->sb) &&
 	    btree != otable_btree(btree->sb))
-		__mark_inode_dirty(btree_inode(btree), I_DIRTY_DATASYNC);
+		tux3_mark_inode_dirty_sync(btree_inode(btree));
 }
 
 static inline struct buffer_head *vol_find_get_block(struct sb *sb, block_t block)

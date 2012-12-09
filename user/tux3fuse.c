@@ -245,7 +245,7 @@ static void tux3fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	if (to_set & FUSE_SET_ATTR_MTIME)
 		inode->i_mtime = attr->st_mtim;
 	if (to_set)
-		mark_inode_dirty(inode);
+		tux3_mark_inode_dirty(inode);
 	change_end(sb);
 
 	struct stat stbuf;

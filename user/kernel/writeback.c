@@ -11,7 +11,7 @@
 
 /* FIXME: probably, we should rewrite with own buffer management. */
 
-/* This is hook of __mark_inode_dirty() */
+/* This is hook of __mark_inode_dirty() and called I_DIRTY_PAGES too */
 void tux3_dirty_inode(struct inode *inode, int flags)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -32,8 +32,21 @@ void tux3_clear_dirty_inode(struct inode *inode)
 	spin_lock(&sb->dirty_inodes_lock);
 	list_del_init(&tux_inode(inode)->dirty_list);
 	spin_unlock(&sb->dirty_inodes_lock);
+#ifndef __KERNEL__
+	inode->i_state &= ~I_DIRTY;
+#endif
 }
 
+void __tux3_mark_inode_dirty(struct inode *inode, int flags)
+{
+	/* Call tux3_dirty_inode() for I_DIRTY_PAGES too */
+	if ((flags & I_DIRTY) == I_DIRTY_PAGES)
+		tux3_dirty_inode(inode, flags);
+
+	__mark_inode_dirty(inode, flags);
+}
+
+/* Mark buffer as dirty to flush at delta flush */
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
 	/*
@@ -51,9 +64,10 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 	tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	tux3_dirty_inode(buffer_inode(buffer), I_DIRTY_PAGES);
+	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
 }
 
+/* Mark buffer as dirty to flush at rollup flush */
 void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
@@ -78,6 +92,7 @@ static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 	return flush_list(dirty_head_when(inode_dirty_heads(inode), delta));
 }
 
+#ifdef __KERNEL__
 int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
 	/* FIXME: linux writeback doesn't allow to control writeback
@@ -167,3 +182,4 @@ error:
 
 	return err;
 }
+#endif /* !__KERNEL__ */

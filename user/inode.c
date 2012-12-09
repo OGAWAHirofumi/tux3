@@ -210,11 +210,6 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 	return 0;
 }
 
-static void end_writeback(struct inode *inode)
-{
-	tux3_clear_dirty_inode(inode);
-}
-
 #include "kernel/inode.c"
 
 static void tux_setup_inode(struct inode *inode)
@@ -284,7 +279,6 @@ void iput(struct inode *inode)
 			return;
 		}
 
-		inode->i_state |= I_FREEING;
 		tux3_evict_inode(inode);
 
 		remove_inode_hash(inode);

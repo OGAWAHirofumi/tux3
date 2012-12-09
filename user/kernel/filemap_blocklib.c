@@ -263,7 +263,7 @@ static int tux3_write_end(struct file *file, struct address_space *mapping,
 	 * filesystems.
 	 */
 	if (i_size_changed)
-		mark_inode_dirty(inode);
+		tux3_mark_inode_dirty(inode);
 
 	return copied;
 }

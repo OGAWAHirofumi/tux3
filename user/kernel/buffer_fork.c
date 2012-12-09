@@ -373,7 +373,7 @@ dirty_buffer:
 	tux3_set_buffer_dirty(buffer, newdelta);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	tux3_dirty_inode(buffer_inode(buffer), I_DIRTY_PAGES);
+	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
 
 out:
 	unlock_page(oldpage);

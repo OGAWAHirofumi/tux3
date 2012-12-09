@@ -281,7 +281,7 @@ static int tuxio(struct file *file, void *data, unsigned len, int write)
 	if (write) {
 		if (inode->i_size < pos)
 			inode->i_size = pos;
-		mark_inode_dirty(inode);
+		tux3_mark_inode_dirty(inode);
 	}
 
 	return err ? err : len - tail;
