@@ -1,12 +1,24 @@
 /*
  * Copied some block library functions, to replace mark_buffer_dirty()
- * by tux3_mark_buffer_dirty(), and to replace discard_buffer() by
+ * by temp_blockdirty(), and to replace discard_buffer() by
  * tux3_invalidate_buffer().
  *
  * We should check the update of original functions, and sync with it.
  */
 
-/* Copy of page_zero_new_buffers() (changed to call tux3_mark_buffer_dirty()) */
+static void temp_blockdirty(struct buffer_head *buffer)
+{
+	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+
+	assert(!buffer_dirty(buffer) || buffer_can_modify(buffer, sb->delta));
+
+	tux3_set_buffer_dirty(buffer, sb->delta);
+	/* FIXME: we need to dirty inode only if buffer became
+	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
+	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
+}
+
+/* Copy of page_zero_new_buffers() (changed to call temp_blockdirty()) */
 static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 				       unsigned to)
 {
@@ -35,7 +47,7 @@ static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 				}
 
 				clear_buffer_new(bh);
-				tux3_mark_buffer_dirty(bh);
+				temp_blockdirty(bh);
 			}
 		}
 
@@ -45,7 +57,7 @@ static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 }
 
 /*
- * Copy of __block_write_begin() (changed to call tux3_mark_buffer_dirty(),
+ * Copy of __block_write_begin() (changed to call temp_blockdirty(),
  * and to remove unmap_underlying_metadata())
  */
 static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
@@ -100,7 +112,7 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 					 * re-think after mmap support */
 					//clear_buffer_new(bh);
 					set_buffer_uptodate(bh);
-					//tux3_mark_buffer_dirty(bh);
+					//temp_blockdirty(bh);
 					continue;
 				}
 				if (block_end > to || block_start < from)
@@ -160,7 +172,7 @@ static int tux3_write_begin(struct address_space *mapping, loff_t pos,
 	return status;
 }
 
-/* Copy of __block_commit_write() (changed to call tux3_mark_buffer_dirty()) */
+/* Copy of __block_commit_write() (changed to call temp_blockdirty()) */
 static int __tux3_commit_write(struct inode *inode, struct page *page,
 			       unsigned from, unsigned to)
 {
@@ -180,7 +192,7 @@ static int __tux3_commit_write(struct inode *inode, struct page *page,
 				partial = 1;
 		} else {
 			set_buffer_uptodate(bh);
-			tux3_mark_buffer_dirty(bh);
+			temp_blockdirty(bh);
 		}
 		clear_buffer_new(bh);
 	}
@@ -305,7 +317,7 @@ out:
 	return;
 }
 
-/* Copy of block_truncate_page() (changed to call tux3_mark_buffer_dirty()) */
+/* Copy of block_truncate_page() (changed to call temp_blockdirty()) */
 int tux3_truncate_page(struct address_space *mapping,
 		       loff_t from, get_block_t *get_block)
 {
@@ -372,7 +384,7 @@ int tux3_truncate_page(struct address_space *mapping,
 	}
 
 	zero_user(page, offset, length);
-	tux3_mark_buffer_dirty(bh);
+	temp_blockdirty(bh);
 	err = 0;
 
 unlock:
