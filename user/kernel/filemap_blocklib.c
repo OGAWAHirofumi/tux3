@@ -147,6 +147,7 @@ static int tux3_write_begin(struct address_space *mapping, loff_t pos,
 	page = grab_cache_page_write_begin(mapping, index, flags);
 	if (!page)
 		return -ENOMEM;
+	assert(!PageForked(page));	/* FIXME: handle forked page */
 
 	status = __tux3_write_begin(page, pos, len, get_block);
 	if (unlikely(status)) {
@@ -332,6 +333,7 @@ int tux3_truncate_page(struct address_space *mapping,
 	err = -ENOMEM;
 	if (!page)
 		goto out;
+	assert(!PageForked(page));	/* FIXME: handle forked page */
 
 	if (!page_has_buffers(page))
 		create_empty_buffers(page, blocksize, 0);

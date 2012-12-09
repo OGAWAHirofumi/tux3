@@ -152,6 +152,15 @@ int flush_list(struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
 
 /* block_fork.c */
+#define PageForked(x)		PageChecked(x)
+#define SetPageForked(x)	SetPageChecked(x)
+
+/* For reliable check, lock_page() is needed */
+static inline int buffer_forked(struct buffer_head *buffer)
+{
+	return PageForked(buffer->b_page);
+}
+
 struct sb;
 void free_forked_buffers(struct sb *sb, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);

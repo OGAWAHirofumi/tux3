@@ -5,9 +5,6 @@
 #include <linux/hugetlb.h>	/* for PageHuge() */
 #include <linux/swap.h>		/* for __lru_cache_add() */
 
-#define PageForked(x)		PageChecked(x)
-#define SetPageForked(x)	SetPageChecked(x)
-
 /*
  * Scanning the freeable forked page.
  *
@@ -271,6 +268,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	/* Someone already forked this page. */
 	if (PageForked(oldpage)) {
 		buffer = ERR_PTR(-EAGAIN);
+		assert(0);	/* FIXME: we have to handle -EAGAIN case */
 		goto out;
 	}
 	/* Page is under I/O, needs buffer fork */
@@ -380,11 +378,3 @@ out:
 
 	return buffer;
 }
-
-#if 0
-/* This must be called under the lock to serialize blockdirty() */
-static int check_forked(struct page *page)
-{
-	return PageForked(page);
-}
-#endif
