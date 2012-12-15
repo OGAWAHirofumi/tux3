@@ -8,6 +8,7 @@
 #include <endian.h>
 #include <sys/types.h>
 
+#include <libklib/typecheck.h>
 #include <libklib/init.h>
 #include <libklib/list.h>
 #include <libklib/err.h>
