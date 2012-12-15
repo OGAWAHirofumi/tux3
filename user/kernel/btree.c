@@ -528,22 +528,18 @@ static void level_redirect_blockput(struct cursor *cursor, int level, struct buf
 	level_replace_blockput(cursor, level, clone, next);
 }
 
-/* FIXME: we might want to remove exception for leaf */
-static int cursor_need_redirect(struct sb *sb, int is_leaf,
-				struct buffer_head *buffer)
+static int leaf_need_redirect(struct sb *sb, struct buffer_head *buffer)
 {
-	/* If not dirty, need redirect */
-	if (!buffer_dirty(buffer))
-		return 1;
+	/* FIXME: leaf doesn't have delta number, we might want to
+	 * remove exception for leaf */
+	/* If this is not re-dirty, we need to redirect */
+	return !buffer_dirty(buffer);
+}
 
-	/* If buffer is dirty and leaf, doesn't need to redirect */
-	if (is_leaf)
-		return 0;
-
-	/* Can we modify buffer for sb->rollup? */
-	if (buffer_can_modify(buffer, sb->rollup))
-		return 0;
-	return 1;
+static int bnode_need_redirect(struct sb *sb, struct buffer_head *buffer)
+{
+	/* If this is not re-dirty for sb->rollup, we need to redirect */
+	return !(buffer_dirty(buffer) && buffer_can_modify(buffer, sb->rollup));
 }
 
 int cursor_redirect(struct cursor *cursor)
@@ -560,13 +556,16 @@ int cursor_redirect(struct cursor *cursor)
 		struct buffer_head *buffer;
 		block_t uninitialized_var(oldblock);
 		block_t uninitialized_var(newblock);
-		int redirected = 0, is_leaf = (level == btree->root.depth);
+		int redirect, is_leaf = (level == btree->root.depth);
 
 		buffer = cursor->path[level].buffer;
 		/* If buffer needs to redirect to dirty, redirect it */
-		if (cursor_need_redirect(sb, is_leaf, buffer)) {
-			redirected = 1;
+		if (is_leaf)
+			redirect = leaf_need_redirect(sb, buffer);
+		else
+			redirect = bnode_need_redirect(sb, buffer);
 
+		if (redirect) {
 			/* Redirect buffer before changing */
 			struct buffer_head *clone = new_block(btree);
 			if (IS_ERR(clone))
@@ -602,7 +601,7 @@ int cursor_redirect(struct cursor *cursor)
 
 parent_level:
 		/* If it is already redirected, ancestor is also redirected */
-		if (!redirected) {
+		if (!redirect) {
 			cursor_check(cursor);
 			return 0;
 		}
@@ -1251,7 +1250,7 @@ int free_empty_btree(struct btree *btree)
 	block_t leaf = be64_to_cpu(rootnode->entries[0].block);
 	struct buffer_head *leafbuf = vol_find_get_block(sb, leaf);
 
-	if (leafbuf && buffer_dirty(leafbuf)) {
+	if (leafbuf && !leaf_need_redirect(sb, leafbuf)) {
 		/*
 		 * This is redirected leaf. So, in here, we can just
 		 * cancel leaf_redirect by bfree(), instead of
@@ -1270,7 +1269,7 @@ int free_empty_btree(struct btree *btree)
 		}
 	}
 
-	if (buffer_dirty(rootbuf)) {
+	if (!bnode_need_redirect(sb, rootbuf)) {
 		/*
 		 * This is redirected bnode. So, in here, we can just
 		 * cancel bnode_redirect by bfree(), instead of
