@@ -292,12 +292,12 @@ need_fork(struct page *page, struct buffer_head *buffer, unsigned delta)
 
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
-	struct page *oldpage = buffer->b_page;
-	struct address_space *mapping = oldpage->mapping;
-	struct inode *inode = buffer_inode(buffer);
-	struct sb *sb = tux_sb(inode->i_sb);
-	struct page *newpage;
+	struct page *newpage, *oldpage = buffer->b_page;
+	struct sb *sb;
+	struct inode *inode;
+	struct address_space *mapping;
 	struct buffer_head *newbuf;
+	enum ret_needfork ret_needfork;
 	void **pslot;
 
 	trace("buffer %p, page %p, index %lx, count %u",
@@ -315,7 +315,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	/* This happens on partially dirty page. */
 //	assert(PageUptodate(page));
 
-	switch (need_fork(oldpage, buffer, newdelta)) {
+	switch ((ret_needfork = need_fork(oldpage, buffer, newdelta))) {
 	case RET_FORKED:
 		/* This page was already forked. Retry from lookup page. */
 		buffer = ERR_PTR(-EAGAIN);
@@ -325,17 +325,26 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		/* This buffer was already dirtied. Done. */
 		goto out;
 	case RET_CAN_DIRTY:
-		/* We can dirty this buffer. */
-		goto dirty_buffer;
 	case RET_NEED_FORK:
-		/* We need to buffer fork. */
 		break;
 	default:
 		BUG();
 		break;
 	}
 
-	/* Clone the oldpage */
+	/* Checked buffer and oldpage, now oldpage->mapping should be valid. */
+	mapping = oldpage->mapping;
+	inode = mapping->host;
+	sb = tux_sb(inode->i_sb);
+
+	if (ret_needfork == RET_CAN_DIRTY) {
+		/* We can dirty this buffer. */
+		goto dirty_buffer;
+	}
+
+	/*
+	 * We need to buffer fork. Start to clone the oldpage.
+	 */
 	newpage = clone_page(oldpage, sb->blocksize);
 	if (IS_ERR(newpage)) {
 		buffer = ERR_CAST(newpage);
