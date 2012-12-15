@@ -108,8 +108,19 @@ void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
+#define buffer_need_fork(b)						\
+	(buffer_dirty(b) &&						\
+	 !buffer_can_modify(b, tux3_inode_delta((b)->b_assoc_map->host)))
+
+/*
+ * Caller must hold lock_page() or backend (otherwise, you may race
+ * with buffer fork or set dirty)
+ */
 static void __tux3_clear_buffer_dirty(struct buffer_head *buffer)
 {
+	/* The buffer must not need to fork */
+	assert(!buffer_need_fork(buffer));
+
 	if (buffer->b_assoc_map) {
 		spin_lock(&buffer->b_page->mapping->private_lock);
 		list_del_init(&buffer->b_assoc_buffers);
@@ -144,7 +155,6 @@ static void discard_buffer(struct buffer_head *buffer)
 /* Invalidate buffer, this is called from truncate, etc */
 void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
-	/* FIXME: we should check buffer_can_modify() to invalidate */
 	__tux3_clear_buffer_dirty(buffer);
 	discard_buffer(buffer);
 }
