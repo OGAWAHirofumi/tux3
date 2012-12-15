@@ -67,35 +67,6 @@ error:
 	return err;
 }
 
-
-/*
- * Clear inode dirty flags after flush.
- */
-void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta)
-{
-	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
-	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
-	struct inode_delta_dirty *i_ddc, *safe;
-
-	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
-		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
-		struct inode *inode = &tuxnode->vfs_inode;
-
-		assert(tuxnode->inum != TUX_BITMAP_INO &&
-		       tuxnode->inum != TUX_VOLMAP_INO);
-
-		/*
-		 * iput() doesn't free inode if I_DIRTY. Grab refcount to tell
-		 * inode state was changed to iput().
-		 */
-		__iget(inode);
-		__tux3_clear_dirty_inode(inode, delta);
-		iput(inode);
-	}
-
-	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
-}
-
 int sync_super(struct sb *sb)
 {
 #ifdef ATOMIC

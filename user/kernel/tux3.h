@@ -767,6 +767,7 @@ int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		     unsigned delta);
 int tux3_drop_inode(struct inode *inode);
 void tux3_evict_inode(struct inode *inode);
+void iget_if_dirty(struct inode *inode);
 
 /* log.c */
 extern unsigned log_size[];

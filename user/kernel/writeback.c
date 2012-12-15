@@ -446,6 +446,7 @@ error:
 	/* FIXME: what to do for dirty_inodes on error path */
 	return err;
 }
+#endif /* !__KERNEL__ */
 
 /*
  * Clear inode dirty flags after flush.
@@ -463,12 +464,24 @@ void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta)
 		assert(tuxnode->inum != TUX_BITMAP_INO &&
 		       tuxnode->inum != TUX_VOLMAP_INO);
 
+		/*
+		 * iput_final() doesn't add inode to LRU list if I_DIRTY.
+		 * Grab refcount to tell inode state was changed to iput().
+		 *
+		 * FIXME: iget and iput set I_REFERENCED, but we would
+		 * not want to set I_REFERENCED for clearing dirty.
+		 */
+		spin_lock(&inode->i_lock);
+		iget_if_dirty(inode);
+		spin_unlock(&inode->i_lock);
+
 		__tux3_clear_dirty_inode(inode, delta);
+
+		iput(inode);
 	}
 
 	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 }
-#endif /* !__KERNEL__ */
 
 void tux3_check_destroy_inode_flags(struct inode *inode)
 {

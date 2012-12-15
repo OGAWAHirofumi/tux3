@@ -133,6 +133,12 @@ void __iget(struct inode *inode)
 	atomic_inc(&inode->i_count);
 }
 
+/* This is used by tux3_clear_dirty_inodes() to tell inode state was changed */
+void iget_if_dirty(struct inode *inode)
+{
+	__iget(inode);
+}
+
 /* get additional reference to inode; caller must already hold one. */
 void ihold(struct inode *inode)
 {

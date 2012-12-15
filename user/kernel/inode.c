@@ -657,6 +657,19 @@ void tux3_evict_inode(struct inode *inode)
 }
 
 #ifdef __KERNEL__
+/* This is used by tux3_clear_dirty_inodes() to tell inode state was changed */
+void iget_if_dirty(struct inode *inode)
+{
+	assert(!(inode->i_state & I_FREEING));
+	if (atomic_read(&inode->i_count)) {
+		atomic_inc(&inode->i_count);
+		return;
+	}
+	/* i_count == 0 should happen only dirty inode */
+	assert(inode->i_state & I_DIRTY);
+	atomic_inc(&inode->i_count);
+}
+
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 {
 	struct inode *inode = dentry->d_inode;
