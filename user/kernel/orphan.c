@@ -294,12 +294,10 @@ void replay_iput_orphan_inodes(struct sb *sb,
 			       struct list_head *orphan_in_otable,
 			       int destroy)
 {
-	struct list_head *head;
+	struct tux3_inode *tuxnode, *safe;
 
 	/* orphan inodes not in sb->otable */
-	head = &sb->orphan_add;
-	while (!list_empty(head)) {
-		struct tux3_inode *tuxnode = orphan_list_entry(head->next);
+	list_for_each_entry_safe(tuxnode, safe, &sb->orphan_add, orphan_list) {
 		struct inode *inode = &tuxnode->vfs_inode;
 
 		if (!destroy) {
@@ -311,9 +309,7 @@ void replay_iput_orphan_inodes(struct sb *sb,
 	}
 
 	/* orphan inodes in sb->otable */
-	head = orphan_in_otable;
-	while (!list_empty(head)) {
-		struct tux3_inode *tuxnode = orphan_list_entry(head->next);
+	list_for_each_entry_safe(tuxnode, safe, orphan_in_otable, orphan_list) {
 		struct inode *inode = &tuxnode->vfs_inode;
 
 		/* list_empty(&inode->orphan_list) tells it is in otable */
