@@ -15,6 +15,7 @@
 #include <errno.h>
 #include "buffer.h"
 #include "trace.h"
+#include "current_task.h"
 
 #include "libklib/libklib.h"
 #include "libklib/lockdebug.h"

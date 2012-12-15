@@ -61,9 +61,6 @@ enum map_mode {
 
 #if 1
 /* FIXME: this is temporary fix */
-#ifndef __KERNEL__
-static struct { void *journal_info; } __current, *current = &__current;
-#endif
 static void get_bitmap_write(struct sb *sb)
 {
 	current->journal_info = sb->bitmap;
