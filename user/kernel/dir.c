@@ -142,6 +142,7 @@ loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 	unsigned reclen = TUX_REC_LEN(len), rec_len, name_len, offset;
 	unsigned blocksize = sb->blocksize;
 	block_t block, blocks = *size >> sb->blockbits;
+	void *olddata;
 
 	for (block = 0; block < blocks; block++) {
 		buffer = blockread(mapping(dir), block);
@@ -174,6 +175,7 @@ create:
 	 * The directory is protected by i_mutex.
 	 * blockdirty() should never return -EAGAIN.
 	 */
+	olddata = bufdata(buffer);
 	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		assert(PTR_ERR(clone) != -EAGAIN);
@@ -189,7 +191,7 @@ create:
 
 		*size += blocksize;
 	} else {
-		entry = ptr_redirect(entry, bufdata(buffer), bufdata(clone));
+		entry = ptr_redirect(entry, olddata, bufdata(clone));
 
 		if (!is_deleted(entry)) {
 			tux_dirent *newent = (void *)entry + name_len;
@@ -346,6 +348,7 @@ int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 	unsigned delta = tux3_get_current_delta();
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
 	struct buffer_head *clone;
+	void *olddata;
 
 	while ((char *)this < (char *)entry) {
 		if (this->rec_len == 0) {
@@ -361,14 +364,15 @@ int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 	 * The directory is protected by i_mutex.
 	 * blockdirty() should never return -EAGAIN.
 	 */
+	olddata = bufdata(buffer);
 	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		assert(PTR_ERR(clone) != -EAGAIN);
 		blockput(buffer);
 		return PTR_ERR(clone);
 	}
-	entry = ptr_redirect(entry, bufdata(buffer), bufdata(clone));
-	prev = ptr_redirect(prev, bufdata(buffer), bufdata(clone));
+	entry = ptr_redirect(entry, olddata, bufdata(clone));
+	prev = ptr_redirect(prev, olddata, bufdata(clone));
 
 	if (prev)
 		prev->rec_len = tux_rec_len_to_disk((void *)next_entry(entry) - (void *)prev);

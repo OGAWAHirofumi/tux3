@@ -233,6 +233,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct sb *sb = tux_sb(old_inode->i_sb);
 	struct buffer_head *old_buffer, *new_buffer, *clone;
 	tux_dirent *old_entry, *new_entry;
+	void *olddata;
 	int err, new_subdir = 0;
 	unsigned delta;
 
@@ -266,6 +267,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		 * The directory is protected by i_mutex.
 		 * blockdirty() should never return -EAGAIN.
 		 */
+		olddata = bufdata(new_buffer);
 		clone = blockdirty(new_buffer, delta);
 		if (IS_ERR(clone)) {
 			assert(PTR_ERR(clone) != -EAGAIN);
@@ -273,8 +275,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			err = PTR_ERR(clone);
 			goto error;
 		}
-		new_entry = ptr_redirect(new_entry, bufdata(new_buffer),
-					 bufdata(clone));
+		new_entry = ptr_redirect(new_entry, olddata, bufdata(clone));
 
 		/* this releases new_buffer */
 		tux_update_dirent(new_dir, clone, new_entry, old_inode);
