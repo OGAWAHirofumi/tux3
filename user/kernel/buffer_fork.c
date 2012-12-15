@@ -192,6 +192,45 @@ static int tux3_replace_page_cache(struct page *oldpage, struct page *newpage)
 	return 0;
 }
 
+/*
+ * This delete the page from radix-tree. But leave page->mapping as is.
+ *
+ * Similar to truncate_inode_page(), but the oldpage is for writeout.
+ * FIXME: we would have to add mmap handling (e.g. replace PTE)
+ */
+static void tux3_delete_from_page_cache(struct page *page)
+{
+	struct address_space *mapping = page->mapping;
+
+	/* Delete page from radix tree. */
+	spin_lock_irq(&mapping->tree_lock);
+	/*
+	 * if we're uptodate, flush out into the cleancache, otherwise
+	 * invalidate any existing cleancache entries.  We can't leave
+	 * stale data around in the cleancache once our page is gone
+	 */
+	if (PageUptodate(page) && PageMappedToDisk(page))
+		cleancache_put_page(page);
+	else
+		cleancache_invalidate_page(mapping, page);
+
+	radix_tree_delete(&mapping->page_tree, page->index);
+#if 0 /* FIXME: backend is assuming page->mapping is available */
+	page->mapping = NULL;
+#endif
+	/* Leave page->index set: truncation lookup relies upon it */
+	mapping->nrpages--;
+	__dec_zone_page_state(page, NR_FILE_PAGES);
+
+	/* Dirty accounting is done by writeback path */
+	spin_unlock_irq(&mapping->tree_lock);
+
+#if 0 /* FIXME */
+	mem_cgroup_uncharge_cache_page(page);
+#endif
+	page_cache_release(page);
+}
+
 static struct buffer_head *page_buffer(struct page *page, unsigned which)
 {
 	struct buffer_head *buffer = page_buffers(page);
@@ -470,50 +509,28 @@ int bufferfork_to_invalidate(struct address_space *mapping, struct page *page)
 		break;
 	}
 
-	/*
-	 * Similar to truncate_inode_page(), but the oldpage is for writeout.
-	 * FIXME: we would have to add mmap handling (e.g. replace PTE)
-	 */
-	/* Delete page from radix tree. */
-	spin_lock_irq(&mapping->tree_lock);
-	/*
-	 * if we're uptodate, flush out into the cleancache, otherwise
-	 * invalidate any existing cleancache entries.  We can't leave
-	 * stale data around in the cleancache once our page is gone
-	 */
-	if (PageUptodate(page) && PageMappedToDisk(page))
-		cleancache_put_page(page);
-	else
-		cleancache_invalidate_page(mapping, page);
+	/* We keep page->mapping as is, so get refcount for radix-tree. */
+	page_cache_get(page);
 
-	radix_tree_delete(&mapping->page_tree, page->index);
-#if 0 /* FIXME: backend is assuming page->mapping is available */
-	page->mapping = NULL;
-#endif
-	/* Leave page->index set: truncation lookup relies upon it */
-	mapping->nrpages--;
-	__dec_zone_page_state(page, NR_FILE_PAGES);
+	/* Delete page from radix-tree */
+	tux3_delete_from_page_cache(page);
 
 	/*
-	 * Inherit reference count of radix-tree, so referencer are
-	 * radix-tree + ->private (plus other users and lru_cache).
+	 * Referencer are dummy radix-tree + ->private (plus other
+	 * users and lru_cache).
 	 *
 	 * FIXME: We can't remove from LRU, because page can be on
 	 * per-cpu lru cache at here. So, vmscan will try to free
-	 * oldpage. We get refcount to pin oldpage to prevent vmscan
-	 * releases oldpage.
+	 * page. We get refcount to pin page to prevent vmscan
+	 * try to release page.
 	 */
-	trace("oldpage count %u", page_count(page));
+	trace("page count %u", page_count(page));
 	assert(page_count(page) >= 2);
 	page_cache_get(page);
 	oldpage_try_remove_from_lru(page);
-	spin_unlock_irq(&mapping->tree_lock);
-#if 0 /* FIXME */
-	mem_cgroup_uncharge_cache_page(page);
-#endif
 
 	/*
-	 * This prevents to re-fork the oldpage. And we guarantee the
+	 * This prevents to re-fork the page. And we guarantee the
 	 * newpage is available on radix-tree here.
 	 */
 	SetPageForked(page);
