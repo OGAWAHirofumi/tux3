@@ -6,6 +6,8 @@
  * We should check the update of original functions, and sync with it.
  */
 
+#include <linux/pagevec.h>
+
 static void temp_blockdirty(struct buffer_head *buffer)
 {
 	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
@@ -289,6 +291,7 @@ static void tux3_invalidatepage(struct page *page, unsigned long offset)
 	unsigned int curr_off = 0;
 
 	BUG_ON(!PageLocked(page));
+	/* If there is no buffer, buffers shouldn't be dirty */
 	if (!page_has_buffers(page))
 		goto out;
 
@@ -393,4 +396,135 @@ unlock:
 	page_cache_release(page);
 out:
 	return err;
+}
+
+/*
+ * Copy of truncate_inode_pages_range()
+ *
+ * Changes:
+ * - to call bufferfork_to_invalidate() before invalidate buffers
+ * - remove to wait the page under I/O (we do buffer fork instead)
+ *
+ * FIXME: some functions are not exported to implement own
+ * truncate_inode_pages_page() fully. So this just do the buffer fork,
+ * without invalidate. This way is inefficient, and we would want to merge
+ * tux3_truncate_inode_pages_page() and truncate_inode_pages_range().
+ */
+void tux3_truncate_inode_pages_range(struct address_space *mapping,
+				     loff_t lstart, loff_t lend)
+{
+	const pgoff_t start = (lstart + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
+#if 0
+	const unsigned partial = lstart & (PAGE_CACHE_SIZE - 1);
+#endif
+	struct pagevec pvec;
+	pgoff_t index;
+	pgoff_t end;
+	int i;
+
+#if 0 /* FIXME */
+	cleancache_invalidate_inode(mapping);
+#endif
+	if (mapping->nrpages == 0)
+		return;
+
+	BUG_ON((lend & (PAGE_CACHE_SIZE - 1)) != (PAGE_CACHE_SIZE - 1));
+	end = (lend >> PAGE_CACHE_SHIFT);
+
+	pagevec_init(&pvec, 0);
+	index = start;
+	while (index <= end && pagevec_lookup(&pvec, mapping, index,
+			min(end - index, (pgoff_t)PAGEVEC_SIZE - 1) + 1)) {
+#if 0 /* FIXME */
+		mem_cgroup_uncharge_start();
+#endif
+		for (i = 0; i < pagevec_count(&pvec); i++) {
+			struct page *page = pvec.pages[i];
+
+			/* We rely upon deletion not changing page->index */
+			index = page->index;
+			if (index > end)
+				break;
+
+			if (!trylock_page(page))
+				continue;
+			WARN_ON(page->index != index);
+#if 0
+			if (PageWriteback(page)) {
+				unlock_page(page);
+				continue;
+			}
+#endif
+			bufferfork_to_invalidate(mapping, page);
+			unlock_page(page);
+		}
+		pagevec_release(&pvec);
+#if 0 /* FIXME */
+		mem_cgroup_uncharge_end();
+#endif
+		cond_resched();
+		index++;
+	}
+#if 0
+	/* Partial page is handled on tux3_truncate_page() */
+	if (partial) {
+		struct page *page = find_lock_page(mapping, start - 1);
+		if (page) {
+			wait_on_page_writeback(page);
+			tux3_truncate_partial_page(page, partial);
+			unlock_page(page);
+			page_cache_release(page);
+		}
+	}
+#endif
+	index = start;
+	for ( ; ; ) {
+		cond_resched();
+		if (!pagevec_lookup(&pvec, mapping, index,
+			min(end - index, (pgoff_t)PAGEVEC_SIZE - 1) + 1)) {
+#if 0
+			if (index == start)
+				break;
+			index = start;
+			continue;
+#else
+			/*
+			 * We leave the pages as is if it can be invalidated.
+			 * And we don't need check the same page repeatedly.
+			 */
+			break;
+#endif
+		}
+		if (index == start && pvec.pages[0]->index > end) {
+			pagevec_release(&pvec);
+			break;
+		}
+#if 0 /* FIXME */
+		mem_cgroup_uncharge_start();
+#endif
+		for (i = 0; i < pagevec_count(&pvec); i++) {
+			struct page *page = pvec.pages[i];
+
+			/* We rely upon deletion not changing page->index */
+			index = page->index;
+			if (index > end)
+				break;
+
+			lock_page(page);
+			WARN_ON(page->index != index);
+#if 0
+			wait_on_page_writeback(page);
+#endif
+			bufferfork_to_invalidate(mapping, page);
+			unlock_page(page);
+		}
+		pagevec_release(&pvec);
+#if 0 /* FIXME */
+		mem_cgroup_uncharge_end();
+#endif
+		index++;
+	}
+#if 0 /* FIXME */
+	cleancache_invalidate_inode(mapping);
+#endif
 }

@@ -601,6 +601,8 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create);
 int tux3_truncate_page(struct address_space *mapping,
 		       loff_t from, get_block_t *get_block);
+void tux3_truncate_inode_pages_range(struct address_space *mapping,
+				     loff_t lstart, loff_t lend);
 extern const struct address_space_operations tux_aops;
 extern const struct address_space_operations tux_blk_aops;
 extern const struct address_space_operations tux_vol_aops;

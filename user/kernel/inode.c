@@ -515,6 +515,11 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 			goto error;
 	}
 
+#ifdef __KERNEL__
+	/* FIXME: The buffer fork before invalidate. We should merge to
+	 * truncate_setsize() */
+	tux3_truncate_inode_pages_range(inode->i_mapping, newsize, LLONG_MAX);
+#endif
 	/* Change i_size, then clean buffers */
 	truncate_setsize(inode, newsize);
 
@@ -578,6 +583,11 @@ void tux3_evict_inode(struct inode *inode)
 		unlock = 1;
 	}
 
+	/*
+	 * evict_inode() should be called only if there is no
+	 * in-progress buffers in backend. So we don't have to call
+	 * tux3_truncate_inode_pages_range() here.
+	 */
 #ifdef __KERNEL__
 	/* Block device special file is still overwriting i_mapping */
 	truncate_inode_pages(&inode->i_data, 0);

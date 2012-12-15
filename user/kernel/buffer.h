@@ -140,5 +140,6 @@ static inline int buffer_forked(struct buffer_head *buffer)
 struct sb;
 void free_forked_buffers(struct sb *sb, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
+int bufferfork_to_invalidate(struct address_space *mapping, struct page *page);
 #endif /* !__KERNEL__ */
 #endif /* !TUX3_BUFFER_H */

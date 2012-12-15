@@ -378,3 +378,17 @@ out:
 
 	return buffer;
 }
+
+/*
+ * This checks the page whether we can invalidate. If the page is
+ * stabled, we can't invalidate the buffers on page. So, this forks
+ * the page without making clone page.
+ *
+ * 1 - fork was done to invalidate (i.e. page was removed from radix-tree)
+ * 0 - fork was not done (i.e. buffers on page can be invalidated)
+ */
+int bufferfork_to_invalidate(struct address_space *mapping, struct page *page)
+{
+	assert(PageLocked(page));
+	return 0;
+}
