@@ -188,12 +188,13 @@ int tux3_add_truncate_hole(struct inode *inode, loff_t newsize)
 	return tux3_add_hole(inode, start, MAX_BLOCKS - start);
 }
 
-/* Clear hole extents for frontend (called from iput path) */
-void tux3_clear_hole(struct inode *inode)
+/* Clear hole extents for frontend (called from tux3_purge_inode()) */
+int tux3_clear_hole(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
 	struct hole_extent *hole, *safe;
+	int has_hole = 0;
 
 	/* This is iput path, so we don't need locks. */
 	list_for_each_entry_safe(hole, safe, &i_ddc->dirty_holes, dirty_list) {
@@ -201,7 +202,11 @@ void tux3_clear_hole(struct inode *inode)
 		list_del_init(&hole->list);
 
 		tux3_destroy_hole(hole);
+
+		has_hole = 1;
 	}
+
+	return has_hole;
 }
 
 /* Is the region a hole? */

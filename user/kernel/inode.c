@@ -562,9 +562,15 @@ static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
 int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		     unsigned delta)
 {
-	int err;
+	int err, has_hole;
 
-	tux3_clear_hole(inode);
+	/*
+	 * If there is hole extents, i_size was changed and is not
+	 * represent last extent in dtree.
+	 *
+	 * So, clear hole extents, then free all extents.
+	 */
+	has_hole = tux3_clear_hole(inode);
 
 	/*
 	 * FIXME: i_blocks (if implemented) would be better way than
@@ -574,7 +580,7 @@ int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	 * inode->i_size = 0;
 	 * if (inode->i_blocks)
 	 */
-	if (idata->i_size) {
+	if (idata->i_size || has_hole) {
 		idata->i_size = 0;
 		err = tux3_truncate_blocks(inode, 0);
 		if (err)
