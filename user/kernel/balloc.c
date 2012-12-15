@@ -190,7 +190,11 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 		goto found;
 	if ((*block = balloc_from_range(sb, 0, goal, blocks)) >= 0)
 		goto found;
+
+	/* FIXME: This is for debugging. Remove this */
+	warn("couldn't balloc: blocks %u", blocks);
 	return -ENOSPC;
+
 found:
 	return 0;
 }
