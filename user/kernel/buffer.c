@@ -113,8 +113,7 @@ void tux3_set_buffer_dirty(struct address_space *mapping,
  * Caller must hold lock_page() or backend (otherwise, you may race
  * with buffer fork or set dirty)
  */
-static void __tux3_clear_buffer_dirty(struct buffer_head *buffer,
-				      unsigned delta)
+void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 {
 	struct address_space *buffer_mapping = buffer->b_assoc_map;
 
@@ -127,14 +126,10 @@ static void __tux3_clear_buffer_dirty(struct buffer_head *buffer,
 		buffer->b_assoc_map = NULL;
 		tux3_clear_bufdelta(buffer);
 		spin_unlock(&buffer_mapping->private_lock);
+
+		clear_buffer_dirty(buffer);
 	} else
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
-}
-
-void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
-{
-	__tux3_clear_buffer_dirty(buffer, delta);
-	clear_buffer_dirty(buffer);
 }
 
 /* This is called for the freeing block on volmap */
@@ -161,7 +156,7 @@ static void discard_buffer(struct buffer_head *buffer)
 {
 	/* FIXME: we need lock_buffer()? */
 	lock_buffer(buffer);
-	clear_buffer_dirty(buffer);
+	/*clear_buffer_dirty(buffer);*/
 	buffer->b_bdev = NULL;
 	clear_buffer_mapped(buffer);
 	clear_buffer_req(buffer);
@@ -178,7 +173,7 @@ static void discard_buffer(struct buffer_head *buffer)
 void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
 	unsigned delta = tux3_inode_delta(buffer_inode(buffer));
-	__tux3_clear_buffer_dirty(buffer, delta);
+	tux3_clear_buffer_dirty(buffer, delta);
 	discard_buffer(buffer);
 }
 
