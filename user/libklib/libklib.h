@@ -22,6 +22,7 @@
 #include <libklib/barrier.h>
 #include <libklib/log2.h>
 #include <libklib/rcupdate.h>
+#include <libklib/wait.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)
