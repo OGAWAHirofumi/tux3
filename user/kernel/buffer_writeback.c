@@ -165,11 +165,12 @@ static struct buffer_head *bufvec_bio_del_buffer(struct bio *bio)
 	return buffer;
 }
 
-static struct sb *bufvec_bio_sb(struct bio *bio)
+static struct address_space *bufvec_bio_mapping(struct bio *bio)
 {
 	struct buffer_head *buffer = bio->bi_private;
 	assert(buffer);
-	return tux_sb(buffer_inode(buffer)->i_sb);
+	/* FIXME: we want to remove usage of b_assoc_map */
+	return buffer->b_assoc_map;
 }
 
 static struct bio *bufvec_bio_alloc(struct sb *sb, unsigned int count,
@@ -335,7 +336,7 @@ static void bufvec_end_io_multiple(struct bio *bio, int err)
 {
 	const int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
 	const int quiet = test_bit(BIO_QUIET, &bio->bi_flags);
-	struct sb *sb;
+	struct address_space *mapping;
 	struct page *page;
 	struct buffer_head *buffer, *first, *tmp;
 	unsigned long flags;
@@ -343,16 +344,18 @@ static void bufvec_end_io_multiple(struct bio *bio, int err)
 	trace("bio %p, err %d", bio, err);
 
 	/* FIXME: inode is still guaranteed to be available? */
-	sb = bufvec_bio_sb(bio);
+	mapping = bufvec_bio_mapping(bio);
+
 	buffer = bufvec_bio_del_buffer(bio);
 	page = buffer->b_page;
 	first = page_buffers(page);
 
 	trace("buffer %p", buffer);
+	tux3_clear_buffer_dirty_for_io_hack(buffer);
 	bufvec_buffer_end_io(buffer, uptodate, quiet);
 	put_bh(buffer);
 
-	iowait_inflight_dec(sb->iowait);
+	iowait_inflight_dec(tux_sb(mapping->host->i_sb)->iowait);
 	bio_put(bio);
 
 	/* Check buffers on the page. If all was done, clear writeback */
@@ -444,13 +447,13 @@ static void bufvec_end_io(struct bio *bio, int err)
 {
 	const int uptodate = test_bit(BIO_UPTODATE, &bio->bi_flags);
 	const int quiet = test_bit(BIO_QUIET, &bio->bi_flags);
-	struct sb *sb;
+	struct address_space *mapping;
 	struct page *page, *last_page;
 
 	trace("bio %p, err %d", bio, err);
 
 	/* FIXME: inode is still guaranteed to be available? */
-	sb = bufvec_bio_sb(bio);
+	mapping = bufvec_bio_mapping(bio);
 
 	/* Remove buffer from bio, then unlock buffer */
 	last_page = NULL;
@@ -462,6 +465,7 @@ static void bufvec_end_io(struct bio *bio, int err)
 		page = buffer->b_page;
 
 		trace("buffer %p", buffer);
+		tux3_clear_buffer_dirty_for_io_hack(buffer);
 		put_bh(buffer);
 
 		if (page != last_page) {
@@ -470,7 +474,7 @@ static void bufvec_end_io(struct bio *bio, int err)
 		}
 	}
 
-	iowait_inflight_dec(sb->iowait);
+	iowait_inflight_dec(tux_sb(mapping->host->i_sb)->iowait);
 	bio_put(bio);
 }
 

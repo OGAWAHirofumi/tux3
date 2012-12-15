@@ -137,9 +137,19 @@ static void tux3_clear_buffer_dirty_for_io(struct buffer_head *buffer)
 {
 	assert(list_empty(&buffer->b_assoc_buffers));
 	assert(buffer_dirty(buffer));	/* Who cleared the dirty? */
-	buffer->b_assoc_map = NULL;
+	/*buffer->b_assoc_map = NULL;*/	/* FIXME: hack for *_for_io_hack */
 	tux3_clear_bufdelta(buffer);	/* FIXME: hack for save delta */
 	clear_buffer_dirty(buffer);
+}
+
+/*
+ * This is hack to know ->mapping in end_io.
+ * So, tux3_clear_buffer_dirty_for_io() doesn't clear buffer->b_assoc_map.
+ * FIXME: remove this hack.
+ */
+static void tux3_clear_buffer_dirty_for_io_hack(struct buffer_head *buffer)
+{
+	buffer->b_assoc_map = NULL;
 }
 
 /* This is called for the freeing block on volmap */
