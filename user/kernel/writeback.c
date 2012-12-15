@@ -65,27 +65,6 @@ static inline unsigned tux3_dirty_flags(struct inode *inode, unsigned delta)
 	return ret;
 }
 
-/* Choice sb->delta or sb->rollup from inode */
-static inline int tux3_inode_delta(struct inode *inode)
-{
-	unsigned delta;
-
-	switch (tux_inode(inode)->inum) {
-	case TUX_VOLMAP_INO:
-		/* volmap are special buffer, and always TUX3_INIT_DELTA */
-		delta = TUX3_INIT_DELTA;
-		break;
-	case TUX_BITMAP_INO:
-		delta = tux_sb(inode->i_sb)->rollup;
-		break;
-	default:
-		delta = tux_sb(inode->i_sb)->delta;
-		break;
-	}
-
-	return delta;
-}
-
 /* This is hook of __mark_inode_dirty() and called I_DIRTY_PAGES too */
 void tux3_dirty_inode(struct inode *inode, int flags)
 {

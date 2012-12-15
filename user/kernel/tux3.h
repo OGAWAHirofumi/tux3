@@ -415,6 +415,27 @@ static inline struct dev *sb_dev(struct sb *sb)
 }
 #endif /* !__KERNEL__ */
 
+/* Choice sb->delta or sb->rollup from inode */
+static inline int tux3_inode_delta(struct inode *inode)
+{
+	unsigned delta;
+
+	switch (tux_inode(inode)->inum) {
+	case TUX_VOLMAP_INO:
+		/* volmap are special buffer, and always TUX3_INIT_DELTA */
+		delta = TUX3_INIT_DELTA;
+		break;
+	case TUX_BITMAP_INO:
+		delta = tux_sb(inode->i_sb)->rollup;
+		break;
+	default:
+		delta = tux_sb(inode->i_sb)->delta;
+		break;
+	}
+
+	return delta;
+}
+
 /* Get delta from free running counter */
 static inline unsigned tux3_delta(unsigned delta)
 {
