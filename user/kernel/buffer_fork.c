@@ -231,14 +231,6 @@ static void tux3_delete_from_page_cache(struct page *page)
 	page_cache_release(page);
 }
 
-static struct buffer_head *page_buffer(struct page *page, unsigned which)
-{
-	struct buffer_head *buffer = page_buffers(page);
-	while (which--)
-		buffer = buffer->b_this_page;
-	return buffer;
-}
-
 /*
  * Clone buffers. But cloned buffer represents the buffer state after
  * flushing buffer.
@@ -400,8 +392,6 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
 	struct page *newpage, *oldpage = buffer->b_page;
 	struct sb *sb;
-	struct inode *inode;
-	struct address_space *mapping;
 	struct buffer_head *newbuf;
 	enum ret_needfork ret_needfork;
 	int err;
@@ -439,9 +429,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	}
 
 	/* Checked buffer and oldpage, now oldpage->mapping should be valid. */
-	mapping = oldpage->mapping;
-	inode = mapping->host;
-	sb = tux_sb(inode->i_sb);
+	sb = tux_sb(oldpage->mapping->host->i_sb);
 
 	if (ret_needfork == RET_CAN_DIRTY) {
 		/* We can dirty this buffer. */
@@ -457,7 +445,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		goto out;
 	}
 
-	newbuf = page_buffer(newpage, bh_offset(buffer) >> sb->blockbits);
+	newbuf = __get_buffer(newpage, bh_offset(buffer) >> sb->blockbits);
 	/* Grab buffer to pin page, then release refcount of page */
 	get_bh(newbuf);
 	page_cache_release(newpage);
@@ -501,16 +489,110 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 dirty_buffer:
 	assert(!buffer_dirty(buffer));
-	/* FIXME: we shouldn't open code this */
-	tux3_set_buffer_dirty(mapping, buffer, newdelta);
-	/* FIXME: we need to dirty inode only if buffer became
-	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
+	__tux3_mark_buffer_dirty(buffer, newdelta);
 
 out:
 	unlock_page(oldpage);
 
 	return buffer;
+}
+
+/*
+ * Do buffer fork for oldpage if needed. Then return page with locked.
+ * Page is locked, so, the caller can call __tux3_mark_buffer_dirty()
+ * (without checking buffer fork) to dirty buffers on the returned page,
+ * until unlock page.
+ *
+ * Caller must hold refcount of oldpage and hold lock_page(oldpage)
+ */
+struct page *pagefork_for_blockdirty(struct page *oldpage, unsigned newdelta)
+{
+	struct page *newpage = oldpage;
+	struct sb *sb;
+	enum ret_needfork ret_needfork;
+	int err;
+
+	/* Check page lock to protect buffer list, and concurrent block_fork */
+	assert(PageLocked(oldpage));
+
+	trace("page %p, index %lx, count %u",
+	      oldpage, oldpage->index, page_count(oldpage));
+	trace("forked %u, dirty %u, writeback %u",
+	      PageForked(oldpage), PageDirty(oldpage), PageWriteback(oldpage));
+
+	/* This happens on partially dirty page. */
+//	assert(PageUptodate(page));
+
+	switch ((ret_needfork = need_fork(oldpage, NULL, newdelta))) {
+	case RET_FORKED:
+		/* This page was already forked. Retry from lookup page. */
+		newpage = ERR_PTR(-EAGAIN);
+		assert(0);	/* FIXME: we have to handle -EAGAIN case */
+	case RET_ALREADY_DIRTY:
+		/* This buffer was already dirtied. Done. */
+		goto out;
+	case RET_CAN_DIRTY:
+	case RET_NEED_FORK:
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	/* Checked buffer and oldpage, now oldpage->mapping should be valid. */
+	sb = tux_sb(oldpage->mapping->host->i_sb);
+
+	if (ret_needfork == RET_CAN_DIRTY) {
+		/* We can dirty this buffer. */
+		goto out;
+	}
+
+	/*
+	 * We need to buffer fork. Start to clone the oldpage.
+	 */
+	newpage = clone_page(oldpage, sb->blocksize);
+	if (IS_ERR(newpage))
+		goto out;
+
+	/*
+	 * We keep page->mapping as is, so inherit refcount of caller
+	 * for radix-tree.
+	 */
+	/*page_cache_get(oldpage);*/
+
+	/* Replace oldpage on radix-tree with newpage */
+	err = tux3_replace_page_cache(oldpage, newpage);
+
+	newpage_add_lru(newpage);
+
+	/*
+	 * Referencer are dummy radix-tree + ->private (plus other
+	 * users and lru_cache).
+	 *
+	 * FIXME: We can't remove from LRU, because page can be on
+	 * per-cpu lru cache at here. So, vmscan will try to free
+	 * oldpage. We get refcount to pin oldpage to prevent vmscan
+	 * try to release oldpage.
+	 */
+	trace("oldpage count %u", page_count(oldpage));
+	assert(page_count(oldpage) >= 2);
+	page_cache_get(oldpage);
+	oldpage_try_remove_from_lru(oldpage);
+
+	/*
+	 * This prevents to re-fork the oldpage. And we guarantee the
+	 * newpage is available on radix-tree here.
+	 */
+	SetPageForked(oldpage);
+	unlock_page(oldpage);
+
+	/* Register forked buffer to free forked page later */
+	forked_buffer_add(sb, page_buffers(oldpage));
+
+	trace("cloned page %p", newpage);
+
+out:
+	return newpage;
 }
 
 /*

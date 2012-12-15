@@ -43,8 +43,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		buffer = clone;
 	}
 
-	tux3_set_buffer_dirty(map, buffer, newdelta);
-	__tux3_mark_inode_dirty(map->inode, I_DIRTY_PAGES);
+	__tux3_mark_buffer_dirty(buffer, newdelta);
 
 	return buffer;
 }

@@ -211,10 +211,10 @@ void __tux3_mark_inode_dirty(struct inode *inode, int flags)
 /*
  * Mark buffer as dirty to flush at delta flush.
  *
- * Specified buffer must be for volmap (i.e. no buffer fork, and
- * page->mapping is valid). Otherwise this will race with buffer fork.
+ * This is used with pagefork_for_blockdirty().  If caller uses this,
+ * caller must hold lock_page().
  */
-void tux3_mark_buffer_dirty(struct buffer_head *buffer)
+void __tux3_mark_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 {
 	struct inode *inode;
 
@@ -231,12 +231,28 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 	}
 
 	inode = buffer_inode(buffer);
-	assert(inode == tux_sb(inode->i_sb)->volmap); /* must be volmap */
+#ifdef __KERNEL__
+	assert(inode == tux_sb(inode->i_sb)->volmap ||
+	       PageLocked(buffer->b_page));
+#endif
 
-	tux3_set_buffer_dirty(mapping(inode), buffer, TUX3_INIT_DELTA);
+	tux3_set_buffer_dirty(mapping(inode), buffer, delta);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
 	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
+}
+
+/*
+ * Mark buffer as dirty to flush at delta flush.
+ *
+ * Specified buffer must be for volmap (i.e. no buffer fork, and
+ * page->mapping is valid). Otherwise this will race with buffer fork.
+ */
+void tux3_mark_buffer_dirty(struct buffer_head *buffer)
+{
+	struct inode *inode = buffer_inode(buffer);
+	assert(inode == tux_sb(inode->i_sb)->volmap); /* must be volmap */
+	__tux3_mark_buffer_dirty(buffer, TUX3_INIT_DELTA);
 }
 
 /*

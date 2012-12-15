@@ -606,6 +606,7 @@ extern const struct inode_operations tux_dir_iops;
 /* filemap.c */
 int tux3_get_block(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create);
+struct buffer_head *__get_buffer(struct page *page, int offset);
 int tux3_truncate_partial_block(struct inode *inode, loff_t newsize);
 void tux3_truncate_inode_pages_range(struct address_space *mapping,
 				     loff_t lstart, loff_t lend);
@@ -853,6 +854,7 @@ void tux3_iattrdirty(struct inode *inode);
 void tux3_xattrdirty(struct inode *inode);
 void tux3_xattr_read_and_clear(struct inode *inode);
 void tux3_clear_dirty_inode(struct inode *inode);
+void __tux3_mark_buffer_dirty(struct buffer_head *buffer, unsigned delta);
 void tux3_mark_buffer_dirty(struct buffer_head *buffer);
 void tux3_mark_buffer_rollup(struct buffer_head *buffer);
 void tux3_mark_inode_orphan(struct tux3_inode *tuxnode);

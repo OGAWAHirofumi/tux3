@@ -692,14 +692,19 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 	return __tux3_get_block(inode, iblock, bh_result, create);
 }
 
+struct buffer_head *__get_buffer(struct page *page, int offset)
+{
+	struct buffer_head *buffer = page_buffers(page);
+	while (offset--)
+		buffer = buffer->b_this_page;
+	return buffer;
+}
+
 static struct buffer_head *get_buffer(struct page *page, int offset)
 {
-	struct buffer_head *bh = page_buffers(page);
-
-	while (offset--)
-		bh = bh->b_this_page;
-	get_bh(bh);
-	return bh;
+	struct buffer_head *buffer = __get_buffer(page, offset);
+	get_bh(buffer);
+	return buffer;
 }
 
 static struct buffer_head *__find_get_buffer(struct address_space *mapping,
