@@ -180,7 +180,7 @@ static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 	if (IS_ERR(entry))
 		return PTR_ERR(entry);
 
-	return tux_delete_dirent(buffer, entry);
+	return tux_delete_dirent(dir, buffer, entry);
 }
 
 static int tux3_unlink(struct inode *dir, struct dentry *dentry)
@@ -276,7 +276,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 					 bufdata(clone));
 
 		/* this releases new_buffer */
-		tux_update_dirent(clone, new_entry, old_inode);
+		tux_update_dirent(new_dir, clone, new_entry, old_inode);
 
 		tux3_iattrdirty(new_inode);
 		new_inode->i_ctime = new_dir->i_ctime;
@@ -301,7 +301,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	old_inode->i_ctime = new_dir->i_ctime;
 	tux3_mark_inode_dirty(old_inode);
 
-	err = tux_delete_dirent(old_buffer, old_entry);
+	err = tux_delete_dirent(old_dir, old_buffer, old_entry);
 	if (err) {
 		error("TUX3: %s: couldn't delete old entry (%Lu)",
 		      __func__, tux_inode(old_inode)->inum);

@@ -356,7 +356,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 		if (entry_atom(entry) == atom) {
 			/* FIXME: better set a flag that unatom broke
 			 * or something! */
-			err = tux_delete_entry(buffer, entry);
+			err = tux_delete_entry(atable, buffer, entry);
 			if (err)
 				return err;
 		} else {

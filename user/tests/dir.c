@@ -39,7 +39,7 @@ static void test01(struct sb *sb, struct inode *dir)
 	test_assert(entry->name_len == name1.len);
 	test_assert(entry->type == TUX_REG);
 
-	err = tux_delete_dirent(buffer, entry);
+	err = tux_delete_dirent(dir, buffer, entry);
 	test_assert(!err);
 	entry = tux_find_dirent(dir, &name1, &buffer);
 	test_assert(IS_ERR(entry));

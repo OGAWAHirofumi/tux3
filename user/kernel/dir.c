@@ -120,10 +120,9 @@ static void tux_update_entry(struct buffer_head *buffer, tux_dirent *entry,
  * NOTE: For now, we don't have ".." though, we shouldn't use this for
  * "..". rename() shouldn't update ->mtime for ".." usually.
  */
-void tux_update_dirent(struct buffer_head *buffer, tux_dirent *entry,
-		       struct inode *new_inode)
+void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
+		       tux_dirent *entry, struct inode *new_inode)
 {
-	struct inode *dir = buffer_inode(buffer);
 	inum_t new_inum = tux_inode(new_inode)->inum;
 
 	tux_update_entry(buffer, entry, new_inum, new_inode->i_mode);
@@ -335,9 +334,9 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 	return 0;
 }
 
-int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
+int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
+		     tux_dirent *entry)
 {
-	struct inode *dir = buffer_inode(buffer);
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
 	struct buffer_head *clone;
 
@@ -371,17 +370,18 @@ int tux_delete_entry(struct buffer_head *buffer, tux_dirent *entry)
 	return 0;
 }
 
-int tux_delete_dirent(struct buffer_head *buffer, tux_dirent *entry)
+int tux_delete_dirent(struct inode *dir, struct buffer_head *buffer,
+		      tux_dirent *entry)
 {
-	struct inode *dir = buffer_inode(buffer);
 	int err;
 
-	err = tux_delete_entry(buffer, entry); /* this releases buffer */
+	err = tux_delete_entry(dir, buffer, entry); /* this releases buffer */
 	if (!err) {
 		tux3_iattrdirty(dir);
 		dir->i_ctime = dir->i_mtime = gettime();
 		tux3_mark_inode_dirty(dir);
 	}
+
 	return err;
 }
 
