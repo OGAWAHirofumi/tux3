@@ -237,7 +237,7 @@ static int rollup_log(struct sb *sb)
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", rollup);
-	tux3_flush_inode(sb->bitmap, rollup);
+	tux3_flush_inode_internal(sb->bitmap, rollup);
 	trace("< done bitmap %u", rollup);
 
 	trace("> apply orphan inodes %u", rollup);
@@ -282,7 +282,7 @@ static int write_btree(struct sb *sb, unsigned delta)
 	 * FIXME: Now we are using TUX3_INIT_DELTA for leaves. Do
 	 * we need to per delta dirty buffers?
 	 */
-	return tux3_flush_inode(sb->volmap, TUX3_INIT_DELTA);
+	return tux3_flush_inode_internal(sb->volmap, TUX3_INIT_DELTA);
 }
 
 /* allocate and write log blocks */
@@ -346,6 +346,11 @@ static int commit_delta(struct sb *sb)
 
 	/* Commit was finished, apply defered bfree. */
 	return unstash(sb, &sb->defree, apply_defered_bfree);
+}
+
+static void post_commit(struct sb *sb, unsigned delta)
+{
+	tux3_clear_dirty_inodes(sb, delta);
 }
 
 static int need_delta(struct sb *sb)
@@ -412,6 +417,9 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 	/* Commit last block (for now, this is sync I/O) */
 	commit_delta(sb);
 	trace("<<<<<<<<< commit done %u", delta);
+
+	post_commit(sb, delta);
+	trace("<<<<<<<<< post commit done %u", delta);
 
 	return err; /* FIXME: error handling */
 }

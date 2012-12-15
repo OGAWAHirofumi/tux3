@@ -271,7 +271,13 @@ static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 	return flush_list(mapping(inode), tux3_dirty_buffers(inode, delta));
 }
 
-#ifdef __KERNEL__
+/*
+ * Flush inode.
+ *
+ * The inode dirty flags keeps until finish I/O to prevent inode
+ * reclaim. Because we don't wait writeback on evict_inode(), and
+ * instead we keeps the inode while writeback is running.
+ */
 int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
 	/* FIXME: linux writeback doesn't allow to control writeback
@@ -282,30 +288,40 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	trace("inum %Lu", tux_inode(inode)->inum);
 
 	err = tux3_flush_buffers(inode, delta);
-	if (err)
-		goto out;
 
 	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
 	dirty = tux3_dirty_flags(inode, delta);
 
 	if (dirty & (TUX3_DIRTY_BTREE | I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
-		err = tux3_save_inode(inode, delta);
-		if (err)
-			goto out;
+		int ret = tux3_save_inode(inode, delta);
+		if (!err)
+			err = ret;
 	}
 
-	/*
-	 * We can clear dirty flags after flush. We have per-delta
-	 * flags, or volmap is not re-dirtied while flushing.
-	 */
-	__tux3_clear_dirty_inode(inode, delta);
-out:
-	/* FIXME: In the error path, dirty state is still remaining,
-	 * we have to do something. */
+	/* FIXME: In the error path, dirty state would still be
+	 * remaining, we have to do something. */
 
 	return err;
 }
 
+/*
+ * tux3_flush_inode() for volmap or bitmap.
+ *
+ * If volmap or bitmap, those can clear inode dirty flags
+ * immediately. Because those inodes is pinned until umount.
+*/
+int tux3_flush_inode_internal(struct inode *inode, unsigned delta)
+{
+	int err = tux3_flush_inode(inode, delta);
+
+	/* FIXME: error handling */
+	assert(atomic_read(&inode->i_count) >= 1);
+	__tux3_clear_dirty_inode(inode, delta);
+
+	return err;
+}
+
+#ifdef __KERNEL__
 int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
 	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
@@ -327,12 +343,32 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 			goto error;
 	}
 
-	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
-
 	return 0;
 
 error:
 	/* FIXME: what to do for dirty_inodes on error path */
 	return err;
+}
+
+/*
+ * Clear inode dirty flags after flush.
+ */
+void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta)
+{
+	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
+	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
+	struct inode_delta_dirty *i_ddc, *safe;
+
+	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
+		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
+		struct inode *inode = &tuxnode->vfs_inode;
+
+		assert(tuxnode->inum != TUX_BITMAP_INO &&
+		       tuxnode->inum != TUX_VOLMAP_INO);
+
+		__tux3_clear_dirty_inode(inode, delta);
+	}
+
+	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 }
 #endif /* !__KERNEL__ */
