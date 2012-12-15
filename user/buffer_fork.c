@@ -46,3 +46,14 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 	return buffer;
 }
+
+int bufferfork_to_invalidate(map_t *map, struct buffer_head *buffer)
+{
+	/*
+	 * The userland shouldn't need to buffer fork on truncate
+	 * path, because no async backend.  So, just make sure it.
+	 */
+	assert(!buffer_need_fork(map, buffer));
+
+	return 0;
+}

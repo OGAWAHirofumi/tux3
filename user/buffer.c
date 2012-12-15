@@ -192,12 +192,6 @@ struct buffer_head *set_buffer_clean(struct buffer_head *buffer)
 	return buffer;
 }
 
-void tux3_clear_buffer_dirty(struct buffer_head *buffer)
-{
-	/* FIXME: this should be set_buffer_empty()? */
-	set_buffer_clean(buffer);
-}
-
 struct buffer_head *__set_buffer_empty(struct buffer_head *buffer)
 {
 	set_buffer_state(buffer, BUFFER_EMPTY);
@@ -208,6 +202,26 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 {
 	assert(!buffer_empty(buffer));
 	return __set_buffer_empty(buffer);
+}
+
+#define buffer_need_fork(m, b)						\
+	(buffer_dirty(b) && !buffer_can_modify(b, tux3_inode_delta((m)->inode)))
+
+void tux3_clear_buffer_dirty(struct buffer_head *buffer)
+{
+#ifdef BUFFER_FOR_TUX3
+	assert(!buffer_need_fork(buffer->map, buffer));
+#endif
+	/* FIXME: this should be set_buffer_empty()? */
+	set_buffer_clean(buffer);
+}
+
+static void tux3_invalidate_buffer(struct buffer_head *buffer)
+{
+#ifdef BUFFER_FOR_TUX3
+	assert(!buffer_need_fork(buffer->map, buffer));
+#endif
+	set_buffer_empty(buffer);
 }
 
 #ifdef BUFFER_PARANOIA_DEBUG
@@ -269,7 +283,8 @@ void blockput_free(struct buffer_head *buffer)
 		assert(bufcount(buffer) == 1);
 		return;
 	}
-	set_buffer_empty(buffer); // free it!!! (and need a buffer free state)
+	/* free it!!! (and need a buffer free state) */
+	tux3_clear_buffer_dirty(buffer);
 	blockput(buffer);
 }
 
@@ -445,8 +460,13 @@ void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend)
 			if (buffer->index < start || end < buffer->index)
 				continue;
 
+			/* Do buffer fork to invalidate */
+			if (bufferfork_to_invalidate(map, buffer))
+				continue;
+
+			/* Invalidate buffers */
 			if (!buffer_empty(buffer))
-				set_buffer_empty(buffer);
+				tux3_invalidate_buffer(buffer);
 			if (!is_reclaim_buffer_early())
 				reclaim_buffer(buffer);
 		}
