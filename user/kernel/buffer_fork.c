@@ -4,6 +4,7 @@
 
 #include <linux/hugetlb.h>	/* for PageHuge() */
 #include <linux/swap.h>		/* for __lru_cache_add() */
+#include <linux/cleancache.h>
 
 /*
  * Scanning the freeable forked page.
@@ -166,10 +167,9 @@ static struct buffer_head *page_buffer(struct page *page, unsigned which)
  * Check if the page can be modified for delta. I.e. All buffers
  * should be dirtied for delta, or clean.
  */
-static int page_can_modify(struct buffer_head *buffer, unsigned delta)
+static int page_can_modify(struct page *page, unsigned delta)
 {
-	struct page *page = buffer->b_page;
-	struct buffer_head *head;
+	struct buffer_head *buffer, *head;
 
 	head = page_buffers(page);
 	buffer = head;
@@ -240,6 +240,56 @@ static void newpage_add_lru(struct page *page)
 		__lru_cache_add(page, LRU_INACTIVE_FILE);
 }
 
+enum ret_needfork {
+	RET_FORKED = 1,		/* Someone already forked */
+	RET_NEED_FORK,		/* Need to fork to dirty */
+	RET_CAN_DIRTY,		/* Can dirty without fork */
+	RET_ALREADY_DIRTY,	/* Buffer is already dirtied for delta */
+};
+
+static enum ret_needfork
+need_fork(struct page *page, struct buffer_head *buffer, unsigned delta)
+{
+	/* Someone already forked this page. */
+	if (PageForked(page))
+		return RET_FORKED;
+	/* Page is under I/O, needs buffer fork */
+	if (PageWriteback(page))
+		return RET_NEED_FORK;
+	/*
+	 * If page isn't dirty (and isn't writeback), this is clean
+	 * page (and all buffers should be clean on this page).  So we
+	 * can just dirty the buffer for current delta.
+	 */
+	if (!PageDirty(page)) {
+		assert(!buffer || !buffer_dirty(buffer));
+		return RET_CAN_DIRTY;
+	}
+
+	/*
+	 * (Re-)check the partial dirtied page under lock_page. (We
+	 * don't allow the buffer has different delta states on same
+	 * page.)
+	 */
+	if (buffer && buffer_dirty(buffer)) {
+		/* Buffer is dirtied by delta, just modify this buffer */
+		if (buffer_can_modify(buffer, delta))
+			return RET_ALREADY_DIRTY;
+
+		/* Buffer was dirtied by different delta, we need buffer fork */
+	} else {
+		/* Check other buffers sharing same page. */
+		if (page_can_modify(page, delta)) {
+			/* This page can be modified, dirty this buffer */
+			return RET_CAN_DIRTY;
+		}
+
+		/* The page can't be modified for delta */
+	}
+
+	return RET_NEED_FORK;
+}
+
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
 	struct page *oldpage = buffer->b_page;
@@ -263,49 +313,28 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	lock_page(oldpage);
 
 	/* This happens on partially dirty page. */
-//	assert(PageUptodate(oldpage));
+//	assert(PageUptodate(page));
 
-	/* Someone already forked this page. */
-	if (PageForked(oldpage)) {
+	switch (need_fork(oldpage, buffer, newdelta)) {
+	case RET_FORKED:
+		/* This page was already forked. Retry from lookup page. */
 		buffer = ERR_PTR(-EAGAIN);
 		assert(0);	/* FIXME: we have to handle -EAGAIN case */
+		/* FALLTHRU */
+	case RET_ALREADY_DIRTY:
+		/* This buffer was already dirtied. Done. */
 		goto out;
-	}
-	/* Page is under I/O, needs buffer fork */
-	if (PageWriteback(oldpage))
-		goto do_clone_page;
-	/*
-	 * If page isn't dirty (and isn't writeback), this is clean
-	 * page (and all buffers should be clean on this page).  So we
-	 * can just dirty the buffer for current delta.
-	 */
-	if (!PageDirty(oldpage)) {
-		assert(!buffer_dirty(buffer));
+	case RET_CAN_DIRTY:
+		/* We can dirty this buffer. */
 		goto dirty_buffer;
+	case RET_NEED_FORK:
+		/* We need to buffer fork. */
+		break;
+	default:
+		BUG();
+		break;
 	}
 
-	/*
-	 * (Re-)check the partial dirtied page under lock_page. (We
-	 * don't allow the buffer has different delta states on same
-	 * page.)
-	 */
-	if (buffer_dirty(buffer)) {
-		/* Buffer is dirtied by newdelta, just modify this buffer */
-		if (buffer_can_modify(buffer, newdelta))
-			goto out;
-
-		/* Buffer was dirtied by different delta, we need buffer fork */
-	} else {
-		/* Check other buffers sharing same page. */
-		if (page_can_modify(buffer, newdelta)) {
-			/* This page can be modified, dirty this buffer */
-			goto dirty_buffer;
-		}
-
-		/* The page can't be modified for newdelta */
-	}
-
-do_clone_page:
 	/* Clone the oldpage */
 	newpage = clone_page(oldpage, sb->blocksize);
 	if (IS_ERR(newpage)) {
@@ -389,6 +418,77 @@ out:
  */
 int bufferfork_to_invalidate(struct address_space *mapping, struct page *page)
 {
+	struct sb *sb = tux_sb(mapping->host->i_sb);
+	unsigned delta = tux3_inode_delta(mapping->host);
+
 	assert(PageLocked(page));
-	return 0;
+
+	switch (need_fork(page, NULL, delta)) {
+	case RET_NEED_FORK:
+		/* Need to fork, then delete from radix-tree */
+		break;
+	case RET_CAN_DIRTY:
+		/* We can invalidate the page */
+		return 0;
+	case RET_FORKED:
+	case RET_ALREADY_DIRTY:
+		trace_on("mapping %p, page %p", mapping, page);
+		/* FALLTHRU */
+	default:
+		BUG();
+		break;
+	}
+
+	/*
+	 * Similar to truncate_inode_page(), but the oldpage is for writeout.
+	 * FIXME: we would have to add mmap handling (e.g. replace PTE)
+	 */
+	/* Delete page from radix tree. */
+	spin_lock_irq(&mapping->tree_lock);
+	/*
+	 * if we're uptodate, flush out into the cleancache, otherwise
+	 * invalidate any existing cleancache entries.  We can't leave
+	 * stale data around in the cleancache once our page is gone
+	 */
+	if (PageUptodate(page) && PageMappedToDisk(page))
+		cleancache_put_page(page);
+	else
+		cleancache_invalidate_page(mapping, page);
+
+	radix_tree_delete(&mapping->page_tree, page->index);
+#if 0 /* FIXME: backend is assuming page->mapping is available */
+	page->mapping = NULL;
+#endif
+	/* Leave page->index set: truncation lookup relies upon it */
+	mapping->nrpages--;
+	__dec_zone_page_state(page, NR_FILE_PAGES);
+
+	/*
+	 * Inherit reference count of radix-tree, so referencer are
+	 * radix-tree + ->private (plus other users and lru_cache).
+	 *
+	 * FIXME: We can't remove from LRU, because page can be on
+	 * per-cpu lru cache at here. So, vmscan will try to free
+	 * oldpage. We get refcount to pin oldpage to prevent vmscan
+	 * releases oldpage.
+	 */
+	trace("oldpage count %u", page_count(page));
+	assert(page_count(page) >= 2);
+	page_cache_get(page);
+	oldpage_try_remove_from_lru(page);
+	spin_unlock_irq(&mapping->tree_lock);
+#if 0 /* FIXME */
+	mem_cgroup_uncharge_cache_page(page);
+#endif
+
+	/*
+	 * This prevents to re-fork the oldpage. And we guarantee the
+	 * newpage is available on radix-tree here.
+	 */
+	SetPageForked(page);
+
+	/* Register forked buffer to free forked page later */
+	forked_buffer_add(sb, page_buffers(page));
+
+	return 1;
 }
