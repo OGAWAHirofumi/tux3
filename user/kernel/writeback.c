@@ -194,16 +194,15 @@ void __tux3_mark_inode_dirty(struct inode *inode, int flags)
 	__mark_inode_dirty(inode, flags);
 }
 
-static int volmap_buffer(struct buffer_head *buffer)
-{
-	struct inode *inode = buffer_inode(buffer);
-	return inode == tux_sb(inode->i_sb)->volmap;
-}
-
-/* Mark buffer as dirty to flush at delta flush */
+/*
+ * Mark buffer as dirty to flush at delta flush.
+ *
+ * Specified buffer must be for volmap (i.e. no buffer fork, and
+ * page->mapping is valid). Otherwise this will race with buffer fork.
+ */
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
-	assert(volmap_buffer(buffer));
+	struct inode *inode;
 
 	/*
 	 * Very *carefully* optimize the it-is-already-dirty case.
@@ -217,18 +216,25 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 			return;
 	}
 
-	tux3_set_buffer_dirty(buffer, TUX3_INIT_DELTA);
+	inode = buffer_inode(buffer);
+	assert(inode == tux_sb(inode->i_sb)->volmap); /* must be volmap */
+
+	tux3_set_buffer_dirty(mapping(inode), buffer, TUX3_INIT_DELTA);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
+	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
 }
 
-/* Mark buffer as dirty to flush at rollup flush */
+/*
+ * Mark buffer as dirty to flush at rollup flush
+ *
+ * Specified buffer must be for volmap (i.e. no buffer fork, and
+ * page->mapping is valid). Otherwise this will race with buffer fork.
+ */
 void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 {
-	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
-
-	assert(volmap_buffer(buffer));
+	struct sb *sb;
+	struct inode *inode;
 
 	/*
 	 * Very *carefully* optimize the it-is-already-dirty case.
@@ -242,7 +248,12 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 			return;
 	}
 
-	tux3_set_buffer_dirty_list(buffer, sb->rollup, &sb->rollup_buffers);
+	inode = buffer_inode(buffer);
+	sb = tux_sb(inode->i_sb);
+	assert(inode == sb->volmap); /* must be volmap */
+
+	tux3_set_buffer_dirty_list(mapping(inode), buffer, sb->rollup,
+				   &sb->rollup_buffers);
 }
 
 static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)

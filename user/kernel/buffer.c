@@ -18,6 +18,10 @@ TUX3_DEFINE_STATE_FNS(unsigned long, buf, BUFDELTA_AVAIL, BUFDELTA_BITS,
 		      BH_PrivateStart);
 
 /*
+ * FIXME: we should rewrite with own buffer management
+ */
+
+/*
  * FIXME: this is hack to save delta to linux buffer_head.
  * Inefficient, and this is not atomic with dirty bit change. And this
  * may not work on all arch (If set_bit() and cmpxchg() is not
@@ -75,33 +79,32 @@ int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 	return 0;
 }
 
-/* FIXME: we should rewrite with own buffer management */
-void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
+/*
+ * Caller must hold lock_page() or backend (otherwise, you may race
+ * with buffer fork or clear dirty)
+ */
+void tux3_set_buffer_dirty_list(struct address_space *mapping,
+				struct buffer_head *buffer, int delta,
 				struct list_head *head)
 {
-	struct address_space *buffer_mapping = buffer->b_page->mapping;
-
 	mark_buffer_dirty(buffer);
 
-	/* Our usage just adds buffer to dirty buffer list in own inode */
-	BUG_ON(buffer_inode(buffer)->i_mapping != buffer_mapping);
-
 	if (!buffer->b_assoc_map) {
-		spin_lock(&buffer_mapping->private_lock);
+		spin_lock(&mapping->private_lock);
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 		list_move_tail(&buffer->b_assoc_buffers, head);
-		buffer->b_assoc_map = buffer_mapping;
+		buffer->b_assoc_map = mapping;
 		/* FIXME: hack for save delta */
 		tux3_set_bufdelta(buffer, delta);
-		spin_unlock(&buffer_mapping->private_lock);
+		spin_unlock(&mapping->private_lock);
 	}
 }
 
-/* FIXME: we should rewrite with own buffer management */
-void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
+void tux3_set_buffer_dirty(struct address_space *mapping,
+			   struct buffer_head *buffer, int delta)
 {
-	struct list_head *head = tux3_dirty_buffers(buffer_inode(buffer),delta);
-	tux3_set_buffer_dirty_list(buffer, delta, head);
+	struct list_head *head = tux3_dirty_buffers(mapping->host, delta);
+	tux3_set_buffer_dirty_list(mapping, buffer, delta, head);
 }
 
 #define buffer_need_fork(b, d) (buffer_dirty(b) && !buffer_can_modify(b, d))
@@ -170,7 +173,7 @@ static void discard_buffer(struct buffer_head *buffer)
 
 /*
  * Invalidate buffer, this must be called from frontend like truncate.
- * Caller must hold lock_page().
+ * Caller must hold lock_page(), and page->mapping must be valid.
  */
 void tux3_invalidate_buffer(struct buffer_head *buffer)
 {

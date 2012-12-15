@@ -167,21 +167,21 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 	set_buffer_state_list(buffer, state, buffers + state);
 }
 
-void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
-				struct list_head *head)
+void tux3_set_buffer_dirty_list(map_t *map, struct buffer_head *buffer,
+				int delta, struct list_head *head)
 {
 	set_buffer_state_list(buffer, tux3_bufsta_delta(delta), head);
 }
 
-void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
+void tux3_set_buffer_dirty(map_t *map, struct buffer_head *buffer, int delta)
 {
-	struct list_head *head = tux3_dirty_buffers(buffer_inode(buffer),delta);
-	tux3_set_buffer_dirty_list(buffer, delta, head);
+	struct list_head *head = tux3_dirty_buffers(map->inode, delta);
+	tux3_set_buffer_dirty_list(map, buffer, delta, head);
 }
 
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)
 {
-	tux3_set_buffer_dirty(buffer, BUFFER_INIT_DELTA);
+	tux3_set_buffer_dirty(buffer->map, buffer, BUFFER_INIT_DELTA);
 	return buffer;
 }
 

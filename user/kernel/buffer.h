@@ -62,9 +62,11 @@ static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 }
 
 int buffer_can_modify(struct buffer_head *buffer, unsigned delta);
-void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
+void tux3_set_buffer_dirty_list(struct address_space *mapping,
+				struct buffer_head *buffer, int delta,
 				struct list_head *head);
-void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);
+void tux3_set_buffer_dirty(struct address_space *mapping,
+			   struct buffer_head *buffer, int delta);
 void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta);
 void blockput_free(struct sb *sb, struct buffer_head *buffer);
 void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer);

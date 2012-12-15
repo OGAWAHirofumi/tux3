@@ -15,6 +15,8 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 #ifndef ATOMIC
 	return buffer;
 #endif
+	map_t *map = buffer->map;
+
 	assert(buffer->state < BUFFER_STATES);
 
 	buftrace("---- before: fork buffer %p ----", buffer);
@@ -24,7 +26,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 		/* Buffer can't modify already, we have to fork buffer */
 		buftrace("---- fork buffer %p ----", buffer);
-		struct buffer_head *clone = new_buffer(buffer->map);
+		struct buffer_head *clone = new_buffer(map);
 		if (IS_ERR(clone))
 			return clone;
 		/* Create the cloned buffer */
@@ -41,8 +43,8 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		buffer = clone;
 	}
 
-	tux3_set_buffer_dirty(buffer, newdelta);
-	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
+	tux3_set_buffer_dirty(map, buffer, newdelta);
+	__tux3_mark_inode_dirty(map->inode, I_DIRTY_PAGES);
 
 	return buffer;
 }

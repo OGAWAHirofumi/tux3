@@ -10,14 +10,15 @@
 
 static void temp_blockdirty(struct buffer_head *buffer)
 {
-	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
+	struct inode *inode = buffer_inode(buffer);
+	struct sb *sb = tux_sb(inode->i_sb);
 
 	assert(!buffer_dirty(buffer) || buffer_can_modify(buffer, sb->delta));
 
-	tux3_set_buffer_dirty(buffer, sb->delta);
+	tux3_set_buffer_dirty(mapping(inode), buffer, sb->delta);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
+	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
 }
 
 /* Copy of page_zero_new_buffers() (changed to call temp_blockdirty()) */

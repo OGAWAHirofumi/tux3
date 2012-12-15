@@ -52,7 +52,7 @@ static void test01(void)
 	/* Test dirty */
 	buf = blockget(map1, 0);
 	test_assert(buf == map1_bufs[0]);
-	set_buffer_dirty(buf);
+	tux3_set_buffer_dirty(map1, buf, TUX3_INIT_DELTA);
 	test_assert(buffer_dirty(buf));
 	blockput(buf);
 
@@ -83,7 +83,7 @@ static void test01(void)
 	}
 
 	/* Set dirty, invalidate_buffers should clear it */
-	set_buffer_dirty(map2_bufs[last]);
+	tux3_set_buffer_dirty(map2, map2_bufs[last], TUX3_INIT_DELTA);
 	for (int i = 0; i < ARRAY_SIZE(map2_bufs); i++)
 		blockput(map2_bufs[i]);
 	invalidate_buffers(map2);
