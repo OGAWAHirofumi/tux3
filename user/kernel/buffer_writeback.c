@@ -4,6 +4,8 @@
 
 #include <linux/list_sort.h>
 
+#include "buffer_writebacklib.c"
+
 /*
  * Helper for waiting I/O
  */
@@ -247,7 +249,7 @@ static int keep_page_dirty(struct bufvec *bufvec, struct page *page)
 static void
 bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 {
-	int ret;
+	int old_flag;
 
 	lock_page(page);
 	assert(PageDirty(page));
@@ -265,8 +267,8 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	 *     clear_dirty_for_io()
 	 */
 	if (!keep_page_dirty(bufvec, page)) {
-		ret = clear_page_dirty_for_io(page);
-		assert(ret);
+		old_flag = tux3_clear_page_dirty_for_io(page);
+		assert(old_flag);
 	}
 
 	/*
@@ -276,7 +278,8 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	 *
 	 * And writeback flag prevents vmscan releases page.
 	 */
-	set_page_writeback(page);
+	old_flag = tux3_test_set_page_writeback(page);
+	assert(!old_flag);
 }
 
 static void bufvec_prepare_and_unlock_page(struct page *page)
