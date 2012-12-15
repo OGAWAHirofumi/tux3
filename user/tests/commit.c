@@ -379,7 +379,7 @@ static void check_orphan_inum(struct replay *rp, struct orphan_data *data,
 /* Test for orphan inodes */
 static void test04(struct sb *sb)
 {
-#define NR_ORPHAN	4
+#define NR_ORPHAN	5
 	struct orphan_data *data = test_alloc_shm(sizeof(*data) * NR_ORPHAN);
 
 	test_assert(make_tux3(sb) == 0);
@@ -398,6 +398,7 @@ static void test04(struct sb *sb)
 		 * inodes[1] is into, then delete from sb->otable
 		 * inodes[2] is into sb->otable, and LOG_ORPHAN_DEL
 		 * inodes[3] make LOG_ORPHAN_ADD
+		 * inodes[4] make LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL
 		 */
 		for (int i = 0; i < NR_ORPHAN; i++) {
 			struct tux3_inode *tuxnode;
@@ -430,6 +431,12 @@ static void test04(struct sb *sb)
 				data[i].err = 0;
 				test_assert(force_delta(sb) == 0);
 				list_move(&tuxnode->orphan_list, &orphans);
+				break;
+			case 4:
+				data[i].err = -ENOENT;
+				test_assert(force_delta(sb) == 0);
+				iput(inodes[i]);
+				test_assert(force_delta(sb) == 0);
 				break;
 			}
 		}
