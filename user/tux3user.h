@@ -18,6 +18,7 @@
 
 #include "libklib/libklib.h"
 #include "libklib/lockdebug.h"
+#include "libklib/atomic.h"
 #include "libklib/mm.h"
 #include "libklib/slab.h"
 #include "libklib/fs.h"

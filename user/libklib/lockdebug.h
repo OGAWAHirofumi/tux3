@@ -1,6 +1,8 @@
 #ifndef LIBKLIB_LOCKDEBUG_H
 #define LIBKLIB_LOCKDEBUG_H
 
+#include <libklib/atomic.h>
+
 #define SPINLOCK_MAGIC		0xdead4ead
 typedef struct {
 #ifdef LOCK_DEBUG
@@ -36,33 +38,14 @@ static inline void spin_unlock(spinlock_t *lock)
 #endif
 }
 
-typedef struct {
-	int counter;
-} atomic_t;
-
-#define ATOMIC_INIT(i)	{ (i) }
-#define atomic_read(v)	((v)->counter)
-
-static inline void atomic_set(atomic_t *v, int i)
-{
-	v->counter = i;
-}
-
-static inline void atomic_inc(atomic_t *v)
-{
-	v->counter++;
-}
-static inline void atomic_dec(atomic_t *v)
-{
-	v->counter--;
-}
-
-static inline int atomic_dec_and_test(atomic_t *v)
-{
-	assert(v->counter > 0);
-	return !--v->counter;
-}
-
+/**
+ * atomic_dec_and_lock - lock on reaching reference count zero
+ * @atomic: the atomic counter
+ * @lock: the spinlock in question
+ *
+ * Decrements @atomic by 1.  If the result is 0, returns true and locks
+ * @lock.  Returns false for all other cases.
+ */
 static inline int atomic_dec_and_lock(atomic_t *v, spinlock_t *lock)
 {
 	spin_lock(lock);
