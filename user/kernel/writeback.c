@@ -25,7 +25,9 @@
  * - inode dirty flags
  * - iattr flags
  * - xattr flags
+ * - delete dirty flags
  * - btree dirty
+ * - inode is dead flag
  */
 
 /* I_DIRTY_SYNC, I_DIRTY_DATASYNC, and I_DIRTY_PAGES */
@@ -34,16 +36,22 @@
 #define IATTR_DIRTY		1
 /* Xattr fork dirty base */
 #define XATTR_DIRTY		1
+/* Dead inode dirty base */
+#define DEAD_DIRTY		1
 /* Bits usage of inode->flags */
 #define IFLAGS_DIRTY_BITS	(NUM_DIRTY_BITS * TUX3_MAX_DELTA)
 #define IFLAGS_IATTR_BITS	(order_base_2(IATTR_DIRTY + TUX3_MAX_DELTA))
 #define IFLAGS_XATTR_BITS	(order_base_2(XATTR_DIRTY + TUX3_MAX_DELTA))
+#define IFLAGS_DEAD_BITS	(order_base_2(DEAD_DIRTY + TUX3_MAX_DELTA))
 /* Bit shift for inode->flags */
 #define IFLAGS_IATTR_SHIFT	IFLAGS_DIRTY_BITS
 #define IFLAGS_XATTR_SHIFT	(IFLAGS_IATTR_SHIFT + IFLAGS_IATTR_BITS)
+#define IFLAGS_DEAD_SHIFT	(IFLAGS_XATTR_SHIFT + IFLAGS_XATTR_BITS)
 
 /* btree root is modified from only backend, so no need per-delta flag */
-#define TUX3_DIRTY_BTREE	(1 << 31)
+#define TUX3_DIRTY_BTREE	(1 << 30)
+/* the dead flag is set by only backend, so no need per-delta flag */
+#define TUX3_INODE_DEAD		(1 << 31)
 
 static inline unsigned tux3_dirty_shift(unsigned delta)
 {
@@ -125,6 +133,7 @@ void tux3_mark_btree_dirty(struct btree *btree)
 	}
 }
 
+#include "writeback_inodedelete.c"
 #include "writeback_iattrfork.c"
 #include "writeback_xattrfork.c"
 
@@ -156,7 +165,7 @@ static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 	}
 
 	/* Update inode state */
-	if (tuxnode->flags)
+	if (tuxnode->flags & ~TUX3_INODE_DEAD)
 		inode->i_state |= I_DIRTY;
 	else
 		inode->i_state &= ~I_DIRTY;
@@ -258,17 +267,17 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 
 static void tux3_state_read_and_clear(struct inode *inode,
 				      struct tux3_iattr_data *idata,
-				      unsigned *state,
+				      unsigned *deleted,
 				      unsigned delta)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
-
-	*state = 0;
 
 	spin_lock(&tuxnode->lock);
 
 	/* Get iattr data */
 	tux3_iattr_read_and_clear(inode, idata, delta);
+	/* Check whether inode has to delete */
+	tux3_dead_read_and_clear(inode, deleted, delta);
 
 	spin_unlock(&tuxnode->lock);
 }
@@ -303,7 +312,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	/* FIXME: linux writeback doesn't allow to control writeback
 	 * timing. */
 	struct tux3_iattr_data idata;
-	unsigned dirty, state;
+	unsigned dirty, deleted;
 	int ret = 0, err;
 
 	trace("inum %Lu", tux_inode(inode)->inum);
@@ -312,7 +321,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	 * Read the stabled inode attributes and state for this delta,
 	 * then tell we read already.
 	 */
-	tux3_state_read_and_clear(inode, &idata, &state, delta);
+	tux3_state_read_and_clear(inode, &idata, &deleted, delta);
 
 	err = tux3_flush_buffers(inode, &idata, delta);
 	if (err && !ret)
@@ -407,3 +416,10 @@ void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta)
 	assert(list_empty(dirty_inodes)); /* someone redirtied own inode? */
 }
 #endif /* !__KERNEL__ */
+
+void tux3_check_destroy_inode_flags(struct inode *inode)
+{
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	tuxnode->flags &= ~TUX3_INODE_DEAD;
+	assert(tuxnode->flags == 0);
+}

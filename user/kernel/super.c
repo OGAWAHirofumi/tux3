@@ -266,9 +266,9 @@ static int i_ddc_is_clean(struct inode *inode)
 
 static void tux3_check_destroy_inode(struct inode *inode)
 {
+	tux3_check_destroy_inode_flags(inode);
 	assert(list_empty(&tux_inode(inode)->alloc_list));
 	assert(list_empty(&tux_inode(inode)->orphan_list));
-	assert(tux_inode(inode)->flags == 0);
 	assert(i_ddc_is_clean(inode));
 }
 
