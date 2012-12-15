@@ -132,6 +132,16 @@ void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 }
 
+/* Clear buffer dirty for I/O (Caller must remove buffer from list) */
+static void tux3_clear_buffer_dirty_for_io(struct buffer_head *buffer)
+{
+	assert(list_empty(&buffer->b_assoc_buffers));
+	assert(buffer_dirty(buffer));	/* Who cleared the dirty? */
+	buffer->b_assoc_map = NULL;
+	tux3_clear_bufdelta(buffer);	/* FIXME: hack for save delta */
+	clear_buffer_dirty(buffer);
+}
+
 /* This is called for the freeing block on volmap */
 static void __blockput_free(struct sb *sb, struct buffer_head *buffer,
 			    unsigned delta)

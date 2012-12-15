@@ -76,7 +76,6 @@ static inline void bufvec_buffer_move_to_contig(struct bufvec *bufvec,
 	 * FIXME: above is true?
 	 */
 	list_move_tail(&buffer->b_assoc_buffers, &bufvec->contig);
-	buffer->b_assoc_map = NULL;
 	bufvec->contig_count++;
 }
 
@@ -290,14 +289,6 @@ static void bufvec_page_end_io(struct page *page, int uptodate, int quiet)
 	end_page_writeback(page);
 }
 
-/* Preparation buffer for I/O */
-static void bufvec_prepare_buffer(struct buffer_head *buffer)
-{
-	tux3_clear_bufdelta(buffer);	/* FIXME: hack for save delta */
-	assert(buffer_dirty(buffer));	/* Who cleared the dirty? */
-	clear_buffer_dirty(buffer);
-}
-
 /* Completion of buffer for I/O */
 static void bufvec_buffer_end_io(struct buffer_head *buffer, int uptodate,
 				 int quiet)
@@ -414,7 +405,8 @@ static void bufvec_bio_add_multiple(struct bufvec *bufvec)
 	/* Set buffer_async_write to all buffers at first, then submit */
 	for (i = 0; i < bufvec->on_page_idx; i++) {
 		struct buffer_head *buffer = bufvec->on_page[i].buffer;
-		bufvec_prepare_buffer(buffer);
+		get_bh(buffer);
+		tux3_clear_buffer_dirty_for_io(buffer);
 		/* Buffer locking order for I/O is lower index to
 		 * bigger index. And grouped by inode. FIXME: is this sane? */
 		/* lock_buffer(buffer); FIXME: need? */
@@ -436,7 +428,6 @@ static void bufvec_bio_add_multiple(struct bufvec *bufvec)
 		if (!bio_add_page(bufvec->bio, page, length, offset))
 			assert(0);	/* why? */
 
-		get_bh(buffer);
 		bufvec_bio_add_buffer(bufvec, buffer);
 
 		bufvec_submit_bio(bufvec);
@@ -525,8 +516,8 @@ static void bufvec_bio_add_page(struct bufvec *bufvec)
 	bufvec_prepare_and_lock_page(bufvec, page);
 	for (i = 0; i < bufvec->on_page_idx; i++) {
 		struct buffer_head *buffer = bufvec->on_page[i].buffer;
-		bufvec_prepare_buffer(buffer);
 		get_bh(buffer);
+		tux3_clear_buffer_dirty_for_io(buffer);
 		bufvec_bio_add_buffer(bufvec, buffer);
 	}
 	bufvec_prepare_and_unlock_page(page);
