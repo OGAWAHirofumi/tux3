@@ -79,22 +79,18 @@ int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head)
 {
-	struct inode *inode = buffer_inode(buffer);
-	struct address_space *mapping = inode->i_mapping;
 	struct address_space *buffer_mapping = buffer->b_page->mapping;
 
 	mark_buffer_dirty(buffer);
 
-	if (!mapping->assoc_mapping)
-		mapping->assoc_mapping = buffer_mapping;
-	else
-		BUG_ON(mapping->assoc_mapping != buffer_mapping);
+	/* Our usage just adds buffer to dirty buffer list in own inode */
+	BUG_ON(buffer_inode(buffer)->i_mapping != buffer_mapping);
 
 	if (!buffer->b_assoc_map) {
 		spin_lock(&buffer_mapping->private_lock);
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 		list_move_tail(&buffer->b_assoc_buffers, head);
-		buffer->b_assoc_map = mapping;
+		buffer->b_assoc_map = buffer_mapping;
 		/* FIXME: hack for save delta */
 		tux3_set_bufdelta(buffer, delta);
 		spin_unlock(&buffer_mapping->private_lock);
@@ -117,15 +113,17 @@ void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 static void __tux3_clear_buffer_dirty(struct buffer_head *buffer,
 				      unsigned delta)
 {
+	struct address_space *buffer_mapping = buffer->b_assoc_map;
+
 	/* The buffer must not need to fork */
 	assert(!buffer_need_fork(buffer, delta));
 
-	if (buffer->b_assoc_map) {
-		spin_lock(&buffer->b_page->mapping->private_lock);
+	if (buffer_mapping) {
+		spin_lock(&buffer_mapping->private_lock);
 		list_del_init(&buffer->b_assoc_buffers);
 		buffer->b_assoc_map = NULL;
 		tux3_clear_bufdelta(buffer);
-		spin_unlock(&buffer->b_page->mapping->private_lock);
+		spin_unlock(&buffer_mapping->private_lock);
 	} else
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 }
