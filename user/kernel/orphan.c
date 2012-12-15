@@ -111,7 +111,6 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
-	/* FIXME: ->orphan_list has no race with frontend for now */
 	while (!list_empty(orphan_add)) {
 		struct tux3_inode *tuxnode =orphan_list_entry(orphan_add->next);
 
@@ -168,12 +167,6 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 }
 
 /*
- * FIXME: Caching the frontend modification by sb->orphan_{add,del}
- * list. This is similar to sb->alloc_list of defered inum
- * allocation. Can't we make infrastructure to do this?
- */
-
-/*
  * Make inode as orphan, and logging it. Then if orphan is living until
  * rollup, orphan will be written to sb->otable.
  */
@@ -204,9 +197,7 @@ static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
 		return PTR_ERR(orphan);
 
 	/* Add orphan deletion (from sb->otable) request. */
-	spin_lock(&sb->orphan_del_lock);
 	list_add(&orphan->list, &sb->orphan_del);
-	spin_unlock(&sb->orphan_del_lock);
 
 	return 0;
 }

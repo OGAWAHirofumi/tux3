@@ -26,15 +26,15 @@ static void init_sb(struct sb *sb)
 	/* Initialize sb */
 	init_rwsem(&sb->delta_lock);
 	mutex_init(&sb->loglock);
-	INIT_LIST_HEAD(&sb->alloc_inodes);
 	INIT_LIST_HEAD(&sb->orphan_add);
-	spin_lock_init(&sb->orphan_del_lock);
 	INIT_LIST_HEAD(&sb->orphan_del);
-	spin_lock_init(&sb->forked_buffers_lock);
-	init_link_circular(&sb->forked_buffers);
-	INIT_LIST_HEAD(&sb->rollup_buffers);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
+	INIT_LIST_HEAD(&sb->rollup_buffers);
+
+	INIT_LIST_HEAD(&sb->alloc_inodes);
+	spin_lock_init(&sb->forked_buffers_lock);
+	init_link_circular(&sb->forked_buffers);
 	spin_lock_init(&sb->dirty_inodes_lock);
 
 	/* Initialize sb_delta_dirty */

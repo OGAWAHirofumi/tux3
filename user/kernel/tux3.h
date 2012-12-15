@@ -231,6 +231,9 @@ struct sb {
 	unsigned freeatom;	/* Start of free atom list in atom table */
 	unsigned atomgen;	/* Next atom number to allocate if no free atoms */
 
+	/*
+	 * For backend only
+	 */
 	struct inode *logmap;	/* Log block cache */
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
@@ -238,7 +241,6 @@ struct sb {
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 
 	struct list_head orphan_add; /* defered orphan inode add list */
-	spinlock_t orphan_del_lock;  /* lock of orphan_del for frontend */
 	struct list_head orphan_del; /* defered orphan inode del list */
 
 	struct stash defree;	/* defer extent frees until after delta */
@@ -246,8 +248,12 @@ struct sb {
 
 	struct list_head rollup_buffers; /* dirty metadata flushed at rollup */
 
-	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 	struct iowait *iowait;		/* helper for waiting I/O */
+
+	/*
+	 * For frontend and backend
+	 */
+	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 
 	spinlock_t forked_buffers_lock;
 	struct link forked_buffers;	/* forked buffers list */
