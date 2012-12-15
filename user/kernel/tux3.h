@@ -590,10 +590,9 @@ static inline struct inode *buffer_inode(struct buffer_head *buffer)
 /* Get logical index of buffer */
 static inline block_t bufindex(struct buffer_head *buffer)
 {
-	struct inode *inode = buffer_inode(buffer);
 	struct page *page = buffer->b_page;
-
-	return (page_offset(page) + bh_offset(buffer)) >> inode->i_blkbits;
+	/* FIXME: maybe we want to remove buffer->b_size */
+	return (page_offset(page) + bh_offset(buffer)) / buffer->b_size;
 }
 
 /* dir.c */
