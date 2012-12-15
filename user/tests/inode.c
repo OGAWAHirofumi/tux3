@@ -14,6 +14,18 @@ static void clean_main(struct sb *sb)
 	tux3_exit_mem();
 }
 
+static int tux3_flush_inode_hack(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	int err;
+
+	change_begin_atomic(sb);
+	err = tux3_flush_inode(inode, tux3_get_current_delta());
+	change_end_atomic(sb);
+
+	return err;
+}
+
 static void test01(struct sb *sb)
 {
 	struct inode *inode;
@@ -44,7 +56,7 @@ static void test01(struct sb *sb)
 	test_assert(!err);
 
 	iput(inode);
-	tux3_flush_inode(inode, sb->delta);
+	tux3_flush_inode_hack(inode);
 
 	/* Check create */
 	inode = tuxopen(sb->rootdir, name, strlen(name));
@@ -74,6 +86,8 @@ static void test02(struct sb *sb)
 	struct inode *inode1, *inode2, *inode3, *inode4;
 	int err;
 
+	change_begin_atomic(sb);
+
 	/* Both is deferred allocation */
 	inode1 = __tux_create_inode(sb->rootdir, 0x1000, iattr, 0);
 	test_assert(inode1);
@@ -82,12 +96,16 @@ static void test02(struct sb *sb)
 	test_assert(inode2);
 	test_assert(is_defer_alloc_inum(inode2));
 
+	change_end_atomic(sb);
+
 	/* Test inum allocation */
 	test_assert(tux_inode(inode1)->inum != tux_inode(inode2)->inum);
 	/* Save first inode */
-	err = tux3_flush_inode(inode1, sb->delta);
+	err = tux3_flush_inode_hack(inode1);
 	test_assert(!err);
 	test_assert(!is_defer_alloc_inum(inode1));
+
+	change_begin_atomic(sb);
 
 	/* Try to alloc same inum after save */
 	inode3 = __tux_create_inode(sb->rootdir, 0x1000, iattr, 0);
@@ -97,11 +115,14 @@ static void test02(struct sb *sb)
 	inode4 = __tux_create_inode(sb->rootdir, 0x10000000, iattr, 0);
 	test_assert(inode4);
 	test_assert(is_defer_alloc_inum(inode4));
+
+	change_end_atomic(sb);
+
 	/* Save inodes */
-	err = tux3_flush_inode(inode2, sb->delta);
+	err = tux3_flush_inode_hack(inode2);
 	test_assert(!err);
 	test_assert(!is_defer_alloc_inum(inode2));
-	err = tux3_flush_inode(inode3, sb->delta);
+	err = tux3_flush_inode_hack(inode3);
 	test_assert(!err);
 	test_assert(!is_defer_alloc_inum(inode3));
 

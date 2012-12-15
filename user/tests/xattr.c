@@ -56,6 +56,8 @@ static void test01(struct sb *sb)
 	struct xattr *xattr;
 	int err;
 
+	change_begin_atomic(sb);
+
 	/* Test positive and negative refcount carry */
 	atom_t atom;
 	err = make_atom(sb->atable, "foo", 3, &atom);
@@ -86,6 +88,8 @@ static void test01(struct sb *sb)
 	test_assert(!err);
 	test_assert(atom1 == atom3);
 
+	change_end_atomic(sb);
+
 	struct inode *inode;
 	struct tux3_inode *tuxnode;
 	struct tux_iattr iattr = { .mode = S_IFREG, };
@@ -101,6 +105,8 @@ static void test01(struct sb *sb)
 	};
 
 	/* Test inode xcache */
+
+	change_begin_atomic(sb);
 
 	/* Create xcache */
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
@@ -123,6 +129,8 @@ static void test01(struct sb *sb)
 	err = xcache_update(inode, data[1].atom, "", data[1].len, 0);
 	test_assert(!err);
 	check_xcache(inode, data);
+
+	change_end_atomic(sb);
 
 	/* Test xattr inode table encode */
 	int xsize1 = encode_xsize(inode);

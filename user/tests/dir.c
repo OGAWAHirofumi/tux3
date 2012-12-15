@@ -25,6 +25,8 @@ static void test01(struct sb *sb, struct inode *dir)
 	struct qstr name1 = { .name = (unsigned char *)"hello", .len = 5, };
 	struct qstr name2 = { .name = (unsigned char *)"world", .len = 5, };
 
+	change_begin_atomic(sb);
+
 	test_assert(tux_dir_is_empty(dir) == 0);
 
 	err = tux_create_dirent(dir, &name1, 0x666, S_IFREG);
@@ -54,6 +56,8 @@ static void test01(struct sb *sb, struct inode *dir)
 
 	test_assert(tux_dir_is_empty(dir) == -ENOTEMPTY);
 
+	change_end_atomic(sb);
+
 	clean_main(sb, dir);
 }
 
@@ -80,6 +84,8 @@ static void test02(struct sb *sb, struct inode *dir)
 	struct file *file = &(struct file){ .f_inode = dir };
 	int err;
 
+	change_begin_atomic(sb);
+
 	for (int i = 0; i < 10; i++) {
 		char name[100];
 		sprintf(name, "file%i", i);
@@ -95,6 +101,8 @@ static void test02(struct sb *sb, struct inode *dir)
 	char dents[10000];
 	err = tux_readdir(file, dents, filldir);
 	test_assert(!err);
+
+	change_end_atomic(sb);
 
 	clean_main(sb, dir);
 }

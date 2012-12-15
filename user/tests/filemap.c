@@ -15,12 +15,14 @@ static void clean_main(struct sb *sb, struct inode *inode)
 static void add_maps(struct inode *inode, block_t index, struct seg *seg,
 		     int nr_segs)
 {
+	unsigned delta = tux3_get_current_delta();
+
 	for (int i = 0; i < nr_segs; i++) {
 		struct seg *s = &seg[i];
 		for (unsigned j = 0; j < s->count; j++) {
 			struct buffer_head *buf;
 			buf = blockget(inode->map, index + j);
-			buf = blockdirty(buf, inode->i_sb->delta);
+			buf = blockdirty(buf, delta);
 			memset(buf->data, 0, inode->i_sb->blocksize);
 			*(block_t *)buf->data = s->block + j;
 			mark_buffer_dirty_non(buf);
@@ -94,6 +96,8 @@ static void test01(struct sb *sb, struct inode *inode)
 		struct seg seg;
 		int err, segs;
 
+		change_begin_atomic(sb);
+
 		for (int i = 0, j = 0; i < 30; i++, j++) {
 			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
 			test_assert(segs == 1);
@@ -134,6 +138,8 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == SEG_HOLE);
 
+		change_end_atomic(sb);
+
 		test_assert(force_delta(sb) == 0);
 		clean_main(sb, inode);
 	}
@@ -143,6 +149,8 @@ static void test01(struct sb *sb, struct inode *inode)
 	if (test_start("test01.2")) {
 		struct seg seg;
 		int err, segs;
+
+		change_begin_atomic(sb);
 
 		for (int i = 30; i >= 0; i--) {
 			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
@@ -167,6 +175,8 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == SEG_HOLE);
 
+		change_end_atomic(sb);
+
 		test_assert(force_delta(sb) == 0);
 		clean_main(sb, inode);
 	}
@@ -186,6 +196,8 @@ static void test02(struct sb *sb, struct inode *inode)
 		{ .index = 10, .count = 20, .mode = MAP_REDIRECT, },
 		{ .index = 80, .count = 10, .mode = MAP_REDIRECT, },
 	};
+
+	change_begin_atomic(sb);
 
 	int total_segs = 0;
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
@@ -208,6 +220,8 @@ static void test02(struct sb *sb, struct inode *inode)
 	/* Clear dirty page to prevent to call map_region again */
 	truncate_inode_pages(mapping(inode), 0);
 
+	change_end_atomic(sb);
+
 	test_assert(force_delta(sb) == 0);
 	clean_main(sb, inode);
 }
@@ -217,6 +231,8 @@ static void test03(struct sb *sb, struct inode *inode)
 {
 	struct seg map1[32], map2[32];
 	int segs1, segs2;
+
+	change_begin_atomic(sb);
 
 	/* Create range */
 	segs1 = d_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1), MAP_WRITE);
@@ -247,6 +263,8 @@ static void test03(struct sb *sb, struct inode *inode)
 	/* Clear dirty page to prevent to call map_region again */
 	truncate_inode_pages(mapping(inode), 0);
 
+	change_end_atomic(sb);
+
 	test_assert(force_delta(sb) == 0);
 	clean_main(sb, inode);
 }
@@ -256,6 +274,8 @@ static void test04(struct sb *sb, struct inode *inode)
 {
 	struct seg map1[32], map2[32];
 	int segs1, segs2;
+
+	change_begin_atomic(sb);
 
 	/* Create extents */
 	segs1 = d_map_region(inode, 2, 2, map1, ARRAY_SIZE(map1), MAP_WRITE);
@@ -275,6 +295,8 @@ static void test04(struct sb *sb, struct inode *inode)
 
 	/* Clear dirty page to prevent to call map_region again */
 	truncate_inode_pages(mapping(inode), 0);
+
+	change_end_atomic(sb);
 
 	test_assert(force_delta(sb) == 0);
 	clean_main(sb, inode);
@@ -325,12 +347,16 @@ static void test05(struct sb *sb, struct inode *inode)
 		},
 	};
 
+	change_begin_atomic(sb);
+
 	for (int test = 0; test < ARRAY_SIZE(data); test++) {
 		__test05(data[test], ARRAY_SIZE(data[test]), inode);
 
 		int err = btree_chop(&tux_inode(inode)->btree, 0, TUXKEY_LIMIT);
 		test_assert(!err);
 	}
+
+	change_end_atomic(sb);
 
 	test_assert(force_delta(sb) == 0);
 	clean_main(sb, inode);

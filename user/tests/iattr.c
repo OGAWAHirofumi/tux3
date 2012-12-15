@@ -24,6 +24,10 @@ static void test01(struct sb *sb)
 	unsigned abits = RDEV_BIT|MODE_OWNER_BIT|CTIME_SIZE_BIT|LINK_COUNT_BIT|MTIME_BIT;
 	struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFCHR | 0644);
 	struct inode *inode2 = rapid_open_inode(sb, NULL, 0x666);
+	unsigned delta;
+
+	change_begin_atomic(sb);
+	delta = tux3_get_current_delta();
 
 	tux3_iattrdirty(inode1);
 
@@ -44,13 +48,15 @@ static void test01(struct sb *sb)
 	int size;
 
 	struct tux3_iattr_data idata;
-	tux3_iattr_read_and_clear(inode1, &idata, sb->delta);
+	tux3_iattr_read_and_clear(inode1, &idata, delta);
 	tux3_iattr_adjust_for_btree(inode1, &idata);
 
 	struct iattr_req_data iattr_data = {
 		.idata	= &idata,
 		.btree	= &tux_inode(inode1)->btree,
 	};
+
+	change_end_atomic(sb);
 
 	/* encode inode1 to attrs, then decode attrs to inode2 */
 	size = encode_asize(idata.present);
