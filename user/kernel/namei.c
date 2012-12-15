@@ -262,8 +262,13 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto error;
 		}
 
+		/*
+		 * The directory is protected by i_mutex.
+		 * blockdirty() should never return -EAGAIN.
+		 */
 		clone = blockdirty(new_buffer, delta);
 		if (IS_ERR(clone)) {
+			assert(PTR_ERR(clone) != -EAGAIN);
 			blockput(new_buffer);
 			err = PTR_ERR(clone);
 			goto error;

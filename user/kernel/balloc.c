@@ -129,7 +129,9 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 
 	for (block_t mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
-		struct buffer_head *buffer = blockread(mapping(inode), mapblock);
+		struct buffer_head *buffer, *clone;
+
+		buffer = blockread(mapping(inode), mapblock);
 		if (!buffer) {
 			warn("block read failed"); // !!! error return sucks here
 			return -1;
@@ -158,11 +160,21 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 					goto final_partial_byte;
 				}
 				found -= run - 1;
-				buffer = blockdirty(buffer, sb->rollup);
-				// FIXME: error check of buffer
-				set_bits(bufdata(buffer), found & mapmask, run);
-				mark_buffer_dirty_non(buffer);
-				blockput(buffer);
+
+				/*
+				 * The bitmap is modified only by backend.
+				 * blockdirty() should never return -EAGAIN.
+				 */
+				clone = blockdirty(buffer, sb->rollup);
+				if (IS_ERR(clone)) {
+					assert(PTR_ERR(clone) != -EAGAIN);
+					blockput(buffer);
+					/* FIXME: error handling */
+					return -1;
+				}
+				set_bits(bufdata(clone), found & mapmask, run);
+				mark_buffer_dirty_non(clone);
+				blockput(clone);
 				sb->nextalloc = found + run;
 				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
@@ -206,7 +218,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapmask = (1 << mapshift) - 1;
 	block_t mapblock = start >> mapshift;
 	unsigned mapoffset = start & mapmask;
-	struct buffer_head *buffer;
+	struct buffer_head *buffer, *clone;
 
 	buffer = blockread(mapping(sb->bitmap), mapblock);
 	if (!buffer) {
@@ -218,11 +230,20 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	if (!all_set(bufdata(buffer), mapoffset, blocks))
 		goto double_free;
 	trace("bfree extent <- [%Lx/%x], ", start, blocks);
-	buffer = blockdirty(buffer, sb->rollup);
-	// FIXME: error check of buffer
-	clear_bits(bufdata(buffer), mapoffset, blocks);
-	mark_buffer_dirty_non(buffer);
-	blockput(buffer);
+	/*
+	 * The bitmap is modified only by backend.
+	 * blockdirty() should never return -EAGAIN.
+	 */
+	clone = blockdirty(buffer, sb->rollup);
+	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
+		blockput(buffer);
+		/* FIXME: error handling */
+		return PTR_ERR(clone);
+	}
+	clear_bits(bufdata(clone), mapoffset, blocks);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
 	mutex_unlock(&sb->bitmap->i_mutex);
@@ -245,7 +266,7 @@ int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
 	unsigned mapmask = (1 << mapshift) - 1;
 	block_t mapblock = start >> mapshift;
 	unsigned mapoffset = start & mapmask;
-	struct buffer_head *buffer;
+	struct buffer_head *buffer, *clone;
 
 	buffer = blockread(mapping(sb->bitmap), mapblock);
 	if (!buffer)
@@ -260,11 +281,20 @@ int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
 		return -EINVAL;
 	}
 
-	/* FIXME: error check */
-	buffer = blockdirty(buffer, sb->rollup);
-	(set ? set_bits : clear_bits)(bufdata(buffer), mapoffset, count);
-	mark_buffer_dirty_non(buffer);
-	blockput(buffer);
+	/*
+	 * The bitmap is modified only by backend.
+	 * blockdirty() should never return -EAGAIN.
+	 */
+	clone = blockdirty(buffer, sb->rollup);
+	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
+		blockput(buffer);
+		/* FIXME: error handling */
+		return PTR_ERR(clone);
+	}
+	(set ? set_bits : clear_bits)(bufdata(clone), mapoffset, count);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
 
 	if (set)
 		sb->freeblocks -= count;

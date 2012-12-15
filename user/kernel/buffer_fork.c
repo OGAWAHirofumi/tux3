@@ -415,7 +415,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	case RET_FORKED:
 		/* This page was already forked. Retry from lookup page. */
 		buffer = ERR_PTR(-EAGAIN);
-		assert(0);	/* FIXME: we have to handle -EAGAIN case */
+		WARN_ON(1);
 		/* FALLTHRU */
 	case RET_ALREADY_DIRTY:
 		/* This buffer was already dirtied. Done. */
@@ -527,7 +527,7 @@ struct page *pagefork_for_blockdirty(struct page *oldpage, unsigned newdelta)
 	case RET_FORKED:
 		/* This page was already forked. Retry from lookup page. */
 		newpage = ERR_PTR(-EAGAIN);
-		assert(0);	/* FIXME: we have to handle -EAGAIN case */
+		WARN_ON(1);
 	case RET_ALREADY_DIRTY:
 		/* This buffer was already dirtied. Done. */
 		goto out;

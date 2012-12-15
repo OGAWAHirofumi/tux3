@@ -170,8 +170,13 @@ loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 	assert(!buffer_dirty(buffer));
 
 create:
+	/*
+	 * The directory is protected by i_mutex.
+	 * blockdirty() should never return -EAGAIN.
+	 */
 	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
 		blockput(buffer);
 		return PTR_ERR(clone);
 	}
@@ -352,8 +357,13 @@ int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 		this = next_entry(this);
 	}
 
+	/*
+	 * The directory is protected by i_mutex.
+	 * blockdirty() should never return -EAGAIN.
+	 */
 	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
 		blockput(buffer);
 		return PTR_ERR(clone);
 	}

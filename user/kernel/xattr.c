@@ -115,8 +115,14 @@ static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
 	if (!buffer)
 		return -EIO;
 
+	/*
+	 * The atable is protected by i_mutex for now.
+	 * blockdirty() should never return -EAGAIN.
+	 * FIXME: need finer granularity locking
+	 */
 	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
 		blockput(buffer);
 		return PTR_ERR(clone);
 	}
@@ -269,8 +275,14 @@ static int update_refcount(struct sb *sb, struct buffer_head *buffer,
 	struct buffer_head *clone;
 	__be16 *refcount;
 
+	/*
+	 * The atable is protected by i_mutex for now.
+	 * blockdirty() should never return -EAGAIN.
+	 * FIXME: need finer granularity locking
+	 */
 	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
 		blockput(buffer);
 		return PTR_ERR(clone);
 	}
