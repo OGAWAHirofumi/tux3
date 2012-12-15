@@ -20,6 +20,7 @@
 #include <libklib/list_sort.h>
 #include <libklib/barrier.h>
 #include <libklib/log2.h>
+#include <libklib/rcupdate.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)

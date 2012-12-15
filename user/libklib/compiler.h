@@ -4,9 +4,13 @@
 #ifdef __CHECKER__
 #define __force		__attribute__((force))
 #define __bitwise__	__attribute__((bitwise))
+#define __kernel	__attribute__((address_space(0)))
+#define __rcu		__attribute__((noderef, address_space(4)))
 #else
 #define __force
 #define __bitwise__
+#define __kernel
+#define __rcu
 #endif
 
 #ifdef __GNUC__
@@ -50,5 +54,19 @@
 
 #define likely(x)	__builtin_expect(!!(x), 1)
 #define unlikely(x)	__builtin_expect(!!(x), 0)
+
+/*
+ * Prevent the compiler from merging or refetching accesses.  The compiler
+ * is also forbidden from reordering successive instances of ACCESS_ONCE(),
+ * but only when the compiler is aware of some particular ordering.  One way
+ * to make the compiler aware of ordering is to put the two invocations of
+ * ACCESS_ONCE() in different C statements.
+ *
+ * This macro does absolutely -nothing- to prevent the CPU from reordering,
+ * merging, or refetching absolutely anything at any time.  Its main intended
+ * use is to mediate communication between process-level code and irq/NMI
+ * handlers, all running on the same CPU.
+ */
+#define ACCESS_ONCE(x) (*(volatile typeof(x) *)&(x))
 
 #endif /* !LIBKLIB_COMPILER_H */
