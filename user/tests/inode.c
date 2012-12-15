@@ -116,7 +116,6 @@ static void test02(struct sb *sb)
 
 	/* Delete deferred allocation inode */
 	inode4->i_nlink--;
-	tux3_make_orphan_add(inode4);
 	test_assert(is_defer_alloc_inum(inode4));
 	/* will schedule inode4 deletion at next do_commit() */
 	iput(inode4);
