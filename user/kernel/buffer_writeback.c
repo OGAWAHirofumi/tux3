@@ -192,6 +192,9 @@ static int keep_page_dirty(struct bufvec *bufvec, struct page *page)
 static void
 bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 {
+	struct tux3_iattr_data *idata = bufvec->idata;
+	pgoff_t last_index;
+	unsigned offset;
 	int old_flag;
 
 	lock_page(page);
@@ -223,6 +226,20 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	 */
 	old_flag = tux3_test_set_page_writeback(page);
 	assert(!old_flag);
+
+	/*
+	 * Zero fill the page for mmap outside i_size after clear dirty.
+	 *
+	 * The page straddles i_size.  It must be zeroed out on each and every
+	 * writepage invocation because it may be mmapped.  "A file is mapped
+	 * in multiples of the page size.  For a file that is not a multiple of
+	 * the  page size, the remaining memory is zeroed when mapped, and
+	 * writes to that region are not written out to the file."
+	 */
+	offset = idata->i_size & (PAGE_CACHE_SIZE - 1);
+	last_index = idata->i_size >> PAGE_CACHE_SHIFT;
+	if (offset && last_index == page->index)
+		zero_user_segment(page, offset, PAGE_CACHE_SIZE);
 }
 
 static void bufvec_prepare_and_unlock_page(struct page *page)
