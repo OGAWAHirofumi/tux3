@@ -28,14 +28,15 @@ module_param(tux3_trace, int, 0644);
 #else
 #define BUFFER_LINK	link
 #endif
-static void cleanup_dirty_buffers(struct list_head *head, unsigned delta)
+static void cleanup_dirty_buffers(struct inode *inode, struct list_head *head,
+				  unsigned delta)
 {
 	struct buffer_head *buffer, *n;
 
 	list_for_each_entry_safe(buffer, n, head, BUFFER_LINK) {
 		trace(">>> clean inum %Lx, buffer %Lx, count %d",
-		      tux_inode(buffer_inode(buffer))->inum,
-		      bufindex(buffer), bufcount(buffer));
+		      tux_inode(inode)->inum, bufindex(buffer),
+		      bufcount(buffer));
 		assert(buffer_dirty(buffer));
 		tux3_clear_buffer_dirty(buffer, delta);
 	}
@@ -66,10 +67,10 @@ static void cleanup_dirty_for_umount(struct sb *sb)
 	 */
 	if (sb->bitmap) {
 		struct list_head *head = tux3_dirty_buffers(sb->bitmap, rollup);
-		cleanup_dirty_buffers(head, rollup);
+		cleanup_dirty_buffers(sb->bitmap, head, rollup);
 		cleanup_dirty_inode(sb->bitmap);
 	}
-	cleanup_dirty_buffers(&sb->rollup_buffers, rollup);
+	cleanup_dirty_buffers(sb->volmap, &sb->rollup_buffers, rollup);
 
 	/* orphan_add should be empty */
 	assert(list_empty(&sb->orphan_add));
