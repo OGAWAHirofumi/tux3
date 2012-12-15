@@ -21,7 +21,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 
 	buftrace("---- before: fork buffer %p ----", buffer);
 	if (buffer_dirty(buffer)) {
-		if (buffer_can_modify(buffer, newdelta))
+		if (buffer_already_dirty(buffer, newdelta))
 			return buffer;
 
 		/* Buffer can't modify already, we have to fork buffer */
@@ -57,7 +57,7 @@ int bufferfork_to_invalidate(map_t *map, struct buffer_head *buffer)
 	 * The userland shouldn't need to buffer fork on truncate
 	 * path, because no async backend.  So, just make sure it.
 	 */
-	assert(!buffer_need_fork(buffer, delta));
+	assert(buffer_can_modify(buffer, delta));
 
 	return 0;
 }

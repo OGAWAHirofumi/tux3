@@ -113,23 +113,23 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return tux3_bufsta_has_delta(buffer->state);
 }
 
-/* When buffer was dirtied */
-static inline unsigned tux3_bufdelta(struct buffer_head *buffer)
+/* Check whether buffer was already dirtied atomically for delta */
+static inline int buffer_already_dirty(struct buffer_head *buffer,
+				       unsigned delta)
 {
-#ifdef assert
-	assert(buffer_dirty(buffer));
-#endif
-	return tux3_bufsta_get_delta(buffer->state);
+	unsigned state = buffer->state;
+	/* If buffer had same delta, buffer was already dirtied for delta */
+	return tux3_bufsta_has_delta(state) &&
+		tux3_bufsta_get_delta(state) == tux3_delta(delta);
 }
 
-/* Can we modify buffer from delta */
+/* Check whether we can modify buffer atomically for delta */
 static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 {
-	/* If true, buffer is still not stabilized. We can modify. */
-	if (tux3_bufdelta(buffer) == tux3_delta(delta))
-		return 1;
-	/* The buffer may already be in stabilized stage for backend. */
-	return 0;
+	unsigned state = buffer->state;
+	/* If buffer is clean or dirtied for same delta, we can modify */
+	return !tux3_bufsta_has_delta(state) ||
+		tux3_bufsta_get_delta(state) == tux3_delta(delta);
 }
 
 struct sb;

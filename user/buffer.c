@@ -204,12 +204,10 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return __set_buffer_empty(buffer);
 }
 
-#define buffer_need_fork(b, d) (buffer_dirty(b) && !buffer_can_modify(b, d))
-
 void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 {
 #ifdef BUFFER_FOR_TUX3
-	assert(!buffer_need_fork(buffer, delta));
+	assert(buffer_can_modify(buffer, delta));
 #endif
 	/* FIXME: this should be set_buffer_empty()? */
 	set_buffer_clean(buffer);
@@ -220,7 +218,7 @@ static void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
 #ifdef BUFFER_FOR_TUX3
 	unsigned delta = tux3_inode_delta(buffer->map->inode);
-	assert(!buffer_need_fork(buffer, delta));
+	assert(buffer_can_modify(buffer, delta));
 #endif
 	set_buffer_empty(buffer);
 }
