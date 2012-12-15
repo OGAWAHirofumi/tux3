@@ -559,12 +559,59 @@ static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
 	return btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
 }
 
+int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
+		     unsigned delta)
+{
+	int err;
+
+	tux3_clear_hole(inode);
+
+	/*
+	 * FIXME: i_blocks (if implemented) would be better way than
+	 * inode->i_size to know whether we have to traverse
+	 * btree. (Or another better info?)
+	 *
+	 * inode->i_size = 0;
+	 * if (inode->i_blocks)
+	 */
+	if (idata->i_size) {
+		idata->i_size = 0;
+		err = tux3_truncate_blocks(inode, 0);
+		if (err)
+			goto error;
+	}
+	err = free_empty_btree(&tux_inode(inode)->btree);
+	if (err)
+		goto error;
+
+	err = xcache_remove_all(inode);
+	if (err)
+		goto error;
+
+	/*
+	 * Orphan is cleared. We can't call change_end()
+	 * anymore until inode was removed.
+	 */
+	err = tux3_clear_inode_orphan(inode);
+	if (err)
+		goto error;
+
+	err = purge_inode(inode);
+
+error:
+	return err;
+}
+
 /*
  * Decide whether in-core inode can be freed or not.
  */
 int tux3_drop_inode(struct inode *inode)
 {
 	if (!is_bad_inode(inode)) {
+		/* If inode->i_nlink == 0, mark dirty to delete */
+		if (inode->i_nlink == 0)
+			tux3_mark_inode_to_delete(inode);
+
 		/* If inode is dirty, we still keep in-core inode. */
 		if (inode->i_state & I_DIRTY) {
 #ifdef __KERNEL__
@@ -582,23 +629,6 @@ int tux3_drop_inode(struct inode *inode)
  */
 void tux3_evict_inode(struct inode *inode)
 {
-	struct sb *sb = tux_sb(inode->i_sb);
-	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
-	unsigned delete_inode = !(inode->i_nlink > 0 || is_bad_inode(inode));
-	unsigned unlock = 0;
-
-	/*
-	 * iput() might be called inside change_{begin,end}.  And if
-	 * this was called, this will be deadlock. So, we use
-	 * change_end_without_commit() instead.
-	 * FIXME: this is fragile way. we should remove iput() from
-	 * backend instead.
-	 */
-	if (delete_inode || !list_empty(&i_ddc->dirty_list)) {
-		change_begin(sb);
-		unlock = 1;
-	}
-
 	/*
 	 * evict_inode() should be called only if there is no
 	 * in-progress buffers in backend. So we don't have to call
@@ -611,65 +641,7 @@ void tux3_evict_inode(struct inode *inode)
 	truncate_inode_pages(mapping(inode), 0);
 #endif
 
-	if (!delete_inode) {
-		tux3_clear_dirty_inode(inode);
-		clear_inode(inode);
-	} else {
-		/*
-		 * FIXME: since in-core inode is freed, we should do
-		 * something for freeing inode even if error happened.
-		 *
-		 * truncate might take long time, we should do
-		 * something to prevent it.
-		 */
-		int err;
-
-		tux3_clear_hole(inode);
-		/*
-		 * FIXME: i_blocks (if implemented) would be better way
-		 * than inode->i_size to know whether we have to
-		 * traverse btree. (Or another better info?)
-		 *
-		 * inode->i_size = 0;
-		 * if (inode->i_blocks)
-		 */
-		if (inode->i_size) {
-			inode->i_size = 0;
-			err = tux3_truncate_blocks(inode, 0);
-			if (err)
-				goto error;
-		}
-		err = free_empty_btree(&tux_inode(inode)->btree);
-		if (err)
-			goto error;
-
-		err = xcache_remove_all(inode);
-		if (err)
-			goto error;
-
-		/*
-		 * Orphan is cleared. We can't call change_end()
-		 * anymore until inode was removed.
-		 */
-		err = tux3_clear_inode_orphan(inode);
-		if (err)
-			goto error;
-
-		err = purge_inode(inode);
-error:
-		/*
-		 * Clear dirty of inode before change_end() to prevent
-		 * to flush removed inode. (Since this is protected by
-		 * change_begin/end(), there shouldn't be no writeback
-		 * process for this inode)
-		 */
-		tux3_clear_dirty_inode(inode);
-		clear_inode(inode);
-	}
-
-	if (unlock)
-		change_end_without_commit(sb);
-
+	clear_inode(inode);
 	free_xcache(inode);
 }
 

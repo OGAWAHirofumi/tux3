@@ -312,10 +312,8 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	/* FIXME: linux writeback doesn't allow to control writeback
 	 * timing. */
 	struct tux3_iattr_data idata;
-	unsigned dirty, deleted;
+	unsigned dirty = 0, deleted;
 	int ret = 0, err;
-
-	trace("inum %Lu", tux_inode(inode)->inum);
 
 	/*
 	 * Read the stabled inode attributes and state for this delta,
@@ -323,12 +321,26 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	 */
 	tux3_state_read_and_clear(inode, &idata, &deleted, delta);
 
+	trace("inum %Lu, idata %p, deleted %d, delta %u",
+	      tux_inode(inode)->inum, &idata, deleted, delta);
+
+	/* If inode was deleted and referencer was gone, delete inode */
+	if (deleted) {
+		err = tux3_purge_inode(inode, &idata, delta);
+		if (err && !ret)
+			ret = err;
+	}
+
 	err = tux3_flush_buffers(inode, &idata, delta);
 	if (err && !ret)
 		ret = err;
 
-	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
-	dirty = tux3_dirty_flags(inode, delta);
+	/*
+	 * Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE.
+	 * If inode is dead, we don't need to save inode.
+	 */
+	if (!deleted)
+		dirty = tux3_dirty_flags(inode, delta);
 
 	if (dirty & (TUX3_DIRTY_BTREE | I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
 		/*

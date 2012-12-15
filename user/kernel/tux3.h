@@ -754,6 +754,8 @@ struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 struct inode *tux3_iget(struct sb *sb, inum_t inum);
 int tux3_save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		    unsigned delta);
+int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
+		     unsigned delta);
 int tux3_drop_inode(struct inode *inode);
 void tux3_evict_inode(struct inode *inode);
 
