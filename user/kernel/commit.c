@@ -304,7 +304,7 @@ static int write_log(struct sb *sb)
 		struct logblock *log = bufdata(buffer);
 		assert(log->magic == cpu_to_be16(TUX3_MAGIC_LOG));
 		log->logchain = sb->super.logchain;
-		err = blockio(WRITE, buffer, block);
+		err = blockio(WRITE, sb, buffer, block);
 		if (err) {
 			blockput(buffer);
 			bfree(sb, block, 1);

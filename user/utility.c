@@ -21,11 +21,10 @@ int devio_vec(int rw, struct dev *dev, loff_t offset, struct iovec *iov,
 	return iovabs(dev->fd, iov, iovcnt, rw, offset);
 }
 
-int blockio(int rw, struct buffer_head *buffer, block_t block)
+int blockio(int rw, struct sb *sb, struct buffer_head *buffer, block_t block)
 {
 	trace("%s: buffer %p, block %Lx", rw ? "write" : "read",
 	      buffer, block);
-	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 	return devio(rw, sb_dev(sb), block << sb->blockbits, bufdata(buffer),
 		     sb->blocksize);
 }

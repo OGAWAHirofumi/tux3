@@ -625,7 +625,7 @@ int syncio(int rw, struct block_device *dev, loff_t offset, unsigned vecs,
 	   struct bio_vec *vec);
 int devio(int rw, struct block_device *dev, loff_t offset, void *data,
 	  unsigned len);
-int blockio(int rw, struct buffer_head *buffer, block_t block);
+int blockio(int rw, struct sb *sb, struct buffer_head *buffer, block_t block);
 int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 
 /* temporary hack for buffer */

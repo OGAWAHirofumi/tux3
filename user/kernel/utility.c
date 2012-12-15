@@ -48,9 +48,8 @@ int devio(int rw, struct block_device *dev, loff_t offset, void *data, unsigned 
 		.bv_len = len });
 }
 
-int blockio(int rw, struct buffer_head *buffer, block_t block)
+int blockio(int rw, struct sb *sb, struct buffer_head *buffer, block_t block)
 {
-	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 	struct bio_vec vec = {
 		.bv_page	= buffer->b_page,
 		.bv_offset	= bh_offset(buffer),
