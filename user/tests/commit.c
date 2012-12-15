@@ -396,7 +396,7 @@ static void test04(struct sb *sb)
 		/*
 		 * inodes[0] is into sb->otable as orphan.
 		 * inodes[1] is into, then delete from sb->otable
-		 * inodes[2] make LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL
+		 * inodes[2] is into sb->otable, and LOG_ORPHAN_DEL
 		 * inodes[3] make LOG_ORPHAN_ADD
 		 */
 		for (int i = 0; i < NR_ORPHAN; i++) {
@@ -428,11 +428,11 @@ static void test04(struct sb *sb)
 				break;
 			case 3:
 				data[i].err = 0;
+				test_assert(force_delta(sb) == 0);
 				list_move(&tuxnode->orphan_list, &orphans);
 				break;
 			}
 		}
-		test_assert(force_delta(sb) == 0);
 
 		/* Hack: clean inodes without destroy */
 		replay_iput_orphan_inodes(sb, &orphans, 0);
