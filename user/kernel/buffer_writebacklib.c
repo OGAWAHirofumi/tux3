@@ -88,13 +88,15 @@ static int tux3_test_set_page_writeback(struct page *page)
 		spin_lock_irqsave(&mapping->tree_lock, flags);
 		ret = TestSetPageWriteback(page);
 		if (!ret) {
-			radix_tree_tag_set(&mapping->page_tree,
-						page_index(page),
-						PAGECACHE_TAG_WRITEBACK);
+			/* If PageForked(), don't touch tag */
+			if (!PageForked(page))
+				radix_tree_tag_set(&mapping->page_tree,
+						   page_index(page),
+						   PAGECACHE_TAG_WRITEBACK);
 			if (bdi_cap_account_writeback(bdi))
 				__inc_bdi_stat(bdi, BDI_WRITEBACK);
 		}
-		/* If PageForked(), don't touch PAGECACHE_TAG_DIRTY */
+		/* If PageForked(), don't touch tag */
 		if (!PageDirty(page) && !PageForked(page))
 			radix_tree_tag_clear(&mapping->page_tree,
 						page_index(page),
