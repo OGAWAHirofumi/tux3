@@ -171,6 +171,10 @@ static int tux3_replace_page_cache(struct page *oldpage, struct page *newpage)
 
 	/* Replace page in radix tree. */
 	spin_lock_irq(&mapping->tree_lock);
+	/* PAGECACHE_TAG_DIRTY represents the view of frontend. Clear it. */
+	if (PageDirty(oldpage))
+		radix_tree_tag_clear(&mapping->page_tree, page_index(oldpage),
+				     PAGECACHE_TAG_DIRTY);
 	/* The refcount to newpage is used for radix tree. */
 	pslot = radix_tree_lookup_slot(&mapping->page_tree, oldpage->index);
 	radix_tree_replace_slot(pslot, newpage);
