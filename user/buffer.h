@@ -227,6 +227,13 @@ int flush_list(map_t *map, struct tux3_iattr_data *idata,
 	       struct list_head *head);
 
 /* block_fork.c */
+static inline int buffer_forked(struct buffer_head *buffer)
+{
+	/* no async backend, so frontend never grab forked buffer */
+	assert(!hlist_unhashed(&buffer->hashlink));
+	return 0;
+}
+
 void free_forked_buffers(struct sb *sb, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 int bufferfork_to_invalidate(map_t *map, struct buffer_head *buffer);

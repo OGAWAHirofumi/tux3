@@ -302,6 +302,19 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	old_inode->i_ctime = new_dir->i_ctime;
 	tux3_mark_inode_dirty(old_inode);
 
+	/*
+	 * The new entry can be on same buffer with old_buffer, and
+	 * may did buffer fork in the above path. So if old_buffer is
+	 * forked buffer, we update the old_buffer in here.
+	 */
+	if (buffer_forked(old_buffer)) {
+		clone = blockget(mapping(old_dir), bufindex(old_buffer));
+		assert(clone);
+		old_entry = ptr_redirect(old_entry, bufdata(old_buffer),
+					 bufdata(clone));
+		blockput(old_buffer);
+		old_buffer = clone;
+	}
 	err = tux_delete_dirent(old_dir, old_buffer, old_entry);
 	if (err) {
 		error("TUX3: %s: couldn't delete old entry (%Lu)",
