@@ -95,6 +95,9 @@ void tux3_set_buffer_dirty_list(struct address_space *mapping,
 				struct buffer_head *buffer, int delta,
 				struct list_head *head)
 {
+	/* FIXME: we better to set this by caller? */
+	if (!buffer_uptodate(buffer))
+		set_buffer_uptodate(buffer);
 	mark_buffer_dirty(buffer);
 
 	if (!buffer->b_assoc_map) {
@@ -139,10 +142,19 @@ void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 }
 
 /* Clear buffer dirty for I/O (Caller must remove buffer from list) */
-static void tux3_clear_buffer_dirty_for_io(struct buffer_head *buffer)
+static void tux3_clear_buffer_dirty_for_io(struct buffer_head *buffer,
+					   struct sb *sb, block_t block)
 {
 	assert(list_empty(&buffer->b_assoc_buffers));
 	assert(buffer_dirty(buffer));	/* Who cleared the dirty? */
+	/* If buffer was hole and dirtied, it can be !buffer_mapped() */
+	/*assert(buffer_mapped(buffer));*/
+	assert(buffer_uptodate(buffer));
+
+	/* Set up buffer for I/O. FIXME: need? */
+	map_bh(buffer, vfs_sb(sb), block);
+	clear_buffer_delay(buffer);
+
 	/*buffer->b_assoc_map = NULL;*/	/* FIXME: hack for *_for_io_hack */
 	tux3_clear_bufdelta(buffer);	/* FIXME: hack for save delta */
 	clear_buffer_dirty(buffer);

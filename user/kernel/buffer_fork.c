@@ -239,6 +239,40 @@ static struct buffer_head *page_buffer(struct page *page, unsigned which)
 	return buffer;
 }
 
+/*
+ * Clone buffers. But cloned buffer represents the buffer state after
+ * flushing buffer.
+ */
+static void clone_buffers(struct page *oldpage, struct page *newpage)
+{
+	struct sb *sb = tux_sb(oldpage->mapping->host->i_sb);
+	struct buffer_head *head, *newbuf, *oldbuf;
+#if 1	/* For now, writeback doesn't use BH_Lock */
+#define USE_FOR_IO					\
+	((1UL << BH_Uptodate_Lock) | (1UL << BH_Async_Write))
+#else
+#define USE_FOR_IO					\
+	((1UL << BH_Lock) | (1UL << BH_Uptodate_Lock) | (1UL << BH_Async_Write))
+#endif
+
+	oldbuf = page_buffers(oldpage);
+	newbuf = page_buffers(newpage);
+	head = newbuf;
+	do {
+		assert(!buffer_locked(oldbuf));
+		assert(!buffer_async_read(oldbuf));
+
+		newbuf->b_state = oldbuf->b_state;
+		/* Adjust ->b_state to after I/O */
+		newbuf->b_state &= ~USE_FOR_IO;
+		if (buffer_dirty(newbuf))
+			tux3_clear_buffer_dirty_for_io(newbuf, sb, 0);
+
+		oldbuf = oldbuf->b_this_page;
+		newbuf = newbuf->b_this_page;
+	} while (newbuf != head);
+}
+
 /* Based on migrate_page_copy() */
 static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 {
@@ -277,6 +311,7 @@ static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 	__set_page_locked(newpage);
 
 	create_empty_buffers(newpage, blocksize, 0);
+	clone_buffers(oldpage, newpage);
 
 	return newpage;
 }

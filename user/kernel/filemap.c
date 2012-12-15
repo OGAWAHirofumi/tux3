@@ -824,7 +824,26 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	bh = get_buffer(page, offset);
 	/* Clear new, so the caller must initialize buffer. */
 	clear_buffer_new(bh);
-	/* FIXME: maybe, we shouldn't set uptodate unconditionally? */
+	/*
+	 * FIXME: now all read is using ->readpage(), this means it
+	 * reads whole page with lock_page(), i.e. read non-target
+	 * block.  So, we have to hold to modify data to prevent race
+	 * with ->readpage(). But we are not holding lock_lock().
+	 *
+	 *          cpu0                            cpu1
+	 *				        bufferA = blockget()
+	 *				        modify data
+	 *     blockread(bufferC)
+	 *       readpage()
+	 *         read bufferA <= lost modify
+	 *         set_buffer_uptodate()
+	 *         read bufferC
+	 *         set_buffer_uptodate()
+	 *                                      set_buffer_uptodate()
+	 *
+	 * So, this set uptodate before unlock_page. But, we should
+	 * use submit_bh() or similar to read block, instead.
+	 */
 	set_buffer_uptodate(bh);
 
 	unlock_page(page);
