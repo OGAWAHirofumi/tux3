@@ -344,15 +344,21 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	trace("inum %Lu, idata %p, orphaned %d, deleted %d, delta %u",
 	      tux_inode(inode)->inum, &idata, orphaned, deleted, delta);
 
-	/* This inode was orphaned in this delta */
-	if (orphaned) {
-		err = tux3_make_orphan_add(inode);
-		if (err && !ret)
-			ret = err;
-	}
+	if (!deleted) {
+		/* If orphaned on this delta, add orphan */
+		if (orphaned) {
+			err = tux3_make_orphan_add(inode);
+			if (err && !ret)
+				ret = err;
+		}
+	} else {
+		/* If orphaned on past delta, delete orphan */
+		if (!orphaned) {
+			err = tux3_make_orphan_del(inode);
+			if (err && !ret)
+				ret = err;
+		}
 
-	/* If inode was deleted and referencer was gone, delete inode */
-	if (deleted) {
 		/*
 		 * Remove from hash before deleting the inode from itable.
 		 * Otherwise, when inum is reused, this inode will be
@@ -360,6 +366,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 		 */
 		remove_inode_hash(inode);
 
+		/* If inode was deleted and referencer was gone, delete inode */
 		err = tux3_purge_inode(inode, &idata, delta);
 		if (err && !ret)
 			ret = err;

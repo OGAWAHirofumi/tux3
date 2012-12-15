@@ -594,11 +594,6 @@ int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	if (err)
 		goto error;
 
-	/* Clear orphan state (inode was destroyed), and logging it. */
-	err = tux3_make_orphan_del(inode);
-	if (err)
-		goto error;
-
 	err = purge_inode(inode);
 
 error:
