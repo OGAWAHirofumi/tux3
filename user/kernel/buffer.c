@@ -57,26 +57,34 @@ static void tux3_clear_bufdelta(struct buffer_head *buffer)
 	}
 }
 
-static int tux3_bufdelta(struct buffer_head *buffer)
+/*
+ * Check buffer dirty and delta number atomically.
+ * >= 0 - delta number of buffer
+ *  < 0 - buffer is not dirty
+ */
+static int buffer_check_dirty_delta(unsigned long state)
 {
-	assert(buffer_dirty(buffer));
-	while (1) {
-		unsigned long state = buffer->b_state;
-		if (tux3_bufsta_has_delta(state))
-			return tux3_bufsta_get_delta(state);
-		/* The delta is not yet set. Retry */
-		cpu_relax();
-	}
+	if (tux3_bufsta_has_delta(state))
+		return tux3_bufsta_get_delta(state);
+	/* Buffer is not dirty */
+	return -1;	/* never much with tux3_delta() */
 }
 
-/* Can we modify buffer from delta */
+/* Check whether buffer was already dirtied atomically for delta */
+int buffer_already_dirty(struct buffer_head *buffer, unsigned delta)
+{
+	unsigned long state = buffer->b_state;
+	/* If buffer had same delta, buffer was already dirtied for delta */
+	return buffer_check_dirty_delta(state) == tux3_delta(delta);
+}
+
+/* Check whether we can modify buffer atomically for delta */
 int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 {
-	/* If true, buffer is still not stabilized. We can modify. */
-	if (tux3_bufdelta(buffer) == tux3_delta(delta))
-		return 1;
-	/* The buffer may already be in stabilized stage for backend. */
-	return 0;
+	unsigned long state = buffer->b_state;
+	/* If buffer is clean or dirtied for same delta, we can modify */
+	return !tux3_bufsta_has_delta(state) ||
+		tux3_bufsta_get_delta(state) == tux3_delta(delta);
 }
 
 /*
@@ -107,8 +115,6 @@ void tux3_set_buffer_dirty(struct address_space *mapping,
 	tux3_set_buffer_dirty_list(mapping, buffer, delta, head);
 }
 
-#define buffer_need_fork(b, d) (buffer_dirty(b) && !buffer_can_modify(b, d))
-
 /*
  * Caller must hold lock_page() or backend (otherwise, you may race
  * with buffer fork or set dirty)
@@ -118,7 +124,7 @@ void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 	struct address_space *buffer_mapping = buffer->b_assoc_map;
 
 	/* The buffer must not need to fork */
-	assert(!buffer_need_fork(buffer, delta));
+	assert(buffer_can_modify(buffer, delta));
 
 	if (buffer_mapping) {
 		spin_lock(&buffer_mapping->private_lock);

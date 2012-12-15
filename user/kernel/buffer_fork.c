@@ -163,26 +163,6 @@ static struct buffer_head *page_buffer(struct page *page, unsigned which)
 	return buffer;
 }
 
-/*
- * Check if the page can be modified for delta. I.e. All buffers
- * should be dirtied for delta, or clean.
- */
-static int page_can_modify(struct page *page, unsigned delta)
-{
-	struct buffer_head *buffer, *head;
-
-	head = page_buffers(page);
-	buffer = head;
-	do {
-		if (buffer_dirty(buffer) && !buffer_can_modify(buffer, delta))
-			return 0;
-
-		buffer = buffer->b_this_page;
-	} while (buffer != head);
-
-	return 1;
-}
-
 /* Based on migrate_page_copy() */
 static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 {
@@ -250,6 +230,9 @@ enum ret_needfork {
 static enum ret_needfork
 need_fork(struct page *page, struct buffer_head *buffer, unsigned delta)
 {
+	struct buffer_head *tmp;
+	int bufdelta;
+
 	/* Someone already forked this page. */
 	if (PageForked(page))
 		return RET_FORKED;
@@ -265,29 +248,41 @@ need_fork(struct page *page, struct buffer_head *buffer, unsigned delta)
 		assert(!buffer || !buffer_dirty(buffer));
 		return RET_CAN_DIRTY;
 	}
+	if (buffer == NULL) {
+		/* If the page is dirty, it should have buffers */
+		assert(page_has_buffers(page));
+		buffer = page_buffers(page);
+	}
 
 	/*
-	 * (Re-)check the partial dirtied page under lock_page. (We
-	 * don't allow the buffer has different delta states on same
-	 * page.)
+	 * (Re-)check the buffer and page under lock_page. (We don't
+	 * allow the buffer has different delta states on same page.)
 	 */
-	if (buffer && buffer_dirty(buffer)) {
+	bufdelta = buffer_check_dirty_delta(buffer->b_state);
+	if (bufdelta >= 0) {
 		/* Buffer is dirtied by delta, just modify this buffer */
-		if (buffer_can_modify(buffer, delta))
+		if (bufdelta == tux3_delta(delta))
 			return RET_ALREADY_DIRTY;
 
 		/* Buffer was dirtied by different delta, we need buffer fork */
-	} else {
-		/* Check other buffers sharing same page. */
-		if (page_can_modify(page, delta)) {
-			/* This page can be modified, dirty this buffer */
-			return RET_CAN_DIRTY;
-		}
-
-		/* The page can't be modified for delta */
+		return RET_NEED_FORK;
 	}
 
-	return RET_NEED_FORK;
+	/*
+	 * Check other buffers sharing same page.
+	 */
+	tmp = buffer->b_this_page;
+	while (tmp != buffer) {
+		if (!buffer_can_modify(tmp, delta)) {
+			/* The buffer can't be modified for delta */
+			return RET_NEED_FORK;
+		}
+
+		tmp = tmp->b_this_page;
+	}
+
+	/* This page can be modified, dirty this buffer */
+	return RET_CAN_DIRTY;
 }
 
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
@@ -306,7 +301,7 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	      PageForked(oldpage), PageDirty(oldpage), PageWriteback(oldpage));
 
 	/* The simple case: redirty on same delta */
-	if (buffer_dirty(buffer) && buffer_can_modify(buffer, newdelta))
+	if (buffer_already_dirty(buffer, newdelta))
 		return buffer;
 
 	/* Take page lock to protect buffer list, and concurrent block_fork */
@@ -436,11 +431,11 @@ int bufferfork_to_invalidate(struct address_space *mapping, struct page *page)
 	case RET_NEED_FORK:
 		/* Need to fork, then delete from radix-tree */
 		break;
+	case RET_ALREADY_DIRTY:
 	case RET_CAN_DIRTY:
 		/* We can invalidate the page */
 		return 0;
 	case RET_FORKED:
-	case RET_ALREADY_DIRTY:
 		trace_on("mapping %p, page %p", mapping, page);
 		/* FALLTHRU */
 	default:

@@ -13,7 +13,7 @@ static void temp_blockdirty(struct buffer_head *buffer)
 	struct inode *inode = buffer_inode(buffer);
 	struct sb *sb = tux_sb(inode->i_sb);
 
-	assert(!buffer_dirty(buffer) || buffer_can_modify(buffer, sb->delta));
+	assert(buffer_can_modify(buffer, sb->delta));
 
 	tux3_set_buffer_dirty(mapping(inode), buffer, sb->delta);
 	/* FIXME: we need to dirty inode only if buffer became

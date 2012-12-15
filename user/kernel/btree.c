@@ -539,7 +539,7 @@ static int leaf_need_redirect(struct sb *sb, struct buffer_head *buffer)
 static int bnode_need_redirect(struct sb *sb, struct buffer_head *buffer)
 {
 	/* If this is not re-dirty for sb->rollup, we need to redirect */
-	return !(buffer_dirty(buffer) && buffer_can_modify(buffer, sb->rollup));
+	return !buffer_already_dirty(buffer, sb->rollup);
 }
 
 int cursor_redirect(struct cursor *cursor)

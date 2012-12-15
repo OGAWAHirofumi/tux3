@@ -61,6 +61,7 @@ static inline struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return buffer;
 }
 
+int buffer_already_dirty(struct buffer_head *buffer, unsigned delta);
 int buffer_can_modify(struct buffer_head *buffer, unsigned delta);
 void tux3_set_buffer_dirty_list(struct address_space *mapping,
 				struct buffer_head *buffer, int delta,
