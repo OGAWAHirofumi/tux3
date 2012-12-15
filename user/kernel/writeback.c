@@ -326,6 +326,13 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 
 	/* If inode was deleted and referencer was gone, delete inode */
 	if (deleted) {
+		/*
+		 * Remove from hash before deleting the inode from itable.
+		 * Otherwise, when inum is reused, this inode will be
+		 * unexpectedly grabbed via hash.
+		 */
+		remove_inode_hash(inode);
+
 		err = tux3_purge_inode(inode, &idata, delta);
 		if (err && !ret)
 			ret = err;

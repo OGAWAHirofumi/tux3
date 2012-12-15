@@ -53,7 +53,7 @@ static void insert_inode_hash(struct inode *inode)
 	hlist_add_head(&inode->i_hash, b);
 }
 
-static void remove_inode_hash(struct inode *inode)
+void remove_inode_hash(struct inode *inode)
 {
 	if (!hlist_unhashed(&inode->i_hash))
 		hlist_del_init(&inode->i_hash);

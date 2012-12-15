@@ -95,6 +95,7 @@ int page_readlink(struct inode *inode, void *buf, unsigned size);
 
 /* inode.c */
 void inode_leak_check(void);
+void remove_inode_hash(struct inode *inode);
 void __iget(struct inode *inode);
 void ihold(struct inode *inode);
 struct inode *tux3_ilookup(struct sb *sb, inum_t inum);
