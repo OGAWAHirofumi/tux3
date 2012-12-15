@@ -210,6 +210,12 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 	return 0;
 }
 
+/* For now, we doesn't cache inode */
+static int generic_drop_inode(struct inode *inode)
+{
+	return 1;
+}
+
 #include "kernel/inode.c"
 
 static void tux_setup_inode(struct inode *inode)
@@ -276,7 +282,7 @@ void iput(struct inode *inode)
 		return;
 
 	if (atomic_dec_and_test(&inode->i_count)) {
-		if (inode->i_nlink > 0 && inode->i_state & I_DIRTY) {
+		if (!tux3_drop_inode(inode)) {
 			/* Keep the inode on dirty list */
 			return;
 		}

@@ -753,6 +753,7 @@ struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 			       dev_t rdev);
 struct inode *tux3_iget(struct sb *sb, inum_t inum);
 int tux3_save_inode(struct inode *inode, unsigned delta);
+int tux3_drop_inode(struct inode *inode);
 void tux3_evict_inode(struct inode *inode);
 
 /* log.c */

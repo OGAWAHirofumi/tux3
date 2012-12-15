@@ -562,6 +562,24 @@ static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
 }
 
 /*
+ * Decide whether in-core inode can be freed or not.
+ */
+int tux3_drop_inode(struct inode *inode)
+{
+	if (!is_bad_inode(inode)) {
+		/* If inode is dirty, we still keep in-core inode. */
+		if (inode->i_state & I_DIRTY) {
+#ifdef __KERNEL__
+			/* If unmount path, inode should be clean */
+			assert(inode->i_sb->s_flags & MS_ACTIVE);
+#endif
+			return 0;
+		}
+	}
+	return generic_drop_inode(inode);
+}
+
+/*
  * In-core inode is going to be freed, do job for it.
  */
 void tux3_evict_inode(struct inode *inode)
