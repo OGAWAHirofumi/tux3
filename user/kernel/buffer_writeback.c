@@ -199,17 +199,17 @@ static struct bio *bufvec_bio_alloc(struct sb *sb, unsigned int count,
 
 static void bufvec_submit_bio(struct bufvec *bufvec)
 {
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct bio *bio = bufvec->bio;
-	struct iowait *iowait = bufvec_bio_sb(bio)->iowait;
 
 	bufvec->bio = NULL;
 	bufvec->bio_lastbuf = NULL;
 
 	trace("bio %p, physical %Lu, count %u", bio,
-	      (block_t)bio->bi_sector >> (bufvec_bio_sb(bio)->blockbits - 9),
-	      bio->bi_size >> bufvec_bio_sb(bio)->blockbits);
+	      (block_t)bio->bi_sector >> (sb->blockbits - 9),
+	      bio->bi_size >> sb->blockbits);
 
-	iowait_inflight_inc(iowait);
+	iowait_inflight_inc(sb->iowait);
 	submit_bio(WRITE, bio);
 }
 
@@ -493,8 +493,7 @@ static void bufvec_end_io(struct bio *bio, int err)
 static void bufvec_bio_add_page(struct bufvec *bufvec)
 {
 	/* FIXME: inode is still guaranteed to be available? */
-	struct inode *inode = bufvec_inode(bufvec);
-	struct sb *sb = tux_sb(inode->i_sb);
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct page *page;
 	block_t physical;
 	unsigned int i, length, offset;
@@ -538,8 +537,8 @@ static void bufvec_bio_add_page(struct bufvec *bufvec)
 /* Check whether "physical" is contiguous with bio */
 static int bufvec_bio_is_contiguous(struct bufvec *bufvec, block_t physical)
 {
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct bio *bio = bufvec->bio;
-	struct sb *sb = bufvec_bio_sb(bio);
 	block_t next;
 
 	next = (block_t)bio->bi_sector + (bio->bi_size >> 9);
