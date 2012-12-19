@@ -600,9 +600,27 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 static void bufvec_cancel_and_unlock_page(struct page *page,
 					  const pgoff_t outside_index)
 {
-	/* If page is fully outside i_size, cancel dirty */
-	if (page->index >= outside_index)
-		cancel_dirty_page(page, PAGE_CACHE_SIZE);
+	/*
+	 * If page is fully outside i_size, cancel dirty.
+	 *
+	 * If page is partially outside i_size, we have to check
+	 * buffers. If all buffers aren't dirty, cancel dirty.
+	 */
+	if (page->index < outside_index) {
+		struct buffer_head *tmp, *head;
+
+		tmp = head = page_buffers(page);
+		do {
+			if (buffer_dirty(tmp))
+				goto out;
+
+			tmp = tmp->b_this_page;
+		} while (tmp != head);
+	}
+
+	cancel_dirty_page(page, PAGE_CACHE_SIZE);
+
+out:
 	unlock_page(page);
 }
 
