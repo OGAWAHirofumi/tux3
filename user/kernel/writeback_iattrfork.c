@@ -58,9 +58,33 @@ void tux3_iattrdirty(struct inode *inode)
 
 	spin_lock(&tuxnode->lock);
 	flags = tuxnode->flags;
-	if (tux3_iattrsta_has_delta(flags)) {
+	if (S_ISREG(inode->i_mode) || tux3_iattrsta_has_delta(flags)) {
+		unsigned old_delta;
+
+		/*
+		 * For a regular file, and even if iattrs are clean,
+		 * we have to provide stable idata for backend.
+		 *
+		 * Because backend may be committing data pages. If
+		 * so, backend have to check idata->i_size, and may
+		 * save dtree root. But previous delta doesn't have
+		 * stable iattrs.
+		 *
+		 * So, this provides stable iattrs for regular file,
+		 * even if previous delta is clean.
+		 *
+		 * Other types don't have this problem, because:
+		 * - Never dirty iattr (e.g. volmap). IOW, iattrs are
+		 *   always stable.
+		 * - Or dirty iattr with data, e.g. directory updates
+		 *   timestamp too with data blocks.
+		 */
+		if (S_ISREG(inode->i_mode) && !tux3_iattrsta_has_delta(flags))
+			old_delta = tux3_delta(delta - 1);
+		else
+			old_delta = tux3_iattrsta_get_delta(flags);
+
 		/* If delta is difference, iattrs was stabilized. Copy. */
-		unsigned old_delta = tux3_iattrsta_get_delta(flags);
 		if (old_delta != tux3_delta(delta)) {
 			struct tux3_iattr_data *idata =
 				&tux3_inode_ddc(inode, old_delta)->idata;
