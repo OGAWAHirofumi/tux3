@@ -135,8 +135,12 @@ static void tux3_iattr_read_and_clear(struct inode *inode,
 		/* If dirty and forked, use copy */
 		struct tux3_iattr_data *idata =
 			&tux3_inode_ddc(inode, delta)->idata;
+		assert(idata->present != TUX3_INVALID_PRESENT);
 		*result = *idata;
 	}
+
+	/* For debugging, set invalid value to ->present after read */
+	tux3_inode_ddc(inode, delta)->idata.present = TUX3_INVALID_PRESENT;
 }
 
 /*

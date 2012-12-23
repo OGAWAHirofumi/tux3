@@ -229,6 +229,8 @@ static void tux3_inode_init_once(void *mem)
 		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_buffers);
 		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_holes);
 		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_list);
+		/* For debugging, set invalid value to ->present */
+		tuxnode->i_ddc[i].idata.present = TUX3_INVALID_PRESENT;
 	}
 
 	/* Initialize generic part */

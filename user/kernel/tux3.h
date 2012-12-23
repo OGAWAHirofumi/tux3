@@ -333,6 +333,9 @@ enum {
 	LOG_TYPES
 };
 
+/* For debugging, MAX_ATTRS is smaller than 31, so present never be -1 */
+#define TUX3_INVALID_PRESENT		(-1U)
+
 /* Inode attributes data */
 struct tux3_iattr_data {
 	unsigned	present;
