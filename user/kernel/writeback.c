@@ -270,6 +270,12 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 				   &sb->rollup_buffers);
 }
 
+/* Caller must hold tuxnode->lock, or replay (no frontend) */
+void tux3_mark_inode_orphan(struct tux3_inode *tuxnode)
+{
+	tuxnode->flags |= TUX3_INODE_ORPHANED;
+}
+
 static void tux3_state_read_and_clear(struct inode *inode,
 				      struct tux3_iattr_data *idata,
 				      unsigned *orphaned, unsigned *deleted,
@@ -287,7 +293,7 @@ static void tux3_state_read_and_clear(struct inode *inode,
 	if (idata->i_nlink == 0 && !(tuxnode->flags & TUX3_INODE_ORPHANED)) {
 		/* This inode was orphaned in this delta */
 		*orphaned = 1;
-		tuxnode->flags |= TUX3_INODE_ORPHANED;
+		tux3_mark_inode_orphan(tuxnode);
 	}
 
 	/* Check whether inode has to delete */

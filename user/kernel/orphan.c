@@ -335,6 +335,7 @@ static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 		return PTR_ERR(inode);
 	assert(inode->i_nlink == 0);
 
+	tux3_mark_inode_orphan(tux_inode(inode));
 	/* List inode up, then caller will decide what to do */
 	list_add(&tux_inode(inode)->orphan_list, head);
 

@@ -845,6 +845,7 @@ void tux3_xattr_read_and_clear(struct inode *inode);
 void tux3_clear_dirty_inode(struct inode *inode);
 void tux3_mark_buffer_dirty(struct buffer_head *buffer);
 void tux3_mark_buffer_rollup(struct buffer_head *buffer);
+void tux3_mark_inode_orphan(struct tux3_inode *tuxnode);
 int tux3_flush_inode_internal(struct inode *inode, unsigned delta);
 int tux3_flush_inode(struct inode *inode, unsigned delta);
 int tux3_flush_inodes(struct sb *sb, unsigned delta);
