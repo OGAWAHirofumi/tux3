@@ -885,22 +885,34 @@ static void tux3_write_failed(struct address_space *mapping, loff_t to)
 	}
 }
 
-static int tux3_da_write_begin(struct file *file, struct address_space *mapping,
-			       loff_t pos, unsigned len, unsigned flags,
-			       struct page **pagep, void **fsdata)
+static int __tux3_file_write_begin(struct file *file,
+				   struct address_space *mapping,
+				   loff_t pos, unsigned len, unsigned flags,
+				   struct page **pagep, void **fsdata,
+				   int check_fork)
 {
 	int ret;
 
 	ret = tux3_write_begin(mapping, pos, len, flags, pagep,
-				tux3_da_get_block);
+			       tux3_da_get_block, check_fork);
 	if (ret < 0)
 		tux3_write_failed(mapping, pos + len);
 	return ret;
 }
 
-static int tux3_da_write_end(struct file *file, struct address_space *mapping,
-			     loff_t pos, unsigned len, unsigned copied,
-			     struct page *page, void *fsdata)
+/* Use delalloc and check buffer fork */
+static int tux3_file_write_begin(struct file *file,
+				 struct address_space *mapping,
+				 loff_t pos, unsigned len, unsigned flags,
+				 struct page **pagep, void **fsdata)
+{
+	return __tux3_file_write_begin(file, mapping, pos, len, flags, pagep,
+				       fsdata, 1);
+}
+
+static int tux3_file_write_end(struct file *file, struct address_space *mapping,
+			       loff_t pos, unsigned len, unsigned copied,
+			       struct page *page, void *fsdata)
 {
 	int ret;
 
@@ -999,8 +1011,8 @@ const struct address_space_operations tux_aops = {
 //	.writepages		= tux3_writepages,
 	.writepage		= tux3_disable_writepage,
 	.writepages		= tux3_disable_writepages,
-	.write_begin		= tux3_da_write_begin,
-	.write_end		= tux3_da_write_end,
+	.write_begin		= tux3_file_write_begin,
+	.write_end		= tux3_file_write_end,
 	.bmap			= tux3_bmap,
 	.invalidatepage		= tux3_invalidatepage,
 //	.releasepage		= ext4_releasepage,
@@ -1018,6 +1030,16 @@ static int tux3_blk_readpage(struct file *file, struct page *page)
 	return err;
 }
 
+/* Use delalloc and doesn't check buffer fork */
+static int tux3_blk_write_begin(struct file *file,
+				struct address_space *mapping,
+				loff_t pos, unsigned len, unsigned flags,
+				struct page **pagep, void **fsdata)
+{
+	return __tux3_file_write_begin(file, mapping, pos, len, flags, pagep,
+				       fsdata, 0);
+}
+
 #if 0 /* disabled writeback for now */
 static int tux3_blk_writepage(struct page *page, struct writeback_control *wbc)
 {
@@ -1031,7 +1053,7 @@ const struct address_space_operations tux_blk_aops = {
 //	.writepages	= tux3_writepages,
 	.writepage	= tux3_disable_writepage,
 	.writepages	= tux3_disable_writepages,
-	.write_begin	= tux3_da_write_begin,
+	.write_begin	= tux3_blk_write_begin,
 	.bmap		= tux3_bmap,
 	.invalidatepage	= tux3_invalidatepage,
 };
@@ -1059,13 +1081,14 @@ static int tux3_vol_writepage(struct page *page, struct writeback_control *wbc)
 }
 #endif
 
+/* Use tux3_vol_get_block() (physical map) and doesn't check buffer fork */
 static int tux3_vol_write_begin(struct file *file,
 				struct address_space *mapping,
 				loff_t pos, unsigned len, unsigned flags,
 				struct page **pagep, void **fsdata)
 {
 	return tux3_write_begin(mapping, pos, len, flags, pagep,
-				tux3_vol_get_block);
+				tux3_vol_get_block, 0);
 }
 
 const struct address_space_operations tux_vol_aops = {

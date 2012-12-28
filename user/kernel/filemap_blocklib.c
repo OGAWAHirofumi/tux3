@@ -1,7 +1,8 @@
 /*
  * Copied some block library functions, to replace mark_buffer_dirty()
- * by temp_blockdirty(), to replace discard_buffer() by
- * tux3_invalidate_buffer(), and add tux3_iattrdirty().
+ * by pagefork_for_blockdirty() and __tux3_mark_buffer_dirty(),
+ * to replace discard_buffer() by tux3_invalidate_buffer(), and add
+ * tux3_iattrdirty().
  *
  * We should check the update of original functions, and sync with it.
  */
@@ -9,20 +10,10 @@
 #include <linux/pagevec.h>
 #include <linux/cleancache.h>
 
-static void temp_blockdirty(struct buffer_head *buffer)
-{
-	struct inode *inode = buffer_inode(buffer);
-	unsigned delta = tux3_get_current_delta();
-
-	assert(buffer_can_modify(buffer, delta));
-
-	tux3_set_buffer_dirty(mapping(inode), buffer, delta);
-	/* FIXME: we need to dirty inode only if buffer became
-	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
-}
-
-/* Copy of page_zero_new_buffers() (changed to call temp_blockdirty()) */
+/*
+ * Copy of page_zero_new_buffers()
+ * (changed to call __tux3_mark_buffer_dirty())
+ */
 static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 				       unsigned to)
 {
@@ -40,6 +31,8 @@ static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 
 		if (buffer_new(bh)) {
 			if (block_end > from && block_start < to) {
+				unsigned delta = tux3_get_current_delta();
+
 				if (!PageUptodate(page)) {
 					unsigned start, size;
 
@@ -51,7 +44,7 @@ static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 				}
 
 				clear_buffer_new(bh);
-				temp_blockdirty(bh);
+				__tux3_mark_buffer_dirty(bh, delta);
 			}
 		}
 
@@ -61,7 +54,7 @@ static void tux3_page_zero_new_buffers(struct page *page, unsigned from,
 }
 
 /*
- * Copy of __block_write_begin() (changed to call temp_blockdirty(),
+ * Copy of __block_write_begin() (changed to call __tux3_mark_buffer_dirty(),
  * and to remove unmap_underlying_metadata())
  */
 static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
@@ -116,7 +109,7 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 					 * re-think after mmap support */
 					//clear_buffer_new(bh);
 					set_buffer_uptodate(bh);
-					//temp_blockdirty(bh);
+					//__tux3_mark_buffer_dirty(bh, delta);
 					continue;
 				}
 				if (block_end > to || block_start < from)
@@ -151,19 +144,45 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 	return err;
 }
 
-/* Copy of block_write_begin() */
+/*
+ * Copy of block_write_begin()
+ * (Add to call pagefork_for_blockdirty() for buffer fork)
+ */
 static int tux3_write_begin(struct address_space *mapping, loff_t pos,
 			    unsigned len, unsigned flags,
-			    struct page **pagep, get_block_t *get_block)
+			    struct page **pagep, get_block_t *get_block,
+			    int check_fork)
 {
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	struct page *page;
 	int status;
 
+retry:
 	page = grab_cache_page_write_begin(mapping, index, flags);
 	if (!page)
 		return -ENOMEM;
-	assert(!PageForked(page));	/* FIXME: handle forked page */
+
+	/*
+	 * FIXME: If check_fork == 0, caller handle buffer fork.
+	 * Unlike check_fork hack, we are better to provide the different
+	 * blockget() implementation doesn't use tux3_write_begin().
+	 */
+	if (check_fork) {
+		struct page *tmp;
+
+		tmp = pagefork_for_blockdirty(page, tux3_get_current_delta());
+		if (IS_ERR(tmp)) {
+			int err;
+			unlock_page(page);
+			page_cache_release(page);
+
+			err = PTR_ERR(tmp);
+			if (err == -EAGAIN)
+				goto retry;
+			return err;
+		}
+		page = tmp;
+	}
 
 	status = __tux3_write_begin(page, pos, len, get_block);
 	if (unlikely(status)) {
@@ -176,7 +195,10 @@ static int tux3_write_begin(struct address_space *mapping, loff_t pos,
 	return status;
 }
 
-/* Copy of __block_commit_write() (changed to call temp_blockdirty()) */
+/*
+ * Copy of __block_commit_write()
+ * (changed to call __tux3_mark_buffer_dirty())
+ */
 static int __tux3_commit_write(struct inode *inode, struct page *page,
 			       unsigned from, unsigned to)
 {
@@ -196,7 +218,7 @@ static int __tux3_commit_write(struct inode *inode, struct page *page,
 				partial = 1;
 		} else {
 			set_buffer_uptodate(bh);
-			temp_blockdirty(bh);
+			__tux3_mark_buffer_dirty(bh, tux3_get_current_delta());
 		}
 		clear_buffer_new(bh);
 	}
@@ -324,7 +346,9 @@ out:
 }
 
 /*
- * Based on block_truncate_page() (changed to call temp_blockdirty())
+ * Based on block_truncate_page()
+ * (changed to call pagefork_for_blockdirty() and __tux3_mark_buffer_dirty()())
+ *
  * This fills zero for whole page, and checks if buffer can be truncated.
  * Then invalidate buffers if it is needed.
  *
@@ -337,13 +361,14 @@ static int __tux3_truncate_partial_block(struct address_space *mapping,
 {
 	struct inode *inode = mapping->host;
 	struct sb *sb = tux_sb(inode->i_sb);
+	unsigned delta = tux3_get_current_delta();
 	pgoff_t index = from >> PAGE_CACHE_SHIFT;
 	unsigned offset = from & (PAGE_CACHE_SIZE - 1);
 	sector_t iblock;
 	unsigned pos, invalid_from;
-	struct page *page;
+	struct page *page, *tmp;
 	struct buffer_head *bh = NULL;
-	int err;
+	int err, forked;
 
 	/* Page boundary? */
 	if (!offset)
@@ -376,19 +401,37 @@ static int __tux3_truncate_partial_block(struct address_space *mapping,
 		 * FIXME: If we didn't need buffer fork, we don't need
 		 * to dirty buffer.
 		 */
+retry_find:
 		page = find_lock_page(mapping, index);
 		if (page) {
-check_fork:
-			if (page_has_buffers(page)) {
-				bh = get_buffer(page, pos);
-				temp_blockdirty(bh);
-				page = bh->b_page;
+			tmp = pagefork_for_blockdirty(page, delta);
+			if (IS_ERR(tmp)) {
+				unlock_page(page);
+				page_cache_release(page);
+
+				err = PTR_ERR(tmp);
+				if (err == -EAGAIN)
+					goto retry_find;
+				goto out;
+			}
+			forked = tmp != page;
+			page = tmp;
+
+dirty_buffer_outside:
+			/* If no buffer fork, we don't need to pin the page */
+			/* FIXME: might be forked in previous truncate,
+			 * so dirty unconditionally */
+			forked = 1;
+			if (forked && page_has_buffers(page)) {
+				assert(page_has_buffers(page));
+				/* Dirty outside i_size to pin the page */
+				bh = __get_buffer(page, pos);
+				__tux3_mark_buffer_dirty(bh, delta);
 
 				invalid_from = (pos + 1) << sb->blockbits;
 				invalid_from &= PAGE_CACHE_SIZE - 1;
 			}
 
-			/* No dirty buffers, just zero fill outside i_size */
 			goto zero_fill_page;
 		}
 
@@ -396,17 +439,30 @@ check_fork:
 		return 0;
 	}
 
+retry_grab:
 	page = grab_cache_page(mapping, index);
 	err = -ENOMEM;
 	if (!page)
 		goto out;
-	assert(!PageForked(page));	/* FIXME: handle forked page */
+
+	tmp = pagefork_for_blockdirty(page, delta);
+	if (IS_ERR(tmp)) {
+		unlock_page(page);
+		page_cache_release(page);
+
+		err = PTR_ERR(tmp);
+		if (err == -EAGAIN)
+			goto retry_grab;
+		goto out;
+	}
+	forked = tmp != page;
+	page = tmp;
 
 	if (!page_has_buffers(page))
 		create_empty_buffers(page, sb->blocksize, 0);
 
 	/* Find the buffer that contains "offset" */
-	bh = get_buffer(page, pos);
+	bh = __get_buffer(page, pos);
 
 	err = 0;
 	/*
@@ -426,9 +482,8 @@ check_fork:
 			 * whether the page needs buffer fork or not.
 			 */
 			if (pos + 1 < PAGE_CACHE_SIZE >> sb->blockbits) {
-				blockput(bh);
 				pos++;
-				goto check_fork;
+				goto dirty_buffer_outside;
 			}
 			goto unlock;
 		}
@@ -447,8 +502,7 @@ check_fork:
 			goto unlock;
 	}
 
-	temp_blockdirty(bh);
-	page = bh->b_page;
+	__tux3_mark_buffer_dirty(bh, delta);
 	/*
 	 * FIXME: If we did buffer fork, the other buffers should be
 	 * clean, so we don't need to invalidate buffers outside
@@ -464,8 +518,6 @@ zero_fill_page:
 	err = 0;
 
 unlock:
-	if (bh)
-		blockput(bh);
 	unlock_page(page);
 	page_cache_release(page);
 out:
