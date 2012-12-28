@@ -606,21 +606,11 @@ static void bufvec_cancel_and_unlock_page(struct page *page,
 	 * If page is partially outside i_size, we have to check
 	 * buffers. If all buffers aren't dirty, cancel dirty.
 	 */
-	if (page->index < outside_index) {
-		struct buffer_head *tmp, *head;
+	if (page->index < outside_index)
+		tux3_try_cancel_dirty_page(page);
+	else
+		cancel_dirty_page(page, PAGE_CACHE_SIZE);
 
-		tmp = head = page_buffers(page);
-		do {
-			if (buffer_dirty(tmp))
-				goto out;
-
-			tmp = tmp->b_this_page;
-		} while (tmp != head);
-	}
-
-	cancel_dirty_page(page, PAGE_CACHE_SIZE);
-
-out:
 	unlock_page(page);
 }
 

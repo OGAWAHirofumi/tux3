@@ -308,11 +308,52 @@ static int tux3_write_end(struct file *file, struct address_space *mapping,
 	return copied;
 }
 
-/* Copy of block_invalidatepage() (changed to call tux3_invalidate_buffer()) */
+/*
+ * Check if we can cancel the dirty of page. This is called after
+ * clear dirty of buffers on this page.
+ *
+ * This would be called for similar purpose to tux3_invalidatepage(),
+ * but caller care to change buffer state.
+ *
+ * FIXME: this traverse buffers on page for each clear dirty
+ * buffer. We may want to clear dirty page as batch job (like
+ * ->writepages())
+ * FIXME: cancel dirty is untested for mmap write.
+ *
+ * Caller must care locking (e.g. volmap page in backend, hold lock_page()).
+ */
+void tux3_try_cancel_dirty_page(struct page *page)
+{
+	struct buffer_head *tmp, *head;
+
+	tmp = head = page_buffers(page);
+	do {
+		if (buffer_dirty(tmp))
+			return;
+
+		tmp = tmp->b_this_page;
+	} while (tmp != head);
+
+	cancel_dirty_page(page, PAGE_CACHE_SIZE);
+}
+
+/*
+ * Based on block_invalidatepage().
+ * (changed to call tux3_invalidate_buffer(), and if no dirty buffers,
+ * cancel dirty page)
+ *
+ * This invalidate the buffers on page. Then if there is no dirty
+ * buffers, cancel dirty page.
+ *
+ * FIXME: cancel dirty is untested for mmap write.
+ *
+ * Caller must hold lock_page().
+ */
 static void tux3_invalidatepage(struct page *page, unsigned long offset)
 {
 	struct buffer_head *head, *bh, *next;
 	unsigned int curr_off = 0;
+	int has_dirty = 0;
 
 	BUG_ON(!PageLocked(page));
 	/* If there is no buffer, buffers shouldn't be dirty */
@@ -325,14 +366,20 @@ static void tux3_invalidatepage(struct page *page, unsigned long offset)
 		unsigned int next_off = curr_off + bh->b_size;
 		next = bh->b_this_page;
 
-		/*
-		 * is this block fully invalidated?
-		 */
+		/* Is this block fully invalidated? */
 		if (offset <= curr_off)
 			tux3_invalidate_buffer(bh);
+
+		/* If buffer is dirty, don't cancel dirty page */
+		if (buffer_dirty(bh))
+			has_dirty = 1;
+
 		curr_off = next_off;
 		bh = next;
 	} while (bh != head);
+
+	if (!has_dirty)
+		cancel_dirty_page(page, PAGE_CACHE_SIZE - offset);
 
 	/*
 	 * We release buffers only if the entire page is being invalidated.

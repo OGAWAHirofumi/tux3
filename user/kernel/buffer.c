@@ -174,8 +174,9 @@ static void tux3_clear_buffer_dirty_for_io_hack(struct buffer_head *buffer)
 static void __blockput_free(struct sb *sb, struct buffer_head *buffer,
 			    unsigned delta)
 {
-	/* FIXME: Untested. buffer was freed, so we would like to free cache */
+	/* FIXME: buffer was freed, so we would like to free cache */
 	tux3_clear_buffer_dirty(buffer, delta);
+	tux3_try_cancel_dirty_page(buffer->b_page);
 	blockput(buffer);
 }
 
