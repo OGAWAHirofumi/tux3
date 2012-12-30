@@ -827,7 +827,8 @@ static void tux_setup_inode(struct inode *inode)
 		inode->i_op = &tux_file_iops;
 		inode->i_fop = &tux_file_fops;
 		inode->i_mapping->a_ops = &tux_file_aops;
-		tux_inode(inode)->io = tux3_filemap_overwrite_io;
+//		tux_inode(inode)->io = tux3_filemap_overwrite_io;
+		tux_inode(inode)->io = tux3_filemap_redirect_io;
 		break;
 	case S_IFDIR:
 		inode->i_op = &tux_dir_iops;

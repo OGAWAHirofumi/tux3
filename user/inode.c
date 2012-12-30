@@ -248,7 +248,8 @@ static void tux_setup_inode(struct inode *inode)
 		inode->map->io = dev_errio;
 		break;
 	case S_IFREG:
-		inode->map->io = tux3_filemap_overwrite_io;
+//		inode->map->io = tux3_filemap_overwrite_io;
+		inode->map->io = tux3_filemap_redirect_io;
 		break;
 	case S_IFDIR:
 	case S_IFLNK:
