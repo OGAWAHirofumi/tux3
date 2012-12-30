@@ -616,7 +616,12 @@ int tux3_drop_inode(struct inode *inode)
 		if (inode->i_state & I_DIRTY) {
 #ifdef __KERNEL__
 			/* If unmount path, inode should be clean */
-			assert(inode->i_sb->s_flags & MS_ACTIVE);
+			if (!(inode->i_sb->s_flags & MS_ACTIVE)) {
+				warn("inode %p, inum %Lu, state %lx/%x",
+				     inode, tux_inode(inode)->inum,
+				     inode->i_state, tux_inode(inode)->flags);
+				assert(inode->i_sb->s_flags & MS_ACTIVE);
+			}
 #endif
 			return 0;
 		}

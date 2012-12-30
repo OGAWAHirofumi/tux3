@@ -76,7 +76,6 @@ int put_super(struct sb *sb)
 	 */
 
 	cleanup_garbage_for_debugging(sb);
-	cleanup_dirty_for_umount(sb);
 
 	__tux3_put_super(sb);
 

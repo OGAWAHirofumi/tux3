@@ -284,6 +284,11 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 
 	tux3_set_buffer_dirty_list(mapping(inode), buffer, sb->rollup,
 				   &sb->rollup_buffers);
+	/*
+	 * FIXME: we don't call __tux3_mark_buffer_dirty() here, but
+	 * mark_buffer_dirty() marks inode as I_DIRTY_PAGES. This
+	 * makes inconsistent state on inode->i_state and tuxnode->flags.
+	 */
 }
 
 /* Caller must hold tuxnode->lock, or replay (no frontend) */

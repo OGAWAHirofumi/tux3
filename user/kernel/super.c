@@ -70,7 +70,17 @@ static void cleanup_dirty_for_umount(struct sb *sb)
 		cleanup_dirty_buffers(sb->bitmap, head, rollup);
 		cleanup_dirty_inode(sb->bitmap);
 	}
-	cleanup_dirty_buffers(sb->volmap, &sb->rollup_buffers, rollup);
+	if (sb->volmap) {
+		cleanup_dirty_buffers(sb->volmap, &sb->rollup_buffers, rollup);
+		/*
+		 * FIXME: mark_buffer_dirty() for rollup buffers marks
+		 * volmap as I_DIRTY_PAGES (we don't need I_DIRTY_PAGES
+		 * actually) without changing tuxnode->flags.
+		 *
+		 * So this is called to clear I_DIRTY_PAGES.
+		 */
+		cleanup_dirty_inode(sb->volmap);
+	}
 
 	/* orphan_add should be empty */
 	assert(list_empty(&sb->orphan_add));
@@ -88,6 +98,8 @@ static inline void cleanup_dirty_for_umount(struct sb *sb)
 
 static void __tux3_put_super(struct sb *sbi)
 {
+	cleanup_dirty_for_umount(sbi);
+
 	tux3_exit_flusher(sbi);
 
 	/* All forked buffers should be freed here */
@@ -354,8 +366,6 @@ static int tux3_sync_fs(struct super_block *sb, int wait)
 static void tux3_put_super(struct super_block *sb)
 {
 	struct sb *sbi = tux_sb(sb);
-
-	cleanup_dirty_for_umount(sbi);
 
 	__tux3_put_super(sbi);
 	sb->s_fs_info = NULL;
