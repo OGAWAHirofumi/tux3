@@ -213,7 +213,7 @@ void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 	set_buffer_clean(buffer);
 }
 
-/* Cleanup dirty for I/O path (for volmap) */
+/* Cleanup dirty for I/O path (for volmap/logmap) */
 static void __clear_buffer_dirty_for_endio(struct buffer_head *buffer, int err)
 {
 	if (err) {

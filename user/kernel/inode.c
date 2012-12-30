@@ -897,13 +897,13 @@ static void tux_setup_inode(struct inode *inode)
 			/* FALLTHRU */
 		case TUX_VTABLE_INO:
 		case TUX_ATABLE_INO:
-		case TUX_LOGMAP_INO:
 			/* set fake i_size to escape the check of block_* */
 			inode->i_size = vfs_sb(sb)->s_maxbytes;
 			inode->i_mapping->a_ops = &tux_blk_aops;
 			tux_inode(inode)->io = tux3_filemap_redirect_io;
 			break;
 		case TUX_VOLMAP_INO:
+		case TUX_LOGMAP_INO:
 			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
 			inode->i_mapping->a_ops = &tux_vol_aops;
 			tux_inode(inode)->io = tux3_volmap_io;
@@ -917,8 +917,8 @@ static void tux_setup_inode(struct inode *inode)
 
 		/* Prevent reentering into our fs recursively by mem reclaim */
 		switch (inum) {
-		case TUX_VOLMAP_INO:
 		case TUX_BITMAP_INO:
+		case TUX_VOLMAP_INO:
 		case TUX_LOGMAP_INO:
 			/* FIXME: we should use non-__GFP_FS for all? */
 			gfp_mask &= ~__GFP_FS;

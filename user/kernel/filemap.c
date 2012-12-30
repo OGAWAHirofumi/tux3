@@ -608,13 +608,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
-	struct btree *btree = &tux_inode(inode)->btree;
 	enum map_mode mode;
-
-	if (sb->logmap == inode) {
-		assert(!has_root(btree) && create);
-		return 0;
-	}
 
 	int delalloc;
 	if (create == 3) {

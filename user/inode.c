@@ -268,12 +268,11 @@ static void tux_setup_inode(struct inode *inode)
 			inode->i_size = vfs_sb(sb)->s_maxbytes;
 			inode->map->io = tux3_filemap_redirect_io;
 			break;
-		case TUX_LOGMAP_INO:
-			inode->map->io = dev_errio;
-			break;
 		case TUX_VOLMAP_INO:
+		case TUX_LOGMAP_INO:
 			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
-			/* use default handler for map->io */;
+			/* use default handler for map->io */
+			/* inode->map->io = dev_blockio; */
 			/* Flushed by tux3_flush_inode_internal() */
 			tux3_set_inode_no_flush(inode);
 			break;
