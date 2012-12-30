@@ -63,6 +63,7 @@ static inline void truncate_inode_pages(map_t *map, loff_t lstart)
 	truncate_buffers_range(map, lstart, LLONG_MAX);
 }
 
+void truncate_pagecache(struct inode *inode, loff_t oldsize, loff_t newsize);
 void truncate_setsize(struct inode *inode, loff_t newsize);
 
 #endif /* !LIBKLIB_MM_H */

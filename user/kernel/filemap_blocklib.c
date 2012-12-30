@@ -7,6 +7,7 @@
  */
 
 #include <linux/pagevec.h>
+#include <linux/cleancache.h>
 
 static void temp_blockdirty(struct buffer_head *buffer)
 {
@@ -322,29 +323,78 @@ out:
 	return;
 }
 
-/* Copy of block_truncate_page() (changed to call temp_blockdirty()) */
-int tux3_truncate_page(struct address_space *mapping,
-		       loff_t from, get_block_t *get_block)
+/*
+ * Based on block_truncate_page() (changed to call temp_blockdirty())
+ * This fills zero for whole page, and checks if buffer can be truncated.
+ * Then invalidate buffers if it is needed.
+ *
+ * Even if truncate was block boundary, we may have to fork page.  If
+ * the buffers are dirtied for past delta, we can't truncate, so this
+ * forks buffer in that case.
+ */
+static int __tux3_truncate_partial_block(struct address_space *mapping,
+					 loff_t from, get_block_t *get_block)
 {
-	pgoff_t index = from >> PAGE_CACHE_SHIFT;
-	unsigned offset = from & (PAGE_CACHE_SIZE-1);
-	unsigned blocksize;
-	sector_t iblock;
-	unsigned length, pos;
 	struct inode *inode = mapping->host;
+	struct sb *sb = tux_sb(inode->i_sb);
+	pgoff_t index = from >> PAGE_CACHE_SHIFT;
+	unsigned offset = from & (PAGE_CACHE_SIZE - 1);
+	sector_t iblock;
+	unsigned pos, invalid_from;
 	struct page *page;
-	struct buffer_head *bh;
+	struct buffer_head *bh = NULL;
 	int err;
 
-	blocksize = 1 << inode->i_blkbits;
-	length = offset & (blocksize - 1);
-
-	/* Block boundary? Nothing to do */
-	if (!length)
+	/* Page boundary? */
+	if (!offset)
 		return 0;
 
-	length = blocksize - length;
-	iblock = (sector_t)index << (PAGE_CACHE_SHIFT - inode->i_blkbits);
+	iblock = from >> sb->blockbits;
+	pos = offset >> sb->blockbits;
+	invalid_from = offset;
+
+	/*
+	 * Block boundary? Make sure the buffers can be truncated.
+	 */
+	if (!(offset & sb->blockmask)) {
+		/*
+		 * If there is dirty buffers outside i_size, we have
+		 * to zero fill those. To do it, we need buffer fork
+		 * to make stable page on in-flight delta.
+		 *
+		 * NOTE: Zeroed buffers are not needed to be written
+		 * though, we have to provide the data on page for
+		 * frontend until data on forked page is available via
+		 * dtree.  So, this dirty the buffer to pin the page.
+		 *
+		 * FIXME: This dirty buffer outside i_size is not
+		 * needed to be written, if buffer is outside i_size,
+		 * buffer is not written. Although if buffer became
+		 * inside i_size on this delta, zeroed buffer can be
+		 * written out.  This is unnecessary writeout.
+		 *
+		 * FIXME: If we didn't need buffer fork, we don't need
+		 * to dirty buffer.
+		 */
+		page = find_lock_page(mapping, index);
+		if (page) {
+check_fork:
+			if (page_has_buffers(page)) {
+				bh = get_buffer(page, pos);
+				temp_blockdirty(bh);
+				page = bh->b_page;
+
+				invalid_from = (pos + 1) << sb->blockbits;
+				invalid_from &= PAGE_CACHE_SIZE - 1;
+			}
+
+			/* No dirty buffers, just zero fill outside i_size */
+			goto zero_fill_page;
+		}
+
+		/* No page, do nothing */
+		return 0;
+	}
 
 	page = grab_cache_page(mapping, index);
 	err = -ENOMEM;
@@ -353,26 +403,35 @@ int tux3_truncate_page(struct address_space *mapping,
 	assert(!PageForked(page));	/* FIXME: handle forked page */
 
 	if (!page_has_buffers(page))
-		create_empty_buffers(page, blocksize, 0);
+		create_empty_buffers(page, sb->blocksize, 0);
 
 	/* Find the buffer that contains "offset" */
-	bh = page_buffers(page);
-	pos = blocksize;
-	while (offset >= pos) {
-		bh = bh->b_this_page;
-		iblock++;
-		pos += blocksize;
-	}
+	bh = get_buffer(page, pos);
 
 	err = 0;
+	/*
+	 * FIXME: If this buffer is dirty, we would not need to call
+	 * get_block()?
+	 */
 	if (!buffer_mapped(bh)) {
-		WARN_ON(bh->b_size != blocksize);
+		WARN_ON(bh->b_size != sb->blocksize);
 		err = get_block(inode, iblock, bh, 0);
 		if (err)
 			goto unlock;
 		/* unmapped? It's a hole - nothing to do */
-		if (!buffer_mapped(bh))
+		if (!buffer_mapped(bh)) {
+			/*
+			 * If this is hole and partial truncate is not
+			 * last block on the page, we have to check
+			 * whether the page needs buffer fork or not.
+			 */
+			if (pos + 1 < PAGE_CACHE_SIZE >> sb->blockbits) {
+				blockput(bh);
+				pos++;
+				goto check_fork;
+			}
 			goto unlock;
+		}
 	}
 
 	/* Ok, it's mapped. Make sure it's up-to-date */
@@ -388,15 +447,36 @@ int tux3_truncate_page(struct address_space *mapping,
 			goto unlock;
 	}
 
-	zero_user(page, offset, length);
 	temp_blockdirty(bh);
+	page = bh->b_page;
+	/*
+	 * FIXME: If we did buffer fork, the other buffers should be
+	 * clean, so we don't need to invalidate buffers outside
+	 * i_size.
+	 */
+
+zero_fill_page:
+	zero_user_segment(page, offset, PAGE_CACHE_SIZE);
+	cleancache_invalidate_page(mapping, page);
+	if (invalid_from && page_has_buffers(page))
+		mapping->a_ops->invalidatepage(page, invalid_from);
+
 	err = 0;
 
 unlock:
+	if (bh)
+		blockput(bh);
 	unlock_page(page);
 	page_cache_release(page);
 out:
 	return err;
+}
+
+/* Truncate partial block. If partial, we have to update last block. */
+int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
+{
+	return __tux3_truncate_partial_block(inode->i_mapping, newsize,
+					     tux3_get_block);
 }
 
 /*

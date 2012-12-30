@@ -188,6 +188,16 @@ struct inode *iget5_locked(struct sb *sb, inum_t inum,
 	return inode;
 }
 
+loff_t i_size_read(const struct inode *inode)
+{
+	return inode->i_size;
+}
+
+void i_size_write(struct inode *inode, loff_t i_size)
+{
+	inode->i_size = i_size;
+}
+
 /* Truncate partial block. If partial, we have to update last block. */
 static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 {
