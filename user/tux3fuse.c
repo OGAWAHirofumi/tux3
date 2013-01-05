@@ -969,36 +969,45 @@ static struct fuse_lowlevel_ops tux3_ops = {
 };
 
 enum {
-	/* FUSE handles this option internally */
-	FUSE_OPT_KEY_INTERNAL,
+	/* tux3fuse options */
+	FUSE_OPT_KEY_TUX3_HELP,
 };
 
 static struct fuse_opt tux3fuse_options[] = {
-	FUSE_OPT_KEY("-d", FUSE_OPT_KEY_INTERNAL),
-	FUSE_OPT_KEY("-f", FUSE_OPT_KEY_INTERNAL),
+	FUSE_OPT_KEY("-h",	FUSE_OPT_KEY_TUX3_HELP),
+	FUSE_OPT_KEY("--help",	FUSE_OPT_KEY_TUX3_HELP),
 	FUSE_OPT_END
 };
 
 static int tux3fuse_parse_options(void *data, const char *arg,
 				  int key, struct fuse_args *outargs)
 {
+	struct tux3fuse *tux3fuse = data;
+
 	/*
 	 * We take the first two NONOPT options as
 	 * the volume name and the mount point.
 	 */
 	if (key == FUSE_OPT_KEY_NONOPT) {
-		char **volname = data;
-		if (!*volname) {
-			*volname = canonicalize_file_name(arg);
-			if (!*volname) {
+		if (!tux3fuse->volname) {
+			tux3fuse->volname = canonicalize_file_name(arg);
+			if (!tux3fuse->volname) {
 				fprintf(stderr, "Volume not found: %s: %s\n",
 					arg, strerror(errno));
 				return -1;
 			}
 			return 0; /* We handled this option */
 		}
-	} else if (key == FUSE_OPT_KEY_INTERNAL) {
-		return 1; /* Pass this option to FUSE */
+	} else if (key == FUSE_OPT_KEY_TUX3_HELP) {
+		fprintf(stderr,
+			"Usage: %s [options] <volume> <mount-point>\n"
+			"\n"
+			"Options:\n"
+			"    -o opt,[opt...]        mount options\n"
+			"    -h   --help            print help\n"
+			"    -V   --version         print version\n"
+			"\n", outargs->argv[0]);
+		return fuse_opt_add_arg(outargs, "-ho");
 	}
 
 	/* Pass all other options to FUSE. */
@@ -1014,18 +1023,19 @@ int main(int argc, char *argv[])
 	int foreground;
 	int err = -1;
 
-	char *volname = NULL;
+	struct tux3fuse tux3fuse = {};
 
 	if (argc < 3) {
-		printf("Usage: %s [options] <volume> <mount-point>\n\n",
-			argv[0]);
-		printf("Options:\n");
-		printf("\t-f\tStay in foreground\n");
-		printf("\t-d\tStay in foreground, display FUSE messages\n");
-		return 1;
+		/* Print usage */
+		struct fuse_args usage_args = FUSE_ARGS_INIT(0, NULL);
+		if (fuse_opt_add_arg(&usage_args, argv[0]) == -1 ||
+		    fuse_opt_add_arg(&usage_args, "-h") == -1)
+			goto error;
+
+		args = usage_args;
 	}
 
-	if (fuse_opt_parse(&args, &volname, tux3fuse_options,
+	if (fuse_opt_parse(&args, &tux3fuse, tux3fuse_options,
 			   tux3fuse_parse_options) == -1)
 		goto error;
 
@@ -1035,10 +1045,6 @@ int main(int argc, char *argv[])
 	fc = fuse_mount(mountpoint, &args);
 	if (!fc)
 		goto error;
-
-	struct tux3fuse tux3fuse = {
-		.volname = volname,
-	};
 
 	fs = fuse_lowlevel_new(&args, &tux3_ops, sizeof(tux3_ops), &tux3fuse);
 	if (fs) {
@@ -1061,8 +1067,8 @@ int main(int argc, char *argv[])
 
 error:
 	fuse_opt_free_args(&args);
-	if (volname)
-		free(volname);
+	if (tux3fuse.volname)
+		free(tux3fuse.volname);
 
 	return err ? 1 : 0;
 }
