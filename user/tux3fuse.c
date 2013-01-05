@@ -968,17 +968,66 @@ static struct fuse_lowlevel_ops tux3_ops = {
 	/* .poll */
 };
 
+enum {
+	/* FUSE handles this option internally */
+	FUSE_OPT_KEY_INTERNAL,
+};
+
+static struct fuse_opt tux3fuse_options[] = {
+	FUSE_OPT_KEY("-d", FUSE_OPT_KEY_INTERNAL),
+	FUSE_OPT_KEY("-f", FUSE_OPT_KEY_INTERNAL),
+	FUSE_OPT_END
+};
+
+static int tux3fuse_parse_options(void *data, const char *arg,
+				  int key, struct fuse_args *outargs)
+{
+	/*
+	 * We take the first two NONOPT options as
+	 * the volume name and the mount point.
+	 */
+	if (key == FUSE_OPT_KEY_NONOPT) {
+		char **volname = data;
+		if (!*volname) {
+			*volname = canonicalize_file_name(arg);
+			if (!*volname) {
+				fprintf(stderr, "Volume not found: %s: %s\n",
+					arg, strerror(errno));
+				return -1;
+			}
+			return 0; /* We handled this option */
+		}
+	} else if (key == FUSE_OPT_KEY_INTERNAL) {
+		return 1; /* Pass this option to FUSE */
+	}
+
+	/* Pass all other options to FUSE. */
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
-	struct fuse_args args = FUSE_ARGS_INIT(argc - 1, argv + 1);
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_chan *fc;
 	struct fuse_session *fs;
 	char *mountpoint;
 	int foreground;
 	int err = -1;
 
-	if (argc < 3)
-		error("usage: %s <volname> <mountpoint> [fuse opts]", argv[0]);
+	char *volname = NULL;
+
+	if (argc < 3) {
+		printf("Usage: %s [options] <volume> <mount-point>\n\n",
+			argv[0]);
+		printf("Options:\n");
+		printf("\t-f\tStay in foreground\n");
+		printf("\t-d\tStay in foreground, display FUSE messages\n");
+		return 1;
+	}
+
+	if (fuse_opt_parse(&args, &volname, tux3fuse_options,
+			   tux3fuse_parse_options) == -1)
+		goto error;
 
 	if (fuse_parse_cmdline(&args, &mountpoint, NULL, &foreground) == -1)
 		goto error;
@@ -988,12 +1037,16 @@ int main(int argc, char *argv[])
 		goto error;
 
 	struct tux3fuse tux3fuse = {
-		.volname = canonicalize_file_name(argv[1]),
+		.volname = volname,
 	};
+
 	fs = fuse_lowlevel_new(&args, &tux3_ops, sizeof(tux3_ops), &tux3fuse);
 	if (fs) {
 		if (fuse_set_signal_handlers(fs) != -1) {
 			fuse_session_add_chan(fs, fc);
+
+			if (!foreground)
+				printf("Running in background\n");
 			fuse_daemonize(foreground);
 
 			err = fuse_session_loop(fs);
@@ -1005,10 +1058,11 @@ int main(int argc, char *argv[])
 	}
 
 	fuse_unmount(mountpoint, fc);
-	free(tux3fuse.volname);
 
 error:
 	fuse_opt_free_args(&args);
+	if (volname)
+		free(volname);
 
 	return err ? 1 : 0;
 }
