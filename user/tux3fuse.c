@@ -988,7 +988,7 @@ int main(int argc, char *argv[])
 		goto error;
 
 	struct tux3fuse tux3fuse = {
-		.volname = argv[1],
+		.volname = canonicalize_file_name(argv[1]),
 	};
 	fs = fuse_lowlevel_new(&args, &tux3_ops, sizeof(tux3_ops), &tux3fuse);
 	if (fs) {
@@ -1005,6 +1005,7 @@ int main(int argc, char *argv[])
 	}
 
 	fuse_unmount(mountpoint, fc);
+	free(tux3fuse.volname);
 
 error:
 	fuse_opt_free_args(&args);
