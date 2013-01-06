@@ -1,11 +1,15 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
-#include "libklib/list.h"
-
 #define BUFFER_FOR_TUX3
 
-#define BUFFER_DIRTY_STATES 4
+#ifdef BUFFER_FOR_TUX3
+#include "trace.h"
+#endif
+#include "libklib/list.h"
+
+#define BUFFER_DIRTY_STATES	4
+#define DEFAULT_DIRTY_WHEN	0
 
 enum {
 	BUFFER_FREED, BUFFER_EMPTY, BUFFER_CLEAN, BUFFER_DIRTY,
@@ -34,11 +38,15 @@ struct buffer_head;
 
 typedef int (blockio_t)(struct buffer_head *buffer, int write);
 
+struct dirty_buffers {
+	struct list_head heads[BUFFER_DIRTY_STATES];
+};
+
 struct map {
 #ifdef BUFFER_FOR_TUX3
 	struct inode *inode;
 #endif
-	struct list_head dirty;
+	struct dirty_buffers dirty;
 	struct dev *dev;
 	blockio_t *io;
 	struct hlist_head hash[BUFFER_BUCKETS];
@@ -64,8 +72,10 @@ void show_dirty_buffers(map_t *map);
 void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list);
 void show_buffers_state(unsigned state);
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer);
+struct buffer_head *set_buffer_dirty_when(struct buffer_head *buffer, int delta);
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
+void get_bh(struct buffer_head *buffer);
 void blockput_free(struct buffer_head *buffer);
 void blockput(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
@@ -75,11 +85,16 @@ struct buffer_head *blockread(map_t *map, block_t block);
 void insert_buffer_hash(struct buffer_head *buffer);
 void remove_buffer_hash(struct buffer_head *buffer);
 int flush_list(struct list_head *list);
+int flush_buffers_when(map_t *map, unsigned delta);
 int flush_buffers(map_t *map);
 int flush_state(unsigned state);
 void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
+int dev_errio(struct buffer_head *buffer, int write);
+void init_dirty_buffers(struct dirty_buffers *dirty);
+map_t *new_map(struct dev *dev, blockio_t *io);
+void free_map(map_t *map);
 
 static inline void *bufdata(struct buffer_head *buffer)
 {
@@ -116,8 +131,40 @@ static inline int buffer_dirty(struct buffer_head *buffer)
 	return buffer->state >= BUFFER_DIRTY;
 }
 
-void get_bh(struct buffer_head *buffer);
-int dev_errio(struct buffer_head *buffer, int write);
-map_t *new_map(struct dev *dev, blockio_t *io);
-void free_map(map_t *map);
+/* When buffer was dirtied */
+static inline unsigned buffer_dirty_when(struct buffer_head *buffer)
+{
+#ifdef assert
+	assert(buffer_dirty(buffer));
+#endif
+	return buffer->state - BUFFER_DIRTY;
+}
+
+/* Get offset of delta */
+static inline unsigned delta_when(unsigned delta)
+{
+	return delta & (BUFFER_DIRTY_STATES - 1);
+}
+
+/* Get list of buffers when dirtied at delta */
+static inline struct list_head *
+dirty_head_when(struct dirty_buffers *dirty, unsigned delta)
+{
+	return &dirty->heads[delta_when(delta)];
+}
+
+static inline struct list_head *dirty_head(struct dirty_buffers *dirty)
+{
+	return dirty_head_when(dirty, DEFAULT_DIRTY_WHEN);
+}
+
+/* Can we modify buffer from delta */
+static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
+{
+	/* If true, buffer is still not stabilized. We can modify. */
+	if (buffer_dirty_when(buffer) == delta_when(delta))
+		return 1;
+	/* The buffer may already be in stabilized stage for backend. */
+	return 0;
+}
 #endif

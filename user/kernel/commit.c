@@ -36,7 +36,6 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 #ifndef __KERNEL__
 	INIT_LIST_HEAD(&sb->dirty_inodes);
 #endif
-	INIT_LIST_HEAD(&sb->commit);
 	INIT_LIST_HEAD(&sb->pinned);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
@@ -163,10 +162,10 @@ static void new_cycle_log(struct sb *sb)
  */
 static int rollup_log(struct sb *sb)
 {
-	trace(">>>>>>>>> commit rollup %u", sb->rollup);
 	/* further block allocations belong to the next cycle */
-	sb->rollup++;
+	unsigned rollup = sb->rollup++;
 
+	trace(">>>>>>>>> commit rollup %u", rollup);
 #ifndef __KERNEL__
 	LIST_HEAD(io_buffers);
 	LIST_HEAD(orphan_add);
@@ -176,7 +175,7 @@ static int rollup_log(struct sb *sb)
 	 * so before block fork was occured, cleans map->dirty list.
 	 * [If we have two lists per map for dirty, we may not need this.]
 	 */
-	list_splice_init(&mapping(sb->bitmap)->dirty, &io_buffers);
+	list_splice_init(dirty_head_when(&mapping(sb->bitmap)->dirty, rollup), &io_buffers);
 	/*
 	 * Orphan inodes are still living, or orphan inodes in
 	 * sb->otable are dead. And logs will be obsoleted, so, we
@@ -209,29 +208,29 @@ static int rollup_log(struct sb *sb)
 	unstash(sb, &sb->derollup, relog_as_bfree);
 
 	/* bnode blocks */
-	trace("> flush pinned buffers %u", sb->rollup);
+	trace("> flush pinned buffers %u", rollup);
 	flush_list(&sb->pinned);
-	trace("< done pinned buffers %u", sb->rollup);
+	trace("< done pinned buffers %u", rollup);
 
 	/* map dirty bitmap blocks to disk and write out */
-	trace("> flush bitmap data %u", sb->rollup);
+	trace("> flush bitmap data %u", rollup);
 	struct buffer_head *buffer, *safe;
 	list_for_each_entry_safe(buffer, safe, &io_buffers, link) {
 		int err = write_bitmap(buffer);
 		if (err)
 			return err;
 	}
-	trace("< done bitmap data %u", sb->rollup);
-	trace("> flush bitmap inode %u", sb->rollup);
+	trace("< done bitmap data %u", rollup);
+	trace("> flush bitmap inode %u", rollup);
 	{
 		int err = write_inode(sb->bitmap);
 		if (err)
 			return err;
 	}
-	trace("< done bitmap inode %u", sb->rollup);
+	trace("< done bitmap inode %u", rollup);
 	assert(list_empty(&io_buffers));
 
-	trace("> apply orphan inodes %u", sb->rollup);
+	trace("> apply orphan inodes %u", rollup);
 	{
 		int err;
 
@@ -251,32 +250,29 @@ static int rollup_log(struct sb *sb)
 		if (err)
 			return err;
 	}
-	trace("< apply orphan inodes %u", sb->rollup);
+	trace("< apply orphan inodes %u", rollup);
 	assert(list_empty(&orphan_add));
 	assert(list_empty(&orphan_del));
 #endif
-	trace("<<<<<<<<< commit rollup done %u", sb->rollup - 1);
+	trace("<<<<<<<<< commit rollup done %u", rollup);
 
 	return 0;
 }
 
 /* Apply frontend modifications to backend buffers, and flush data buffers. */
-static int stage_delta(struct sb *sb)
+static int stage_delta(struct sb *sb, unsigned delta)
 {
 	/* flush inodes */
-	return sync_inodes(sb);
+	return sync_inodes(sb, delta);
 }
 
-static int write_leaves(struct sb *sb)
+static int write_leaves(struct sb *sb, unsigned delta)
 {
-#if 1
-	/* flush leaf blocks */
-	return sync_inode(sb->volmap);
-#else
-	/* what is this? */
-	/* leaf blocks */
-	return flush_list(&sb->commit);
-#endif
+	/*
+	 * Flush leaves blocks.  FIXME: Now we are using DEFAULT_DIRTY_WHEN
+	 * for leaves. Do we need to per delta dirty buffers?
+	 */
+	return sync_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
 }
 
 /* allocate and write log blocks */
@@ -358,11 +354,11 @@ enum rollup_flags { NO_ROLLUP, ALLOW_ROLLUP, FORCE_ROLLUP, };
 /* must hold down_write(&sb->delta_lock) */
 static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 {
+	unsigned delta = sb->delta++;
 	int err = 0;
 
-	trace(">>>>>>>>> commit delta %u", sb->delta);
+	trace(">>>>>>>>> commit delta %u", delta);
 	/* further changes of frontend belong to the next delta */
-	sb->delta++;
 
 	/* Add delta log for debugging. */
 	log_delta(sb);
@@ -379,7 +375,7 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 	 *   rollup_log, it made unexpected dirty state (i.e. leaf is
 	 *   still dirty, but parent was already cleaned.)
 	 */
-	err = stage_delta(sb);
+	err = stage_delta(sb, delta);
 	if (err)
 		return err;
 
@@ -393,10 +389,10 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 		log_delta(sb);
 	}
 
-	write_leaves(sb);
+	write_leaves(sb, delta);
 	write_log(sb);
 	commit_delta(sb);
-	trace("<<<<<<<<< commit done %u", sb->delta - 1);
+	trace("<<<<<<<<< commit done %u", delta);
 
 	return err; /* FIXME: error handling */
 }

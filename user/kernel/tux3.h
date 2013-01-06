@@ -249,7 +249,6 @@ struct sb {
 	struct stash derollup;	/* defer extent frees until after rollup */
 
 	struct list_head pinned; /* dirty metadata not flushed per delta */
-	struct list_head commit; /* dirty metadata flushed per delta */
 
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 #ifdef __KERNEL__

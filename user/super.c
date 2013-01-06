@@ -43,12 +43,15 @@ static void clean_dirty_inode(const char *str, struct inode *inode)
 static void cleanup_garbage_for_debugging(struct sb *sb)
 {
 #ifdef ATOMIC
+	int rollup = sb->rollup;
+
 	/*
 	 * Pinned buffer is not flushing always, it is normal. So,
 	 * this clean those for unmount to check buffer debugging
 	 */
 	if (sb->bitmap) {
-		clean_dirty_buffer("bitmap", &mapping(sb->bitmap)->dirty);
+		struct dirty_buffers *dirty = &mapping(sb->bitmap)->dirty;
+		clean_dirty_buffer("bitmap", dirty_head_when(dirty, rollup));
 		clean_dirty_inode("bitmap", sb->bitmap);
 	}
 	clean_dirty_buffer("pinned", &sb->pinned);

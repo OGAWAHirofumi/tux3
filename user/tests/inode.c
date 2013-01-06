@@ -43,7 +43,7 @@ static void test01(struct sb *sb)
 	test_assert(!err);
 
 	iput(inode);
-	sync_inode(inode);
+	sync_inode(inode, sb->delta);
 
 	/* Check create */
 	inode = tuxopen(sb->rootdir, name, strlen(name));
@@ -84,7 +84,7 @@ static void test02(struct sb *sb)
 	/* Test inum allocation */
 	test_assert(inode1->inum != inode2->inum);
 	/* Save first inode */
-	err = sync_inode(inode1);
+	err = sync_inode(inode1, sb->delta);
 	test_assert(!err);
 	test_assert(!is_defer_alloc_inum(inode1));
 
@@ -97,10 +97,10 @@ static void test02(struct sb *sb)
 	test_assert(inode4);
 	test_assert(is_defer_alloc_inum(inode4));
 	/* Save inodes */
-	err = sync_inode(inode2);
+	err = sync_inode(inode2, sb->delta);
 	test_assert(!err);
 	test_assert(!is_defer_alloc_inum(inode2));
-	err = sync_inode(inode3);
+	err = sync_inode(inode3, sb->delta);
 	test_assert(!err);
 	test_assert(!is_defer_alloc_inum(inode3));
 

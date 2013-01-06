@@ -37,7 +37,7 @@ void mark_buffer_dirty(struct buffer_head *buffer)
 	}
 }
 
-int sync_inode(struct inode *inode)
+int sync_inode(struct inode *inode, unsigned delta)
 {
 	unsigned dirty = inode->i_state;
 	int err;
@@ -51,7 +51,7 @@ int sync_inode(struct inode *inode)
 	if (inode->i_state & I_DIRTY_PAGES) {
 		/* To handle redirty, this clears before flushing */
 		inode->i_state &= ~I_DIRTY_PAGES;
-		err = flush_buffers(mapping(inode));
+		err = flush_buffers_when(mapping(inode), delta);
 		if (err)
 			goto error;
 	}
@@ -74,7 +74,7 @@ error:
 	return err;
 }
 
-int sync_inodes(struct sb *sb)
+int sync_inodes(struct sb *sb, unsigned delta)
 {
 	struct inode *inode, *safe;
 	LIST_HEAD(dirty_inodes);
@@ -94,7 +94,7 @@ int sync_inodes(struct sb *sb)
 			continue;
 		}
 
-		err = sync_inode(inode);
+		err = sync_inode(inode, delta);
 		if (err)
 			goto error;
 	}
@@ -108,10 +108,10 @@ int sync_inodes(struct sb *sb)
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)
 		goto error;
-	err = sync_inode(sb->bitmap);
+	err = sync_inode(sb->bitmap, DEFAULT_DIRTY_WHEN);
 	if (err)
 		goto error;
-	err = sync_inode(sb->volmap);
+	err = sync_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
 	if (err)
 		goto error;
 #endif
@@ -132,7 +132,7 @@ int sync_super(struct sb *sb)
 	int err;
 
 	trace("sync inodes");
-	if ((err = sync_inodes(sb)))
+	if ((err = sync_inodes(sb, DEFAULT_DIRTY_WHEN)))
 		return err;
 	trace("sync super");
 	if ((err = save_sb(sb)))

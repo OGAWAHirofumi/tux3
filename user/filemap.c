@@ -11,14 +11,15 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 #ifndef ATOMIC
 	return buffer;
 #endif
-	unsigned oldstate = buffer->state;
-	assert(oldstate < BUFFER_STATES);
-	newdelta &= BUFFER_DIRTY_STATES - 1;
-	trace_on("---- before: fork buffer %p ----", buffer);
-	if (oldstate >= BUFFER_DIRTY) {
-		if (oldstate - BUFFER_DIRTY == newdelta)
+	assert(buffer->state < BUFFER_STATES);
+
+	trace("---- before: fork buffer %p ----", buffer);
+	if (buffer_dirty(buffer)) {
+		if (buffer_can_modify(buffer, newdelta))
 			return buffer;
-		trace_on("---- fork buffer %p ----", buffer);
+
+		/* Buffer can't modify already, we have to fork buffer */
+		trace("---- fork buffer %p ----", buffer);
 		struct buffer_head *clone = new_buffer(buffer->map);
 		if (IS_ERR(clone))
 			return clone;
@@ -35,7 +36,8 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 		 */
 		buffer = clone;
 	}
-	set_buffer_state_list(buffer, BUFFER_DIRTY + newdelta, &buffer->map->dirty);
+
+	set_buffer_dirty_when(buffer, newdelta);
 	__mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
 
 	return buffer;
@@ -180,7 +182,7 @@ int write_bitmap(struct buffer_head *buffer)
 	if (err < 0)
 		return err;
 	assert(err == 1);
-	assert(buffer->state - BUFFER_DIRTY == ((sb->rollup - 1) & (BUFFER_DIRTY_STATES - 1)));
+	assert(buffer_dirty_when(buffer) == delta_when(sb->rollup - 1));
 	trace("write bitmap %Lx", buffer->index);
 	err = blockio(WRITE, buffer, seg.block);
 	if (!err)

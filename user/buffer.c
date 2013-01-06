@@ -98,8 +98,10 @@ void show_buffer_list(struct list_head *list)
 
 void show_dirty_buffers(map_t *map)
 {
-	printf("map %p dirty: ", map);
-	show_buffer_list(&map->dirty);
+	for (int i = 0; i < BUFFER_DIRTY_STATES; i++) {
+		printf("map %p dirty [%d]: ", map, i);
+		show_buffer_list(dirty_head_when(&map->dirty, i));
+	}
 }
 
 void show_buffers_state(unsigned state)
@@ -164,10 +166,16 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 	set_buffer_state_list(buffer, state, buffers + state);
 }
 
+struct buffer_head *set_buffer_dirty_when(struct buffer_head *buffer, int delta)
+{
+	struct list_head *head = dirty_head_when(&buffer->map->dirty, delta);
+	set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(delta), head);
+	return buffer;
+}
+
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)
 {
-	set_buffer_state_list(buffer, BUFFER_DIRTY, &buffer->map->dirty);
-	return buffer;
+	return set_buffer_dirty_when(buffer, DEFAULT_DIRTY_WHEN);
 }
 
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer)
@@ -452,9 +460,14 @@ int flush_list(struct list_head *list)
 	return err;
 }
 
+int flush_buffers_when(map_t *map, unsigned delta)
+{
+	return flush_list(dirty_head_when(&map->dirty, delta));
+}
+
 int flush_buffers(map_t *map)
 {
-	return flush_list(&map->dirty);
+	return flush_buffers_when(map, DEFAULT_DIRTY_WHEN);
 }
 
 int flush_state(unsigned state)
@@ -579,7 +592,7 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 #endif
 }
 
-int dev_blockio(struct buffer_head *buffer, int write)
+static int dev_blockio(struct buffer_head *buffer, int write)
 {
 	int err;
 
@@ -604,6 +617,12 @@ int dev_errio(struct buffer_head *buffer, int write)
 	return -EIO;
 }
 
+void init_dirty_buffers(struct dirty_buffers *dirty)
+{
+	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)
+		INIT_LIST_HEAD(&dirty->heads[i]);
+}
+
 map_t *new_map(struct dev *dev, blockio_t *io)
 {
 	map_t *map = malloc(sizeof(*map)); // error???
@@ -611,7 +630,7 @@ map_t *new_map(struct dev *dev, blockio_t *io)
 		.dev	= dev,
 		.io	= io ? io : dev_blockio
 	};
-	INIT_LIST_HEAD(&map->dirty);
+	init_dirty_buffers(&map->dirty);
 	for (int i = 0; i < BUFFER_BUCKETS; i++)
 		INIT_HLIST_HEAD(&map->hash[i]);
 	return map;
@@ -619,7 +638,8 @@ map_t *new_map(struct dev *dev, blockio_t *io)
 
 void free_map(map_t *map)
 {
-	assert(list_empty(&map->dirty));
+	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)
+		assert(list_empty(dirty_head_when(&map->dirty, i)));
 
 	for (int i = 0; i < BUFFER_BUCKETS; i++) {
 		struct hlist_head *bucket = &map->hash[i];
