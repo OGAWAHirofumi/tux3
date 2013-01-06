@@ -169,6 +169,7 @@ static int new_cycle_log(struct sb *sb)
  */
 static int rollup_log(struct sb *sb)
 {
+	trace(">>>>>>>>> commit rollup %u", sb->rollup);
 	/* further block allocations belong to the next cycle */
 	sb->rollup++;
 
@@ -192,22 +193,29 @@ static int rollup_log(struct sb *sb)
 		return err;
 
 	/* bnode blocks */
+	trace("> flush pinned buffers %u", sb->rollup);
 	flush_buffer_list(sb, &sb->pinned);
+	trace("< done pinned buffers %u", sb->rollup);
 
 	/* map dirty bitmap blocks to disk and write out */
+	trace("> flush bitmap data %u", sb->rollup);
 	struct buffer_head *buffer, *safe;
 	list_for_each_entry_safe(buffer, safe, &io_buffers, link) {
 		int err = write_bitmap(buffer);
 		if (err)
 			return err;
 	}
+	trace("< done bitmap data %u", sb->rollup);
+	trace("> flush bitmap inode %u", sb->rollup);
 	{
 		int err = write_inode(sb->bitmap);
 		if (err)
 			return err;
 	}
+	trace("< done bitmap inode %u", sb->rollup);
 	assert(list_empty(&io_buffers));
 #endif
+	trace("<<<<<<<<< commit rollup done %u", sb->rollup - 1);
 
 	return 0;
 }
@@ -297,8 +305,10 @@ static int need_rollup(struct sb *sb)
 	return !(++crudehack % 3);
 }
 
+enum rollup_flags { NO_ROLLUP, ALLOW_ROLLUP, FORCE_ROLLUP, };
+
 /* must hold down_write(&sb->delta_lock) */
-static int do_commit(struct sb *sb, int can_rollup)
+static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 {
 	int err = 0;
 
@@ -306,7 +316,8 @@ static int do_commit(struct sb *sb, int can_rollup)
 	/* further changes of frontend belong to the next delta */
 	sb->delta++;
 
-	if (can_rollup && need_rollup(sb)) {
+	if ((rollup_flag == ALLOW_ROLLUP && need_rollup(sb)) ||
+	    rollup_flag == FORCE_ROLLUP) {
 		err = rollup_log(sb);
 		if (err)
 			return err;
@@ -325,12 +336,24 @@ static int do_commit(struct sb *sb, int can_rollup)
 }
 
 /* FIXME: quickly designed, rethink this. */
+int force_rollup(struct sb *sb)
+{
+	int err;
+
+	down_write(&sb->delta_lock);
+	err = do_commit(sb, FORCE_ROLLUP);
+	up_write(&sb->delta_lock);
+
+	return err;
+}
+
+/* FIXME: quickly designed, rethink this. */
 int force_delta(struct sb *sb)
 {
 	int err;
 
 	down_write(&sb->delta_lock);
-	err = do_commit(sb, 0);
+	err = do_commit(sb, NO_ROLLUP);
 	up_write(&sb->delta_lock);
 
 	return err;
@@ -358,7 +381,7 @@ int change_end(struct sb *sb)
 	down_write(&sb->delta_lock);
 	/* FIXME: error handling */
 	if (sb->delta == delta)
-		err = do_commit(sb, 1);
+		err = do_commit(sb, ALLOW_ROLLUP);
 	up_write(&sb->delta_lock);
 #endif
 	return err;

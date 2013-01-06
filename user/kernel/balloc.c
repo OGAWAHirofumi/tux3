@@ -12,7 +12,7 @@
 #include "tux3.h"
 
 #ifndef trace
-#define trace trace_off
+#define trace trace_on
 #endif
 
 /* For lockdep: random value bigger than max of inode_i_mutex_lock_class */
@@ -167,6 +167,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, unsigned count, unsigned
 				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
 				mutex_unlock(&sb->bitmap->i_mutex);
+				trace("balloc extent -> [%Lx/%x]", (L)found, blocks);
 				return found;
 			}
 		}
@@ -191,7 +192,6 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 		goto found;
 	return -ENOSPC;
 found:
-	trace("balloc extent -> [%Lx/%x]", (L)*block, blocks);
 	return 0;
 }
 
@@ -203,7 +203,6 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	unsigned mapblock = start >> mapshift;
 	struct buffer_head *buffer;
 
-	trace("free <- [%Lx]", (L)start);
 	buffer = blockread(mapping(sb->bitmap), mapblock);
 	if (!buffer) {
 		warn("could not read bitmap buffer: extent 0x%Lx\n", (L)start);
@@ -213,6 +212,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	if (!all_set(bufdata(buffer), start &= mapmask, blocks))
 		goto double_free;
+	trace("bfree extent <- [%Lx/%x], ", (L)start, blocks);
 	buffer = blockdirty(buffer, sb->rollup);
 	// FIXME: error check of buffer
 	clear_bits(bufdata(buffer), start, blocks);

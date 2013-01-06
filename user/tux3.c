@@ -126,10 +126,8 @@ int main(int argc, char *argv[])
 	if ((errno = -load_itable(sb)))
 		goto eek;
 
-	if (!strcmp(command, "replay")) {
-		if ((errno = -replay_stage1(sb)))
-			goto eek;
-	}
+	if ((errno = -replay_stage1(sb)))
+		goto eek;
 
 	sb->bitmap = iget_or_create_inode(sb, TUX_BITMAP_INO);
 	if (IS_ERR(sb->bitmap)) {
@@ -149,9 +147,15 @@ int main(int argc, char *argv[])
 	show_tree_range(&sb->rootdir->btree, 0, -1);
 	show_tree_range(&sb->bitmap->btree, 0, -1);
 
-	if (!strcmp(command, "replay")) {
-		if ((errno = -replay_stage2(sb)))
-			goto eek;
+	if ((errno = -replay_stage2(sb)))
+		goto eek;
+
+	if (!strcmp(command, "delta")) {
+		force_delta(sb);
+		goto out;
+	}
+	if (!strcmp(command, "rollup")) {
+		force_rollup(sb);
 		goto out;
 	}
 
