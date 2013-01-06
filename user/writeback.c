@@ -46,8 +46,7 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 	if (!buffer_dirty(buffer)) {
 		struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
 		unsigned rollup = sb->rollup;
-		tux3_set_buffer_dirty_list(buffer, rollup,
-				      dirty_head_when(&sb->pinned, rollup));
+		tux3_set_buffer_dirty_list(buffer, rollup, &sb->rollup_buffers);
 	}
 }
 

@@ -68,7 +68,7 @@ static void cleanup_dirty_for_umount(struct sb *sb)
 		cleanup_dirty_buffers(dirty_head_when(dirty, rollup));
 		cleanup_dirty_inode(sb->bitmap);
 	}
-	cleanup_dirty_buffers(dirty_head_when(&sb->pinned, rollup));
+	cleanup_dirty_buffers(&sb->rollup_buffers);
 
 	/* orphan_add should be empty */
 	assert(list_empty(&sb->orphan_add));

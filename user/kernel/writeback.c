@@ -70,8 +70,7 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 			return;
 	}
 
-	tux3_set_buffer_dirty_list(buffer, sb->rollup,
-				   dirty_head_when(&sb->pinned, sb->rollup));
+	tux3_set_buffer_dirty_list(buffer, sb->rollup, &sb->rollup_buffers);
 }
 
 static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)

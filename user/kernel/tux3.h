@@ -242,7 +242,7 @@ struct sb {
 	struct stash defree;	/* defer extent frees until after delta */
 	struct stash derollup;	/* defer extent frees until after rollup */
 
-	struct dirty_buffers pinned; /* dirty metadata not flushed per delta */
+	struct list_head rollup_buffers; /* dirty metadata flushed at rollup */
 
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 	spinlock_t dirty_inodes_lock;

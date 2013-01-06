@@ -32,7 +32,7 @@ static void init_sb(struct sb *sb)
 	INIT_LIST_HEAD(&sb->dirty_inodes);
 	spin_lock_init(&sb->forked_buffers_lock);
 	init_link_circular(&sb->forked_buffers);
-	init_dirty_buffers(&sb->pinned);
+	INIT_LIST_HEAD(&sb->rollup_buffers);
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
 }
@@ -172,11 +172,10 @@ static int rollup_log(struct sb *sb)
 {
 	/* further block allocations belong to the next cycle */
 	unsigned rollup = sb->rollup++;
-
-	trace(">>>>>>>>> commit rollup %u", rollup);
-
 	LIST_HEAD(orphan_add);
 	LIST_HEAD(orphan_del);
+
+	trace(">>>>>>>>> commit rollup %u", rollup);
 
 	/*
 	 * Orphan inodes are still living, or orphan inodes in
@@ -211,10 +210,12 @@ static int rollup_log(struct sb *sb)
 	unstash(sb, &sb->derollup, relog_as_bfree);
 
 	/*
-	 * Merge dirty bnode blocks buffers to volmap dirty list, then
-	 * bnode blocks will be flushed via volmap with leaves.
+	 * Merge the dirty bnode buffers to volmap dirty list, and
+	 * clean ->rollup_buffers up before dirtying bnode buffers on
+	 * this rollup.  Later, bnode blocks will be flushed via
+	 * volmap with leaves.
 	 */
-	list_splice_init(dirty_head_when(&sb->pinned, rollup),
+	list_splice_init(&sb->rollup_buffers,
 			 dirty_head(inode_dirty_heads(sb->volmap)));
 
 	/* Flush bitmap */
