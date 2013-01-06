@@ -231,7 +231,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 {
 	struct inode *old_inode = old_dentry->d_inode;
 	struct inode *new_inode = new_dentry->d_inode;
-	struct sb *sb = old_inode->i_sb;
+	struct sb *sb = tux_sb(old_inode->i_sb);
 	struct buffer_head *old_buffer, *new_buffer, *clone;
 	tux_dirent *old_entry, *new_entry;
 	int err, new_subdir = 0;

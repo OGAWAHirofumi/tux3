@@ -640,6 +640,7 @@ int tux3_write_inode(struct inode *inode, struct writeback_control *wbc)
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 {
 	struct inode *inode = dentry->d_inode;
+	struct sb *sb = tux_sb(inode->i_sb);
 
 	generic_fillattr(inode, stat);
 	stat->ino = tux_inode(inode)->inum;
@@ -741,7 +742,7 @@ const struct inode_operations tux_symlink_iops = {
 
 static void tux_setup_inode(struct inode *inode)
 {
-	struct sb *sbi = tux_sb(inode->i_sb);
+//	struct sb *sbi = tux_sb(inode->i_sb);
 
 	assert(tux_inode(inode)->inum != TUX_INVALID_INO);
 

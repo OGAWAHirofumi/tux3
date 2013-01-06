@@ -154,7 +154,7 @@ static int rollup_log(struct sb *sb)
 	unsigned rollup = sb->rollup++;
 
 	trace(">>>>>>>>> commit rollup %u", rollup);
-#ifndef __KERNEL__
+
 	LIST_HEAD(orphan_add);
 	LIST_HEAD(orphan_del);
 
@@ -188,7 +188,7 @@ static int rollup_log(struct sb *sb)
 	 * obsolete log records on previous rollup.
 	 */
 	unstash(sb, &sb->derollup, relog_as_bfree);
-
+#ifndef __KERNEL__
 	/*
 	 * Merge dirty bnode blocks buffers to volmap dirty list, then
 	 * bnode blocks will be flushed via volmap with leaves.
@@ -200,7 +200,7 @@ static int rollup_log(struct sb *sb)
 	trace("> flush bitmap %u", rollup);
 	sync_inode(sb->bitmap, rollup);
 	trace("< done bitmap %u", rollup);
-
+#endif
 	trace("> apply orphan inodes %u", rollup);
 	{
 		int err;
@@ -224,7 +224,6 @@ static int rollup_log(struct sb *sb)
 	trace("< apply orphan inodes %u", rollup);
 	assert(list_empty(&orphan_add));
 	assert(list_empty(&orphan_del));
-#endif
 	trace("<<<<<<<<< commit rollup done %u", rollup);
 
 	return 0;
@@ -398,16 +397,14 @@ int force_delta(struct sb *sb)
 
 int change_begin(struct sb *sb)
 {
-#ifndef __KERNEL__
 	down_read(&sb->delta_lock);
-#endif
 	return 0;
 }
 
 int change_end(struct sb *sb)
 {
 	int err = 0;
-#ifndef __KERNEL__
+
 	if (!need_delta(sb)) {
 		up_read(&sb->delta_lock);
 		return 0;
@@ -420,10 +417,6 @@ int change_end(struct sb *sb)
 	if (sb->delta == delta)
 		err = do_commit(sb, ALLOW_ROLLUP);
 	up_write(&sb->delta_lock);
-#endif
+
 	return err;
 }
-
-#ifdef __KERNEL__
-static void *useme[] = { new_cycle_log, need_delta, do_commit, useme };
-#endif

@@ -107,18 +107,18 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 
 	down_write(&cursor->btree->lock);
 	while (!list_empty(orphan_add)) {
-		struct inode *inode;
-		inode = list_entry(orphan_add->next, struct inode, orphan_list);
+		tuxnode_t *tuxnode;
+		tuxnode = list_entry(orphan_add->next, tuxnode_t, orphan_list);
 
 		/* FIXME: what to do if error? */
-		err = btree_probe(cursor, inode->inum);
+		err = btree_probe(cursor, tuxnode->inum);
 		if (err)
 			goto out;
 
 		/* Write orphan inum into orphan btree */
 		struct ileaf_req rq = {
 			.key = {
-				.start	= inode->inum,
+				.start	= tuxnode->inum,
 				.len	= 1,
 			},
 		};
@@ -127,7 +127,7 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 		if (err)
 			goto out;
 
-		list_del_init(&inode->orphan_list);
+		list_del_init(&tuxnode->orphan_list);
 	}
 out:
 	up_write(&cursor->btree->lock);
@@ -172,10 +172,11 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 int tux3_mark_inode_orphan(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	tuxnode_t *tuxnode = tux_inode(inode);
 
-	assert(list_empty(&inode->orphan_list));
-	list_add(&inode->orphan_list, &sb->orphan_add);
-	log_orphan_add(sb, sb->version, inode->inum);
+	assert(list_empty(&tuxnode->orphan_list));
+	list_add(&tuxnode->orphan_list, &sb->orphan_add);
+	log_orphan_add(sb, sb->version, tuxnode->inum);
 
 	return 0;
 }
@@ -201,22 +202,23 @@ static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
 int tux3_clear_inode_orphan(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	tuxnode_t *tuxnode = tux_inode(inode);
 
-	if (!list_empty(&inode->orphan_list)) {
+	if (!list_empty(&tuxnode->orphan_list)) {
 		/* This orphan is not applied to sb->otable yet. */
-		list_del_init(&inode->orphan_list);
+		list_del_init(&tuxnode->orphan_list);
 	} else {
 		/* This orphan was already applied to sb->otable. */
-		int err = add_defer_oprhan_del(sb, inode->inum);
+		int err = add_defer_oprhan_del(sb, tuxnode->inum);
 		if (err) {
 			/* FIXME: what to do? */
 			warn("orphan inum %Lu was leaved due to low memory",
-			     inode->inum);
+			     tuxnode->inum);
 			return err;
 		}
 	}
 
-	log_orphan_del(sb, sb->version, inode->inum);
+	log_orphan_del(sb, sb->version, tuxnode->inum);
 
 	return 0;
 }
@@ -285,43 +287,45 @@ void replay_iput_orphan_inodes(struct sb *sb,
 	/* orphan inodes not in sb->otable */
 	head = &sb->orphan_add;
 	while (!list_empty(head)) {
-		struct inode *inode;
-		inode = list_entry(head->next, struct inode, orphan_list);
+		tuxnode_t *tuxnode;
+		tuxnode = list_entry(head->next, tuxnode_t, orphan_list);
 
 		if (!destroy) {
 			/* Set i_nlink = 1 prevent to destroy inode. */
-			inode->i_nlink = 1;
-			list_del_init(&inode->orphan_list);
+			set_nlink(&tuxnode->vfs_inode, 1);
+			list_del_init(&tuxnode->orphan_list);
 		}
-		iput(inode);
+		iput(&tuxnode->vfs_inode);
 	}
 
 	/* orphan inodes in sb->otable */
 	head = orphan_in_otable;
 	while (!list_empty(head)) {
-		struct inode *inode;
-		inode = list_entry(head->next, struct inode, orphan_list);
+		tuxnode_t *tuxnode;
+		tuxnode = list_entry(head->next, tuxnode_t, orphan_list);
 
 		/* list_empty(&inode->orphan_list) tells it is in otable */
-		list_del_init(&inode->orphan_list);
+		list_del_init(&tuxnode->orphan_list);
 
 		if (!destroy) {
 			/* Set i_nlink = 1 prevent to destroy inode. */
-			inode->i_nlink = 1;
+			set_nlink(&tuxnode->vfs_inode, 1);
 		}
-		iput(inode);
+		iput(&tuxnode->vfs_inode);
 	}
 }
 
 static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 {
-	struct inode *inode = tux3_iget(sb, inum);
+	struct inode *inode;
+
+	inode = tux3_iget(sb, inum);
 	if (IS_ERR(inode))
 		return PTR_ERR(inode);
 	assert(inode->i_nlink == 0);
 
 	/* List inode up, then caller will decide what to do */
-	list_add(&inode->orphan_list, head);
+	list_add(&tux_inode(inode)->orphan_list, head);
 
 	return 0;
 }

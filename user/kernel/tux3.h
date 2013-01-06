@@ -211,6 +211,33 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 
 /* Tux3-specific sb is a handle for the entire volume state */
 
+#ifdef __KERNEL__
+/* FIXME */
+#define DEFAULT_DIRTY_WHEN	0
+struct dirty_buffers {
+};
+
+/* Can we modify buffer from delta */
+static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
+{
+	return 1;
+}
+
+static inline void init_dirty_buffers(struct dirty_buffers *dirty)
+{
+}
+
+static inline int sync_inodes(struct sb *sb, unsigned delta)
+{
+	return 0;
+}
+
+static inline int blockio(int rw, struct buffer_head *buffer, block_t block)
+{
+	return 0;
+}
+#endif
+
 struct sb {
 	union {
 		struct disksuper super;
@@ -663,12 +690,21 @@ int devio(int rw, struct block_device *dev, loff_t offset, void *data,
 	  unsigned len);
 
 /* temporary hack for buffer */
+struct buffer_head *peekblk(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 
 static inline void blockput(struct buffer_head *buffer)
 {
 	put_bh(buffer);
+}
+
+static inline void blockput_free(struct buffer_head *buffer)
+{
+	/* Untested */
+	WARN_ON(1);
+	bforget(buffer);
+	blockput(buffer);
 }
 
 static inline int buffer_empty(struct buffer_head *buffer)

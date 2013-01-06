@@ -536,7 +536,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 			    struct buffer_head *bh_result, int create)
 {
 	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
-	      tux_inode(inode)->inum, iblock, bh_result->b_size, create);
+	      tux_inode(inode)->inum, (u64)iblock, bh_result->b_size, create);
 
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
@@ -597,7 +597,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 	trace("<== inum %Lu, mapped %d, block %Lu, size %zu",
 	      tux_inode(inode)->inum, buffer_mapped(bh_result),
-	      bh_result->b_blocknr, bh_result->b_size);
+	      (u64)bh_result->b_blocknr, bh_result->b_size);
 
 	return 0;
 }
@@ -644,6 +644,26 @@ static struct buffer_head *get_buffer(struct address_space *mapping,
 		page_cache_release(page);
 	}
 	return bh;
+}
+
+struct buffer_head *peekblk(struct address_space *mapping, block_t iblock)
+{
+	struct inode *inode = mapping->host;
+	struct buffer_head *bh;
+	pgoff_t index;
+	int offset;
+
+	/* Untested */
+	WARN_ON(1);
+
+	index = iblock >> (PAGE_CACHE_SHIFT - inode->i_blkbits);
+	offset = iblock & ((1 << (PAGE_CACHE_SHIFT - inode->i_blkbits)) - 1);
+
+	bh = get_buffer(mapping, index, offset);
+	if (bh)
+		return bh;
+
+	return NULL;
 }
 
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
