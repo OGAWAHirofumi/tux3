@@ -79,6 +79,17 @@ static unsigned guess_readahead(struct buffer_head *buffer)
 	return count;
 }
 
+static void clean_buffer(struct buffer_head *buffer)
+{
+	/* Is this forked buffer? */
+	if (hlist_unhashed(&buffer->hashlink)) {
+		/* We have to unpin forked buffer to free. See blockdirty() */
+		set_buffer_clean(buffer);
+		blockput(buffer);
+	} else
+		set_buffer_clean(buffer);
+}
+
 static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
 {
 	struct inode *inode = buffer_inode(buffer);
@@ -146,7 +157,7 @@ static int filemap_extent_io(struct buffer_head *buffer, enum map_mode mode)
 				err = blockio(rw, buffer, block);
 
 			/* FIXME: leave empty if error ??? */
-			set_buffer_clean(buffer);
+			clean_buffer(buffer);
 			if (rw == READ)
 				blockput(buffer);
 		}
@@ -166,33 +177,6 @@ int filemap_redirect_io(struct buffer_head *buffer, int write)
 	enum map_mode mode = write ? MAP_REDIRECT : MAP_READ;
 	return filemap_extent_io(buffer, mode);
 }
-
-/*
- * FIXME: temporary hack.  The bitmap pages has possibility to
- * blockfork. It means we can't get the page buffer with blockget(),
- * because it gets cloned buffer for frontend. But, in here, we are
- * interest older buffer to write out. So, for now, this is grabbing
- * old buffer while blockfork.
- *
- * This is why we can't use filemap_extent_io() simply.
- */
-int write_bitmap(struct buffer_head *buffer)
-{
-	struct sb *sb = tux_sb(buffer_inode(buffer)->i_sb);
-	struct seg seg;
-	int err = map_region(buffer->map->inode, buffer->index, 1, &seg, 1,
-			     MAP_REDIRECT);
-	if (err < 0)
-		return err;
-	assert(err == 1);
-	assert(buffer_dirty_when(buffer) == delta_when(sb->rollup - 1));
-	trace("write bitmap %Lx", buffer->index);
-	err = blockio(WRITE, buffer, seg.block);
-	if (!err)
-		clean_buffer(buffer);
-	return 0;
-}
-
 
 static int tuxio(struct file *file, void *data, unsigned len, int write)
 {

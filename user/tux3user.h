@@ -94,7 +94,6 @@ void tux_dump_entries(struct buffer_head *buffer);
 /* filemap.c */
 int filemap_overwrite_io(struct buffer_head *buffer, int write);
 int filemap_redirect_io(struct buffer_head *buffer, int write);
-int write_bitmap(struct buffer_head *buffer);
 int tuxread(struct file *file, void *data, unsigned len);
 int tuxwrite(struct file *file, const void *data, unsigned len);
 void tuxseek(struct file *file, loff_t pos);

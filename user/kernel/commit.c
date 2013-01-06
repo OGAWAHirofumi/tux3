@@ -108,20 +108,6 @@ int save_sb(struct sb *sb)
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
 }
 
-void clean_buffer(struct buffer_head *buffer)
-{
-#ifdef __KERNEL__
-	set_buffer_uptodate(buffer);
-#else
-	/* Is this forked buffer? */
-	if (hlist_unhashed(&buffer->hashlink)) {
-		set_buffer_clean(buffer);
-		blockput(buffer);
-	} else
-		set_buffer_clean(buffer);
-#endif
-}
-
 /* Delta transition */
 
 static int relog_frontend_defer_as_bfree(struct sb *sb, u64 val)
@@ -167,15 +153,9 @@ static int rollup_log(struct sb *sb)
 
 	trace(">>>>>>>>> commit rollup %u", rollup);
 #ifndef __KERNEL__
-	LIST_HEAD(io_buffers);
 	LIST_HEAD(orphan_add);
 	LIST_HEAD(orphan_del);
-	/*
-	 * sb->rollup was incremented, so block fork may occur from here,
-	 * so before block fork was occured, cleans map->dirty list.
-	 * [If we have two lists per map for dirty, we may not need this.]
-	 */
-	list_splice_init(dirty_head_when(&mapping(sb->bitmap)->dirty, rollup), &io_buffers);
+
 	/*
 	 * Orphan inodes are still living, or orphan inodes in
 	 * sb->otable are dead. And logs will be obsoleted, so, we
@@ -212,23 +192,10 @@ static int rollup_log(struct sb *sb)
 	flush_list(&sb->pinned);
 	trace("< done pinned buffers %u", rollup);
 
-	/* map dirty bitmap blocks to disk and write out */
-	trace("> flush bitmap data %u", rollup);
-	struct buffer_head *buffer, *safe;
-	list_for_each_entry_safe(buffer, safe, &io_buffers, link) {
-		int err = write_bitmap(buffer);
-		if (err)
-			return err;
-	}
-	trace("< done bitmap data %u", rollup);
-	trace("> flush bitmap inode %u", rollup);
-	{
-		int err = write_inode(sb->bitmap);
-		if (err)
-			return err;
-	}
-	trace("< done bitmap inode %u", rollup);
-	assert(list_empty(&io_buffers));
+	/* Flush bitmap */
+	trace("> flush bitmap %u", rollup);
+	sync_inode(sb->bitmap, rollup);
+	trace("< done bitmap %u", rollup);
 
 	trace("> apply orphan inodes %u", rollup);
 	{

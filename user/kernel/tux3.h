@@ -737,7 +737,6 @@ int replay_bnode_adjust(struct replay *rp, block_t bnode, tuxkey_t from, tuxkey_
 void setup_sb(struct sb *sb, struct disksuper *super);
 int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
-void clean_buffer(struct buffer_head *buffer);
 int apply_defered_bfree(struct sb *sb, u64 val);
 int force_rollup(struct sb *sb);
 int force_delta(struct sb *sb);
