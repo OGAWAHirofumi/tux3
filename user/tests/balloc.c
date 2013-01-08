@@ -247,6 +247,9 @@ int main(int argc, char *argv[])
 		blockput(buffer);
 	}
 
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
+
 	if (test_start("test01"))
 		test01(sb, blocks);
 	test_end();
@@ -272,6 +275,8 @@ int main(int argc, char *argv[])
 		test06(sb, blocks);
 	test_end();
 #endif
+
+	tux3_end_backend();
 
 	clean_main(sb);
 

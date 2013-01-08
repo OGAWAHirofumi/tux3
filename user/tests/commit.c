@@ -34,23 +34,28 @@ static int buffer_is_allocated(struct sb *sb, struct buffer_head *buf)
 {
 	check_block = bufindex(buf);
 	if (stash_walk(sb, &sb->defree, check_defree_block) < 0)
-		return -1; /* buffer is defree block */
+		return 0; /* buffer is defree block */
 	if (stash_walk(sb, &sb->derollup, check_defree_block) < 0)
-		return -1; /* buffer is derollup block */
+		return 0; /* buffer is derollup block */
 
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
+	int allocated = 1;
 	block_t block = balloc_from_range(sb, bufindex(buf), 1, 1);
-	if (block != -1) {
+	if (block >= 0) {
 		bfree(sb, block, 1);
-		return -1; /* buffer is freed block */
+		allocated = 0; /* buffer is free block */
 	}
-	return 0;
+	tux3_end_backend();
+
+	return allocated;
 }
 
 static void check_dirty_list(struct sb *sb, struct list_head *head)
 {
 	struct buffer_head *buf, *n;
 	list_for_each_entry_safe(buf, n, head, link)
-		test_assert(buffer_is_allocated(sb, buf) == 0);
+		test_assert(buffer_is_allocated(sb, buf));
 }
 
 /*

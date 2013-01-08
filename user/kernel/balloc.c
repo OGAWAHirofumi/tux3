@@ -124,6 +124,8 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
 
+	assert(tux3_under_backend(sb));
+
 	for (block_t mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		trace_off("search mapblock %x/%x", mapblock, mapblocks);
 		struct buffer_head *buffer, *clone;
@@ -215,6 +217,8 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	block_t mapblock = start >> mapshift;
 	unsigned mapoffset = start & mapmask;
 	struct buffer_head *buffer, *clone;
+
+	assert(tux3_under_backend(sb));
 
 	buffer = blockread(mapping(sb->bitmap), mapblock);
 	if (!buffer) {

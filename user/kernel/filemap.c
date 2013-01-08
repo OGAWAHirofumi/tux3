@@ -109,8 +109,14 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 	if (tux_inode(inode)->inum != TUX_BITMAP_INO) {
 		if (mode == MAP_READ)
 			down_read(&btree->lock);
-		else
+		else {
+			/* If write, must be backend */
+			assert(tux3_under_backend(sb));
 			down_write(&btree->lock);
+		}
+	} else {
+		/* If bitmap, must be backend */
+		assert(tux3_under_backend(sb));
 	}
 
 	if (!has_root(btree) && mode != MAP_READ) {
