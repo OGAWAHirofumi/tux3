@@ -29,6 +29,7 @@
  * - btree dirty
  * - inode is orphaned flag
  * - inode is dead flag
+ * - inode is flushed own timing flag
  */
 
 /* I_DIRTY_SYNC, I_DIRTY_DATASYNC, and I_DIRTY_PAGES */
@@ -50,14 +51,39 @@
 #define IFLAGS_DEAD_SHIFT	(IFLAGS_XATTR_SHIFT + IFLAGS_XATTR_BITS)
 
 /* btree root is modified from only backend, so no need per-delta flag */
-#define TUX3_DIRTY_BTREE	(1 << 29)
+#define TUX3_DIRTY_BTREE	(1 << 28)
 /* the orphaned flag is set by only backend, so no need per-delta flag */
-#define TUX3_INODE_ORPHANED	(1 << 30)
+#define TUX3_INODE_ORPHANED	(1 << 29)
 /* the dead flag is set by only backend, so no need per-delta flag */
-#define TUX3_INODE_DEAD		(1 << 31)
+#define TUX3_INODE_DEAD		(1 << 30)
+/* If no-flush flag is set, tux3_flush_inodes() doesn't flush */
+#define TUX3_INODE_NO_FLUSH	(1 << 31)
 
-#define NON_DIRTY_FLAGS		(TUX3_INODE_ORPHANED | TUX3_INODE_DEAD)
+#define NON_DIRTY_FLAGS					\
+	(TUX3_INODE_ORPHANED | TUX3_INODE_DEAD | TUX3_INODE_NO_FLUSH)
 
+/*
+ * If no-flush flag is set, tux3_flush_inodes() doesn't flush. Some
+ * inodes have to be flushed by custom timing, and it is flushed by
+ * tux3_flush_inode_internal() instead.
+ *
+ * This inode must be pinned until umount, to flush by
+ * tux3_flush_inode_internal().
+ */
+void tux3_set_inode_no_flush(struct inode *inode)
+{
+	tux_inode(inode)->flags |= TUX3_INODE_NO_FLUSH;
+}
+
+/* The inode has no-flush flag? */
+static int tux3_is_inode_no_flush(struct inode *inode)
+{
+	return tux_inode(inode)->flags & TUX3_INODE_NO_FLUSH;
+}
+
+/*
+ * Dirty flags helpers
+ */
 static inline unsigned tux3_dirty_shift(unsigned delta)
 {
 	return tux3_delta(delta) * NUM_DIRTY_BITS;
@@ -92,13 +118,12 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 		return;
 
 	/*
-	 * If inode is bitmap or volmap, delta is different cycle with
-	 * sb->delta. So those can race. And those inodes are flushed
-	 * by do_commit().
+	 * If inode is TUX3_INODE_NO_FLUSH, it is handled by different
+	 * cycle with sb->delta. So those can race.
 	 *
 	 * So, don't bother s_ddc->dirty_inodes by adding those inodes.
 	 */
-	if (tuxnode->inum == TUX_BITMAP_INO || tuxnode->inum == TUX_VOLMAP_INO)
+	if (tux3_is_inode_no_flush(inode))
 		s_ddc = NULL;
 	else {
 		s_ddc = tux3_sb_ddc(sb, delta);
@@ -423,17 +448,20 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 }
 
 /*
- * tux3_flush_inode() for volmap or bitmap.
+ * tux3_flush_inode() for TUX3_INODE_NO_FLUSH.
  *
- * If volmap or bitmap, those can clear inode dirty flags
+ * If inode is TUX3_INODE_NO_FLUSH, those can clear inode dirty flags
  * immediately. Because those inodes is pinned until umount.
 */
 int tux3_flush_inode_internal(struct inode *inode, unsigned delta)
 {
-	int err = tux3_flush_inode(inode, delta);
+	int err;
 
-	/* FIXME: error handling */
+	assert(tux3_is_inode_no_flush(inode));
 	assert(atomic_read(&inode->i_count) >= 1);
+
+	err = tux3_flush_inode(inode, delta);
+	/* FIXME: error handling */
 	__tux3_clear_dirty_inode(inode, delta);
 
 	return err;
@@ -452,8 +480,7 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
 
-		assert(tuxnode->inum != TUX_BITMAP_INO &&
-		       tuxnode->inum != TUX_VOLMAP_INO);
+		assert(!tux3_is_inode_no_flush(inode));
 
 		err = tux3_flush_inode(inode, delta);
 		if (err)
@@ -480,8 +507,7 @@ void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta)
 		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
 
-		assert(tuxnode->inum != TUX_BITMAP_INO &&
-		       tuxnode->inum != TUX_VOLMAP_INO);
+		assert(!tux3_is_inode_no_flush(inode));
 
 		/*
 		 * iput_final() doesn't add inode to LRU list if I_DIRTY.

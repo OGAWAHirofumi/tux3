@@ -892,6 +892,9 @@ static void tux_setup_inode(struct inode *inode)
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
 		switch (inum) {
 		case TUX_BITMAP_INO:
+			/* Flushed by tux3_flush_inode_internal() */
+			tux3_set_inode_no_flush(inode);
+			/* FALLTHRU */
 		case TUX_VTABLE_INO:
 		case TUX_ATABLE_INO:
 		case TUX_LOGMAP_INO:
@@ -904,6 +907,8 @@ static void tux_setup_inode(struct inode *inode)
 			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
 			inode->i_mapping->a_ops = &tux_vol_aops;
 			tux_inode(inode)->io = tux3_volmap_io;
+			/* Flushed by tux3_flush_inode_internal() */
+			tux3_set_inode_no_flush(inode);
 			break;
 		default:
 			BUG();
