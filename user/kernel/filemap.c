@@ -10,31 +10,18 @@
 
 /*
  * Locking order: Take care about memory allocation. (It may call our fs.)
+ * FIXME: fill locking rule
  *
  * down_write(itable: btree->lock) (open_inode)
  * down_read(itable: btree->lock) (make_inode, save_inode)
- *    balloc()
  *
  * down_write(inode: btree->lock) (btree_chop, map_region for write)
- *     bitmap->i_mutex (balloc, bfree)
- *         down_read(bitmap: btree->lock) (map_region for read)
  * down_read(inode: btree->lock) (map_region for read)
  *
  * This lock may be first lock except vfs locks (lock_super, i_mutex).
  * sb->delta_lock (change_begin, change_end) [only for DISABLE_ASYNC_BACKEND]
  *
  * memory allocation: (blockread, blockget, kmalloc, etc.)
- *     lock_page() (for write)
- *         write (bitmap) dirty buffers:
- *             down_write(bitmap: btree->lock) (map_region for write)
- *                 lock_page() (blockread)
- *                     Note, this down_read is avoided by is_bitmap_write()
- *                     [down_read(bitmap: btree->lock) (map_region for read)]
- *                 bitmap->i_mutex (balloc)
- *
- *     lock_page() (blockread)
- *         down_read(bitmap: btree->lock) (map_region for read)
- *     bitmap->i_mutex (balloc)
  *
  * So, to prevent reentering into our fs recursively by memory reclaim
  * from memory allocation, lower layer wouldn't use __GFP_FS.
@@ -55,24 +42,6 @@ enum map_mode {
 };
 
 #include "filemap_hole.c"
-
-#if 1
-/* FIXME: this is temporary fix */
-static void get_bitmap_write(struct sb *sb)
-{
-	current->journal_info = sb->bitmap;
-}
-
-static int is_bitmap_write(struct sb *sb)
-{
-	return current->journal_info == sb->bitmap;
-}
-
-static void put_bitmap_write(struct sb *sb)
-{
-	current->journal_info = NULL;
-}
-#endif
 
 /* userland only */
 void show_segs(struct seg map[], unsigned segs)
@@ -107,13 +76,24 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 
 	assert(max_segs > 0);
 
-	if (mode != MAP_READ) {
-		down_write(&btree->lock);
-		if (inode == sb->bitmap)
-			get_bitmap_write(sb);
-	} else {
-		if (!is_bitmap_write(sb))
-			down_read_nested(&btree->lock, inode == sb->bitmap);
+	/*
+	 * bitmap enters here recursively.
+	 *
+	 * tux3_flush_inode_internal() (flush bitmap)
+	 *   flush_list()
+	 *     map_region() (for flush)
+	 *       balloc()
+	 *         read bitmap
+	 *           map_region() (for read)
+	 *
+	 * But bitmap is used (read/write) only from backend.
+	 * So, no need to lock.
+	 */
+	if (tux_inode(inode)->inum != TUX_BITMAP_INO) {
+		if (mode == MAP_READ)
+			down_read(&btree->lock);
+		else
+			down_write(&btree->lock);
 	}
 
 	if (!has_root(btree) && mode != MAP_READ) {
@@ -330,13 +310,11 @@ out_release:
 	if (cursor)
 		release_cursor(cursor);
 out_unlock:
-	if (mode != MAP_READ) {
-		up_write(&btree->lock);
-		if (inode == sb->bitmap)
-			put_bitmap_write(sb);
-	} else {
-		if (!is_bitmap_write(sb))
+	if (tux_inode(inode)->inum != TUX_BITMAP_INO) {
+		if (mode == MAP_READ)
 			up_read(&btree->lock);
+		else
+			up_write(&btree->lock);
 	}
 	if (cursor)
 		free_cursor(cursor);
@@ -355,13 +333,24 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 
 	assert(max_segs > 0);
 
-	if (mode != MAP_READ) {
-		down_write(&btree->lock);
-		if (inode == sb->bitmap)
-			get_bitmap_write(sb);
-	} else {
-		if (!is_bitmap_write(sb))
-			down_read_nested(&btree->lock, inode == sb->bitmap);
+	/*
+	 * bitmap enters here recursively.
+	 *
+	 * tux3_flush_inode_internal() (flush bitmap)
+	 *   flush_list()
+	 *     map_region() (for flush)
+	 *       balloc()
+	 *         read bitmap
+	 *           map_region() (for read)
+	 *
+	 * But bitmap is used (read/write) only from backend.
+	 * So, no need to lock.
+	 */
+	if (tux_inode(inode)->inum != TUX_BITMAP_INO) {
+		if (mode == MAP_READ)
+			down_read(&btree->lock);
+		else
+			down_write(&btree->lock);
 	}
 
 	if (!has_root(btree) && mode != MAP_READ) {
@@ -492,13 +481,11 @@ out_release:
 	if (cursor)
 		release_cursor(cursor);
 out_unlock:
-	if (mode != MAP_READ) {
-		up_write(&btree->lock);
-		if (inode == sb->bitmap)
-			put_bitmap_write(sb);
-	} else {
-		if (!is_bitmap_write(sb))
+	if (tux_inode(inode)->inum != TUX_BITMAP_INO) {
+		if (mode == MAP_READ)
 			up_read(&btree->lock);
+		else
+			up_write(&btree->lock);
 	}
 	if (cursor)
 		free_cursor(cursor);

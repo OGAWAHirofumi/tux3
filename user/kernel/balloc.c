@@ -15,9 +15,6 @@
 #define trace trace_on
 #endif
 
-/* For lockdep: random value bigger than max of inode_i_mutex_lock_class */
-#define I_MUTEX_BITMAP	7
-
 #ifndef __KERNEL__
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
@@ -136,7 +133,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 			warn("block read failed"); // !!! error return sucks here
 			return -1;
 		}
-		mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
+
 		unsigned bytes = sb->blocksize - offset, run = 0;
 		if (bytes > tail)
 			bytes = tail;
@@ -178,13 +175,12 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 				sb->nextalloc = found + run;
 				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
-				mutex_unlock(&sb->bitmap->i_mutex);
+
 				trace("balloc extent -> [%Lx/%x]", found, blocks);
 				return found;
 			}
 		}
 final_partial_byte:
-		mutex_unlock(&sb->bitmap->i_mutex);
 		blockput(buffer);
 		tail -= bytes;
 		offset = 0;
@@ -226,7 +222,6 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 		goto error;
 	}
 
-	mutex_lock_nested(&sb->bitmap->i_mutex, I_MUTEX_BITMAP);
 	if (!all_set(bufdata(buffer), mapoffset, blocks))
 		goto double_free;
 	trace("bfree extent <- [%Lx/%x], ", start, blocks);
@@ -246,13 +241,11 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	blockput(clone);
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
-	mutex_unlock(&sb->bitmap->i_mutex);
 
 	return 0;
 
 double_free:
 	error("double free: start 0x%Lx, blocks %x", start, blocks);
-	mutex_unlock(&sb->bitmap->i_mutex);
 	blockput(buffer);
 error:
 	return -EIO; // error???
