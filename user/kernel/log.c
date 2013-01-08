@@ -111,7 +111,7 @@ void log_finish(struct sb *sb)
 	}
 }
 
-int log_finish_cycle(struct sb *sb)
+void log_finish_cycle(struct sb *sb)
 {
 	struct buffer_head *logbuf;
 	unsigned count = sb->lognext;
@@ -126,8 +126,6 @@ int log_finish_cycle(struct sb *sb)
 	}
 	/* Initialize for new delta cycle */
 	sb->lognext = 0;
-
-	return count;
 }
 
 static void *log_begin(struct sb *sb, unsigned bytes)
