@@ -126,28 +126,30 @@ int make_tux3(struct sb *sb)
 	if (err)
 		return err;
 
+	change_begin_atomic(sb);
+
 	trace("create bitmap");
 	sb->bitmap = create_internal_inode(sb, TUX_BITMAP_INO, NULL);
 	if (IS_ERR(sb->bitmap)) {
 		err = PTR_ERR(sb->bitmap);
-		goto eek;
+		goto error_change_end;
 	}
 
 	if (reserve_superblock(sb) < 0)
-		goto eek;
+		goto error_change_end;
 
 	trace("create version table");
 	sb->vtable = create_internal_inode(sb, TUX_VTABLE_INO, NULL);
 	if (IS_ERR(sb->vtable)) {
 		err = PTR_ERR(sb->vtable);
-		goto eek;
+		goto error_change_end;
 	}
 
 	trace("create atom dictionary");
 	sb->atable = create_internal_inode(sb, TUX_ATABLE_INO, NULL);
 	if (IS_ERR(sb->atable)) {
 		err = PTR_ERR(sb->atable);
-		goto eek;
+		goto error_change_end;
 	}
 
 	trace("create root directory");
@@ -155,21 +157,28 @@ int make_tux3(struct sb *sb)
 	sb->rootdir = create_internal_inode(sb, TUX_ROOTDIR_INO, &root_iattr);
 	if (IS_ERR(sb->rootdir)) {
 		err = PTR_ERR(sb->rootdir);
-		goto eek;
+		goto error_change_end;
 	}
 
+	change_end_atomic(sb);
+
 	if ((err = sync_super(sb)))
-		goto eek;
+		goto error;
 
 	show_buffers(mapping(sb->bitmap));
 	show_buffers(mapping(sb->rootdir));
 	show_buffers(sb->volmap->map);
+
 	return 0;
-eek:
+
+error_change_end:
+	change_end_atomic(sb);
+error:
 	if (err)
 		warn("eek, %s", strerror(-err));
 	iput(sb->bitmap);
 	sb->bitmap = NULL;
+
 	return err ? err : -ENOSPC; // just guess
 }
 
