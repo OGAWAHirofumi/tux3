@@ -10,18 +10,35 @@
 
 /*
  * Locking order: Take care about memory allocation. (It may call our fs.)
- * FIXME: fill locking rule
  *
- * down_write(itable: btree->lock) (open_inode)
- * down_read(itable: btree->lock) (make_inode, save_inode)
+ * down_write(itable: btree->lock) (alloc_inum, save_inode, purge_inode)
+ * down_read(itable: btree->lock) (open_inode)
+ *
+ * down_write(otable: btree->lock) (tux3_rollup_orphan_add,
+ *				    tux3_rollup_orphan_del,
+ *				    load_otable_orphan)
  *
  * down_write(inode: btree->lock) (btree_chop, map_region for write)
  * down_read(inode: btree->lock) (map_region for read)
+ *
+ * inode->i_mutex
+ *     mapping->private_lock (front uses to protect dirty buffer list)
+ *     tuxnode->hole_extents_lock (for inode->hole_extents,
+ *				   i_ddc->dirty_holes is protected by ->i_mutex)
+ *
+ *     inode->i_lock
+ *         tuxnode->lock (to protect tuxnode data)
+ *             tuxnode->dirty_inodes_lock (for i_ddc->dirty_inodes,
+ *					   Note: timestamp can be updated
+ *					   outside inode->i_mutex)
+ *
+ * sb->forked_buffers (for sb->forked_buffers)
  *
  * This lock may be first lock except vfs locks (lock_super, i_mutex).
  * sb->delta_lock (change_begin, change_end) [only for DISABLE_ASYNC_BACKEND]
  *
  * memory allocation: (blockread, blockget, kmalloc, etc.)
+ *     FIXME: fill here, what functions/locks are used via memory reclaim path
  *
  * So, to prevent reentering into our fs recursively by memory reclaim
  * from memory allocation, lower layer wouldn't use __GFP_FS.
