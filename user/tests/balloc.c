@@ -101,7 +101,11 @@ static void test01(struct sb *sb, block_t blocks)
 	test_assert(all_set(bits, 0x51, 2) == 0);
 
 	/* Corner case */
+#if 1
+	unsigned char *bitmap = malloc(8); /* bitmap must be array of ulong */
+#else
 	unsigned char *bitmap = malloc(7);
+#endif
 	set_bits(bitmap, 0, 7 * 8);
 	test_assert(all_set(bitmap, 0, 7 * 8));
 	test_assert(all_clear(bitmap, 0, 7 * 8) == 0);
