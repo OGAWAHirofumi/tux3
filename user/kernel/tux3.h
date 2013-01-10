@@ -660,7 +660,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 			  unsigned blocks);
 int balloc(struct sb *sb, unsigned blocks, block_t *block);
 int bfree(struct sb *sb, block_t start, unsigned blocks);
-int replay_update_bitmap(struct replay *rp, block_t start, unsigned count, int set);
+int replay_update_bitmap(struct replay *rp, block_t start, unsigned blocks, int set);
 
 /* btree.c */
 unsigned calc_entries_per_node(unsigned blocksize);

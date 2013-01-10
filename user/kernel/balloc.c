@@ -111,29 +111,170 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 }
 #endif
 
+/*
+ * Modify bits on one block, then adjust ->freeblocks.
+ */
+static int bitmap_modify_bits(struct sb *sb, struct buffer_head *buffer,
+			      unsigned offset, unsigned blocks, int set)
+{
+	struct buffer_head *clone;
+	void (*modify)(u8 *, unsigned, unsigned) = set ? set_bits : clear_bits;
+
+	assert(blocks > 0);
+	assert(offset + blocks <= sb->blocksize << 3);
+
+	/*
+	 * The bitmap is modified only by backend.
+	 * blockdirty() should never return -EAGAIN.
+	 */
+	clone = blockdirty(buffer, sb->rollup);
+	if (IS_ERR(clone)) {
+		int err = PTR_ERR(clone);
+		assert(err != -EAGAIN);
+		return err;
+	}
+
+	modify(bufdata(clone), offset, blocks);
+
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
+
+	if (set)
+		sb->freeblocks -= blocks;
+	else
+		sb->freeblocks += blocks;
+
+	return 0;
+}
+
+/*
+ * Modify bits on multiple blocks.  Caller may want to check range is
+ * excepted state.
+ *
+ * FIXME: If error happened on middle of blocks, modified bits and
+ * ->freeblocks are not restored to original. What to do?
+ */
+static int bitmap_modify(struct sb *sb, block_t start, unsigned blocks, int set)
+{
+	struct inode *bitmap = sb->bitmap;
+	unsigned mapshift = sb->blockbits + 3;
+	unsigned mapsize = 1 << mapshift;
+	unsigned mapmask = mapsize - 1;
+	unsigned mapoffset = start & mapmask;
+	block_t mapblock, mapblocks = (start + blocks + mapmask) >> mapshift;
+
+	assert(blocks > 0);
+	assert(start + blocks <= sb->volblocks);
+
+	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
+		struct buffer_head *buffer;
+		unsigned len;
+		int err;
+
+		buffer = blockread(mapping(bitmap), mapblock);
+		if (!buffer) {
+			warn("block read failed");
+			// !!! error return sucks here
+			return -EIO;
+		}
+
+		len = min(mapsize - mapoffset, blocks);
+		err = bitmap_modify_bits(sb, buffer, mapoffset, len, set);
+		if (err) {
+			blockput(buffer);
+			/* FIXME: error handling */
+			return err;
+		}
+
+		mapoffset = 0;
+		blocks -= len;
+	}
+
+	return 0;
+}
+
+/*
+ * If bits on multiple blocks is excepted state, modify bits.
+ *
+ * FIXME: If error happened on middle of blocks, modified bits and
+ * ->freeblocks are not restored to original. What to do?
+ */
+static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
+				  int set)
+{
+	struct inode *bitmap = sb->bitmap;
+	unsigned mapshift = sb->blockbits + 3;
+	unsigned mapsize = 1 << mapshift;
+	unsigned mapmask = mapsize - 1;
+	unsigned mapoffset = start & mapmask;
+	block_t mapblock, mapblocks = (start + blocks + mapmask) >> mapshift;
+	int (*test)(u8 *, unsigned, unsigned) = set ? all_clear : all_set;
+
+	assert(blocks > 0);
+	assert(start + blocks <= sb->volblocks);
+
+	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
+		struct buffer_head *buffer;
+		unsigned len;
+		int err;
+
+		buffer = blockread(mapping(bitmap), mapblock);
+		if (!buffer) {
+			warn("block read failed");
+			// !!! error return sucks here
+			return -EIO;
+		}
+
+		len = min(mapsize - mapoffset, blocks);
+		if (!test(bufdata(buffer), mapoffset, len)) {
+			blockput(buffer);
+
+			error("%s: start 0x%Lx, count %x",
+			      set ? "already allocated" : "double free",
+			      start, blocks);
+
+			return -EIO;	/* FIXME: error code? */
+		}
+
+		err = bitmap_modify_bits(sb, buffer, mapoffset, len, set);
+		if (err) {
+			blockput(buffer);
+			/* FIXME: error handling */
+			return err;
+		}
+
+		mapoffset = 0;
+		blocks -= len;
+	}
+
+	return 0;
+}
+
 /* userland only */
 block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 			  unsigned blocks)
 {
-	struct inode *inode = sb->bitmap;
+	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapsize = 1 << mapshift;
 	unsigned mapmask = mapsize - 1;
 	unsigned mapoffset = start & mapmask;
 	block_t limit = start + count;
 	block_t mapblock, mapblocks = (limit + mapmask) >> mapshift;
-	struct buffer_head *buffer, *clone;
-	block_t found;
+	struct buffer_head *buffer;
+	block_t need, found;
 
 	trace("balloc find %i blocks, range [%Lx, %Lx]", blocks, start, count);
 	assert(blocks > 0);
+	assert(start + count <= sb->volblocks);
 	assert(tux3_under_backend(sb));
 
+	need = blocks;
 	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		unsigned idx, maplimit;
 		void *p;
 
-		buffer = blockread(mapping(inode), mapblock);
+		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
 			warn("block read failed");
 			// !!! error return sucks here
@@ -148,20 +289,27 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 
 		p = bufdata(buffer);
 		while (1) {
-			/* There is no space on this block */
-			maplimit = mapoffset + blocks;
-			if (maplimit > mapsize)
-				break;
+			maplimit = min_t(block_t, mapoffset + need, mapsize);
 
 			/* Check if there is no non-zero bits */
 			idx = find_next_bit_le(p, maplimit, mapoffset);
-			if (idx == maplimit)
+			if (idx == maplimit) {
+				need -= idx - mapoffset;
+				if (need)
+					break;	/* Need more blocks */
+
+				/* Found requested free blocks */
+				found = (mapblock << mapshift) + idx - blocks;
 				goto found_range;
+			}
+
+			/* Reset needed blocks */
+			need = blocks;
 
 			/* Skip non-zero bit */
 			mapoffset = find_next_zero_bit_le(p, mapsize, idx + 1);
 			if (mapoffset == mapsize)
-				break;
+				break;	/* Search next blocks */
 		}
 
 		blockput(buffer);
@@ -171,25 +319,27 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 	return -ENOSPC;
 
 found_range:
-	found = (mapblock << mapshift) + mapoffset;
+	/* Found free blocks within one block? */
+	if ((found >> mapshift) == mapblock) {
+		unsigned foundoffset = found & mapmask;
+		int err;
 
-	/*
-	 * The bitmap is modified only by backend.
-	 * blockdirty() should never return -EAGAIN.
-	 */
-	clone = blockdirty(buffer, sb->rollup);
-	if (IS_ERR(clone)) {
-		assert(PTR_ERR(clone) != -EAGAIN);
+		err = bitmap_modify_bits(sb, buffer, foundoffset, blocks, 1);
+		if (err) {
+			blockput(buffer);
+			/* FIXME: error handling */
+			return err;
+		}
+	} else {
+		int err;
+
 		blockput(buffer);
-		/* FIXME: error handling */
-		return -EIO;
+		err = bitmap_modify(sb, found, blocks, 1);
+		if (err)
+			return err;
 	}
-	set_bits(bufdata(clone), mapoffset, blocks);
-	mark_buffer_dirty_non(clone);
-	blockput(clone);
 
 	sb->nextalloc = found + blocks;
-	sb->freeblocks -= blocks;
 	//set_sb_dirty(sb);
 
 	trace("balloc extent [block %Lx, count %x]", found, blocks);
@@ -221,95 +371,13 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 
 int bfree(struct sb *sb, block_t start, unsigned blocks)
 {
-	unsigned mapshift = sb->blockbits + 3;
-	unsigned mapmask = (1 << mapshift) - 1;
-	block_t mapblock = start >> mapshift;
-	unsigned mapoffset = start & mapmask;
-	struct buffer_head *buffer, *clone;
-
-	assert(blocks > 0);
 	assert(tux3_under_backend(sb));
-
-	buffer = blockread(mapping(sb->bitmap), mapblock);
-	if (!buffer) {
-		warn("couldn't read bitmap buffer: extent 0x%Lx\n", start);
-		goto error;
-	}
-
-	if (!all_set(bufdata(buffer), mapoffset, blocks))
-		goto double_free;
-
-	/*
-	 * The bitmap is modified only by backend.
-	 * blockdirty() should never return -EAGAIN.
-	 */
-	clone = blockdirty(buffer, sb->rollup);
-	if (IS_ERR(clone)) {
-		assert(PTR_ERR(clone) != -EAGAIN);
-		blockput(buffer);
-		/* FIXME: error handling */
-		return PTR_ERR(clone);
-	}
-	clear_bits(bufdata(clone), mapoffset, blocks);
-	mark_buffer_dirty_non(clone);
-	blockput(clone);
-
-	sb->freeblocks += blocks;
-	//set_sb_dirty(sb);
-
 	trace("bfree extent [block %Lx, count %x], ", start, blocks);
-
-	return 0;
-
-double_free:
-	error("double free: start 0x%Lx, blocks %x", start, blocks);
-	blockput(buffer);
-error:
-	return -EIO; // error???
+	return bitmap_test_and_modify(sb, start, blocks, 0);
 }
 
-int replay_update_bitmap(struct replay *rp, block_t start, unsigned count,
+int replay_update_bitmap(struct replay *rp, block_t start, unsigned blocks,
 			 int set)
 {
-	struct sb *sb = rp->sb;
-	unsigned mapshift = sb->blockbits + 3;
-	unsigned mapmask = (1 << mapshift) - 1;
-	block_t mapblock = start >> mapshift;
-	unsigned mapoffset = start & mapmask;
-	struct buffer_head *buffer, *clone;
-
-	buffer = blockread(mapping(sb->bitmap), mapblock);
-	if (!buffer)
-		return -ENOMEM;
-
-	if (!(set ? all_clear : all_set)(bufdata(buffer), mapoffset, count)) {
-		blockput(buffer);
-
-		error("%s: start 0x%Lx, count %x",
-		      set ? "already allocated" : "double free",
-		      start, count);
-		return -EINVAL;
-	}
-
-	/*
-	 * The bitmap is modified only by backend.
-	 * blockdirty() should never return -EAGAIN.
-	 */
-	clone = blockdirty(buffer, sb->rollup);
-	if (IS_ERR(clone)) {
-		assert(PTR_ERR(clone) != -EAGAIN);
-		blockput(buffer);
-		/* FIXME: error handling */
-		return PTR_ERR(clone);
-	}
-	(set ? set_bits : clear_bits)(bufdata(clone), mapoffset, count);
-	mark_buffer_dirty_non(clone);
-	blockput(clone);
-
-	if (set)
-		sb->freeblocks -= count;
-	else
-		sb->freeblocks += count;
-
-	return 0;
+	return bitmap_test_and_modify(rp->sb, start, blocks, set);
 }
