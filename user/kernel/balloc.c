@@ -18,8 +18,10 @@
 #ifndef __KERNEL__
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
-	assert(!(start & 7));
 	unsigned char ones[256];
+
+	assert(!(start & 7));
+
 	for (int i = 0; i < sizeof(ones); i++)
 		ones[i] = bytebits(i);
 
@@ -114,8 +116,6 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 			  unsigned blocks)
 {
 	struct inode *inode = sb->bitmap;
-	trace_off("balloc %i blocks from [%Lx/%x]", blocks, start, count);
-	assert(blocks > 0);
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	block_t limit = start + count;
@@ -124,10 +124,11 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3;
 
+	trace("balloc find %i blocks, range [%Lx, %Lx]", blocks, start, count);
+	assert(blocks > 0);
 	assert(tux3_under_backend(sb));
 
 	for (block_t mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
-		trace_off("search mapblock %x/%x", mapblock, mapblocks);
 		struct buffer_head *buffer, *clone;
 
 		buffer = blockread(mapping(inode), mapblock);
@@ -179,7 +180,9 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 				sb->freeblocks -= run;
 				//set_sb_dirty(sb);
 
-				trace("balloc extent -> [%Lx/%x]", found, blocks);
+				trace("balloc extent [block %Lx, count %x]",
+				      found, blocks);
+
 				return found;
 			}
 		}
@@ -194,8 +197,6 @@ final_partial_byte:
 
 int balloc(struct sb *sb, unsigned blocks, block_t *block)
 {
-	assert(blocks > 0);
-	trace_off("balloc %x blocks at goal %Lx", blocks, sb->nextalloc);
 	block_t ret, goal = sb->nextalloc, total = sb->volblocks;
 
 	ret = balloc_from_range(sb, goal, total - goal, blocks);
@@ -218,13 +219,13 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 
 int bfree(struct sb *sb, block_t start, unsigned blocks)
 {
-	assert(blocks > 0);
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapmask = (1 << mapshift) - 1;
 	block_t mapblock = start >> mapshift;
 	unsigned mapoffset = start & mapmask;
 	struct buffer_head *buffer, *clone;
 
+	assert(blocks > 0);
 	assert(tux3_under_backend(sb));
 
 	buffer = blockread(mapping(sb->bitmap), mapblock);
@@ -235,7 +236,7 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 
 	if (!all_set(bufdata(buffer), mapoffset, blocks))
 		goto double_free;
-	trace("bfree extent <- [%Lx/%x], ", start, blocks);
+
 	/*
 	 * The bitmap is modified only by backend.
 	 * blockdirty() should never return -EAGAIN.
@@ -250,8 +251,11 @@ int bfree(struct sb *sb, block_t start, unsigned blocks)
 	clear_bits(bufdata(clone), mapoffset, blocks);
 	mark_buffer_dirty_non(clone);
 	blockput(clone);
+
 	sb->freeblocks += blocks;
 	//set_sb_dirty(sb);
+
+	trace("bfree extent [block %Lx, count %x], ", start, blocks);
 
 	return 0;
 
