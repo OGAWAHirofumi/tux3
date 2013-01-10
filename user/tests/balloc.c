@@ -17,42 +17,46 @@
 
 #include "kernel/balloc.c"
 
-static int bitmap_all_test(struct sb *sb, block_t start, unsigned count,
-			   int (*test)(uint8_t *, unsigned, unsigned))
+static int bitmap_test(struct sb *sb, block_t start, block_t count, int set)
 {
 	struct inode *bitmap = sb->bitmap;
-	block_t start_block = start >> (3 + sb->blockbits);
-	block_t end_block = (((start + count + 7) >> 3) + sb->blockmask) >> sb->blockbits;
-	int ret = 1;
+	unsigned mapshift = sb->blockbits + 3;
+	unsigned mapsize = 1 << mapshift;
+	unsigned mapmask = mapsize - 1;
+	unsigned mapoffset = start & mapmask;
+	block_t mapblock, mapblocks = (start + count + mapmask) >> mapshift;
+	int (*test)(u8 *, unsigned, unsigned) = set ? all_set : all_clear;
 
-	for (block_t block = start_block; block < end_block; block++) {
-		block_t block_start = (block_t)(block << sb->blockbits) << 3;
-		block_t block_count = (block_t)sb->blocksize << 3;
+	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
+		struct buffer_head *buffer;
+		unsigned len;
+		int ret;
 
-		struct buffer_head *buf = blockget(bitmap->map, block);
-		block_t start_off, end_off, checkcnt;
+		buffer = blockget(mapping(bitmap), mapblock);
+		assert(buffer);
 
-		start_off = max(start - block_start, 0LL);
-		end_off = min(start + count - block_start, block_count);
-		checkcnt = end_off - start_off;
+		len = min_t(block_t, mapsize - mapoffset, count);
+		ret = test(bufdata(buffer), mapoffset, len);
+		blockput(buffer);
 
-		ret = test(bufdata(buf), start_off, checkcnt);
-
-		blockput(buf);
 		if (!ret)
-			break;
+			return 0;
+
+		mapoffset = 0;
+		count -= len;
 	}
-	return ret;
+
+	return 1;
 }
 
 static int bitmap_all_set(struct sb *sb, block_t start, unsigned count)
 {
-	return bitmap_all_test(sb, start, count, all_set);
+	return bitmap_test(sb, start, count, 1);
 }
 
 static int bitmap_all_clear(struct sb *sb, block_t start, unsigned count)
 {
-	return bitmap_all_test(sb, start, count, all_clear);
+	return bitmap_test(sb, start, count, 0);
 }
 
 /* cleanup bitmap of main() */
