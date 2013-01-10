@@ -115,6 +115,12 @@ void clear_bits(u8 *bitmap, unsigned start, unsigned count)
 
 int all_set(u8 *bitmap, unsigned start, unsigned count)
 {
+#if 1
+	/* Bitmap must be array of "unsigned long" */
+	unsigned limit = start + count;
+	/* Find zero bit in range. If not found, all are non-zero.  */
+	return find_next_zero_bit_le(bitmap, limit, start) == limit;
+#else
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff;	/* little endian!!! */
 	unsigned rmask = ~(-1 << (limit & 7)) & 0xff;	/* little endian!!! */
@@ -129,10 +135,17 @@ int all_set(u8 *bitmap, unsigned start, unsigned count)
 			return 0;
 	return	(bitmap[loff] & lmask) == lmask &&
 		(!rmask || (bitmap[roff] & rmask) == rmask);
+#endif
 }
 
 int all_clear(u8 *bitmap, unsigned start, unsigned count)
 {
+#if 1
+	/* Bitmap must be array of "unsigned long" */
+	unsigned limit = start + count;
+	/* Find non-zero bit in range. If not found, all are zero.  */
+	return find_next_bit_le(bitmap, limit, start) == limit;
+#else
 	unsigned limit = start + count;
 	unsigned lmask = (-1 << (start & 7)) & 0xff;	/* little endian!!! */
 	unsigned rmask = ~(-1 << (limit & 7)) & 0xff;	/* little endian!!! */
@@ -147,6 +160,7 @@ int all_clear(u8 *bitmap, unsigned start, unsigned count)
 			return 0;
 	return	!(bitmap[loff] & lmask) &&
 		(!rmask || !(bitmap[roff] & rmask));
+#endif
 }
 
 int bytebits(u8 c)
