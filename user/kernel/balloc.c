@@ -117,19 +117,21 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 {
 	struct inode *inode = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
-	unsigned mapmask = (1 << mapshift) - 1;
+	unsigned mapsize = 1 << mapshift;
+	unsigned mapmask = mapsize - 1;
+	unsigned mapoffset = start & mapmask;
 	block_t limit = start + count;
-	block_t mapblocks = (limit + mapmask) >> mapshift;
-	unsigned offset = (start & mapmask) >> 3;
-	unsigned startbit = start & 7;
-	block_t tail = (count + startbit + 7) >> 3;
+	block_t mapblock, mapblocks = (limit + mapmask) >> mapshift;
+	struct buffer_head *buffer, *clone;
+	block_t found;
 
 	trace("balloc find %i blocks, range [%Lx, %Lx]", blocks, start, count);
 	assert(blocks > 0);
 	assert(tux3_under_backend(sb));
 
-	for (block_t mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
-		struct buffer_head *buffer, *clone;
+	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
+		unsigned idx, maplimit;
+		void *p;
 
 		buffer = blockread(mapping(inode), mapblock);
 		if (!buffer) {
@@ -138,61 +140,61 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 			return -EIO;
 		}
 
-		unsigned bytes = sb->blocksize - offset, run = 0;
-		if (bytes > tail)
-			bytes = tail;
-		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes, c;
-		for (; p < top; p++, startbit = 0) {
-			if ((c = *p) == 0xff) {
-				run = 0;
-				continue;
-			}
-			for (int i = startbit, mask = 1 << startbit; i < 8; i++, mask <<= 1) {
-				if ((c & mask)) {
-					run = 0;
-					continue;
-				}
-				if (++run < blocks)
-					continue;
-				assert(run == blocks);
-				block_t found = i + (((void *)p - bufdata(buffer)) << 3) + (mapblock << mapshift);
-				if (found >= limit) {
-					assert(mapblock == mapblocks - 1);
-					goto final_partial_byte;
-				}
-				found -= run - 1;
-
-				/*
-				 * The bitmap is modified only by backend.
-				 * blockdirty() should never return -EAGAIN.
-				 */
-				clone = blockdirty(buffer, sb->rollup);
-				if (IS_ERR(clone)) {
-					assert(PTR_ERR(clone) != -EAGAIN);
-					blockput(buffer);
-					/* FIXME: error handling */
-					return -EIO;
-				}
-				set_bits(bufdata(clone), found & mapmask, run);
-				mark_buffer_dirty_non(clone);
-				blockput(clone);
-				sb->nextalloc = found + run;
-				sb->freeblocks -= run;
-				//set_sb_dirty(sb);
-
-				trace("balloc extent [block %Lx, count %x]",
-				      found, blocks);
-
-				return found;
-			}
+		/* If last block of range, apply limit */
+		if (mapblock == mapblocks - 1) {
+			if (limit & mapmask)
+				mapsize = limit & mapmask;
 		}
-final_partial_byte:
+
+		p = bufdata(buffer);
+		while (1) {
+			/* There is no space on this block */
+			maplimit = mapoffset + blocks;
+			if (maplimit > mapsize)
+				break;
+
+			/* Check if there is no non-zero bits */
+			idx = find_next_bit_le(p, maplimit, mapoffset);
+			if (idx == maplimit)
+				goto found_range;
+
+			/* Skip non-zero bit */
+			mapoffset = find_next_zero_bit_le(p, mapsize, idx + 1);
+			if (mapoffset == mapsize)
+				break;
+		}
+
 		blockput(buffer);
-		tail -= bytes;
-		offset = 0;
+		mapoffset = 0;
 	}
 
 	return -ENOSPC;
+
+found_range:
+	found = (mapblock << mapshift) + mapoffset;
+
+	/*
+	 * The bitmap is modified only by backend.
+	 * blockdirty() should never return -EAGAIN.
+	 */
+	clone = blockdirty(buffer, sb->rollup);
+	if (IS_ERR(clone)) {
+		assert(PTR_ERR(clone) != -EAGAIN);
+		blockput(buffer);
+		/* FIXME: error handling */
+		return -EIO;
+	}
+	set_bits(bufdata(clone), mapoffset, blocks);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
+
+	sb->nextalloc = found + blocks;
+	sb->freeblocks -= blocks;
+	//set_sb_dirty(sb);
+
+	trace("balloc extent [block %Lx, count %x]", found, blocks);
+
+	return found;
 }
 
 int balloc(struct sb *sb, unsigned blocks, block_t *block)
