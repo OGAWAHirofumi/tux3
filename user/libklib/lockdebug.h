@@ -1,5 +1,5 @@
-#ifndef USER_TUX3_LOCKDEBUG_H
-#define USER_TUX3_LOCKDEBUG_H
+#ifndef LIBKLIB_LOCKDEBUG_H
+#define LIBKLIB_LOCKDEBUG_H
 
 #define LOCK_DEBUG
 
@@ -150,4 +150,4 @@ static inline void mutex_unlock(struct mutex *lock)
 	up_write(&lock->sem);
 #endif
 }
-#endif /* !USER_TUX3_LOCKDEBUG_H */
+#endif /* !LIBKLIB_LOCKDEBUG_H */

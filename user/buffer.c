@@ -6,7 +6,7 @@
 #endif
 #include "buffer.h"
 #include "trace.h"
-#include "err.h"
+#include "libklib/err.h"
 
 #define buftrace trace_off
 

@@ -1,4 +1,4 @@
-#include "tux3user.h"
+#include <tux3user.h>
 
 unsigned long find_next_bit(const unsigned long *addr, unsigned long size,
 			    unsigned long offset)

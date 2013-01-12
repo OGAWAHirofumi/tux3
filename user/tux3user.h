@@ -17,7 +17,7 @@
 #include "buffer.h"
 #include "trace.h"
 
-#include "knlcompat.h"
+#include "libklib/libklib.h"
 #include "writeback.h"
 
 /* Endian support */

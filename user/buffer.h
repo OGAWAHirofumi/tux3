@@ -1,7 +1,7 @@
 #ifndef BUFFER_H
 #define BUFFER_H
 
-#include "list.h"
+#include "libklib/list.h"
 
 #define BUFFER_FOR_TUX3
 

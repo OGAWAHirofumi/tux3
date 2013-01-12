@@ -1,12 +1,13 @@
-#ifndef TUX3_KERNEL_COMPAT_H
-#define TUX3_KERNEL_COMPAT_H
+#ifndef LIBKLIB_H
+#define LIBKLIB_H
 
 #include <stdint.h>
 #include <limits.h>
 #include <endian.h>
-#include "list.h"
-#include "err.h"
-#include "lockdebug.h"
+
+#include <libklib/list.h>
+#include <libklib/err.h>
+#include <libklib/lockdebug.h>
 
 #ifdef __CHECKER__
 #define __force		__attribute__((force))
@@ -333,4 +334,4 @@ static inline void truncate_inode_pages(map_t *map, loff_t lstart)
 }
 
 void truncate_setsize(struct inode *inode, loff_t newsize);
-#endif /* !TUX3_KERNEL_COMPAT_H */
+#endif /* !LIBKLIB_H */

@@ -1,6 +1,6 @@
 /* List ops from include/linux/list.h */
-#ifndef LIST_H
-#define LIST_H
+#ifndef LIBKLIB_LIST_H
+#define LIBKLIB_LIST_H
 
 #define LIST_POISON1  ((void *) 0x00100100)
 #define LIST_POISON2  ((void *) 0x00200200)
@@ -223,4 +223,4 @@ static inline void hlist_add_head(struct hlist_node *n, struct hlist_head *h)
 	     pos && ({ n = pos->next; 1; }) && 				 \
 		({ tpos = hlist_entry(pos, typeof(*tpos), member); 1;}); \
 	     pos = n)
-#endif
+#endif /* !LIBKLIB_LIST_H */

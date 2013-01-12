@@ -52,6 +52,7 @@ PREFIX	= /usr/local
 SBINDIR	= $(PREFIX)/sbin
 LIBEXECDIR = $(PREFIX)/libexec/tux3
 
+# binaries
 TUX3_BIN	= tux3 tux3graph
 ifeq ($(shell pkg-config fuse && echo found), found)
 	FUSE_BIN = tux3fuse
@@ -61,41 +62,57 @@ TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
 	tests/ileaf tests/inode tests/log tests/xattr
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
-TUX3_LIB	= libtux3.a
-COMMON_OBJS	= dir.o filemap.o inode.o knlcompat.o namei.o super.o \
-	utility.o writeback.o
+# libraries
+LIBTUX3		= libtux3.a
+LIBKLIB		= libklib/libklib.a
+ALL_LIBS	= $(LIBTUX3) $(LIBKLIB)
+
+# LIBTUX3 objects
+USER_OBJS	= dir.o filemap.o inode.o namei.o super.o utility.o writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
 	kernel/dleaf.o kernel/dleaf2.o kernel/iattr.o kernel/ileaf.o \
 	kernel/log.o kernel/orphan.o kernel/replay.o kernel/xattr.o
+TEST_LIB_OBJS	= tests/test.o
 
+# LIBKLIB objects
+LIBKLIB_OBJS	= libklib/libklib.o
+
+# binary objects
 OBJS		= tux3.o tux3graph.o
 FUSE_OBJS	= tux3fuse.o
-TEST_LIB_OBJS	= tests/test.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
 	tests/dir.o tests/dleaf.o tests/dleaf2.o tests/filemap.o \
 	tests/iattr.o tests/ileaf.o tests/inode.o tests/log.o \
-	tests/xattr.o $(TEST_LIB_OBJS)
-ALL_OBJS	= $(COMMON_OBJS) $(KERN_OBJS) $(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
+	tests/xattr.o
+
+# objects for common build rules
+COMMON_OBJS	= $(USER_OBJS) $(TEST_LIB_OBJS) $(LIBKLIB_OBJS) $(OBJS) \
+	$(TEST_OBJS)
+
+ALL_OBJS	= $(USER_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS) $(LIBKLIB_OBJS) \
+	$(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
 
 .PHONY: tests
 all: $(ALL_BIN)
 
 # objects dependency
-tux3: tux3.o $(TUX3_LIB)
-tux3graph: tux3graph.o $(TUX3_LIB)
-tests/balloc: tests/balloc.o $(TUX3_LIB)
-tests/btree: tests/btree.o $(TUX3_LIB)
-tests/buffer: tests/buffer.o $(TUX3_LIB)
-tests/commit: tests/commit.o $(TUX3_LIB)
-tests/dir: tests/dir.o $(TUX3_LIB)
-tests/dleaf: tests/dleaf.o $(TUX3_LIB)
-tests/dleaf2: tests/dleaf2.o $(TUX3_LIB)
-tests/filemap: tests/filemap.o $(TUX3_LIB)
-tests/iattr: tests/iattr.o $(TUX3_LIB)
-tests/ileaf: tests/ileaf.o $(TUX3_LIB)
-tests/inode: tests/inode.o $(TUX3_LIB)
-tests/log: tests/log.o $(TUX3_LIB)
-tests/xattr: tests/xattr.o $(TUX3_LIB)
+$(LIBTUX3): $(USER_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS)
+$(LIBKLIB): $(LIBKLIB_OBJS)
+tux3: tux3.o $(ALL_LIBS)
+tux3graph: tux3graph.o $(ALL_LIBS)
+tests/balloc: tests/balloc.o $(ALL_LIBS)
+tests/btree: tests/btree.o $(ALL_LIBS)
+tests/buffer: tests/buffer.o $(ALL_LIBS)
+tests/commit: tests/commit.o $(ALL_LIBS)
+tests/dir: tests/dir.o $(ALL_LIBS)
+tests/dleaf: tests/dleaf.o $(ALL_LIBS)
+tests/dleaf2: tests/dleaf2.o $(ALL_LIBS)
+tests/filemap: tests/filemap.o $(ALL_LIBS)
+tests/iattr: tests/iattr.o $(ALL_LIBS)
+tests/ileaf: tests/ileaf.o $(ALL_LIBS)
+tests/inode: tests/inode.o $(ALL_LIBS)
+tests/log: tests/log.o $(ALL_LIBS)
+tests/xattr: tests/xattr.o $(ALL_LIBS)
 
 # dependency generation
 DEPDIR	  := .deps
@@ -113,8 +130,8 @@ DEP_ARGS = -MF $(DEP_FILE) -MP -MMD
 DEP_FILES_PRESENT := $(wildcard $(DEP_FILES))
 -include $(DEP_FILES_PRESENT)
 
-# rules
-$(COMMON_OBJS) $(OBJS) $(TEST_OBJS): %.o: %.c $(MISSING_DEP_DIRS)
+# common build rules
+$(COMMON_OBJS): %.o: %.c $(MISSING_DEP_DIRS)
 	$(CC) $(DEP_ARGS) $(CFLAGS) -c -o $@ $<
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
@@ -127,20 +144,22 @@ ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) -include tux3user.h $(CHECKFLAGS) -c $<
 endif
 
-$(TUX3_LIB): $(COMMON_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS)
+# build libraries rules
+$(LIBTUX3) $(LIBKLIB):
 	rm -f $@ && $(AR) $(AFLAGS) $@ $^
 
+# build binaries rules
 $(TEST_BIN) $(TUX3_BIN):
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-$(FUSE_BIN): tux3fuse.c $(TUX3_LIB) $(MISSING_DEP_DIRS)
-	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c -lfuse -o tux3fuse $(TUX3_LIB)
+$(FUSE_BIN): tux3fuse.c $(ALL_LIBS) $(MISSING_DEP_DIRS)
+	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c -lfuse -o tux3fuse $(ALL_LIBS)
 ifeq ($(CHECK),1)
 	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
 
 clean:
-	rm -f $(ALL_BIN) $(TUX3_LIB) *.o tests/*.o kernel/*.o
+	rm -f $(ALL_BIN) $(ALL_LIBS) $(ALL_OBJS)
 	rm -f a.out $(TESTDIR)/testdev
 	rm -f *.gcda tests/*.gcda kernel/*.gcda
 	rm -f *.gcno tests/*.gcno kernel/*.gcno
