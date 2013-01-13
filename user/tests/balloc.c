@@ -232,23 +232,24 @@ static void test06(struct sb *sb, block_t blocks)
 	clean_main(sb);
 }
 
-#if 0 /* Maybe, we should support this */
+/* Test balloc and bfree on multiple blocks */
 static void test07(struct sb *sb, block_t blocks)
 {
 	block_t block;
 
-	/* Alloc blocks on multiple bitmap data pages */
-	test_assert(balloc(sb, sb->volblocks, &block) == 0);
-	test_assert(block == 0);
-	test_assert(bitmap_all_set(sb, 0, sb->volblocks));
+	for (int i = 0; i < 3; i++) {
+		/* Alloc blocks on multiple bitmap data pages */
+		test_assert(balloc(sb, sb->volblocks, &block) == 0);
+		test_assert(block == 0);
+		test_assert(bitmap_all_set(sb, 0, sb->volblocks));
 
-	/* Free blocks on multiple bitmap data pages */
-	test_assert(bfree(sb, 0, sb->volblocks) == 0);
-	test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
+		/* Free blocks on multiple bitmap data pages */
+		test_assert(bfree(sb, 0, sb->volblocks) == 0);
+		test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
+	}
 
 	clean_main(sb);
 }
-#endif
 
 int main(int argc, char *argv[])
 {
@@ -304,11 +305,9 @@ int main(int argc, char *argv[])
 		test06(sb, BITMAP_BLOCKS);
 	test_end();
 
-#if 0 /* Maybe, we should support this */
 	if (test_start("test07"))
 		test07(sb, BITMAP_BLOCKS);
 	test_end();
-#endif
 
 	tux3_end_backend();
 
