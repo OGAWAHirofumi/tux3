@@ -152,7 +152,7 @@ static void test03(struct sb *sb, block_t blocks)
 	sb->nextalloc = sb->volblocks - 1;
 	test_assert(balloc(sb, 2, &block) == 0);
 	test_assert(bitmap_all_set(sb, 0, 2));
-	test_assert(bitmap_all_clear(sb, 2, sb->volblocks));
+	test_assert(bitmap_all_clear(sb, 2, sb->volblocks - 2));
 
 	test_assert(bfree(sb, block, 2) == 0);
 	test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
@@ -204,8 +204,32 @@ static void test05(struct sb *sb, block_t blocks)
 	clean_main(sb);
 }
 
-#if 0 /* Maybe, we should support this */
+/* Fill whole bitmap and free */
 static void test06(struct sb *sb, block_t blocks)
+{
+#define ALLOC_UNIT	8
+	block_t total = blocks << (sb->blockbits + 3);
+	block_t *b;
+	int nr = total / ALLOC_UNIT;
+
+	b = malloc(nr * sizeof(*b));
+	assert(b);
+
+	for (int i = 0; i < nr; i++) {
+		b[i] = balloc_from_range(sb, 0, total, ALLOC_UNIT);
+		test_assert(b[i] >= 0);
+	}
+
+	for (int i = 0; i < nr; i++)
+		test_assert(bfree(sb, b[i], ALLOC_UNIT) == 0);
+
+	free(b);
+
+	clean_main(sb);
+}
+
+#if 0 /* Maybe, we should support this */
+static void test07(struct sb *sb, block_t blocks)
 {
 	block_t block;
 
@@ -224,11 +248,14 @@ static void test06(struct sb *sb, block_t blocks)
 
 int main(int argc, char *argv[])
 {
+#define BITMAP_BLOCKS	10
+
 	struct dev *dev = &(struct dev){ .bits = 3 };
 	/* This expect buffer is never reclaimed */
 	init_buffers(dev, 1 << 20, 1);
 
-	struct disksuper super = INIT_DISKSB(dev->bits, 150);
+	block_t volblocks = BITMAP_BLOCKS << (dev->bits + 3);
+	struct disksuper super = INIT_DISKSB(dev->bits, volblocks);
 	struct sb *sb = rapid_sb(dev);
 	sb->super = super;
 	setup_sb(sb, &super);
@@ -239,8 +266,7 @@ int main(int argc, char *argv[])
 	sb->bitmap = bitmap;
 
 	/* Setup buffers for bitmap */
-	block_t blocks = 10;
-	for (int block = 0; block < blocks; block++) {
+	for (int block = 0; block < BITMAP_BLOCKS; block++) {
 		struct buffer_head *buffer = blockget(bitmap->map, block);
 		memset(bufdata(buffer), 0, sb->blocksize);
 		set_buffer_clean(buffer);
@@ -251,28 +277,32 @@ int main(int argc, char *argv[])
 	tux3_start_backend(sb);
 
 	if (test_start("test01"))
-		test01(sb, blocks);
+		test01(sb, BITMAP_BLOCKS);
 	test_end();
 
 	if (test_start("test02"))
-		test02(sb, blocks);
+		test02(sb, BITMAP_BLOCKS);
 	test_end();
 
 	if (test_start("test03"))
-		test03(sb, blocks);
+		test03(sb, BITMAP_BLOCKS);
 	test_end();
 
 	if (test_start("test04"))
-		test04(sb, blocks);
+		test04(sb, BITMAP_BLOCKS);
 	test_end();
 
 	if (test_start("test05"))
-		test05(sb, blocks);
+		test05(sb, BITMAP_BLOCKS);
+	test_end();
+
+	if (test_start("test06"))
+		test06(sb, BITMAP_BLOCKS);
 	test_end();
 
 #if 0 /* Maybe, we should support this */
-	if (test_start("test06"))
-		test06(sb, blocks);
+	if (test_start("test07"))
+		test07(sb, BITMAP_BLOCKS);
 	test_end();
 #endif
 
