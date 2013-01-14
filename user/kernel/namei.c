@@ -340,6 +340,7 @@ const struct file_operations tux_dir_fops = {
 	.llseek		= generic_file_llseek,
 	.read		= generic_read_dir,
 	.readdir	= tux_readdir,
+	.fsync		= tux3_sync_file,
 };
 
 const struct inode_operations tux_dir_iops = {

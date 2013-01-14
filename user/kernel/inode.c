@@ -732,6 +732,23 @@ void iget_if_dirty(struct inode *inode)
 	atomic_inc(&inode->i_count);
 }
 
+/* Synchronize changes to a file and directory. */
+int tux3_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
+{
+	struct inode *inode = file->f_mapping->host;
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	/* FIXME: this is sync(2). We should implement real one */
+	static int print_once;
+	if (!print_once) {
+		print_once++;
+		warn("fsync(2) fall-back to sync(2): %Lx-%Lx, datasync %d",
+		     start, end, datasync);
+	}
+
+	return force_delta(sb);
+}
+
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 {
 	struct inode *inode = dentry->d_inode;
@@ -803,7 +820,7 @@ static const struct file_operations tux_file_fops = {
 #endif
 	.mmap		= generic_file_mmap,
 	.open		= generic_file_open,
-//	.fsync		= file_fsync,
+	.fsync		= tux3_sync_file,
 	.splice_read	= generic_file_splice_read,
 	.splice_write	= tux3_file_splice_write,
 };
