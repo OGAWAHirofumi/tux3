@@ -132,8 +132,9 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 
 		buffer = blockread(mapping(inode), mapblock);
 		if (!buffer) {
-			warn("block read failed"); // !!! error return sucks here
-			return -1;
+			warn("block read failed");
+			// !!! error return sucks here
+			return -EIO;
 		}
 
 		unsigned bytes = sb->blocksize - offset, run = 0;
@@ -169,7 +170,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 					assert(PTR_ERR(clone) != -EAGAIN);
 					blockput(buffer);
 					/* FIXME: error handling */
-					return -1;
+					return -EIO;
 				}
 				set_bits(bufdata(clone), found & mapmask, run);
 				mark_buffer_dirty_non(clone);
@@ -187,25 +188,31 @@ final_partial_byte:
 		tail -= bytes;
 		offset = 0;
 	}
-	return -1;
+
+	return -ENOSPC;
 }
 
 int balloc(struct sb *sb, unsigned blocks, block_t *block)
 {
 	assert(blocks > 0);
 	trace_off("balloc %x blocks at goal %Lx", blocks, sb->nextalloc);
-	block_t goal = sb->nextalloc, total = sb->volblocks;
+	block_t ret, goal = sb->nextalloc, total = sb->volblocks;
 
-	if ((*block = balloc_from_range(sb, goal, total - goal, blocks)) >= 0)
-		goto found;
-	if ((*block = balloc_from_range(sb, 0, goal, blocks)) >= 0)
-		goto found;
+	ret = balloc_from_range(sb, goal, total - goal, blocks);
+	if (goal && ret == -ENOSPC)
+		ret = balloc_from_range(sb, 0, goal, blocks);
 
-	/* FIXME: This is for debugging. Remove this */
-	warn("couldn't balloc: blocks %u", blocks);
-	return -ENOSPC;
+	if (ret < 0) {
+		if (ret == -ENOSPC) {
+			/* FIXME: This is for debugging. Remove this */
+			warn("couldn't balloc: blocks %u", blocks);
+		}
+		return ret;
+	}
 
-found:
+	/* Set allocated block */
+	*block = ret;
+
 	return 0;
 }
 

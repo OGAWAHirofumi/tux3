@@ -123,7 +123,7 @@ static void test02(struct sb *sb, block_t blocks)
 		if (i < count)
 			test_assert(block == start + i);
 		else
-			test_assert(block == -1);
+			test_assert(block == -ENOSPC);
 	}
 	/* Check bitmap */
 	test_assert(bitmap_all_set(sb, start, count));

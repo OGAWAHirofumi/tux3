@@ -87,8 +87,8 @@ static int reserve_superblock(struct sb *sb)
 	int reserve = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
 	for (int i = 0; i < reserve; i++) {
 		block_t block = balloc_from_range(sb, i, 1, 1);
-		if (block == -1)
-			return -ENOSPC; // fix error code ???
+		if (block < 0)
+			return block;
 		log_balloc(sb, block, 1);
 		trace("reserve %Lx", block);
 	}
@@ -117,11 +117,10 @@ int make_tux3(struct sb *sb)
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
-	if (reserve_superblock(sb) < 0) {
-		tux3_end_backend();
-		goto error;
-	}
+	err = reserve_superblock(sb);
 	tux3_end_backend();
+	if (err)
+		goto error;
 
 	change_begin_atomic(sb);
 
@@ -161,12 +160,11 @@ int make_tux3(struct sb *sb)
 error_change_end:
 	change_end_atomic(sb);
 error:
-	if (err)
-		warn("eek, %s", strerror(-err));
+	warn("eek, %s", strerror(-err));
 	iput(sb->bitmap);
 	sb->bitmap = NULL;
 
-	return err ? err : -ENOSPC; // just guess
+	return err;
 }
 
 int tux3_init_mem(void)

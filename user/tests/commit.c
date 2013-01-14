@@ -45,6 +45,8 @@ static int buffer_is_allocated(struct sb *sb, struct buffer_head *buf)
 	if (block >= 0) {
 		bfree(sb, block, 1);
 		allocated = 0; /* buffer is free block */
+	} else {
+		test_assert(block == -ENOSPC);
 	}
 	tux3_end_backend();
 
