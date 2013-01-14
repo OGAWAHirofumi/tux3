@@ -357,9 +357,9 @@ static int tux3_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_blocks = sbi->volblocks;
 	buf->f_bfree = sbi->freeblocks;
 	buf->f_bavail = sbi->freeblocks;
+	buf->f_files = MAX_INODES;
+	buf->f_ffree = sbi->freeinodes;
 #if 0
-	buf->f_files = buf->f_blocks << (sbi->clus_bits - EXFAT_CHUNK_BITS) / 3;
-	buf->f_ffree = buf->f_blocks << (sbi->clus_bits - EXFAT_CHUNK_BITS) / 3;
 	buf->f_fsid.val[0] = sbi->serial_number;
 	/*buf->f_fsid.val[1];*/
 #endif

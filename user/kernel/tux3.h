@@ -85,7 +85,7 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Tux3 disk format */
 
-#define TUX3_MAGIC		"tux3" "\x20\x12\x07\x02"
+#define TUX3_MAGIC		"tux3" "\x20\x12\x12\x20"
 /*
  * TUX3_LABEL includes the date of the last incompatible disk format change
  * NOTE: Always update this history for each incompatible change!
@@ -108,9 +108,12 @@ static inline void *decode48(void *at, u64 *val)
 #define TUX3_MAGIC_ILEAF	0x90de
 #define TUX3_MAGIC_OLEAF	0x6eaf
 
+/* Number of available inum ("0" - "((1 << 48) - 1)") */
 #define MAX_INODES_BITS		48
+#define MAX_INODES		((u64)1 << MAX_INODES_BITS)
+/* Maximum number of block address ("0" - "((1 << 48) - 1)") */
 #define MAX_BLOCKS_BITS		48
-#define MAX_BLOCKS		((block_t)1 << 48)
+#define MAX_BLOCKS		((block_t)1 << MAX_BLOCKS_BITS)
 #define MAX_EXTENT		(1 << 6)
 
 #define SB_LOC			(1 << 12)
@@ -141,6 +144,11 @@ struct disksuper {
 	/* The rest should be moved to a "metablock" that is updated frequently */
 	__be64 iroot;		/* Root of the inode table btree */
 	__be64 oroot;		/* Root of the orphan table btree */
+	__be64 usedinodes;	/* Number of using inode numbers.  (Instead of
+				 * free inode numbers).  With this, we can
+				 * change the maximum inodes without changing
+				 * usedinodes on disk.
+				 */
 	__be64 nextalloc;	/* Get rid of this when we have a real allocation policy */
 	__be64 atomdictsize;	/*
 				 * Size of the atom dictionary instead of i_size
@@ -248,6 +256,8 @@ struct sb {
 	struct inode *atable;	/* xattr atom special file */
 
 	unsigned blocksize, blockbits, blockmask;
+	u64 freeinodes;		/* Number of free inode numbers. This is
+				 * including the deferred allocated inodes */
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
 	unsigned version;	/* Currently mounted volume version view */

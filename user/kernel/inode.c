@@ -257,6 +257,17 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 
 	add_defer_alloc_inum(inode);
 
+	/*
+	 * If inum is not reserved area, account it. If inum is
+	 * reserved area, inode might not be written into itable. So,
+	 * we don't include the reserved area into dynamic accounting.
+	 * FIXME: what happen if snapshot was introduced?
+	 */
+	if (goal >= TUX_NORMAL_INO) {
+		assert(sb->freeinodes > TUX_NORMAL_INO);
+		sb->freeinodes--;
+	}
+
 error:
 	up_write(&cursor->btree->lock);
 	free_cursor(cursor);
@@ -458,6 +469,15 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	if (err)
 		goto error_release;
 
+	/*
+	 * If inode is newly added into itable, account to on-disk usedinodes.
+	 * ->usedinodes is used only by backend, no need lock.
+	 * FIXME: what happen if snapshot was introduced?
+	 */
+	if (is_defer_alloc_inum(inode) && inum >= TUX_NORMAL_INO) {
+		assert(be64_to_cpu(sb->super.usedinodes) < MAX_INODES);
+		be64_add_cpu(&sb->super.usedinodes, 1);
+	}
 	del_defer_alloc_inum(inode);
 
 error_release:
@@ -539,15 +559,37 @@ error:
 /* Remove inode from itable */
 static int purge_inode(struct inode *inode)
 {
-	struct btree *itable = itable_btree(tux_sb(inode->i_sb));
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct btree *itable = itable_btree(sb);
+	int reserved_inum = tux_inode(inode)->inum < TUX_NORMAL_INO;
 
 	down_write(&itable->lock);	/* FIXME: spinlock is enough? */
+
+	/*
+	 * If inum is not reserved area, account it.
+	 * FIXME: what happen if snapshot was introduced?
+	 */
+	if (!reserved_inum) {
+		assert(sb->freeinodes < MAX_INODES);
+		sb->freeinodes++;
+	}
+
 	if (is_defer_alloc_inum(inode)) {
 		del_defer_alloc_inum(inode);
 		up_write(&itable->lock);
 		return 0;
 	}
 	up_write(&itable->lock);
+
+	/*
+	 * If inode is deleted from itable, account to on-disk usedinodes.
+	 * ->usedinodes is used only by backend, no need lock.
+	 * FIXME: what happen if snapshot was introduced?
+	 */
+	if (!reserved_inum) {
+		assert(be64_to_cpu(sb->super.usedinodes) > TUX_NORMAL_INO);
+		be64_add_cpu(&sb->super.usedinodes, -1);
+	}
 
 	/* Remove inum from inode btree */
 	return btree_chop(itable, tux_inode(inode)->inum, 1);

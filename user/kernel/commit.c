@@ -92,6 +92,7 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	vfs_sb(sb)->s_maxbytes = calc_maxbytes(sb->blocksize);
 
 	/* Probably does not belong here (maybe metablock) */
+	sb->freeinodes = MAX_INODES - be64_to_cpu(super->usedinodes);
 	sb->freeblocks = sb->volblocks;
 	sb->nextalloc = be64_to_cpu(super->nextalloc);
 	sb->atomdictsize = be64_to_cpu(super->atomdictsize);
@@ -100,8 +101,8 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	/* logchain and logcount are read from super directly */
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
-	trace("volblocks %Lu, freeblocks %Lu, nextalloc %Lu",
-	      sb->volblocks, sb->freeblocks, sb->nextalloc);
+	trace("volblocks %Lu, freeblocks %Lu, freeinodes %Lu, nextalloc %Lu",
+	      sb->volblocks, sb->freeblocks, sb->freeinodes, sb->nextalloc);
 	trace("atom_dictsize %Lu, freeatom %u, atomgen %u",
 	      (s64)sb->atomdictsize, sb->freeatom, sb->atomgen);
 	trace("logchain %Lu, logcount %u",
