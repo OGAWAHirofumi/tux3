@@ -25,6 +25,13 @@
 /* The "volatile" is due to gcc bugs */
 #define barrier() __asm__ __volatile__("": : :"memory")
 
+#ifdef __CHECKER__
+#define __must_be_array(arr) 0
+#else
+/* &a[0] degrades to a pointer: a different type from an array */
+#define __must_be_array(a) BUILD_BUG_ON_ZERO(__same_type((a), &(a)[0]))
+#endif
+
 #if __GNUC__ < 3
 /* gcc 2.x */
 #elif __GNUC__ == 3
@@ -54,6 +61,15 @@
 
 #define likely(x)	__builtin_expect(!!(x), 1)
 #define unlikely(x)	__builtin_expect(!!(x), 0)
+
+/* Are two types/vars the same type (ignoring qualifiers)? */
+#ifndef __same_type
+# define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
+#endif
+
+#ifndef __must_be_array
+#define __must_be_array(arr) 0
+#endif
 
 /*
  * Prevent the compiler from merging or refetching accesses.  The compiler
