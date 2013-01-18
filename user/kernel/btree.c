@@ -544,9 +544,6 @@ static int bnode_need_redirect(struct sb *sb, struct buffer_head *buffer)
 
 int cursor_redirect(struct cursor *cursor)
 {
-#ifndef ATOMIC
-	return 0;
-#endif
 	struct btree *btree = cursor->btree;
 	unsigned level = btree->root.depth;
 	struct sb *sb = btree->sb;

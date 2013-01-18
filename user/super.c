@@ -49,33 +49,12 @@ void free_inode_check(struct tux3_inode *tuxnode)
 	assert(mapping(inode));
 }
 
-static void cleanup_garbage_for_debugging(struct sb *sb)
-{
-#ifndef ATOMIC
-	/*
-	 * Clean garbage (atomic commit) stuff. Don't forget to update
-	 * this, if you update the atomic commit.
-	 */
-	log_finish(sb);
-	log_finish_cycle(sb);
-
-	if (sb->logmap)
-		invalidate_buffers(sb->logmap->map);
-
-	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
-	assert(flink_empty(&sb->derollup.head));
-	assert(list_empty(&sb->pinned));
-#endif /* !ATOMIC */
-}
-
 int put_super(struct sb *sb)
 {
 	/*
 	 * FIXME: Some test programs may not be loading inodes.
 	 * All programs should load all internal inodes.
 	 */
-
-	cleanup_garbage_for_debugging(sb);
 
 	__tux3_put_super(sb);
 

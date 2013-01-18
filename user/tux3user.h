@@ -48,25 +48,21 @@ struct file {
 
 #include "kernel/tux3.h"
 
-#ifdef ATOMIC
-#define INIT_DISKSB_FREEBLOCKS(_blocks)
-#else
-#define INIT_DISKSB_FREEBLOCKS(_blocks)	.freeblocks = cpu_to_be64(_blocks)
-#endif
 #define INIT_DISKSB(_bits, _blocks) {				\
 	.magic		= TUX3_MAGIC,				\
 	.birthdate	= 0,					\
 	.flags		= 0,					\
-	.iroot		= cpu_to_be64(pack_root(&no_root)),	\
-	.oroot		= cpu_to_be64(pack_root(&no_root)),	\
 	.blockbits	= cpu_to_be16(_bits),			\
 	.volblocks	= cpu_to_be64(_blocks),			\
+								\
+	.iroot		= cpu_to_be64(pack_root(&no_root)),	\
+	.oroot		= cpu_to_be64(pack_root(&no_root)),	\
+	.nextalloc	= 0,					\
 	.atomdictsize	= 0,					\
 	.freeatom	= 0,					\
 	.atomgen	= cpu_to_be32(1),			\
 	.logchain	= 0,					\
 	.logcount	= 0,					\
-	INIT_DISKSB_FREEBLOCKS(_blocks)				\
 }
 
 #define rapid_open_inode(sb, io, mode) ({			\

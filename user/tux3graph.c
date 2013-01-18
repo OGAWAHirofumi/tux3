@@ -1297,9 +1297,6 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		" | <iroot0> iroot 0x%016llx (depth %u, block %llu)"
 		" | <oroot0> oroot 0x%016llx (depth %u, block %llu)"
 		" | blockbits %u (size %u) | volblocks %llu"
-#ifndef ATOMIC
-		" | freeblocks %llu"
-#endif
 		" | nextalloc %llu"
 		" | atomdictsize %Lu | freeatom %u | atomgen %u"
 		" | <logchain_%llu> logchain %llu | logcount %u"
@@ -1319,9 +1316,6 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		otable_btree(sb)->root.depth, otable_btree(sb)->root.block,
 		sb->blockbits, sb->blocksize,
 		be64_to_cpu(txsb->volblocks),
-#ifndef ATOMIC
-		be64_to_cpu(txsb->freeblocks),
-#endif
 		be64_to_cpu(txsb->nextalloc),
 		be64_to_cpu(txsb->atomdictsize),
 		be32_to_cpu(txsb->freeatom), be32_to_cpu(txsb->atomgen),

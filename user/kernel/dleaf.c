@@ -431,9 +431,6 @@ int dleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 
 void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst)
 {
-#ifndef ATOMIC
-	return;
-#endif
 	walk->leaf = dst;
 	walk->group = ptr_redirect(walk->group, src, dst);
 	walk->gstop = ptr_redirect(walk->gstop, src, dst);

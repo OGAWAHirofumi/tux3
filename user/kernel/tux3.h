@@ -141,9 +141,6 @@ struct disksuper {
 	/* The rest should be moved to a "metablock" that is updated frequently */
 	__be64 iroot;		/* Root of the inode table btree */
 	__be64 oroot;		/* Root of the orphan table btree */
-#ifndef ATOMIC /* Obsoleted by LOG_FREEBLOCKS */
-	__be64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
-#endif
 	__be64 nextalloc;	/* Get rid of this when we have a real allocation policy */
 	__be64 atomdictsize;	/*
 				 * Size of the atom dictionary instead of i_size

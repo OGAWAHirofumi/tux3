@@ -656,7 +656,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 			 */
 			break;
 		}
-#ifdef ATOMIC
+#if 1
 		/*
 		 * We doesn't use get_block() on write path in
 		 * atomic-commit, so SEG_NEW never happen.

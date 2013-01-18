@@ -12,9 +12,6 @@ void free_forked_buffers(struct sb *sb, struct inode *inode, int umount)
 
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 {
-#ifndef ATOMIC
-	return buffer;
-#endif
 	map_t *map = buffer->map;
 
 	assert(buffer->state < BUFFER_STATES);

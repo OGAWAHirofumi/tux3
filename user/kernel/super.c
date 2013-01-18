@@ -22,12 +22,12 @@ int tux3_trace;
 module_param(tux3_trace, int, 0644);
 #endif
 
-#ifdef ATOMIC
 #ifdef __KERNEL__
 #define BUFFER_LINK	b_assoc_buffers
 #else
 #define BUFFER_LINK	link
 #endif
+
 static void cleanup_dirty_buffers(struct inode *inode, struct list_head *head,
 				  unsigned delta)
 {
@@ -90,11 +90,6 @@ static void cleanup_dirty_for_umount(struct sb *sb)
 	/* defree must be flushed for each delta */
 	assert(flink_empty(&sb->defree.head)||flink_is_last(&sb->defree.head));
 }
-#else /* !ATOMIC */
-static inline void cleanup_dirty_for_umount(struct sb *sb)
-{
-}
-#endif /* !ATOMIC */
 
 static void __tux3_put_super(struct sb *sbi)
 {
@@ -336,26 +331,6 @@ static void tux3_destroy_inode(struct inode *inode)
 	call_rcu(&inode->i_rcu, tux3_i_callback);
 }
 
-#ifndef ATOMIC
-static void tux3_write_super(struct super_block *sb)
-{
-	lock_super(sb);
-	if (save_sb(tux_sb(sb))) {
-		printk(KERN_ERR "TUX3: unable to write superblock\n");
-		return;
-	}
-	sb->s_dirt = 0;
-	unlock_super(sb);
-}
-
-/* Just a glue to be called to write sb for non-atomic mode ->sync_fs(). */
-int force_delta(struct sb *sb)
-{
-	tux3_write_super(vfs_sb(sb)); /* FIXME: error handling */
-	return 0;
-}
-#endif
-
 static int tux3_sync_fs(struct super_block *sb, int wait)
 {
 	/* FIXME: We should support "wait" parameter. */
@@ -402,9 +377,6 @@ static const struct super_operations tux3_super_ops = {
 	.evict_inode	= tux3_evict_inode,
 	/* FIXME: we have to handle write_inode of sync (e.g. cache pressure) */
 //	.write_inode	= tux3_write_inode,
-#ifndef ATOMIC
-	.write_super	= tux3_write_super,
-#endif
 	.sync_fs	= tux3_sync_fs,
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,

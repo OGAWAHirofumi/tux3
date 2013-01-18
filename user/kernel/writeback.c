@@ -439,7 +439,6 @@ int tux3_flush_inode_internal(struct inode *inode, unsigned delta)
 	return err;
 }
 
-#ifdef __KERNEL__
 int tux3_flush_inodes(struct sb *sb, unsigned delta)
 {
 	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
@@ -467,7 +466,6 @@ error:
 	/* FIXME: what to do for dirty_inodes on error path */
 	return err;
 }
-#endif /* !__KERNEL__ */
 
 /*
  * Clear inode dirty flags after flush.

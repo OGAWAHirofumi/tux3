@@ -92,11 +92,7 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	vfs_sb(sb)->s_maxbytes = calc_maxbytes(sb->blocksize);
 
 	/* Probably does not belong here (maybe metablock) */
-#ifdef ATOMIC
 	sb->freeblocks = sb->volblocks;
-#else
-	sb->freeblocks = be64_to_cpu(super->freeblocks);
-#endif
 	sb->nextalloc = be64_to_cpu(super->nextalloc);
 	sb->atomdictsize = be64_to_cpu(super->atomdictsize);
 	sb->atomgen = be32_to_cpu(super->atomgen);
@@ -151,9 +147,6 @@ int save_sb(struct sb *sb)
 	/* Probably does not belong here (maybe metablock) */
 	super->iroot = cpu_to_be64(pack_root(&itable_btree(sb)->root));
 	super->oroot = cpu_to_be64(pack_root(&otable_btree(sb)->root));
-#ifndef ATOMIC
-	super->freeblocks = cpu_to_be64(sb->freeblocks);
-#endif
 	super->nextalloc = cpu_to_be64(sb->nextalloc);
 	super->atomdictsize = cpu_to_be64(sb->atomdictsize);
 	super->freeatom = cpu_to_be32(sb->freeatom);
@@ -758,7 +751,6 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 	return err;
 }
 
-#ifdef ATOMIC
 int force_rollup(struct sb *sb)
 {
 	return sync_current_delta(sb, FORCE_ROLLUP);
@@ -768,7 +760,6 @@ int force_delta(struct sb *sb)
 {
 	return sync_current_delta(sb, NO_ROLLUP);
 }
-#endif /* !ATOMIC */
 
 unsigned tux3_get_current_delta(void)
 {

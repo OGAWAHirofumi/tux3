@@ -297,8 +297,7 @@ static void test03(struct sb *sb)
 		clean_main(sb);
 	}
 	test_end();
-/* On writeback, test03.1 modifies original data on disk */
-#ifdef ATOMIC
+
 	if (test_start("test03.2")) {
 		test_assert(force_rollup(sb) == 0);
 
@@ -317,7 +316,7 @@ static void test03(struct sb *sb)
 		clean_main(sb);
 	}
 	test_end();
-#endif
+
 	clean_main(sb);
 }
 
