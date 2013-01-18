@@ -695,6 +695,8 @@ unsigned tux3_get_current_delta(void);
 unsigned tux3_inode_delta(struct inode *inode);
 void change_begin_atomic(struct sb *sb);
 void change_end_atomic(struct sb *sb);
+void change_begin_atomic_nested(struct sb *sb, void **ptr);
+void change_end_atomic_nested(struct sb *sb, void *ptr);
 void change_begin(struct sb *sb);
 int change_end(struct sb *sb);
 

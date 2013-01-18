@@ -700,6 +700,11 @@ unsigned tux3_inode_delta(struct inode *inode)
 	return delta;
 }
 
+/*
+ * This is used to avoid to run backend (if disabled asynchronous
+ * backend), and never be blocked. This is used in atomic context, or
+ * from backend task to avoid to run backend recursively.
+ */
 void change_begin_atomic(struct sb *sb)
 {
 	assert(current->journal_info == NULL);
@@ -715,12 +720,39 @@ void change_end_atomic(struct sb *sb)
 	delta_put(sb, delta_ref);
 }
 
+/*
+ * This is used for nested change_begin/end. We should not use this
+ * usually (nesting change_begin/end is wrong for normal operations).
+ *
+ * For now, this is only used for ->evict_inode() debugging.
+ */
+void change_begin_atomic_nested(struct sb *sb, void **ptr)
+{
+	*ptr = current->journal_info;
+	current->journal_info = NULL;
+	change_begin_atomic(sb);
+}
+
+void change_end_atomic_nested(struct sb *sb, void *ptr)
+{
+	change_end_atomic(sb);
+	current->journal_info = ptr;
+}
+
 static int need_delta(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 10);
 }
 
+/*
+ * Normal version of change_begin/end. If there is no special
+ * requirement, we should use this version.
+ *
+ * This checks backend job and run if disabled asynchronous backend,
+ * and blocked if disabled asynchronous backend and backend is
+ * running.
+ */
 void change_begin(struct sb *sb)
 {
 	down_read(&sb->delta_lock);

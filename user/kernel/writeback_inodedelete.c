@@ -53,6 +53,7 @@ static void __tux3_mark_inode_to_delete(struct inode *inode, unsigned delta)
 
 void tux3_mark_inode_to_delete(struct inode *inode)
 {
+	struct sb *sb = tux_sb(inode->i_sb);
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	unsigned delta;
 
@@ -60,17 +61,12 @@ void tux3_mark_inode_to_delete(struct inode *inode)
 	if (tux3_inode_is_dead(tuxnode))
 		return;
 
-	/*
-	 * FIXME: change_{begin,end}() is needed. But this is called
-	 * under inode->i_lock, and change_begin() might sleep for
-	 * now. So, we can't use those here.
-	 */
-	/*change_begin();*/
+	change_begin_atomic(sb);
 
 	delta = tux3_inode_delta(inode);
 	__tux3_mark_inode_to_delete(inode, delta);
 
-	/*change_end();*/
+	change_end_atomic(sb);
 }
 
 /*

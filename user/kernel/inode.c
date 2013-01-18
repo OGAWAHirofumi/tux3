@@ -628,25 +628,29 @@ int tux3_drop_inode(struct inode *inode)
 void tux3_evict_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-
+	void *ptr;
 
 	/*
 	 * evict_inode() should be called only if there is no
 	 * in-progress buffers in backend. So we don't have to call
 	 * tux3_truncate_inode_pages_range() here.
 	 *
-	 * We don't need change anything here though, this is needed
-	 * to provide the current delta for debugging in
+	 * We don't change anything here though, change_{begin,end}
+	 * are needed to provide the current delta for debugging in
 	 * tux3_invalidate_buffer().
+	 *
+	 * The ->evict_inode() is called from slab reclaim path, and
+	 * reclaim path is called from memory allocation path, so, we
+	 * have to use *_nested() here.
 	 */
-	change_begin_atomic(sb);
+	change_begin_atomic_nested(sb, &ptr);
 #ifdef __KERNEL__
 	/* Block device special file is still overwriting i_mapping */
 	truncate_inode_pages(&inode->i_data, 0);
 #else
 	truncate_inode_pages(mapping(inode), 0);
 #endif
-	change_end_atomic(sb);
+	change_end_atomic_nested(sb, ptr);
 
 	clear_inode(inode);
 	free_xcache(inode);
