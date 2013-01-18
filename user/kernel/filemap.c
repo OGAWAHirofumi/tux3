@@ -572,7 +572,7 @@ int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
 
 static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
-	struct inode *inode = buffer_inode(bufvec_contig_buf(bufvec));
+	struct inode *inode = bufvec_inode(bufvec);
 	block_t block, index = bufvec_contig_index(bufvec);
 	unsigned count = bufvec_contig_count(bufvec);
 	int err, rw = (mode == MAP_READ) ? READ : WRITE;

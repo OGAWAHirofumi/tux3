@@ -83,6 +83,7 @@ struct bufvec {
 	struct list_head *buffers;	/* The dirty buffers for this delta */
 	struct list_head contig;	/* One logical contiguous range */
 	unsigned contig_count;		/* Count of contiguous buffers */
+	struct address_space *mapping;	/* address_space for dirty buffers */
 
 	struct {
 		struct buffer_head *buffer;
@@ -93,6 +94,11 @@ struct bufvec {
 	struct bio *bio;
 	struct buffer_head *bio_lastbuf;
 };
+
+static inline struct inode *bufvec_inode(struct bufvec *bufvec)
+{
+	return bufvec->mapping->host;
+}
 
 static inline unsigned bufvec_contig_count(struct bufvec *bufvec)
 {

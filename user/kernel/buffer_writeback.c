@@ -45,11 +45,13 @@ void tux3_iowait_wait(struct iowait *iowait)
 #define MAX_BUFVEC_COUNT	UINT_MAX
 
 /* Initialize bufvec */
-static void bufvec_init(struct bufvec *bufvec, struct list_head *head)
+static void bufvec_init(struct bufvec *bufvec, struct address_space *mapping,
+			struct list_head *head)
 {
 	INIT_LIST_HEAD(&bufvec->contig);
 	bufvec->buffers		= head;
 	bufvec->contig_count	= 0;
+	bufvec->mapping		= mapping;
 	bufvec->on_page_idx	= 0;
 	bufvec->bio		= NULL;
 	bufvec->bio_lastbuf	= NULL;
@@ -222,7 +224,7 @@ static void bufvec_submit_bio(struct bufvec *bufvec)
 static int keep_page_dirty(struct bufvec *bufvec, struct page *page)
 {
 	struct buffer_head *first = page_buffers(page);
-	struct inode *inode = buffer_inode(first);
+	struct inode *inode = bufvec_inode(bufvec);
 
 	if (tux_inode(inode)->inum == TUX_VOLMAP_INO) {
 		struct buffer_head *tmp = first;
@@ -397,7 +399,7 @@ still_busy:
 static void bufvec_bio_add_multiple(struct bufvec *bufvec)
 {
 	/* FIXME: inode is still guaranteed to be available? */
-	struct sb *sb = tux_sb(buffer_inode(bufvec->on_page[0].buffer)->i_sb);
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct page *page;
 	unsigned int i;
 
@@ -491,7 +493,7 @@ static void bufvec_end_io(struct bio *bio, int err)
 static void bufvec_bio_add_page(struct bufvec *bufvec)
 {
 	/* FIXME: inode is still guaranteed to be available? */
-	struct inode *inode = buffer_inode(bufvec->on_page[0].buffer);
+	struct inode *inode = bufvec_inode(bufvec);
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct page *page;
 	block_t physical;
@@ -665,7 +667,7 @@ int flush_list(struct address_space *mapping, struct list_head *head)
 	if (list_empty(head))
 		return 0;
 
-	bufvec_init(&bufvec, head);
+	bufvec_init(&bufvec, mapping, head);
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);

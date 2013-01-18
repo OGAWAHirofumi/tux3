@@ -13,7 +13,7 @@ static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
 	trace("%s inode 0x%Lx block 0x%Lx",
 	      (mode == MAP_READ) ? "read" :
 			(mode == MAP_WRITE) ? "write" : "redirect",
-	      tux_inode(buffer_inode(bufvec_contig_buf(bufvec)))->inum,
+	      tux_inode(bufvec_inode(bufvec))->inum,
 	      bufvec_contig_index(bufvec));
 
 	if (bufvec_contig_last_index(bufvec) & (-1LL << MAX_BLOCKS_BITS))
@@ -46,7 +46,7 @@ static int guess_readahead(struct bufvec *bufvec, struct inode *inode,
 	block_t limit;
 	int ret;
 
-	bufvec_init(bufvec, NULL);
+	bufvec_init(bufvec, inode->map, NULL);
 
 	limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
 	/* FIXME: MAX_EXTENT is not true for dleaf2 */
@@ -139,7 +139,7 @@ static void filemap_write_endio(struct buffer_head *buffer, int err)
 
 static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
-	struct inode *inode = buffer_inode(bufvec_contig_buf(bufvec));
+	struct inode *inode = bufvec_inode(bufvec);
 	block_t block, index = bufvec_contig_index(bufvec);
 	int err, rw = (mode == MAP_READ) ? READ : WRITE;
 

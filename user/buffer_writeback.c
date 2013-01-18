@@ -23,12 +23,13 @@ void tux3_iowait_wait(struct iowait *iowait)
 #define MAX_BUFVEC_COUNT	UINT_MAX
 
 /* Initialize bufvec */
-void bufvec_init(struct bufvec *bufvec, struct list_head *head)
+void bufvec_init(struct bufvec *bufvec, map_t *map, struct list_head *head)
 {
 	INIT_LIST_HEAD(&bufvec->contig);
 	INIT_LIST_HEAD(&bufvec->for_io);
 	bufvec->buffers		= head;
 	bufvec->contig_count	= 0;
+	bufvec->map		= map;
 	bufvec->end_io		= NULL;
 }
 
@@ -133,7 +134,7 @@ static struct buffer_head *bufvec_next_buffer(struct bufvec *bufvec)
  */
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 {
-	struct sb *sb;
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct iovec *iov;
 	unsigned i, iov_count;
 	int err;
@@ -144,8 +145,6 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 	if (iov == NULL)
 		return -ENOMEM;
 	iov_count = 0;
-
-	sb = tux_sb(buffer_inode(bufvec_contig_buf(bufvec))->i_sb);
 
 	/* Add buffers for I/O */
 	for (i = 0; i < count; i++) {
@@ -218,7 +217,7 @@ int flush_list(map_t *map, struct list_head *head)
 	if (list_empty(head))
 		return 0;
 
-	bufvec_init(&bufvec, head);
+	bufvec_init(&bufvec, map, head);
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);

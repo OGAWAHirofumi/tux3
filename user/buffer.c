@@ -432,7 +432,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 		struct bufvec bufvec;
 		int ret;
 
-		bufvec_init(&bufvec, NULL);
+		bufvec_init(&bufvec, map, NULL);
 		ret = bufvec_contig_add(&bufvec, buffer);
 		assert(ret == 1);
 
