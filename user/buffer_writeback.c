@@ -208,10 +208,9 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 /*
  * Flush buffers in head
  */
-int flush_list(struct list_head *head)
+int flush_list(map_t *map, struct list_head *head)
 {
 	struct bufvec bufvec;
-	map_t *map;
 	int err = 0;
 
 	/* FIXME: on error path, we have to do something for buffer state */
@@ -223,9 +222,6 @@ int flush_list(struct list_head *head)
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);
-
-	/* Use first buffer to get inode, all should be for this inode. */
-	map = buffer_inode(buffers_entry(head->next))->map;
 
 	while (bufvec_next_buffer(&bufvec)) {
 		/* Collect contiguous buffer range */
@@ -244,10 +240,5 @@ int flush_list(struct list_head *head)
 
 int flush_buffers(map_t *map)
 {
-	return flush_list(tux3_dirty_buffers(map->inode, BUFFER_INIT_DELTA));
-}
-
-int flush_state(unsigned state)
-{
-	return flush_list(buffers + state);
+	return flush_list(map, tux3_dirty_buffers(map->inode, BUFFER_INIT_DELTA));
 }

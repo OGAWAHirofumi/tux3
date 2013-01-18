@@ -654,11 +654,10 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 /*
  * Flush buffers in head
  */
-int flush_list(struct list_head *head)
+int flush_list(struct address_space *mapping, struct list_head *head)
 {
-	struct inode *inode;
+	struct inode *inode = mapping->host;
 	struct bufvec bufvec;
-	struct buffer_head *buffer;
 	int err = 0;
 
 	/* FIXME: on error path, we have to do something for buffer state */
@@ -670,10 +669,6 @@ int flush_list(struct list_head *head)
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);
-
-	/* Use first buffer to get inode, all should be for this inode. */
-	buffer = buffers_entry(head->next);
-	inode = buffer_inode(buffer);
 
 	while (bufvec_next_buffer_page(&bufvec)) {
 		/* Collect contiguous buffer range */

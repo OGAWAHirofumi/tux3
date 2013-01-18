@@ -253,12 +253,11 @@ static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 
 	/* Apply hole extents before page caches */
 	err = tux3_flush_hole(inode, delta);
-	if (!err) {
-		/* Apply page caches */
-		err = flush_list(tux3_dirty_buffers(inode, delta));
-	}
+	if (err)
+		return err;
 
-	return err;
+	/* Apply page caches */
+	return flush_list(mapping(inode), tux3_dirty_buffers(inode, delta));
 }
 
 #ifdef __KERNEL__

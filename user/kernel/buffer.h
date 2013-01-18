@@ -120,7 +120,7 @@ void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
-int flush_list(struct list_head *head);
+int flush_list(struct address_space *mapping, struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
 
 /* block_fork.c */
