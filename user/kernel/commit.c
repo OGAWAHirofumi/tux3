@@ -29,7 +29,9 @@ static void init_sb(struct sb *sb)
 	for (i = 0; i < ARRAY_SIZE(sb->delta_refs); i++)
 		atomic_set(&sb->delta_refs[0].refcount, 0);
 
+#ifdef DISABLE_ASYNC_BACKEND
 	init_rwsem(&sb->delta_lock);
+#endif
 	init_waitqueue_head(&sb->delta_event_wq);
 	mutex_init(&sb->loglock);
 	INIT_LIST_HEAD(&sb->orphan_add);
@@ -358,6 +360,12 @@ static int commit_delta(struct sb *sb)
 
 static void post_commit(struct sb *sb, unsigned delta)
 {
+	/*
+	 * Check referencer of forked buffer was gone, and can free.
+	 * FIXME: is this right timing and place to do this?
+	 */
+	free_forked_buffers(sb, 0);
+
 	tux3_clear_dirty_inodes(sb, delta);
 }
 
@@ -369,7 +377,6 @@ static int need_rollup(struct sb *sb)
 
 enum rollup_flags { NO_ROLLUP, ALLOW_ROLLUP, FORCE_ROLLUP, };
 
-/* must hold down_write(&sb->delta_lock) */
 static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 {
 	unsigned delta = sb->marshal_delta;
@@ -443,20 +450,10 @@ static int flush_pending_delta(struct sb *sb)
 		sb->pending_delta = NULL;
 #endif
 
-//		down_write(&sb->delta_lock);
 		err = do_commit(sb, rollup_flag);
-
-		/*
-		 * Check referencer of forked buffer was gone, and can free
-		 * FIXME: For now, although protecting this by ->delta_lock,
-		 * because easy to avoid race.  But probably, we would not
-		 * need to protect.
-		 */
-		free_forked_buffers(sb, 0);
 
 		sb->committed_delta = delta;
 		clear_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state);
-//		up_write(&sb->delta_lock);
 
 		/* Wake up waiters for delta commit */
 		wake_up_all(&sb->delta_event_wq);
@@ -565,9 +562,10 @@ static void delta_transition(struct sb *sb)
 	/* Wake up waiters for delta transition */
 	wake_up_all(&sb->delta_event_wq);
 
-	/* FIXME: remove this */
+#ifdef DISABLE_ASYNC_BACKEND
 	wait_event(sb->delta_event_wq,
 		   test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state));
+#endif
 }
 
 /* Try delta transition */
@@ -637,7 +635,9 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 	unsigned delta;
 	int err = 0;
 
-	down_write(&sb->delta_lock);	/* FIXME: remove this */
+#ifdef DISABLE_ASYNC_BACKEND
+	down_write(&sb->delta_lock);
+#endif
 	/* Get delta that have to write */
 	delta_ref = delta_get(sb);
 #ifdef ROLLUP_DEBUG
@@ -657,7 +657,9 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 	/* Wait until committing the current delta */
 	err = wait_for_commit(sb, delta);
 	assert(err || delta_after_eq(sb->committed_delta, delta));
+#ifdef DISABLE_ASYNC_BACKEND
 	up_write(&sb->delta_lock);
+#endif
 
 	return err;
 }
@@ -761,7 +763,9 @@ static int need_delta(struct sb *sb)
  */
 void change_begin(struct sb *sb)
 {
+#ifdef DISABLE_ASYNC_BACKEND
 	down_read(&sb->delta_lock);
+#endif
 	change_begin_atomic(sb);
 }
 
@@ -770,14 +774,20 @@ int change_end(struct sb *sb)
 	int err = 0;
 
 	change_end_atomic(sb);
+#ifdef DISABLE_ASYNC_BACKEND
 	up_read(&sb->delta_lock);
+#endif
 
-	down_write(&sb->delta_lock);	/* FIXME: remove this */
+#ifdef DISABLE_ASYNC_BACKEND
+	down_write(&sb->delta_lock);
+#endif
 	if (need_delta(sb))
 		try_delta_transition(sb);
 
 	err = flush_pending_delta(sb);
+#ifdef DISABLE_ASYNC_BACKEND
 	up_write(&sb->delta_lock);
+#endif
 
 	return err;
 }

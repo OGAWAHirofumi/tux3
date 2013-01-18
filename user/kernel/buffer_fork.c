@@ -126,10 +126,13 @@ void free_forked_buffers(struct sb *sb, int umount)
 
 		trace_on("buffer %p, page %p, count %u",
 			 buffer, page, page_count(page));
-		assert(!PageDirty(page)); /* page should already be submitted */
-		assert(!umount || !PageWriteback(page));
-		/* I/O was done? */
-		if (!PageWriteback(page)) {
+#ifdef DISABLE_ASYNC_BACKEND
+		/* The page should already be submitted if no async frontend */
+		assert(!PageDirty(page));
+#endif
+		assert(!umount || (!PageDirty(page) && !PageWriteback(page)));
+		/* I/O was submitted, and I/O was done? */
+		if (!PageDirty(page) && !PageWriteback(page)) {
 			/* All users were gone or from umount? */
 			if (umount || is_freeable_forked(buffer, page)) {
 				clear_buffer_freeable(buffer);

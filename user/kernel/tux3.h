@@ -220,7 +220,9 @@ struct sb {
 		char thisbig[SB_LEN];
 	};
 
+#ifdef DISABLE_ASYNC_BACKEND
 	struct rw_semaphore delta_lock;		/* delta transition exclusive */
+#endif
 	struct delta_ref __rcu *current_delta;	/* current delta */
 	struct delta_ref delta_refs[TUX3_MAX_DELTA];
 	unsigned next_delta;			/* delta commit cycle */

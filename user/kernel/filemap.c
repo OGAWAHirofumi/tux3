@@ -21,7 +21,7 @@
  * down_read(inode: btree->lock) (map_region for read)
  *
  * This lock may be first lock except vfs locks (lock_super, i_mutex).
- * sb->delta_lock (change_begin, change_end)
+ * sb->delta_lock (change_begin, change_end) [only for DISABLE_ASYNC_BACKEND]
  *
  * This lock may be last lock. (care about blockget())
  * sb->loglock (log_begin, log_end)
