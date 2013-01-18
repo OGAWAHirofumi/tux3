@@ -179,6 +179,7 @@ struct bufvec {
 	struct list_head *buffers;	/* The dirty buffers for this delta */
 	struct list_head contig;	/* One logical contiguous range */
 	unsigned contig_count;		/* Count of contiguous buffers */
+	struct tux3_iattr_data *idata;	/* inode attrs for write */
 	map_t *map;			/* map for dirty buffers */
 
 	struct list_head for_io;	/* The buffers in iovec */
@@ -215,7 +216,8 @@ static inline block_t bufvec_contig_last_index(struct bufvec *bufvec)
 
 void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
-void bufvec_init(struct bufvec *bufvec, map_t *map, struct list_head *head);
+void bufvec_init(struct bufvec *bufvec, map_t *map,
+		 struct list_head *head, struct tux3_iattr_data *idata);
 void bufvec_free(struct bufvec *bufvec);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
 void bufvec_complete_without_io(struct bufvec *bufvec, unsigned count);

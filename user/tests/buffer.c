@@ -112,7 +112,7 @@ static void test02(void)
 	map_t *map = new_map(dev, NULL);
 	test_assert(map);
 
-	bufvec_init(&bufvec, map, NULL);
+	bufvec_init(&bufvec, map, NULL, NULL);
 
 	/* Add buffer until BUFFER_COUNT again */
 	count = 0;

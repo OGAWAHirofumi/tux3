@@ -46,7 +46,7 @@ static int guess_readahead(struct bufvec *bufvec, struct inode *inode,
 	block_t limit;
 	int ret;
 
-	bufvec_init(bufvec, inode->map, NULL);
+	bufvec_init(bufvec, inode->map, NULL, NULL);
 
 	limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
 	/* FIXME: MAX_EXTENT is not true for dleaf2 */

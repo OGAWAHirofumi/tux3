@@ -23,12 +23,14 @@ void tux3_iowait_wait(struct iowait *iowait)
 #define MAX_BUFVEC_COUNT	UINT_MAX
 
 /* Initialize bufvec */
-void bufvec_init(struct bufvec *bufvec, map_t *map, struct list_head *head)
+void bufvec_init(struct bufvec *bufvec, map_t *map,
+		 struct list_head *head, struct tux3_iattr_data *idata)
 {
 	INIT_LIST_HEAD(&bufvec->contig);
 	INIT_LIST_HEAD(&bufvec->for_io);
 	bufvec->buffers		= head;
 	bufvec->contig_count	= 0;
+	bufvec->idata		= idata;
 	bufvec->map		= map;
 	bufvec->end_io		= NULL;
 }
@@ -39,6 +41,13 @@ void bufvec_free(struct bufvec *bufvec)
 	assert(!bufvec->buffers || list_empty(bufvec->buffers));
 	assert(list_empty(&bufvec->contig));
 	assert(list_empty(&bufvec->for_io));
+}
+
+static inline void bufvec_buffer_move_to_contig(struct bufvec *bufvec,
+						struct buffer_head *buffer)
+{
+	list_move_tail(&buffer->link, &bufvec->contig);
+	bufvec->contig_count++;
 }
 
 static void bufvec_io_done(struct bufvec *bufvec, int err)
@@ -157,38 +166,81 @@ int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer)
 			return 0;
 	}
 
-	list_move_tail(&buffer->link, &bufvec->contig);
-	bufvec->contig_count++;
+	bufvec_buffer_move_to_contig(bufvec, buffer);
 
 	return 1;
 }
 
-/*
- * Try to collect logically contiguous range from bufvec->buffers.
- */
-static void bufvec_contig_collect(struct bufvec *bufvec)
+static void cancel_buffer_dirty(struct buffer_head *buffer)
+{
+}
+
+/* Cancel dirty buffers fully outside i_size */
+static void bufvec_cancel_dirty_outside(struct bufvec *bufvec)
 {
 	struct buffer_head *buffer;
-	block_t last_index;
+
+	while (!list_empty(bufvec->buffers)) {
+		buffer = buffers_entry(bufvec->buffers->next);
+		buftrace("cancel dirty: buffer %p, block %Lu",
+			 buffer, bufindex(buffer));
+
+		list_del_init(&buffer->link);
+		/* Cancel buffer dirty of outside i_size */
+		cancel_buffer_dirty(buffer);
+	}
+}
+
+/*
+ * Try to collect logically contiguous dirty range from bufvec->buffers.
+ *
+ * return value:
+ * 1 - there is buffers for I/O
+ * 0 - no buffers for I/O
+ */
+static int bufvec_contig_collect(struct bufvec *bufvec)
+{
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
+	struct tux3_iattr_data *idata = bufvec->idata;
+	struct buffer_head *buffer;
+	block_t last_index, next_index, outside_block;
 
 	/* If there is in-progress contiguous range, leave as is */
 	if (bufvec_contig_count(bufvec))
-		return;
+		return 1;
+	assert(!list_empty(bufvec->buffers));
+
+	outside_block = (idata->i_size + sb->blockmask) >> sb->blockbits;
 
 	buffer = buffers_entry(bufvec->buffers->next);
-	do {
-		list_move_tail(&buffer->link, &bufvec->contig);
-		bufvec->contig_count++;
+	next_index = bufindex(buffer);
+	/* If next buffer is fully outside i_size, clear dirty */
+	if (next_index >= outside_block) {
+		bufvec_cancel_dirty_outside(bufvec);
+		return 0;
+	}
 
-		if (list_empty(bufvec->buffers))
-			break;
+	do {
 		/* Check contig_count limit */
 		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
 			break;
+		bufvec_buffer_move_to_contig(bufvec, buffer);
 
-		last_index = bufindex(buffer);
+		if (list_empty(bufvec->buffers))
+			break;
+
 		buffer = buffers_entry(bufvec->buffers->next);
-	} while (last_index == bufindex(buffer) - 1);
+		last_index = next_index;
+		next_index = bufindex(buffer);
+
+		/* If next buffer is fully outside i_size, clear dirty */
+		if (next_index >= outside_block) {
+			bufvec_cancel_dirty_outside(bufvec);
+			break;
+		}
+	} while (last_index == next_index - 1);
+
+	return !!bufvec_contig_count(bufvec);
 }
 
 static int buffer_index_cmp(void *priv, struct list_head *a,
@@ -218,19 +270,19 @@ int flush_list(map_t *map, struct tux3_iattr_data *idata,
 	if (list_empty(head))
 		return 0;
 
-	bufvec_init(&bufvec, map, head);
+	bufvec_init(&bufvec, map, head, idata);
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);
 
 	while (bufvec_next_buffer(&bufvec)) {
 		/* Collect contiguous buffer range */
-		bufvec_contig_collect(&bufvec);
-
-		/* Start I/O */
-		err = map->io(WRITE, &bufvec);
-		if (err)
-			break;
+		if (bufvec_contig_collect(&bufvec)) {
+			/* Start I/O */
+			err = map->io(WRITE, &bufvec);
+			if (err)
+				break;
+		}
 	}
 
 	bufvec_free(&bufvec);

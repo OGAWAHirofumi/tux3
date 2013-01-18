@@ -48,11 +48,12 @@ void tux3_iowait_wait(struct iowait *iowait)
 
 /* Initialize bufvec */
 static void bufvec_init(struct bufvec *bufvec, struct address_space *mapping,
-			struct list_head *head)
+			struct list_head *head, struct tux3_iattr_data *idata)
 {
 	INIT_LIST_HEAD(&bufvec->contig);
 	bufvec->buffers		= head;
 	bufvec->contig_count	= 0;
+	bufvec->idata		= idata;
 	bufvec->mapping		= mapping;
 	bufvec->on_page_idx	= 0;
 	bufvec->bio		= NULL;
@@ -579,6 +580,53 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 	return 0;
 }
 
+static void bufvec_cancel_and_unlock_page(struct page *page,
+					  const pgoff_t outside_index)
+{
+	/* If page is fully outside i_size, cancel dirty */
+	if (page->index >= outside_index)
+		cancel_dirty_page(page, PAGE_CACHE_SIZE);
+	unlock_page(page);
+}
+
+/* Cancel dirty buffers fully outside i_size */
+static void bufvec_cancel_dirty_outside(struct bufvec *bufvec)
+{
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
+	struct tux3_iattr_data *idata = bufvec->idata;
+	struct page *page, *prev_page;
+	struct buffer_head *buffer;
+	pgoff_t outside_index;
+
+	outside_index = (idata->i_size+(PAGE_CACHE_SIZE-1)) >> PAGE_CACHE_SHIFT;
+
+	buffer = buffers_entry(bufvec->buffers->next);
+	page = prev_page = buffer->b_page;
+	lock_page(page);
+	while (1) {
+		trace("cancel dirty: buffer %p, block %Lu",
+		      buffer, bufindex(buffer));
+
+		/* Cancel buffer dirty of outside i_size */
+		list_del_init(&buffer->b_assoc_buffers);
+		tux3_clear_buffer_dirty_for_io(buffer, sb, 0);
+		tux3_clear_buffer_dirty_for_io_hack(buffer);
+
+		if (list_empty(bufvec->buffers))
+			break;
+
+		buffer = buffers_entry(bufvec->buffers->next);
+		if (buffer->b_page != prev_page) {
+			bufvec_cancel_and_unlock_page(page, outside_index);
+
+			prev_page = page;
+			page = buffer->b_page;
+			lock_page(page);
+		}
+	}
+	bufvec_cancel_and_unlock_page(page, outside_index);
+}
+
 /*
  * Try to add buffer to bufvec as contiguous range.
  *
@@ -609,32 +657,56 @@ int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer)
 }
 
 /*
- * Try to collect logically contiguous range from bufvec->buffers.
+ * Try to collect logically contiguous dirty range from bufvec->buffers.
+ *
+ * return value:
+ * 1 - there is buffers for I/O
+ * 0 - no buffers for I/O
  */
-static void bufvec_contig_collect(struct bufvec *bufvec)
+static int bufvec_contig_collect(struct bufvec *bufvec)
 {
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
+	struct tux3_iattr_data *idata = bufvec->idata;
 	struct buffer_head *buffer;
-	block_t last_index;
+	block_t last_index, next_index, outside_block;
 
 	/* If there is in-progress contiguous range, leave as is */
 	if (bufvec_contig_count(bufvec))
-		return;
+		return 1;
 	assert(!list_empty(bufvec->buffers));
 
+	outside_block = (idata->i_size + sb->blockmask) >> sb->blockbits;
+
 	buffer = buffers_entry(bufvec->buffers->next);
+	next_index = bufindex(buffer);
+	/* If next buffer is fully outside i_size, clear dirty */
+	if (next_index >= outside_block) {
+		bufvec_cancel_dirty_outside(bufvec);
+		return 0;
+	}
+
 	do {
+		/* Check contig_count limit */
+		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
+			break;
 		bufvec_buffer_move_to_contig(bufvec, buffer);
 		trace("buffer %p", buffer);
 
 		if (list_empty(bufvec->buffers))
 			break;
-		/* Check contig_count limit */
-		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
-			break;
 
-		last_index = bufindex(buffer);
 		buffer = buffers_entry(bufvec->buffers->next);
-	} while (last_index == bufindex(buffer) - 1);
+		last_index = next_index;
+		next_index = bufindex(buffer);
+
+		/* If next buffer is fully outside i_size, clear dirty */
+		if (next_index >= outside_block) {
+			bufvec_cancel_dirty_outside(bufvec);
+			break;
+		}
+	} while (last_index == next_index - 1);
+
+	return !!bufvec_contig_count(bufvec);
 }
 
 static int buffer_index_cmp(void *priv, struct list_head *a,
@@ -667,19 +739,19 @@ int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
 	if (list_empty(head))
 		return 0;
 
-	bufvec_init(&bufvec, mapping, head);
+	bufvec_init(&bufvec, mapping, head, idata);
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);
 
 	while (bufvec_next_buffer_page(&bufvec)) {
 		/* Collect contiguous buffer range */
-		bufvec_contig_collect(&bufvec);
-
-		/* Start I/O */
-		err = tux_inode(inode)->io(WRITE, &bufvec);
-		if (err)
-			break;
+		if (bufvec_contig_collect(&bufvec)) {
+			/* Start I/O */
+			err = tux_inode(inode)->io(WRITE, &bufvec);
+			if (err)
+				break;
+		}
 	}
 
 	bufvec_free(&bufvec);

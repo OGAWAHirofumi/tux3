@@ -87,6 +87,7 @@ struct bufvec {
 	struct list_head *buffers;	/* The dirty buffers for this delta */
 	struct list_head contig;	/* One logical contiguous range */
 	unsigned contig_count;		/* Count of contiguous buffers */
+	struct tux3_iattr_data *idata;	/* inode attrs for write */
 	struct address_space *mapping;	/* address_space for dirty buffers */
 
 	struct {
