@@ -128,8 +128,8 @@ static inline block_t bufvec_contig_last_index(struct bufvec *bufvec)
 
 void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
-int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
+int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
 int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
 	       struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);

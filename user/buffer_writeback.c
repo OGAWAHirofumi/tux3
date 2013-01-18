@@ -41,64 +41,6 @@ void bufvec_free(struct bufvec *bufvec)
 	assert(list_empty(&bufvec->for_io));
 }
 
-/*
- * Try to add buffer to bufvec as contiguous range.
- *
- * return value:
- * 1 - success
- * 0 - fail to add
- */
-int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer)
-{
-	unsigned contig_count = bufvec_contig_count(bufvec);
-
-	if (contig_count) {
-		block_t last;
-
-		/* Check contig_count limit */
-		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
-			return 0;
-
-		/* Check if buffer is logically contiguous */
-		last = bufvec_contig_last_index(bufvec);
-		if (last != bufindex(buffer) - 1)
-			return 0;
-	}
-
-	list_move_tail(&buffer->link, &bufvec->contig);
-	bufvec->contig_count++;
-
-	return 1;
-}
-
-/*
- * Try to collect logically contiguous range from bufvec->buffers.
- */
-static void bufvec_contig_collect(struct bufvec *bufvec)
-{
-	struct buffer_head *buffer;
-	block_t last_index;
-
-	/* If there is in-progress contiguous range, leave as is */
-	if (bufvec_contig_count(bufvec))
-		return;
-
-	buffer = buffers_entry(bufvec->buffers->next);
-	do {
-		list_move_tail(&buffer->link, &bufvec->contig);
-		bufvec->contig_count++;
-
-		if (list_empty(bufvec->buffers))
-			break;
-		/* Check contig_count limit */
-		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
-			break;
-
-		last_index = bufindex(buffer);
-		buffer = buffers_entry(bufvec->buffers->next);
-	} while (last_index == bufindex(buffer) - 1);
-}
-
 static void bufvec_io_done(struct bufvec *bufvec, int err)
 {
 	struct list_head *head = &bufvec->for_io;
@@ -189,6 +131,64 @@ void bufvec_complete_without_io(struct bufvec *bufvec, unsigned count)
 	assert(i > 0);
 
 	bufvec_io_done(bufvec, 0);
+}
+
+/*
+ * Try to add buffer to bufvec as contiguous range.
+ *
+ * return value:
+ * 1 - success
+ * 0 - fail to add
+ */
+int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer)
+{
+	unsigned contig_count = bufvec_contig_count(bufvec);
+
+	if (contig_count) {
+		block_t last;
+
+		/* Check contig_count limit */
+		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
+			return 0;
+
+		/* Check if buffer is logically contiguous */
+		last = bufvec_contig_last_index(bufvec);
+		if (last != bufindex(buffer) - 1)
+			return 0;
+	}
+
+	list_move_tail(&buffer->link, &bufvec->contig);
+	bufvec->contig_count++;
+
+	return 1;
+}
+
+/*
+ * Try to collect logically contiguous range from bufvec->buffers.
+ */
+static void bufvec_contig_collect(struct bufvec *bufvec)
+{
+	struct buffer_head *buffer;
+	block_t last_index;
+
+	/* If there is in-progress contiguous range, leave as is */
+	if (bufvec_contig_count(bufvec))
+		return;
+
+	buffer = buffers_entry(bufvec->buffers->next);
+	do {
+		list_move_tail(&buffer->link, &bufvec->contig);
+		bufvec->contig_count++;
+
+		if (list_empty(bufvec->buffers))
+			break;
+		/* Check contig_count limit */
+		if (bufvec_contig_count(bufvec) == MAX_BUFVEC_COUNT)
+			break;
+
+		last_index = bufindex(buffer);
+		buffer = buffers_entry(bufvec->buffers->next);
+	} while (last_index == bufindex(buffer) - 1);
 }
 
 static int buffer_index_cmp(void *priv, struct list_head *a,
