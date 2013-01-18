@@ -237,6 +237,11 @@ struct sb {
 	unsigned marshal_delta;			/* marshaling delta */
 	unsigned committed_delta;		/* committed delta */
 	wait_queue_head_t delta_event_wq;	/* wait queue for delta event */
+#ifndef DISABLE_ASYNC_BACKEND
+	/* work to flush delta */
+	struct workqueue_struct *flush_wq;
+	struct work_struct flush_work;
+#endif
 
 	struct btree itable;	/* Inode table btree */
 	struct btree otable;	/* Orphan table btree */
@@ -288,7 +293,7 @@ struct sb {
 	/* Per-delta dirty data for sb */
 	struct sb_delta_dirty s_ddc[TUX3_MAX_DELTA];
 #ifdef __KERNEL__
-	struct super_block *vfs_sb; /* Generic kernel superblock */
+	struct super_block *vfs_sb;	/* Generic kernel superblock */
 #else
 	struct dev *dev;		/* userspace block device */
 	loff_t s_maxbytes;		/* maximum file size */
@@ -691,6 +696,8 @@ void setup_sb(struct sb *sb, struct disksuper *super);
 int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
 int apply_defered_bfree(struct sb *sb, u64 val);
+int tux3_init_flusher(struct sb *sb);
+void tux3_exit_flusher(struct sb *sb);
 int force_rollup(struct sb *sb);
 int force_delta(struct sb *sb);
 unsigned tux3_get_current_delta(void);
