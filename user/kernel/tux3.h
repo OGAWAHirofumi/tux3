@@ -616,7 +616,8 @@ struct buffer_head *__get_buffer(struct page *page, int offset);
 int tux3_truncate_partial_block(struct inode *inode, loff_t newsize);
 void tux3_truncate_inode_pages_range(struct address_space *mapping,
 				     loff_t lstart, loff_t lend);
-extern const struct address_space_operations tux_aops;
+extern const struct address_space_operations tux_file_aops;
+extern const struct address_space_operations tux_symlink_aops;
 extern const struct address_space_operations tux_blk_aops;
 extern const struct address_space_operations tux_vol_aops;
 
@@ -707,6 +708,8 @@ void change_begin_atomic_nested(struct sb *sb, void **ptr);
 void change_end_atomic_nested(struct sb *sb, void *ptr);
 void change_begin(struct sb *sb);
 int change_end(struct sb *sb);
+void change_begin_if_needed(struct sb *sb);
+void change_end_if_needed(struct sb *sb);
 
 /* dir.c */
 void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,

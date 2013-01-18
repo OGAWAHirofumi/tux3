@@ -24,12 +24,12 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 
 	mutex_lock(&inode->i_mutex);
 	blk_start_plug(&plug);
-	/* FIXME: we would like to separate change_begin/end to small chunk */
+	/* For each ->write_end() calls change_end(). */
 	change_begin(sb);
 	/* For timestamp. FIXME: convert this to ->update_time handler? */
 	tux3_iattrdirty(inode);
 	ret = __generic_file_aio_write(iocb, iov, nr_segs, &iocb->ki_pos);
-	change_end(sb);
+	change_end_if_needed(sb);
 	mutex_unlock(&inode->i_mutex);
 
 	if (ret > 0 || ret == -EIOCBQUEUED) {
@@ -73,8 +73,7 @@ static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
 			break;
 
 		mutex_lock_nested(&inode->i_mutex, I_MUTEX_CHILD);
-		/* FIXME: we would like to separate change_begin/end
-		 * to small chunk */
+		/* For each ->write_end() calls change_end(). */
 		change_begin(sb);
 		/* For timestamp. FIXME: convert this to ->update_time
 		 * handler? */
@@ -86,7 +85,7 @@ static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
 				ret = splice_from_pipe_feed(pipe, &sd,
 							    pipe_to_file);
 		}
-		change_end(sb);
+		change_end_if_needed(sb);
 		mutex_unlock(&inode->i_mutex);
 	} while (ret > 0);
 	splice_from_pipe_end(pipe, &sd);

@@ -885,3 +885,30 @@ int change_end(struct sb *sb)
 
 	return err;
 }
+
+/*
+ * This is used for simplify the error path, or separates big chunk to
+ * small chunk in loop.
+ *
+ * E.g. the following
+ *
+ * change_begin()
+ * while (stop) {
+ * 	change_begin_if_need()
+ * 	if (do_something() < 0)
+ * 		break;
+ * 	change_end_if_need()
+ * }
+ * change_end_if_need()
+ */
+void change_begin_if_needed(struct sb *sb)
+{
+	if (current->journal_info == NULL)
+		change_begin(sb);
+}
+
+void change_end_if_needed(struct sb *sb)
+{
+	if (current->journal_info)
+		change_end(sb);
+}

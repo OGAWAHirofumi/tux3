@@ -885,6 +885,7 @@ static void tux3_write_failed(struct address_space *mapping, loff_t to)
 	}
 }
 
+/* Use delalloc and check buffer fork. */
 static int __tux3_file_write_begin(struct file *file,
 				   struct address_space *mapping,
 				   loff_t pos, unsigned len, unsigned flags,
@@ -900,12 +901,29 @@ static int __tux3_file_write_begin(struct file *file,
 	return ret;
 }
 
-/* Use delalloc and check buffer fork */
+static int __tux3_file_write_end(struct file *file,
+				 struct address_space *mapping,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct page *page, void *fsdata)
+{
+	int ret;
+
+	ret = tux3_write_end(file, mapping, pos, len, copied, page, fsdata);
+	if (ret < len)
+		tux3_write_failed(mapping, pos + len);
+	return ret;
+}
+
+/* Separate big write transaction to page chunk */
 static int tux3_file_write_begin(struct file *file,
 				 struct address_space *mapping,
 				 loff_t pos, unsigned len, unsigned flags,
 				 struct page **pagep, void **fsdata)
 {
+	/* Separate big write transaction to small chunk. */
+	assert(S_ISREG(mapping->host->i_mode));
+	change_begin_if_needed(tux_sb(mapping->host->i_sb));
+
 	return __tux3_file_write_begin(file, mapping, pos, len, flags, pagep,
 				       fsdata, 1);
 }
@@ -916,9 +934,13 @@ static int tux3_file_write_end(struct file *file, struct address_space *mapping,
 {
 	int ret;
 
-	ret = tux3_write_end(file, mapping, pos, len, copied, page, fsdata);
-	if (ret < len)
-		tux3_write_failed(mapping, pos + len);
+	ret = __tux3_file_write_end(file, mapping, pos, len, copied, page,
+				    fsdata);
+
+	/* Separate big write transaction to small chunk. */
+	assert(S_ISREG(mapping->host->i_mode));
+	change_end_if_needed(tux_sb(mapping->host->i_sb));
+
 	return ret;
 }
 
@@ -1004,7 +1026,7 @@ static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
 	return blocknr;
 }
 
-const struct address_space_operations tux_aops = {
+const struct address_space_operations tux_file_aops = {
 	.readpage		= tux3_readpage,
 	.readpages		= tux3_readpages,
 //	.writepage		= tux3_writepage,
@@ -1013,6 +1035,35 @@ const struct address_space_operations tux_aops = {
 	.writepages		= tux3_disable_writepages,
 	.write_begin		= tux3_file_write_begin,
 	.write_end		= tux3_file_write_end,
+	.bmap			= tux3_bmap,
+	.invalidatepage		= tux3_invalidatepage,
+//	.releasepage		= ext4_releasepage,
+#ifdef TUX3_DIRECT_IO
+	.direct_IO		= tux3_direct_IO,
+#endif
+	.migratepage		= buffer_migrate_page,
+//	.is_partially_uptodate	= block_is_partially_uptodate,
+};
+
+static int tux3_symlink_write_begin(struct file *file,
+				    struct address_space *mapping,
+				    loff_t pos, unsigned len, unsigned flags,
+				    struct page **pagep, void **fsdata)
+{
+	return __tux3_file_write_begin(file, mapping, pos, len, flags, pagep,
+				       fsdata, 1);
+}
+
+/* Copy of tux_file_aops, except ->write_begin/end */
+const struct address_space_operations tux_symlink_aops = {
+	.readpage		= tux3_readpage,
+	.readpages		= tux3_readpages,
+//	.writepage		= tux3_writepage,
+//	.writepages		= tux3_writepages,
+	.writepage		= tux3_disable_writepage,
+	.writepages		= tux3_disable_writepages,
+	.write_begin		= tux3_symlink_write_begin,
+	.write_end		= __tux3_file_write_end,
 	.bmap			= tux3_bmap,
 	.invalidatepage		= tux3_invalidatepage,
 //	.releasepage		= ext4_releasepage,

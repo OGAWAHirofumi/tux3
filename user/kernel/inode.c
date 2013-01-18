@@ -821,7 +821,7 @@ static void tux_setup_inode(struct inode *inode)
 	case S_IFREG:
 		inode->i_op = &tux_file_iops;
 		inode->i_fop = &tux_file_fops;
-		inode->i_mapping->a_ops = &tux_aops;
+		inode->i_mapping->a_ops = &tux_file_aops;
 		tux_inode(inode)->io = tux3_filemap_overwrite_io;
 		break;
 	case S_IFDIR:
@@ -833,7 +833,7 @@ static void tux_setup_inode(struct inode *inode)
 		break;
 	case S_IFLNK:
 		inode->i_op = &tux_symlink_iops;
-		inode->i_mapping->a_ops = &tux_aops;
+		inode->i_mapping->a_ops = &tux_symlink_aops;
 		tux_inode(inode)->io = tux3_filemap_redirect_io;
 		break;
 	case 0: /* internal inode */
