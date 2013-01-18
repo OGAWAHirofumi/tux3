@@ -443,7 +443,7 @@ static int flush_pending_delta(struct sb *sb)
 		sb->pending_delta = NULL;
 #endif
 
-		down_write(&sb->delta_lock);
+//		down_write(&sb->delta_lock);
 		err = do_commit(sb, rollup_flag);
 
 		/*
@@ -456,7 +456,7 @@ static int flush_pending_delta(struct sb *sb)
 
 		sb->committed_delta = delta;
 		clear_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state);
-		up_write(&sb->delta_lock);
+//		up_write(&sb->delta_lock);
 
 		/* Wake up waiters for delta commit */
 		wake_up_all(&sb->delta_event_wq);
@@ -564,6 +564,10 @@ static void delta_transition(struct sb *sb)
 
 	/* Wake up waiters for delta transition */
 	wake_up_all(&sb->delta_event_wq);
+
+	/* FIXME: remove this */
+	wait_event(sb->delta_event_wq,
+		   test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state));
 }
 
 /* Try delta transition */
@@ -633,6 +637,7 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 	unsigned delta;
 	int err = 0;
 
+	down_write(&sb->delta_lock);	/* FIXME: remove this */
 	/* Get delta that have to write */
 	delta_ref = delta_get(sb);
 #ifdef ROLLUP_DEBUG
@@ -652,6 +657,7 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 	/* Wait until committing the current delta */
 	err = wait_for_commit(sb, delta);
 	assert(err || delta_after_eq(sb->committed_delta, delta));
+	up_write(&sb->delta_lock);
 
 	return err;
 }
@@ -766,10 +772,12 @@ int change_end(struct sb *sb)
 	change_end_atomic(sb);
 	up_read(&sb->delta_lock);
 
+	down_write(&sb->delta_lock);	/* FIXME: remove this */
 	if (need_delta(sb))
 		try_delta_transition(sb);
 
 	err = flush_pending_delta(sb);
+	up_write(&sb->delta_lock);
 
 	return err;
 }
