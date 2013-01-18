@@ -108,18 +108,17 @@ void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
-#define buffer_need_fork(b)						\
-	(buffer_dirty(b) &&						\
-	 !buffer_can_modify(b, tux3_inode_delta((b)->b_assoc_map->host)))
+#define buffer_need_fork(b, d) (buffer_dirty(b) && !buffer_can_modify(b, d))
 
 /*
  * Caller must hold lock_page() or backend (otherwise, you may race
  * with buffer fork or set dirty)
  */
-static void __tux3_clear_buffer_dirty(struct buffer_head *buffer)
+static void __tux3_clear_buffer_dirty(struct buffer_head *buffer,
+				      unsigned delta)
 {
 	/* The buffer must not need to fork */
-	assert(!buffer_need_fork(buffer));
+	assert(!buffer_need_fork(buffer, delta));
 
 	if (buffer->b_assoc_map) {
 		spin_lock(&buffer->b_page->mapping->private_lock);
@@ -131,10 +130,29 @@ static void __tux3_clear_buffer_dirty(struct buffer_head *buffer)
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
 }
 
-void tux3_clear_buffer_dirty(struct buffer_head *buffer)
+void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 {
-	__tux3_clear_buffer_dirty(buffer);
+	__tux3_clear_buffer_dirty(buffer, delta);
 	clear_buffer_dirty(buffer);
+}
+
+/* This is called for the freeing block on volmap */
+static void __blockput_free(struct sb *sb, struct buffer_head *buffer,
+			    unsigned delta)
+{
+	/* FIXME: Untested. buffer was freed, so we would like to free cache */
+	tux3_clear_buffer_dirty(buffer, delta);
+	blockput(buffer);
+}
+
+void blockput_free(struct sb *sb, struct buffer_head *buffer)
+{
+	__blockput_free(sb, buffer, TUX3_INIT_DELTA);
+}
+
+void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer)
+{
+	__blockput_free(sb, buffer, sb->rollup);
 }
 
 /* Copied from fs/buffer.c */
@@ -152,10 +170,14 @@ static void discard_buffer(struct buffer_head *buffer)
 	unlock_buffer(buffer);
 }
 
-/* Invalidate buffer, this is called from truncate, etc */
+/*
+ * Invalidate buffer, this must be called from frontend like truncate.
+ * Caller must hold lock_page().
+ */
 void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
-	__tux3_clear_buffer_dirty(buffer);
+	unsigned delta = tux3_inode_delta(buffer_inode(buffer));
+	__tux3_clear_buffer_dirty(buffer, delta);
 	discard_buffer(buffer);
 }
 

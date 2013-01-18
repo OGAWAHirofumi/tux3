@@ -408,8 +408,11 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			if (err)
 				return err;
 
-			if (code == LOG_BNODE_FREE)
-				blockput_free(vol_find_get_block(sb, block));
+			if (code == LOG_BNODE_FREE) {
+				struct buffer_head *buffer =
+					vol_find_get_block(sb, block);
+				blockput_free_rollup(sb, buffer);
+			}
 			break;
 		}
 		case LOG_BNODE_ROOT:
@@ -454,7 +457,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			if (err)
 				return err;
 
-			blockput_free(vol_find_get_block(sb, src));
+			blockput_free_rollup(sb, vol_find_get_block(sb, src));
 			break;
 		}
 		case LOG_ORPHAN_ADD:

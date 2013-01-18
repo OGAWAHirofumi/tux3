@@ -69,7 +69,7 @@ static void test01(void)
 	}
 	/* Clear dirty and reclaim again */
 	buf = blockget(map1, 0);
-	blockput_free(buf);
+	blockput_free(&sb, buf);
 
 	map2_bufs[last] = blockget(map2, last);
 	test_assert(map2_bufs[last]);

@@ -23,6 +23,7 @@ enum {
 	BUFFER_STATES = BUFFER_DIRTY + TUX3_MAX_DELTA
 };
 
+struct sb;
 static inline block_t bufindex(struct buffer_head *buffer);
 
 static inline void *bufdata(struct buffer_head *buffer)
@@ -50,14 +51,6 @@ static inline void blockput(struct buffer_head *buffer)
 	put_bh(buffer);
 }
 
-void tux3_clear_buffer_dirty(struct buffer_head *buffer);
-static inline void blockput_free(struct buffer_head *buffer)
-{
-	/* FIXME: Untested. buffer was freed, so we would like to free cache */
-	tux3_clear_buffer_dirty(buffer);
-	blockput(buffer);
-}
-
 static inline int buffer_empty(struct buffer_head *buffer)
 {
 	return 1;
@@ -72,6 +65,9 @@ int buffer_can_modify(struct buffer_head *buffer, unsigned delta);
 void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head);
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta);
+void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta);
+void blockput_free(struct sb *sb, struct buffer_head *buffer);
+void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer);
 void tux3_invalidate_buffer(struct buffer_head *buffer);
 
 /* buffer_writeback.c */
@@ -137,7 +133,6 @@ static inline int buffer_forked(struct buffer_head *buffer)
 	return PageForked(buffer->b_page);
 }
 
-struct sb;
 void free_forked_buffers(struct sb *sb, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 int bufferfork_to_invalidate(struct address_space *mapping, struct page *page);

@@ -204,22 +204,23 @@ struct buffer_head *set_buffer_empty(struct buffer_head *buffer)
 	return __set_buffer_empty(buffer);
 }
 
-#define buffer_need_fork(m, b)						\
-	(buffer_dirty(b) && !buffer_can_modify(b, tux3_inode_delta((m)->inode)))
+#define buffer_need_fork(b, d) (buffer_dirty(b) && !buffer_can_modify(b, d))
 
-void tux3_clear_buffer_dirty(struct buffer_head *buffer)
+void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 {
 #ifdef BUFFER_FOR_TUX3
-	assert(!buffer_need_fork(buffer->map, buffer));
+	assert(!buffer_need_fork(buffer, delta));
 #endif
 	/* FIXME: this should be set_buffer_empty()? */
 	set_buffer_clean(buffer);
 }
 
+/* Invalidate buffer, this must be called from frontend like truncate */
 static void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
 #ifdef BUFFER_FOR_TUX3
-	assert(!buffer_need_fork(buffer->map, buffer));
+	unsigned delta = tux3_inode_delta(buffer->map->inode);
+	assert(!buffer_need_fork(buffer, delta));
 #endif
 	set_buffer_empty(buffer);
 }
@@ -272,10 +273,9 @@ void get_bh(struct buffer_head *buffer)
 	buffer->count++;
 }
 
-void blockput_free(struct buffer_head *buffer)
+/* This is called for the freeing block on volmap */
+static void __blockput_free(struct buffer_head *buffer, unsigned delta)
 {
-	assert(buffer_dirty(buffer));
-
 	if (bufcount(buffer) != 2) { /* caller + hashlink == 2 */
 		warn("free block %Lx/%x still in use!",
 		     bufindex(buffer), bufcount(buffer));
@@ -284,8 +284,18 @@ void blockput_free(struct buffer_head *buffer)
 		return;
 	}
 	/* free it!!! (and need a buffer free state) */
-	tux3_clear_buffer_dirty(buffer);
+	tux3_clear_buffer_dirty(buffer, delta);
 	blockput(buffer);
+}
+
+void blockput_free(struct sb *sb, struct buffer_head *buffer)
+{
+	__blockput_free(buffer, BUFFER_INIT_DELTA);
+}
+
+void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer)
+{
+	__blockput_free(buffer, sb->rollup);
 }
 
 unsigned buffer_hash(block_t block)

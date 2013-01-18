@@ -422,7 +422,11 @@ static inline int tux3_inode_delta(struct inode *inode)
 
 	switch (tux_inode(inode)->inum) {
 	case TUX_VOLMAP_INO:
-		/* volmap are special buffer, and always TUX3_INIT_DELTA */
+		/*
+		 * Note: volmap are special, and has both of
+		 * TUX3_INIT_DELTA and sb->rollup. So TUX3_INIT_DELTA
+		 * can be incorrect if delta was used for buffer.
+		 */
 		delta = TUX3_INIT_DELTA;
 		break;
 	case TUX_BITMAP_INO:

@@ -855,7 +855,7 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 				trace(">>> can merge leaf %p into leaf %p", leafbuf, leafprev);
 				remove_index(cursor, cii);
 				mark_buffer_dirty_non(leafprev);
-				blockput_free(leafbuf);
+				blockput_free(sb, leafbuf);
 				goto keep_prev_leaf;
 			}
 			blockput(leafprev);
@@ -894,7 +894,7 @@ keep_prev_leaf:
 					trace(">>> can merge node %p into node %p", buf, prev[level]);
 					remove_index(cursor, cii);
 					mark_buffer_rollup_non(prev[level]);
-					blockput_free(buf);
+					blockput_free_rollup(sb, buf);
 					goto keep_prev_node;
 				}
 				blockput(prev[level]);
@@ -931,7 +931,7 @@ chop_root:
 		 */
 		bfree(sb, bufindex(prev[0]), 1);
 		log_bnode_free(sb, bufindex(prev[0]));
-		blockput_free(prev[0]);
+		blockput_free_rollup(sb, prev[0]);
 
 		vecmove(prev, prev + 1, btree->root.depth);
 	}
@@ -1260,7 +1260,7 @@ int free_empty_btree(struct btree *btree)
 		bfree(sb, leaf, 1);
 		log_leaf_free(sb, leaf);
 		assert(ops->leaf_can_free(btree, bufdata(leafbuf)));
-		blockput_free(leafbuf);
+		blockput_free(sb, leafbuf);
 	} else {
 		defer_bfree(&sb->defree, leaf, 1);
 		log_bfree(sb, leaf, 1);
@@ -1278,7 +1278,7 @@ int free_empty_btree(struct btree *btree)
 		 */
 		bfree(sb, bufindex(rootbuf), 1);
 		log_bnode_free(sb, bufindex(rootbuf));
-		blockput_free(rootbuf);
+		blockput_free_rollup(sb, rootbuf);
 	} else {
 		defer_bfree(&sb->derollup, bufindex(rootbuf), 1);
 		log_bfree_on_rollup(sb, bufindex(rootbuf), 1);

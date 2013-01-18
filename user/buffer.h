@@ -132,6 +132,7 @@ static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 	return 0;
 }
 
+struct sb;
 struct buffer_head *new_buffer(map_t *map);
 void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
@@ -146,9 +147,10 @@ struct buffer_head *set_buffer_dirty(struct buffer_head *buffer);
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *__set_buffer_empty(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
-void tux3_clear_buffer_dirty(struct buffer_head *buffer);
+void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta);
 void get_bh(struct buffer_head *buffer);
-void blockput_free(struct buffer_head *buffer);
+void blockput_free(struct sb *sb, struct buffer_head *buffer);
+void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer);
 void blockput(struct buffer_head *buffer);
 unsigned buffer_hash(block_t block);
 struct buffer_head *peekblk(map_t *map, block_t block);
@@ -216,7 +218,6 @@ int flush_buffers(map_t *map);
 int flush_state(unsigned state);
 
 /* block_fork.c */
-struct sb;
 void free_forked_buffers(struct sb *sb, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 int bufferfork_to_invalidate(map_t *map, struct buffer_head *buffer);
