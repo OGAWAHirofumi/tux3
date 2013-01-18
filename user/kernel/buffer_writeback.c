@@ -655,7 +655,8 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 /*
  * Flush buffers in head
  */
-int flush_list(struct address_space *mapping, struct list_head *head)
+int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
+	       struct list_head *head)
 {
 	struct inode *inode = mapping->host;
 	struct bufvec bufvec;

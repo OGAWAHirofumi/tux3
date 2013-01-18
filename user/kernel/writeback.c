@@ -256,8 +256,28 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 				   &sb->rollup_buffers);
 }
 
-static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
+static void tux3_state_read_and_clear(struct inode *inode,
+				      struct tux3_iattr_data *idata,
+				      unsigned *state,
+				      unsigned delta)
 {
+	struct tux3_inode *tuxnode = tux_inode(inode);
+
+	*state = 0;
+
+	spin_lock(&tuxnode->lock);
+
+	/* Get iattr data */
+	tux3_iattr_read_and_clear(inode, idata, delta);
+
+	spin_unlock(&tuxnode->lock);
+}
+
+static inline int tux3_flush_buffers(struct inode *inode,
+				     struct tux3_iattr_data *idata,
+				     unsigned delta)
+{
+	struct list_head *dirty_buffers = tux3_dirty_buffers(inode, delta);
 	int err;
 
 	/* FIXME: error handling */
@@ -268,7 +288,7 @@ static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 		return err;
 
 	/* Apply page caches */
-	return flush_list(mapping(inode), tux3_dirty_buffers(inode, delta));
+	return flush_list(mapping(inode), idata, dirty_buffers);
 }
 
 /*
@@ -282,26 +302,41 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 {
 	/* FIXME: linux writeback doesn't allow to control writeback
 	 * timing. */
-	unsigned dirty;
-	int err;
+	struct tux3_iattr_data idata;
+	unsigned dirty, state;
+	int ret = 0, err;
 
 	trace("inum %Lu", tux_inode(inode)->inum);
 
-	err = tux3_flush_buffers(inode, delta);
+	/*
+	 * Read the stabled inode attributes and state for this delta,
+	 * then tell we read already.
+	 */
+	tux3_state_read_and_clear(inode, &idata, &state, delta);
+
+	err = tux3_flush_buffers(inode, &idata, delta);
+	if (err && !ret)
+		ret = err;
 
 	/* Get flags after tux3_flush_buffers() to check TUX3_DIRTY_BTREE */
 	dirty = tux3_dirty_flags(inode, delta);
 
 	if (dirty & (TUX3_DIRTY_BTREE | I_DIRTY_SYNC | I_DIRTY_DATASYNC)) {
-		int ret = tux3_save_inode(inode, delta);
-		if (!err)
-			err = ret;
+		/*
+		 * If there is btree root, adjust present after
+		 * tux3_flush_buffers().
+		 */
+		tux3_iattr_adjust_for_btree(inode, &idata);
+
+		err = tux3_save_inode(inode, &idata, delta);
+		if (err && !ret)
+			ret = err;
 	}
 
 	/* FIXME: In the error path, dirty state would still be
 	 * remaining, we have to do something. */
 
-	return err;
+	return ret;
 }
 
 /*

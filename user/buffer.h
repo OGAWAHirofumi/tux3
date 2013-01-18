@@ -133,6 +133,7 @@ static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 }
 
 struct sb;
+struct tux3_iattr_data;
 struct buffer_head *new_buffer(map_t *map);
 void show_buffer(struct buffer_head *buffer);
 void show_buffers(map_t *map);
@@ -219,8 +220,8 @@ void bufvec_free(struct bufvec *bufvec);
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
 void bufvec_complete_without_io(struct bufvec *bufvec, unsigned count);
-int flush_list(map_t *map, struct list_head *head);
-int flush_buffers(map_t *map);
+int flush_list(map_t *map, struct tux3_iattr_data *idata,
+	       struct list_head *head);
 
 /* block_fork.c */
 void free_forked_buffers(struct sb *sb, int umount);

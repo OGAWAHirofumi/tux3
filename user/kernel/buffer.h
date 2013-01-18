@@ -24,6 +24,7 @@ enum {
 };
 
 struct sb;
+struct tux3_iattr_data;
 static inline block_t bufindex(struct buffer_head *buffer);
 
 static inline void *bufdata(struct buffer_head *buffer)
@@ -129,7 +130,8 @@ void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
-int flush_list(struct address_space *mapping, struct list_head *head);
+int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
+	       struct list_head *head);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
 
 /* block_fork.c */

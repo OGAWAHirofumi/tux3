@@ -407,12 +407,12 @@ struct inode *tux3_iget(struct sb *sb, inum_t inum)
 	return inode;
 }
 
-static int save_inode(struct inode *inode, unsigned delta)
+static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
+		      unsigned delta)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	inum_t inum = tux_inode(inode)->inum;
-	struct tux3_iattr_data idata;
 	int err = 0;
 
 	trace("save inode 0x%Lx", inum);
@@ -441,12 +441,9 @@ static int save_inode(struct inode *inode, unsigned delta)
 		assert(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size));
 	}
 
-	/* Get iattr data */
-	tux3_iattr_read_and_clear(inode, &idata, delta);
-
 	/* Write inode attributes to inode btree */
 	struct iattr_req_data iattr_data = {
-		.idata	= &idata,
+		.idata	= idata,
 		.btree	= &tux_inode(inode)->btree,
 		.inode	= inode,
 	};
@@ -471,7 +468,8 @@ out:
 	return err;
 }
 
-int tux3_save_inode(struct inode *inode, unsigned delta)
+int tux3_save_inode(struct inode *inode, struct tux3_iattr_data *idata,
+		    unsigned delta)
 {
 	/* Those inodes must not be marked as I_DIRTY_SYNC/DATASYNC. */
 	assert(tux_inode(inode)->inum != TUX_VOLMAP_INO &&
@@ -484,7 +482,7 @@ int tux3_save_inode(struct inode *inode, unsigned delta)
 		/* FIXME: assert(only btree should be changed); */
 		break;
 	}
-	return save_inode(inode, delta);
+	return save_inode(inode, idata, delta);
 }
 
 #ifdef __KERNEL__

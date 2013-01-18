@@ -15,6 +15,7 @@
 #define trace trace_off
 #endif
 
+#include "writeback.c"
 #include "kernel/iattr.c"
 
 /* Test encode_attrs() and decode_attrs() */
@@ -44,6 +45,7 @@ static void test01(struct sb *sb)
 
 	struct tux3_iattr_data idata;
 	tux3_iattr_read_and_clear(inode1, &idata, sb->delta);
+	tux3_iattr_adjust_for_btree(inode1, &idata);
 
 	struct iattr_req_data iattr_data = {
 		.idata	= &idata,

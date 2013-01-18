@@ -82,10 +82,12 @@ static void tux3_iattr_clear_dirty(struct tux3_inode *tuxnode)
 /*
  * Read iattrs, then clear iattr dirty to tell no need to iattrfork
  * anymore if needed.
+ *
+ * Caller must hold tuxnode->lock.
  */
-void tux3_iattr_read_and_clear(struct inode *inode,
-			       struct tux3_iattr_data *result,
-			       unsigned delta)
+static void tux3_iattr_read_and_clear(struct inode *inode,
+				      struct tux3_iattr_data *result,
+				      unsigned delta)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	unsigned long flags;
@@ -96,7 +98,6 @@ void tux3_iattr_read_and_clear(struct inode *inode,
 	 * If delta is same, iattrs are available in inode. If not,
 	 * iattrs were forked.
 	 */
-	spin_lock(&tuxnode->lock);
 	flags = tuxnode->flags;
 	if (!tux3_iattrsta_has_delta(flags) ||
 	    tux3_iattrsta_get_delta(flags) == tux3_delta(delta)) {
@@ -112,9 +113,15 @@ void tux3_iattr_read_and_clear(struct inode *inode,
 			&tux3_inode_ddc(inode, delta)->idata;
 		*result = *idata;
 	}
+}
 
-	/* If there is btree root, adjust present */
-	if (has_root(&tuxnode->btree))
-		result->present |= DATA_BTREE_BIT;
-	spin_unlock(&tuxnode->lock);
+/*
+ * DATA_BTREE_BIT is not set in normal state. We set it only when
+ * flush inode.  So, this is called to flush inode.
+ */
+static void tux3_iattr_adjust_for_btree(struct inode *inode,
+					struct tux3_iattr_data *idata)
+{
+	if (has_root(&tux_inode(inode)->btree))
+		idata->present |= DATA_BTREE_BIT;
 }
