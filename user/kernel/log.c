@@ -57,10 +57,10 @@
  */
 
 unsigned log_size[] = {
-	[LOG_BALLOC]		= 8,
-	[LOG_BFREE]		= 8,
-	[LOG_BFREE_ON_ROLLUP]	= 8,
-	[LOG_BFREE_RELOG]	= 8,
+	[LOG_BALLOC]		= 11,
+	[LOG_BFREE]		= 11,
+	[LOG_BFREE_ON_ROLLUP]	= 11,
+	[LOG_BFREE_RELOG]	= 11,
 	[LOG_LEAF_REDIRECT]	= 13,
 	[LOG_LEAF_FREE]		= 7,
 	[LOG_BNODE_REDIRECT]	= 13,
@@ -161,19 +161,19 @@ static void log_u48(struct sb *sb, u8 intent, u64 v1)
 	log_end(sb, encode48(data, v1));
 }
 
-static void log_u8_u48(struct sb *sb, u8 intent, u8 v1, u64 v2)
-{
-	unsigned char *data = log_begin(sb, log_size[intent]);
-	*data++ = intent;
-	*data++ = v1;
-	log_end(sb, encode48(data, v2));
-}
-
 static void log_u16_u48(struct sb *sb, u8 intent, u16 v1, u64 v2)
 {
 	unsigned char *data = log_begin(sb, log_size[intent]);
 	*data++ = intent;
 	data = encode16(data, v1);
+	log_end(sb, encode48(data, v2));
+}
+
+static void log_u32_u48(struct sb *sb, u8 intent, u32 v1, u64 v2)
+{
+	unsigned char *data = log_begin(sb, log_size[intent]);
+	*data++ = intent;
+	data = encode32(data, v1);
 	log_end(sb, encode48(data, v2));
 }
 
@@ -206,29 +206,29 @@ static void log_u48_u48_u48(struct sb *sb, u8 intent, u64 v1, u64 v2, u64 v3)
 /* balloc() until next rollup */
 void log_balloc(struct sb *sb, block_t block, unsigned count)
 {
-	assert(count < 256);	/* FIXME: extent max is 64 for now */
-	log_u8_u48(sb, LOG_BALLOC, count, block);
+	/* FIXME: 32bits count is too big? */
+	log_u32_u48(sb, LOG_BALLOC, count, block);
 }
 
 /* bfree() */
 void log_bfree(struct sb *sb, block_t block, unsigned count)
 {
-	assert(count < 256);	/* FIXME: extent max is 64 for now */
-	log_u8_u48(sb, LOG_BFREE, count, block);
+	/* FIXME: 32bits count is too big? */
+	log_u32_u48(sb, LOG_BFREE, count, block);
 }
 
 /* Defered bfree() until after next rollup */
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
 {
-	assert(count < 256);	/* FIXME: extent max is 64 for now */
-	log_u8_u48(sb, LOG_BFREE_ON_ROLLUP, count, block);
+	/* FIXME: 32bits count is too big? */
+	log_u32_u48(sb, LOG_BFREE_ON_ROLLUP, count, block);
 }
 
 /* Same with log_bfree() (re-logged log_bfree_on_rollup() on rollup) */
 void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
 {
-	assert(count < 256);	/* FIXME: extent max is 64 for now */
-	log_u8_u48(sb, LOG_BFREE_RELOG, count, block);
+	/* FIXME: 32bits count is too big? */
+	log_u32_u48(sb, LOG_BFREE_RELOG, count, block);
 }
 
 /*

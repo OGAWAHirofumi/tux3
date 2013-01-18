@@ -360,8 +360,8 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 		case LOG_BFREE_RELOG:
 		{
 			u64 block;
-			u8 count;
-			count = *data++;
+			u32 count;
+			data = decode32(data, &count);
 			data = decode48(data, &block);
 			trace("%s: count %u, block %Lx",
 			      log_name[code], count, block);

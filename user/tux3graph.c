@@ -1129,8 +1129,9 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
 		case LOG_BFREE_RELOG: {
-			unsigned count = *data++;
+			u32 count;
 			u64 block;
+			data = decode32(data, &count);
 			data = decode48(data, &block);
 			fprintf(gi->f, "count %u, block %llu ",
 				count, block);
