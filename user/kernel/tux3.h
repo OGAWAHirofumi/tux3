@@ -199,6 +199,12 @@ struct cursor {
 
 struct stash { struct flink_head head; u64 *pos, *top; };
 
+/* Refcount for delta */
+struct delta_ref {
+	atomic_t refcount;
+	unsigned delta;
+};
+
 /* Per-delta data structure for sb */
 struct sb_delta_dirty {
 	struct list_head dirty_inodes;	/* dirty inodes list */
@@ -210,6 +216,19 @@ struct sb {
 		struct disksuper super;
 		char thisbig[SB_LEN];
 	};
+
+	struct rw_semaphore delta_lock;		/* delta transition exclusive */
+	struct delta_ref __rcu *current_delta;	/* current delta */
+	struct delta_ref delta_refs[TUX3_MAX_DELTA];
+	unsigned delta;				/* delta commit cycle */
+	unsigned rollup;			/* log rollup cycle */
+
+#define TUX3_COMMIT_RUNNING_BIT		0
+#define TUX3_COMMIT_PENDING_BIT		1
+	unsigned long backend_state;		/* delta state */
+	unsigned marshal_delta;			/* marshaling delta */
+	unsigned committed_delta;		/* committed delta */
+
 	struct btree itable;	/* Inode table btree */
 	struct btree otable;	/* Orphan table btree */
 	struct inode *volmap;	/* Volume metadata cache (like blockdev). */
@@ -217,9 +236,7 @@ struct sb {
 	struct inode *rootdir;	/* root directory special file */
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */
-	unsigned delta;		/* delta commit cycle */
-	unsigned rollup;	/* log rollup cycle */
-	struct rw_semaphore delta_lock; /* delta transition exclusive */
+
 	unsigned blocksize, blockbits, blockmask;
 	block_t volblocks, freeblocks, nextalloc;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
@@ -692,8 +709,9 @@ int save_sb(struct sb *sb);
 int apply_defered_bfree(struct sb *sb, u64 val);
 int force_rollup(struct sb *sb);
 int force_delta(struct sb *sb);
-int change_begin(struct sb *sb);
-int change_end_without_commit(struct sb *sb);
+void change_begin_atomic(struct sb *sb);
+void change_end_atomic(struct sb *sb);
+void change_begin(struct sb *sb);
 int change_end(struct sb *sb);
 
 /* dir.c */
