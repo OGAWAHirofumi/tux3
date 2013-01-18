@@ -338,6 +338,25 @@ static int need_rollup(struct sb *sb)
 
 enum rollup_flags { NO_ROLLUP, ALLOW_ROLLUP, FORCE_ROLLUP, };
 
+/* For debugging */
+void tux3_start_backend(struct sb *sb)
+{
+	assert(current->journal_info == NULL);
+	current->journal_info = sb;
+}
+
+void tux3_end_backend(void)
+{
+	assert(current->journal_info);
+	current->journal_info = NULL;
+}
+
+/* If true, it is under backend */
+int tux3_under_backend(struct sb *sb)
+{
+	return current->journal_info == sb;
+}
+
 static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 {
 	unsigned delta = sb->marshal_delta;
@@ -346,6 +365,7 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 
 	trace(">>>>>>>>> commit delta %u", delta);
 	/* further changes of frontend belong to the next delta */
+	tux3_start_backend(sb);
 
 	/* Prepare to wait I/O */
 	tux3_iowait_init(&iowait);
@@ -386,6 +406,7 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 	tux3_iowait_wait(&iowait);
 	/* Commit last block (for now, this is sync I/O) */
 	commit_delta(sb);
+	tux3_end_backend();
 	trace("<<<<<<<<< commit done %u", delta);
 
 	post_commit(sb, delta);
