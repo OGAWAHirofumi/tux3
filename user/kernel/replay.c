@@ -169,6 +169,7 @@ typedef int (*replay_log_t)(struct replay *, struct buffer_head *);
 
 static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 {
+	struct sb *sb = rp->sb;
 	struct logblock *log = bufdata(logbuf);
 	unsigned char *data = log->data;
 	int err;
@@ -286,6 +287,15 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 				return err;
 			break;
 		}
+		case LOG_FREEBLOCKS:
+		{
+			u64 freeblocks;
+			data = decode48(data, &freeblocks);
+			trace("%s: freeblocks %llu", log_name[code],
+			      freeblocks);
+			sb->freeblocks = freeblocks;
+			break;
+		}
 		case LOG_BALLOC:
 		case LOG_BFREE:
 		case LOG_BFREE_ON_ROLLUP:
@@ -295,7 +305,6 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 		case LOG_BNODE_FREE:
 		case LOG_ORPHAN_ADD:
 		case LOG_ORPHAN_DEL:
-		case LOG_FREEBLOCKS:
 		case LOG_ROLLUP:
 		case LOG_DELTA:
 			data += log_size[code] - sizeof(code);
@@ -316,6 +325,19 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 	block_t blocknr = rp->blocknrs[bufindex(logbuf)];
 	unsigned char *data = log->data;
 	int err;
+
+	/*
+	 * Log block address itself works as balloc log, and adjust
+	 * bitmap and derollup even if logblocks is before latest
+	 * rollup, to prevent to be overwritten. (This must be after
+	 * LOG_FREEBLOCKS replay if there is it.)
+	 */
+	trace("LOG BLOCK: logblock %Lx", blocknr);
+	err = replay_update_bitmap(rp, blocknr, 1, 1);
+	if (err)
+		return err;
+	/* Mark log block as derollup block */
+	defer_bfree(&sb->derollup, blocknr, 1);
 
 	/* If log is before latest rollup, those were already applied to FS. */
 	if (bufindex(logbuf) < rp->rollup_index) {
@@ -449,14 +471,6 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			break;
 		}
 		case LOG_FREEBLOCKS:
-		{
-			u64 freeblocks;
-			data = decode48(data, &freeblocks);
-			trace("%s: freeblocks %llu", log_name[code],
-			      freeblocks);
-			sb->freeblocks = freeblocks;
-			break;
-		}
 		case LOG_BNODE_ADD:
 		case LOG_BNODE_UPDATE:
 		case LOG_BNODE_DEL:
@@ -470,17 +484,6 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			return -EINVAL;
 		}
 	}
-
-	/*
-	 * Log block address itself works as balloc log. (This must be
-	 * after LOG_FREEBLOCKS replay if there is it.)
-	 */
-	trace("LOG BLOCK: logblock %Lx", blocknr);
-	err = replay_update_bitmap(rp, blocknr, 1, 1);
-	if (err)
-		return err;
-	/* Mark log block as derollup block */
-	defer_bfree(&sb->derollup, blocknr, 1);
 
 	return 0;
 }
