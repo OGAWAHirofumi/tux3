@@ -195,10 +195,6 @@ static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 		inode->i_ctime = dir->i_ctime;
 		/* FIXME: we shouldn't write inode for i_nlink = 0? */
 		inode_dec_link_count(inode);
-		if (inode->i_nlink == 0) {
-			/* FIXME: what to do if error? */
-			err = tux3_mark_inode_orphan(inode);
-		}
 	}
 	change_end(sb);
 
@@ -220,10 +216,7 @@ static int tux3_rmdir(struct inode *dir, struct dentry *dentry)
 			/* FIXME: we need to do this for POSIX? */
 			/* inode->i_size = 0; */
 			clear_nlink(inode);
-			/* FIXME: we shouldn't write inode for i_nlink = 0? */
 			tux3_mark_inode_dirty_sync(inode);
-			/* FIXME: can't avoid this? what to do if error? */
-			err = tux3_mark_inode_orphan(inode);
 
 			inode_dec_link_count(dir);
 		}

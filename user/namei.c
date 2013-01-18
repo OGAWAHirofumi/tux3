@@ -241,7 +241,7 @@ int tuxunlink(struct inode *dir, const char *name, unsigned len)
 
 	err = tux3_unlink(dir, &dentry);
 
-	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */
+	/* This iput() will schedule deletion if i_nlink == 0 && i_count == 1 */
 	iput(dentry.d_inode);
 
 	return err;
@@ -268,7 +268,7 @@ int tuxrmdir(struct inode *dir, const char *name, unsigned len)
 	if (S_ISDIR(dentry.d_inode->i_mode))
 		err = tux3_rmdir(dir, &dentry);
 
-	/* This iput() will truncate inode if i_nlink == 0 && i_count == 1 */
+	/* This iput() will schedule deletion if i_nlink == 0 && i_count == 1 */
 	iput(dentry.d_inode);
 
 	return err;

@@ -237,7 +237,6 @@ struct sb {
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
 	struct mutex loglock;	/* serialize log entries (spinlock me) */
 
-	spinlock_t orphan_add_lock;  /* lock of orphan_add for frontend */
 	struct list_head orphan_add; /* defered orphan inode add list */
 	spinlock_t orphan_del_lock;  /* lock of orphan_del for frontend */
 	struct list_head orphan_del; /* defered orphan inode del list */
@@ -801,8 +800,8 @@ void clean_orphan_list(struct list_head *head);
 extern struct ileaf_attr_ops oattr_ops;
 int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add);
 int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del);
-int tux3_mark_inode_orphan(struct inode *inode);
-int tux3_clear_inode_orphan(struct inode *inode);
+int tux3_make_orphan_add(struct inode *inode);
+int tux3_make_orphan_del(struct inode *inode);
 int replay_orphan_add(struct replay *rp, unsigned version, inum_t inum);
 int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum);
 void replay_iput_orphan_inodes(struct sb *sb,

@@ -115,6 +115,8 @@ int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 	while (!list_empty(orphan_add)) {
 		struct tux3_inode *tuxnode =orphan_list_entry(orphan_add->next);
 
+		trace("inum %Lu", tuxnode->inum);
+
 		/* FIXME: what to do if error? */
 		err = btree_probe(cursor, tuxnode->inum);
 		if (err)
@@ -151,6 +153,8 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 	while (!list_empty(orphan_del)) {
 		struct orphan *orphan = orphan_entry(orphan_del->next);
 
+		trace("inum %Lu", orphan->inum);
+
 		/* Remove inum from orphan btree */
 		err = btree_chop(otable, orphan->inum, 1);
 		if (err)
@@ -170,18 +174,18 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
  */
 
 /*
- * Mark inode as orphan, and logging it. Then if orphan is living until
+ * Make inode as orphan, and logging it. Then if orphan is living until
  * rollup, orphan will be written to sb->otable.
  */
-int tux3_mark_inode_orphan(struct inode *inode)
+int tux3_make_orphan_add(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct tux3_inode *tuxnode = tux_inode(inode);
 
-	spin_lock(&sb->orphan_add_lock);
+	trace("inum %Lu", tuxnode->inum);
+
 	assert(list_empty(&tuxnode->orphan_list));
 	list_add(&tuxnode->orphan_list, &sb->orphan_add);
-	spin_unlock(&sb->orphan_add_lock);
 
 	log_orphan_add(sb, sb->version, tuxnode->inum);
 
@@ -208,17 +212,16 @@ static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
 }
 
 /* Clear inode as orphan (inode was destroyed), and logging it. */
-int tux3_clear_inode_orphan(struct inode *inode)
+int tux3_make_orphan_del(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct tux3_inode *tuxnode = tux_inode(inode);
 
-	/* Since referencer is only me, so we can check empty without lock */
+	trace("inum %Lu", tuxnode->inum);
+
 	if (!list_empty(&tuxnode->orphan_list)) {
 		/* This orphan is not applied to sb->otable yet. */
-		spin_lock(&sb->orphan_add_lock);
 		list_del_init(&tuxnode->orphan_list);
-		spin_unlock(&sb->orphan_add_lock);
 	} else {
 		/* This orphan was already applied to sb->otable. */
 		int err = add_defer_oprhan_del(sb, tuxnode->inum);

@@ -27,6 +27,7 @@
  * - xattr flags
  * - delete dirty flags
  * - btree dirty
+ * - inode is orphaned flag
  * - inode is dead flag
  */
 
@@ -49,9 +50,13 @@
 #define IFLAGS_DEAD_SHIFT	(IFLAGS_XATTR_SHIFT + IFLAGS_XATTR_BITS)
 
 /* btree root is modified from only backend, so no need per-delta flag */
-#define TUX3_DIRTY_BTREE	(1 << 30)
+#define TUX3_DIRTY_BTREE	(1 << 29)
+/* the orphaned flag is set by only backend, so no need per-delta flag */
+#define TUX3_INODE_ORPHANED	(1 << 30)
 /* the dead flag is set by only backend, so no need per-delta flag */
 #define TUX3_INODE_DEAD		(1 << 31)
+
+#define NON_DIRTY_FLAGS		(TUX3_INODE_ORPHANED | TUX3_INODE_DEAD)
 
 static inline unsigned tux3_dirty_shift(unsigned delta)
 {
@@ -165,7 +170,7 @@ static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 	}
 
 	/* Update inode state */
-	if (tuxnode->flags & ~TUX3_INODE_DEAD)
+	if (tuxnode->flags & ~NON_DIRTY_FLAGS)
 		inode->i_state |= I_DIRTY;
 	else
 		inode->i_state &= ~I_DIRTY;
@@ -267,7 +272,7 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 
 static void tux3_state_read_and_clear(struct inode *inode,
 				      struct tux3_iattr_data *idata,
-				      unsigned *deleted,
+				      unsigned *orphaned, unsigned *deleted,
 				      unsigned delta)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
@@ -276,6 +281,15 @@ static void tux3_state_read_and_clear(struct inode *inode,
 
 	/* Get iattr data */
 	tux3_iattr_read_and_clear(inode, idata, delta);
+
+	/* Check orphan state */
+	*orphaned = 0;
+	if (idata->i_nlink == 0 && !(tuxnode->flags & TUX3_INODE_ORPHANED)) {
+		/* This inode was orphaned in this delta */
+		*orphaned = 1;
+		tuxnode->flags |= TUX3_INODE_ORPHANED;
+	}
+
 	/* Check whether inode has to delete */
 	tux3_dead_read_and_clear(inode, deleted, delta);
 
@@ -312,17 +326,24 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 	/* FIXME: linux writeback doesn't allow to control writeback
 	 * timing. */
 	struct tux3_iattr_data idata;
-	unsigned dirty = 0, deleted;
+	unsigned dirty = 0, orphaned, deleted;
 	int ret = 0, err;
 
 	/*
 	 * Read the stabled inode attributes and state for this delta,
 	 * then tell we read already.
 	 */
-	tux3_state_read_and_clear(inode, &idata, &deleted, delta);
+	tux3_state_read_and_clear(inode, &idata, &orphaned, &deleted, delta);
 
-	trace("inum %Lu, idata %p, deleted %d, delta %u",
-	      tux_inode(inode)->inum, &idata, deleted, delta);
+	trace("inum %Lu, idata %p, orphaned %d, deleted %d, delta %u",
+	      tux_inode(inode)->inum, &idata, orphaned, deleted, delta);
+
+	/* This inode was orphaned in this delta */
+	if (orphaned) {
+		err = tux3_make_orphan_add(inode);
+		if (err && !ret)
+			ret = err;
+	}
 
 	/* If inode was deleted and referencer was gone, delete inode */
 	if (deleted) {
@@ -439,6 +460,6 @@ void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta)
 void tux3_check_destroy_inode_flags(struct inode *inode)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
-	tuxnode->flags &= ~TUX3_INODE_DEAD;
+	tuxnode->flags &= ~NON_DIRTY_FLAGS;
 	assert(tuxnode->flags == 0);
 }

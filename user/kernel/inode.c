@@ -594,11 +594,8 @@ int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	if (err)
 		goto error;
 
-	/*
-	 * Orphan is cleared. We can't call change_end()
-	 * anymore until inode was removed.
-	 */
-	err = tux3_clear_inode_orphan(inode);
+	/* Clear orphan state (inode was destroyed), and logging it. */
+	err = tux3_make_orphan_del(inode);
 	if (err)
 		goto error;
 
