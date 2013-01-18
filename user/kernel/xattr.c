@@ -106,7 +106,7 @@ static loff_t unatom_dict_read(struct inode *atable, atom_t atom)
 
 static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
 {
-	struct sb *sb = tux_sb(atable->i_sb);
+	unsigned delta = tux3_get_current_delta();
 	struct buffer_head *buffer, *clone;
 	loff_t old;
 	unsigned offset;
@@ -115,7 +115,7 @@ static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
 	if (!buffer)
 		return -EIO;
 
-	clone = blockdirty(buffer, sb->delta);
+	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		blockput(buffer);
 		return PTR_ERR(clone);
@@ -265,10 +265,11 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 static int update_refcount(struct sb *sb, struct buffer_head *buffer,
 			   unsigned offset, u16 val)
 {
+	unsigned delta = tux3_get_current_delta();
 	struct buffer_head *clone;
 	__be16 *refcount;
 
-	clone = blockdirty(buffer, sb->delta);
+	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		blockput(buffer);
 		return PTR_ERR(clone);

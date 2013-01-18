@@ -11,11 +11,11 @@
 static void temp_blockdirty(struct buffer_head *buffer)
 {
 	struct inode *inode = buffer_inode(buffer);
-	struct sb *sb = tux_sb(inode->i_sb);
+	unsigned delta = tux3_get_current_delta();
 
-	assert(buffer_can_modify(buffer, sb->delta));
+	assert(buffer_can_modify(buffer, delta));
 
-	tux3_set_buffer_dirty(mapping(inode), buffer, sb->delta);
+	tux3_set_buffer_dirty(mapping(inode), buffer, delta);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
 	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);

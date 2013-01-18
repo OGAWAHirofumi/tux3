@@ -223,7 +223,7 @@ struct sb {
 	struct rw_semaphore delta_lock;		/* delta transition exclusive */
 	struct delta_ref __rcu *current_delta;	/* current delta */
 	struct delta_ref delta_refs[TUX3_MAX_DELTA];
-	unsigned delta;				/* delta commit cycle */
+	unsigned next_delta;			/* delta commit cycle */
 	unsigned rollup;			/* log rollup cycle */
 
 #define TUX3_COMMIT_RUNNING_BIT		0
@@ -443,31 +443,6 @@ static inline struct dev *sb_dev(struct sb *sb)
 	return sb->dev;
 }
 #endif /* !__KERNEL__ */
-
-/* Choice sb->delta or sb->rollup from inode */
-static inline int tux3_inode_delta(struct inode *inode)
-{
-	unsigned delta;
-
-	switch (tux_inode(inode)->inum) {
-	case TUX_VOLMAP_INO:
-		/*
-		 * Note: volmap are special, and has both of
-		 * TUX3_INIT_DELTA and sb->rollup. So TUX3_INIT_DELTA
-		 * can be incorrect if delta was used for buffer.
-		 */
-		delta = TUX3_INIT_DELTA;
-		break;
-	case TUX_BITMAP_INO:
-		delta = tux_sb(inode->i_sb)->rollup;
-		break;
-	default:
-		delta = tux_sb(inode->i_sb)->delta;
-		break;
-	}
-
-	return delta;
-}
 
 /* Get delta from free running counter */
 static inline unsigned tux3_delta(unsigned delta)
@@ -716,6 +691,8 @@ int save_sb(struct sb *sb);
 int apply_defered_bfree(struct sb *sb, u64 val);
 int force_rollup(struct sb *sb);
 int force_delta(struct sb *sb);
+unsigned tux3_get_current_delta(void);
+unsigned tux3_inode_delta(struct inode *inode);
 void change_begin_atomic(struct sb *sb);
 void change_end_atomic(struct sb *sb);
 void change_begin(struct sb *sb);

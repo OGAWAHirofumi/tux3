@@ -123,9 +123,9 @@ int tux3_flush_hole(struct inode *inode, unsigned delta)
  */
 static int tux3_add_hole(struct inode *inode, block_t start, block_t count)
 {
-	struct sb *sb = tux_sb(inode->i_sb);
+	unsigned delta = tux3_get_current_delta();
 	struct tux3_inode *tuxnode = tux_inode(inode);
-	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, delta);
 	struct hole_extent *hole, *safe, *merged = NULL, *removed = NULL;
 
 	/* FIXME: for now, support truncate only */
@@ -189,10 +189,9 @@ int tux3_add_truncate_hole(struct inode *inode, loff_t newsize)
 }
 
 /* Clear hole extents for frontend (called from tux3_purge_inode()) */
-int tux3_clear_hole(struct inode *inode)
+int tux3_clear_hole(struct inode *inode, unsigned delta)
 {
-	struct sb *sb = tux_sb(inode->i_sb);
-	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, sb->delta);
+	struct inode_delta_dirty *i_ddc = tux3_inode_ddc(inode, delta);
 	struct hole_extent *hole, *safe;
 	int has_hole = 0;
 

@@ -135,6 +135,7 @@ void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
 loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 			inum_t inum, umode_t mode, loff_t *size)
 {
+	unsigned delta = tux3_get_current_delta();
 	struct sb *sb = tux_sb(dir->i_sb);
 	tux_dirent *entry;
 	struct buffer_head *buffer, *clone;
@@ -169,7 +170,7 @@ loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
 	assert(!buffer_dirty(buffer));
 
 create:
-	clone = blockdirty(buffer, tux_sb(dir->i_sb)->delta);
+	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		blockput(buffer);
 		return PTR_ERR(clone);
@@ -337,6 +338,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 		     tux_dirent *entry)
 {
+	unsigned delta = tux3_get_current_delta();
 	tux_dirent *prev = NULL, *this = bufdata(buffer);
 	struct buffer_head *clone;
 
@@ -350,7 +352,7 @@ int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 		this = next_entry(this);
 	}
 
-	clone = blockdirty(buffer, tux_sb(dir->i_sb)->delta);
+	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		blockput(buffer);
 		return PTR_ERR(clone);

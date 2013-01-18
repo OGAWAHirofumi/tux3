@@ -185,6 +185,7 @@ struct inode *iget5_locked(struct sb *sb, inum_t inum,
 /* Truncate partial block. If partial, we have to update last block. */
 static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 {
+	unsigned delta = tux3_get_current_delta();
 	struct sb *sb = tux_sb(inode->i_sb);
 	block_t index = newsize >> sb->blockbits;
 	unsigned offset = newsize & sb->blockmask;
@@ -197,7 +198,7 @@ static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 	if (!buffer)
 		return -EIO;
 
-	clone = blockdirty(buffer, sb->delta);
+	clone = blockdirty(buffer, delta);
 	if (IS_ERR(clone)) {
 		blockput(buffer);
 		return PTR_ERR(clone);

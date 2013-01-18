@@ -234,6 +234,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct buffer_head *old_buffer, *new_buffer, *clone;
 	tux_dirent *old_entry, *new_entry;
 	int err, new_subdir = 0;
+	unsigned delta;
 
 	old_entry = tux_find_dirent(old_dir, &old_dentry->d_name, &old_buffer);
 	if (IS_ERR(old_entry))
@@ -243,6 +244,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	assert(be64_to_cpu(old_entry->inum) == tux_inode(old_inode)->inum);
 
 	change_begin(sb);
+	delta = tux3_get_current_delta();
+
 	if (new_inode) {
 		int old_is_dir = S_ISDIR(old_inode->i_mode);
 		if (old_is_dir) {
@@ -259,7 +262,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			goto error;
 		}
 
-		clone = blockdirty(new_buffer, sb->delta);
+		clone = blockdirty(new_buffer, delta);
 		if (IS_ERR(clone)) {
 			blockput(new_buffer);
 			err = PTR_ERR(clone);

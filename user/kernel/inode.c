@@ -570,7 +570,7 @@ int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	 *
 	 * So, clear hole extents, then free all extents.
 	 */
-	has_hole = tux3_clear_hole(inode);
+	has_hole = tux3_clear_hole(inode, delta);
 
 	/*
 	 * FIXME: i_blocks (if implemented) would be better way than
@@ -627,17 +627,26 @@ int tux3_drop_inode(struct inode *inode)
  */
 void tux3_evict_inode(struct inode *inode)
 {
+	struct sb *sb = tux_sb(inode->i_sb);
+
+
 	/*
 	 * evict_inode() should be called only if there is no
 	 * in-progress buffers in backend. So we don't have to call
 	 * tux3_truncate_inode_pages_range() here.
+	 *
+	 * We don't need change anything here though, this is needed
+	 * to provide the current delta for debugging in
+	 * tux3_invalidate_buffer().
 	 */
+	change_begin_atomic(sb);
 #ifdef __KERNEL__
 	/* Block device special file is still overwriting i_mapping */
 	truncate_inode_pages(&inode->i_data, 0);
 #else
 	truncate_inode_pages(mapping(inode), 0);
 #endif
+	change_end_atomic(sb);
 
 	clear_inode(inode);
 	free_xcache(inode);

@@ -194,6 +194,7 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 
 static int tuxio(struct file *file, void *data, unsigned len, int write)
 {
+	unsigned delta = write ? tux3_get_current_delta() : 0;
 	struct inode *inode = file->f_inode;
 	struct sb *sb = tux_sb(inode->i_sb);
 	loff_t pos = file->f_pos;
@@ -236,7 +237,7 @@ static int tuxio(struct file *file, void *data, unsigned len, int write)
 		}
 
 		if (write) {
-			clone = blockdirty(buffer, sb->delta);
+			clone = blockdirty(buffer, delta);
 			if (IS_ERR(clone)) {
 				blockput(buffer);
 				err = PTR_ERR(clone);

@@ -64,7 +64,7 @@ static loff_t calc_maxbytes(loff_t blocksize)
 /* Setup sb by on-disk super block */
 static void __setup_sb(struct sb *sb, struct disksuper *super)
 {
-	sb->delta		= TUX3_INIT_DELTA;
+	sb->next_delta		= TUX3_INIT_DELTA;
 	sb->rollup		= TUX3_INIT_DELTA;
 	sb->marshal_delta	= TUX3_INIT_DELTA - 1;
 	sb->committed_delta	= TUX3_INIT_DELTA - 1;
@@ -515,7 +515,7 @@ static void __delta_transition(struct sb *sb, struct delta_ref *delta_ref)
 	assert(atomic_read(&delta_ref->refcount) == 0);
 	atomic_set(&delta_ref->refcount, 1);
 	/* Assign the delta number */
-	delta_ref->delta = sb->delta++;
+	delta_ref->delta = sb->next_delta++;
 #ifdef ROLLUP_DEBUG
 	delta_ref->rollup_flag = ALLOW_ROLLUP;
 #endif
@@ -667,6 +667,38 @@ int force_delta(struct sb *sb)
 	return sync_current_delta(sb, NO_ROLLUP);
 }
 #endif /* !ATOMIC */
+
+unsigned tux3_get_current_delta(void)
+{
+	struct delta_ref *delta_ref = current->journal_info;
+	assert(delta_ref != NULL);
+	return delta_ref->delta;
+}
+
+/* Choice sb->delta or sb->rollup from inode */
+unsigned tux3_inode_delta(struct inode *inode)
+{
+	unsigned delta;
+
+	switch (tux_inode(inode)->inum) {
+	case TUX_VOLMAP_INO:
+		/*
+		 * Note: volmap are special, and has both of
+		 * TUX3_INIT_DELTA and sb->rollup. So TUX3_INIT_DELTA
+		 * can be incorrect if delta was used for buffer.
+		 */
+		delta = TUX3_INIT_DELTA;
+		break;
+	case TUX_BITMAP_INO:
+		delta = tux_sb(inode->i_sb)->rollup;
+		break;
+	default:
+		delta = tux3_get_current_delta();
+		break;
+	}
+
+	return delta;
+}
 
 void change_begin_atomic(struct sb *sb)
 {
