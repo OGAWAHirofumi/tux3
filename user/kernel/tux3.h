@@ -239,8 +239,7 @@ struct sb {
 	wait_queue_head_t delta_event_wq;	/* wait queue for delta event */
 #ifndef DISABLE_ASYNC_BACKEND
 	/* work to flush delta */
-	struct workqueue_struct *flush_wq;
-	struct work_struct flush_work;
+	struct task_struct *flush_task;
 #endif
 
 	struct btree itable;	/* Inode table btree */

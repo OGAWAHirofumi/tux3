@@ -4,6 +4,10 @@
  */
 
 #include "tux3.h"
+#ifdef __KERNEL__
+#include <linux/kthread.h>
+#include <linux/freezer.h>
+#endif
 
 #ifndef trace
 #define trace trace_on
@@ -461,44 +465,64 @@ static int flush_delta(struct sb *sb)
 }
 
 #ifndef DISABLE_ASYNC_BACKEND
-static void flush_delta_work(struct work_struct *work)
+static int flush_delta_work(void *data)
 {
-	struct sb *sb = container_of(work, struct sb, flush_work);
+	struct sb *sb = data;
 	int err;
 
-	if (test_and_clear_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state))
-		err = flush_delta(sb);
-	else
-		assert(0);
+	set_freezable();
 
-	/* FIXME: error handling */
+	/*
+	 * Our parent may run at a different priority, just set us to normal
+	 */
+	set_user_nice(current, 0);
+
+	while (!kthread_freezable_should_stop(NULL)) {
+		if (test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state)) {
+			clear_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state);
+
+			err = flush_delta(sb);
+			/* FIXME: error handling */
+		}
+
+		set_current_state(TASK_INTERRUPTIBLE);
+		if (!test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state) &&
+		    !kthread_should_stop())
+			schedule();
+		__set_current_state(TASK_RUNNING);
+	}
+
+	return 0;
 }
 
 static void schedule_flush_delta(struct sb *sb)
 {
-	queue_work(sb->flush_wq, &sb->flush_work);
+	wake_up_process(sb->flush_task);
 }
 
 int tux3_init_flusher(struct sb *sb)
 {
+	struct task_struct *task;
 	char b[BDEVNAME_SIZE];
 
 	bdevname(vfs_sb(sb)->s_bdev, b);
 
 	/* FIXME: we should use normal bdi-writeback by changing core */
-	sb->flush_wq = alloc_ordered_workqueue("tux3-wq/%s", WQ_MEM_RECLAIM, b);
-	if (!sb->flush_wq)
-		return -ENOMEM;
+	task = kthread_run(flush_delta_work, sb, "tux3/%s", b);
+	if (IS_ERR(task))
+		return PTR_ERR(task);
 
-	INIT_WORK(&sb->flush_work, flush_delta_work);
+	sb->flush_task = task;
 
 	return 0;
 }
 
 void tux3_exit_flusher(struct sb *sb)
 {
-	flush_work(&sb->flush_work);
-	destroy_workqueue(sb->flush_wq);
+	if (sb->flush_task) {
+		kthread_stop(sb->flush_task);
+		sb->flush_task = NULL;
+	}
 }
 
 static int flush_pending_delta(struct sb *sb)
