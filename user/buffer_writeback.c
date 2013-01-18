@@ -97,6 +97,18 @@ static void bufvec_io_done(struct bufvec *bufvec, int err)
 	}
 }
 
+/* Get the next candidate buffer. */
+static struct buffer_head *bufvec_next_buffer(struct bufvec *bufvec)
+{
+	if (!list_empty(&bufvec->contig))
+		return bufvec_contig_buf(bufvec);
+
+	if (bufvec->buffers && !list_empty(bufvec->buffers))
+		return buffers_entry(bufvec->buffers->next);
+
+	return NULL;
+}
+
 /*
  * Prepare and submit I/O for specified range.
  *
@@ -203,7 +215,7 @@ int flush_list(struct list_head *head)
 	/* Use first buffer to get inode, all should be for this inode. */
 	map = buffer_inode(buffers_entry(head->next))->map;
 
-	while (!list_empty(head)) {
+	while (bufvec_next_buffer(&bufvec)) {
 		/* Collect contiguous buffer range */
 		bufvec_contig_collect(&bufvec);
 
