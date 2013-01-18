@@ -213,6 +213,33 @@ void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 	set_buffer_clean(buffer);
 }
 
+/* Cleanup dirty for I/O path (for volmap) */
+static void __clear_buffer_dirty_for_endio(struct buffer_head *buffer, int err)
+{
+	if (err) {
+		/* FIXME: What to do? Hack: This re-link to state from bufvec */
+		assert(0);
+		__set_buffer_empty(buffer);
+	} else {
+		/* FIXME: this should be set_buffer_empty()? */
+		set_buffer_clean(buffer);
+	}
+}
+
+/* Cleanup dirty for I/O path (for filemap) */
+void clear_buffer_dirty_for_endio(struct buffer_head *buffer, int err)
+{
+	int forked = hlist_unhashed(&buffer->hashlink);
+
+	__clear_buffer_dirty_for_endio(buffer, err);
+
+	/* Is this forked buffer? */
+	if (forked) {
+		/* We have to unpin forked buffer to free. See blockdirty() */
+		blockput(buffer);
+	}
+}
+
 /* Invalidate buffer, this must be called from frontend like truncate */
 static void tux3_invalidate_buffer(struct buffer_head *buffer)
 {
@@ -617,16 +644,6 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 #endif
 }
 
-static void dev_blockio_endio(struct buffer_head *buffer, int err)
-{
-	if (err) {
-		/* FIXME: What to do? Hack: This re-link to state from bufvec */
-		assert(0);
-		__set_buffer_empty(buffer);
-	} else
-		set_buffer_clean(buffer);
-}
-
 static int dev_blockio(int rw, struct bufvec *bufvec)
 {
 	block_t block = bufvec_contig_index(bufvec);
@@ -635,7 +652,7 @@ static int dev_blockio(int rw, struct bufvec *bufvec)
 	assert(bufvec_contig_buf(bufvec)->map->dev->bits >= 6 &&
 	       bufvec_contig_buf(bufvec)->map->dev->fd);
 
-	bufvec->end_io = dev_blockio_endio;
+	bufvec->end_io = __clear_buffer_dirty_for_endio;
 
 	return blockio_vec(rw, bufvec, block, count);
 }

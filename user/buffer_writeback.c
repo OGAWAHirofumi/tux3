@@ -171,8 +171,13 @@ int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer)
 	return 1;
 }
 
-static void cancel_buffer_dirty(struct buffer_head *buffer)
+static void cancel_buffer_dirty(struct bufvec *bufvec,
+				struct buffer_head *buffer)
 {
+	if (tux_inode(bufvec_inode(bufvec))->inum == TUX_VOLMAP_INO)
+		__clear_buffer_dirty_for_endio(buffer, 0);
+	else
+		clear_buffer_dirty_for_endio(buffer, 0);
 }
 
 /* Cancel dirty buffers fully outside i_size */
@@ -187,7 +192,7 @@ static void bufvec_cancel_dirty_outside(struct bufvec *bufvec)
 
 		list_del_init(&buffer->link);
 		/* Cancel buffer dirty of outside i_size */
-		cancel_buffer_dirty(buffer);
+		cancel_buffer_dirty(bufvec, buffer);
 	}
 }
 

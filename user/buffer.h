@@ -149,6 +149,7 @@ struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *__set_buffer_empty(struct buffer_head *buffer);
 struct buffer_head *set_buffer_empty(struct buffer_head *buffer);
 void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta);
+void clear_buffer_dirty_for_endio(struct buffer_head *buffer, int err);
 void get_bh(struct buffer_head *buffer);
 void blockput_free(struct sb *sb, struct buffer_head *buffer);
 void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer);

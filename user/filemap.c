@@ -118,25 +118,6 @@ static void filemap_clean_endio(struct buffer_head *buffer, int err)
 	blockput(buffer);
 }
 
-/* For write end I/O */
-static void filemap_write_endio(struct buffer_head *buffer, int err)
-{
-	int forked = hlist_unhashed(&buffer->hashlink);
-
-	if (err) {
-		/* FIXME: What to do? Hack: This re-link to state from bufvec */
-		assert(0);
-		set_buffer_empty(buffer);
-	} else
-		set_buffer_clean(buffer);
-
-	/* Is this forked buffer? */
-	if (forked) {
-		/* We have to unpin forked buffer to free. See blockdirty() */
-		blockput(buffer);
-	}
-}
-
 static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 {
 	struct inode *inode = bufvec_inode(bufvec);
@@ -179,7 +160,7 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 			if (rw == READ)
 				bufvec_io->end_io = filemap_read_endio;
 			else
-				bufvec_io->end_io = filemap_write_endio;
+				bufvec_io->end_io = clear_buffer_dirty_for_endio;
 
 			err = blockio_vec(rw, bufvec_io, block, count);
 			if (err)
