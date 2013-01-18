@@ -203,6 +203,9 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 struct delta_ref {
 	atomic_t refcount;
 	unsigned delta;
+#ifdef ROLLUP_DEBUG
+	int rollup_flag;	/* FIXME: is there better way? */
+#endif
 };
 
 /* Per-delta data structure for sb */
@@ -226,8 +229,12 @@ struct sb {
 #define TUX3_COMMIT_RUNNING_BIT		0
 #define TUX3_COMMIT_PENDING_BIT		1
 	unsigned long backend_state;		/* delta state */
+#ifdef ROLLUP_DEBUG
+	struct delta_ref *pending_delta;	/* pending delta for commit */
+#endif
 	unsigned marshal_delta;			/* marshaling delta */
 	unsigned committed_delta;		/* committed delta */
+	wait_queue_head_t delta_event_wq;	/* wait queue for delta event */
 
 	struct btree itable;	/* Inode table btree */
 	struct btree otable;	/* Orphan table btree */

@@ -27,6 +27,8 @@ CFLAGS	+= --coverage
 endif
 # use LOCK_DEBUG
 CFLAGS	+= -DLOCK_DEBUG=1
+# use ROLLUP_DEBUG
+CFLAGS	+= -DROLLUP_DEBUG=1
 # use atomic-commit
 CFLAGS	+= -DATOMIC=1
 # user flags
