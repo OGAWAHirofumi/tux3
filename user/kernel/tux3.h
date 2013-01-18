@@ -118,10 +118,6 @@ static inline void *decode48(void *at, u64 *val)
 #define MAX_TUXKEY		(((tuxkey_t)1 << 48) - 1)
 #define TUXKEY_LIMIT		(MAX_TUXKEY + 1)
 
-/* Maximum delta number (must be power of 2) */
-#define TUX3_MAX_DELTA		2	/* 1 frontend + 1 backend */
-#define TUX3_INIT_DELTA		0	/* initial delta number */
-
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
 #define TUX_VTABLE_INO		1
@@ -301,6 +297,11 @@ enum {
 	LOG_TYPES
 };
 
+/* Per-delta data structure for inode */
+struct inode_delta_dirty {
+	struct list_head dirty_buffers;	/* list for dirty buffers */
+};
+
 struct xcache;
 struct tux3_inode {
 	struct btree btree;
@@ -313,9 +314,10 @@ struct tux3_inode {
 	struct list_head orphan_list;	/* link for orphan inode list */
 
 	spinlock_t lock;		/* lock for inode metadata */
+	/* Per-delta dirty data for inode */
 	unsigned flags;			/* flags for inode state */
+	struct inode_delta_dirty i_ddc[TUX3_MAX_DELTA];
 #ifdef __KERNEL__
-	struct dirty_buffers dirty;	/* list for dirty buffers */
 	int (*io)(int rw, struct bufvec *bufvec);
 #endif
 	/* Generic inode */
@@ -364,11 +366,6 @@ static inline struct block_device *sb_dev(struct sb *sb)
 {
 	return sb->vfs_sb->s_bdev;
 }
-
-static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
-{
-	return &tux_inode(inode)->dirty;
-}
 #else /* !__KERNEL__ */
 static inline struct sb *tux_sb(struct sb *sb)
 {
@@ -389,11 +386,6 @@ static inline struct dev *sb_dev(struct sb *sb)
 {
 	return sb->dev;
 }
-
-static inline struct dirty_buffers *inode_dirty_heads(struct inode *inode)
-{
-	return &mapping(inode)->dirty;
-}
 #endif /* !__KERNEL__ */
 
 /* Get delta from free running counter */
@@ -406,6 +398,20 @@ static inline unsigned tux3_delta(unsigned delta)
 static inline struct sb_delta_dirty *tux3_sb_ddc(struct sb *sb, unsigned delta)
 {
 	return &sb->s_ddc[tux3_delta(delta)];
+}
+
+/* Get per-delta dirty data control for inode */
+static inline struct inode_delta_dirty *tux3_inode_ddc(struct inode *inode,
+						       unsigned delta)
+{
+	return &tux_inode(inode)->i_ddc[tux3_delta(delta)];
+}
+
+/* Get per-delta dirty buffers list from inode */
+static inline struct list_head *tux3_dirty_buffers(struct inode *inode,
+						   unsigned delta)
+{
+	return &tux3_inode_ddc(inode, delta)->dirty_buffers;
 }
 
 struct tux_iattr {

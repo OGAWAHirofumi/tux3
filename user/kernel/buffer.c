@@ -13,7 +13,7 @@
  * so this maps the delta 0-3 to 1-4. And 0 is used to tell "delta is
  * not set yet"
  */
-#define DELTA_STATES	(((BUFFER_DIRTY_STATES << 1) - 1) << BH_PrivateStart)
+#define DELTA_STATES	(((TUX3_MAX_DELTA << 1) - 1) << BH_PrivateStart)
 #define DELTA_MASK	((unsigned long)DELTA_STATES)
 #define DELTA_VAL(x)	((unsigned long)((x) + 1) << BH_PrivateStart)
 
@@ -27,7 +27,7 @@ static void tux3_set_bufdelta(struct buffer_head *buffer, int delta)
 {
 	unsigned long state, old_state;
 
-	delta = delta_when(delta);
+	delta = tux3_delta(delta);
 
 	state = buffer->b_state;
 	for (;;) {
@@ -71,7 +71,7 @@ static int tux3_bufdelta(struct buffer_head *buffer)
 int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 {
 	/* If true, buffer is still not stabilized. We can modify. */
-	if (tux3_bufdelta(buffer) == delta_when(delta))
+	if (tux3_bufdelta(buffer) == tux3_delta(delta))
 		return 1;
 	/* The buffer may already be in stabilized stage for backend. */
 	return 0;
@@ -106,8 +106,7 @@ void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 /* FIXME: we should rewrite with own buffer management */
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 {
-	struct dirty_buffers *dirty = inode_dirty_heads(buffer_inode(buffer));
-	struct list_head *head = dirty_head_when(dirty, delta);
+	struct list_head *head = tux3_dirty_buffers(buffer_inode(buffer),delta);
 	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
@@ -150,21 +149,6 @@ void tux3_invalidate_buffer(struct buffer_head *buffer)
 	/* FIXME: we should check buffer_can_modify() to invalidate */
 	__tux3_clear_buffer_dirty(buffer);
 	discard_buffer(buffer);
-}
-
-void init_dirty_buffers(struct dirty_buffers *dirty)
-{
-	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)
-		INIT_LIST_HEAD(&dirty->heads[i]);
-}
-
-int dirty_buffers_is_empty(struct dirty_buffers *dirty)
-{
-	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++) {
-		if (!list_empty(&dirty->heads[i]))
-			return 0;
-	}
-	return 1;
 }
 
 #include "buffer_writeback.c"

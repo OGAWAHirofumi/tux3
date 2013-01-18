@@ -64,8 +64,7 @@ static void cleanup_dirty_for_umount(struct sb *sb)
 	 * normal. So, this clean those for unmount.
 	 */
 	if (sb->bitmap) {
-		struct dirty_buffers *dirty = inode_dirty_heads(sb->bitmap);
-		cleanup_dirty_buffers(dirty_head_when(dirty, rollup));
+		cleanup_dirty_buffers(tux3_dirty_buffers(sb->bitmap, rollup));
 		cleanup_dirty_inode(sb->bitmap);
 	}
 	cleanup_dirty_buffers(&sb->rollup_buffers);
@@ -209,14 +208,15 @@ static void tux3_inode_init_once(void *mem)
 {
 	struct tux3_inode *tuxnode = mem;
 	struct inode *inode = &tuxnode->vfs_inode;
+	int i;
 
 	INIT_LIST_HEAD(&tuxnode->dirty_list);
 	INIT_LIST_HEAD(&tuxnode->alloc_list);
 	INIT_LIST_HEAD(&tuxnode->orphan_list);
 	spin_lock_init(&tuxnode->lock);
-#ifdef __KERNEL__
-	init_dirty_buffers(inode_dirty_heads(inode));
-#endif
+	/* Initialize inode_delta_dirty */
+	for (i = 0; i < ARRAY_SIZE(tuxnode->i_ddc); i++)
+		INIT_LIST_HEAD(&tuxnode->i_ddc[i].dirty_buffers);
 
 	/* Initialize generic part */
 	inode_init_once(inode);
@@ -243,15 +243,25 @@ static void tux3_inode_init_always(struct tux3_inode *tuxnode)
 	inode->i_mode		= 0;
 }
 
+static int dirty_buffers_is_empty(struct inode *inode)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(tux_inode(inode)->i_ddc); i++) {
+		if (!list_empty(&tux_inode(inode)->i_ddc[i].dirty_buffers))
+			return 0;
+	}
+
+	return 1;
+}
+
 static void tux3_check_destroy_inode(struct inode *inode)
 {
 	assert(list_empty(&tux_inode(inode)->dirty_list));
 	assert(list_empty(&tux_inode(inode)->alloc_list));
 	assert(list_empty(&tux_inode(inode)->orphan_list));
 	assert(tux_inode(inode)->flags == 0);
-#ifdef __KERNEL__
-	assert(dirty_buffers_is_empty(inode_dirty_heads(inode)));
-#endif
+	assert(dirty_buffers_is_empty(inode));
 }
 
 #ifdef __KERNEL__

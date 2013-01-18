@@ -244,7 +244,7 @@ int flush_list(struct list_head *head)
 
 int flush_buffers(map_t *map)
 {
-	return flush_list(dirty_head(&map->dirty));
+	return flush_list(tux3_dirty_buffers(map->inode, BUFFER_INIT_DELTA));
 }
 
 int flush_state(unsigned state)

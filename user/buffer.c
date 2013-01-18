@@ -101,7 +101,7 @@ void show_dirty_buffers(map_t *map)
 {
 	for (int i = 0; i < BUFFER_DIRTY_STATES; i++) {
 		printf("map %p dirty [%d]: ", map, i);
-		show_buffer_list(dirty_head_when(&map->dirty, i));
+		show_buffer_list(tux3_dirty_buffers(map->inode, i));
 	}
 }
 
@@ -170,18 +170,18 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 void tux3_set_buffer_dirty_list(struct buffer_head *buffer, int delta,
 				struct list_head *head)
 {
-	set_buffer_state_list(buffer, BUFFER_DIRTY + delta_when(delta), head);
+	set_buffer_state_list(buffer, BUFFER_DIRTY + tux3_delta(delta), head);
 }
 
 void tux3_set_buffer_dirty(struct buffer_head *buffer, int delta)
 {
-	struct list_head *head = dirty_head_when(&buffer->map->dirty, delta);
+	struct list_head *head = tux3_dirty_buffers(buffer_inode(buffer),delta);
 	tux3_set_buffer_dirty_list(buffer, delta, head);
 }
 
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)
 {
-	tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
+	tux3_set_buffer_dirty(buffer, BUFFER_INIT_DELTA);
 	return buffer;
 }
 
@@ -618,21 +618,6 @@ int dev_errio(int rw, struct bufvec *bufvec)
 	return -EIO;
 }
 
-void init_dirty_buffers(struct dirty_buffers *dirty)
-{
-	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++)
-		INIT_LIST_HEAD(&dirty->heads[i]);
-}
-
-int dirty_buffers_is_empty(struct dirty_buffers *dirty)
-{
-	for (int i = 0; i < BUFFER_DIRTY_STATES; i ++) {
-		if (!list_empty(&dirty->heads[i]))
-			return 0;
-	}
-	return 1;
-}
-
 map_t *new_map(struct dev *dev, blockio_t *io)
 {
 	map_t *map = malloc(sizeof(*map)); // error???
@@ -640,7 +625,6 @@ map_t *new_map(struct dev *dev, blockio_t *io)
 		.dev	= dev,
 		.io	= io ? io : dev_blockio
 	};
-	init_dirty_buffers(&map->dirty);
 	for (int i = 0; i < BUFFER_BUCKETS; i++)
 		INIT_HLIST_HEAD(&map->hash[i]);
 	return map;
@@ -648,8 +632,6 @@ map_t *new_map(struct dev *dev, blockio_t *io)
 
 void free_map(map_t *map)
 {
-	assert(dirty_buffers_is_empty(&map->dirty));
-
 	for (int i = 0; i < BUFFER_BUCKETS; i++) {
 		struct hlist_head *bucket = &map->hash[i];
 		struct buffer_head *buffer;

@@ -8,7 +8,6 @@
  */
 
 #include "tux3.h"
-#include "buffer.h"
 
 #ifndef trace
 #define trace trace_on
@@ -52,8 +51,8 @@ static inline int tux3_inode_delta(struct inode *inode)
 
 	switch (tux_inode(inode)->inum) {
 	case TUX_VOLMAP_INO:
-		/* volmap are special buffer, and always DEFAULT_DIRTY_WHEN */
-		delta = DEFAULT_DIRTY_WHEN;
+		/* volmap are special buffer, and always TUX3_INIT_DELTA */
+		delta = TUX3_INIT_DELTA;
 		break;
 	case TUX_BITMAP_INO:
 		delta = tux_sb(inode->i_sb)->rollup;
@@ -189,7 +188,7 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 			return;
 	}
 
-	tux3_set_buffer_dirty(buffer, DEFAULT_DIRTY_WHEN);
+	tux3_set_buffer_dirty(buffer, TUX3_INIT_DELTA);
 	/* FIXME: we need to dirty inode only if buffer became
 	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
 	__tux3_mark_inode_dirty(buffer_inode(buffer), I_DIRTY_PAGES);
@@ -219,7 +218,7 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 
 static inline int tux3_flush_buffers(struct inode *inode, unsigned delta)
 {
-	return flush_list(dirty_head_when(inode_dirty_heads(inode), delta));
+	return flush_list(tux3_dirty_buffers(inode, delta));
 }
 
 #ifdef __KERNEL__

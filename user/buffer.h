@@ -4,13 +4,25 @@
 #define BUFFER_FOR_TUX3
 
 #ifdef BUFFER_FOR_TUX3
+#include "tux3user.h"
 #include "trace.h"
+
+static inline unsigned tux3_delta(unsigned delta);
 #endif
 #include "libklib/list.h"
 #include <sys/uio.h>
 
-#define BUFFER_DIRTY_STATES	4
-#define DEFAULT_DIRTY_WHEN	0
+#ifdef BUFFER_FOR_TUX3
+/* Maximum delta number (must be power of 2) */
+#define BUFFER_DIRTY_STATES	2	/* 1 frontend + 1 backend */
+#define BUFFER_INIT_DELTA	0	/* initial delta number */
+#define TUX3_MAX_DELTA		BUFFER_DIRTY_STATES
+#define TUX3_INIT_DELTA		BUFFER_INIT_DELTA
+#else
+/* Maximum delta number (must be power of 2) */
+#define BUFFER_DIRTY_STATES	4	/* 1 frontend + 1 backend */
+#define BUFFER_INIT_DELTA	0	/* initial delta number */
+#endif
 
 enum {
 	BUFFER_FREED, BUFFER_EMPTY, BUFFER_CLEAN, BUFFER_DIRTY,
@@ -40,15 +52,10 @@ struct bufvec;
 
 typedef int (blockio_t)(int rw, struct bufvec *bufvec);
 
-struct dirty_buffers {
-	struct list_head heads[BUFFER_DIRTY_STATES];
-};
-
 struct map {
 #ifdef BUFFER_FOR_TUX3
 	struct inode *inode;
 #endif
-	struct dirty_buffers dirty;
 	struct dev *dev;
 	blockio_t *io;
 	struct hlist_head hash[BUFFER_BUCKETS];
@@ -110,29 +117,11 @@ static inline unsigned tux3_bufdelta(struct buffer_head *buffer)
 	return buffer->state - BUFFER_DIRTY;
 }
 
-/* Get offset of delta */
-static inline unsigned delta_when(unsigned delta)
-{
-	return delta & (BUFFER_DIRTY_STATES - 1);
-}
-
-/* Get list of buffers when dirtied at delta */
-static inline struct list_head *
-dirty_head_when(struct dirty_buffers *dirty, unsigned delta)
-{
-	return &dirty->heads[delta_when(delta)];
-}
-
-static inline struct list_head *dirty_head(struct dirty_buffers *dirty)
-{
-	return dirty_head_when(dirty, DEFAULT_DIRTY_WHEN);
-}
-
 /* Can we modify buffer from delta */
 static inline int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 {
 	/* If true, buffer is still not stabilized. We can modify. */
-	if (tux3_bufdelta(buffer) == delta_when(delta))
+	if (tux3_bufdelta(buffer) == tux3_delta(delta))
 		return 1;
 	/* The buffer may already be in stabilized stage for backend. */
 	return 0;
@@ -166,8 +155,6 @@ void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
 int dev_errio(int rw, struct bufvec *bufvec);
-void init_dirty_buffers(struct dirty_buffers *dirty);
-int dirty_buffers_is_empty(struct dirty_buffers *dirty);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
 

@@ -233,7 +233,7 @@ static int rollup_log(struct sb *sb)
 	 * volmap with leaves.
 	 */
 	list_splice_init(&sb->rollup_buffers,
-			 dirty_head(inode_dirty_heads(sb->volmap)));
+			 tux3_dirty_buffers(sb->volmap, TUX3_INIT_DELTA));
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", rollup);
@@ -279,10 +279,10 @@ static int write_btree(struct sb *sb, unsigned delta)
 {
 	/*
 	 * Flush leaves (and if there is rollup, bnodes too) blocks.
-	 * FIXME: Now we are using DEFAULT_DIRTY_WHEN for leaves. Do
+	 * FIXME: Now we are using TUX3_INIT_DELTA for leaves. Do
 	 * we need to per delta dirty buffers?
 	 */
-	return tux3_flush_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
+	return tux3_flush_inode(sb->volmap, TUX3_INIT_DELTA);
 }
 
 /* allocate and write log blocks */

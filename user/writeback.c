@@ -105,10 +105,10 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	err = unstash(sb, &sb->defree, apply_defered_bfree);
 	if (err)
 		goto error;
-	err = tux3_flush_inode(sb->bitmap, DEFAULT_DIRTY_WHEN);
+	err = tux3_flush_inode(sb->bitmap, TUX3_INIT_DELTA);
 	if (err)
 		goto error;
-	err = tux3_flush_inode(sb->volmap, DEFAULT_DIRTY_WHEN);
+	err = tux3_flush_inode(sb->volmap, TUX3_INIT_DELTA);
 	if (err)
 		goto error;
 #endif
@@ -129,7 +129,7 @@ int sync_super(struct sb *sb)
 	int err;
 
 	trace("sync inodes");
-	if ((err = tux3_flush_inodes(sb, DEFAULT_DIRTY_WHEN)))
+	if ((err = tux3_flush_inodes(sb, TUX3_INIT_DELTA)))
 		return err;
 	trace("sync super");
 	if ((err = save_sb(sb)))
