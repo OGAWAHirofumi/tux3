@@ -101,7 +101,7 @@ void log_finish(struct sb *sb)
 	if (sb->logbuf) {
 		struct logblock *log = bufdata(sb->logbuf);
 		assert(sb->logtop >= sb->logpos);
-		log->bytes = to_be_u16(sb->logpos - log->data);
+		log->bytes = cpu_to_be16(sb->logpos - log->data);
 		memset(sb->logpos, 0, sb->logtop - sb->logpos);
 		log_drop(sb);
 	}
@@ -133,7 +133,7 @@ static void *log_begin(struct sb *sb, unsigned bytes)
 		log_finish(sb);
 		log_next(sb, 1);
 		*(struct logblock *)bufdata(sb->logbuf) = (struct logblock){
-			.magic = to_be_u16(TUX3_MAGIC_LOG) };
+			.magic = cpu_to_be16(TUX3_MAGIC_LOG) };
 	}
 	return sb->logpos;
 }

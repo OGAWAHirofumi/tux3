@@ -41,58 +41,21 @@ typedef u32 millisecond_t;
 typedef u64 inum_t;
 typedef u64 tuxkey_t;
 
-#ifdef __KERNEL__
-/* Endian support */
-typedef __be16	be_u16;
-typedef __be32	be_u32;
-typedef __be64	be_u64;
-
-static inline u16 from_be_u16(be_u16 val)
-{
-	return be16_to_cpu(val);
-}
-
-static inline u32 from_be_u32(be_u32 val)
-{
-	return be32_to_cpu(val);
-}
-
-static inline u64 from_be_u64(be_u64 val)
-{
-	return be64_to_cpu(val);
-}
-
-static inline be_u16 to_be_u16(u16 val)
-{
-	return cpu_to_be16(val);
-}
-
-static inline be_u32 to_be_u32(u32 val)
-{
-	return cpu_to_be32(val);
-}
-
-static inline be_u64 to_be_u64(u64 val)
-{
-	return cpu_to_be64(val);
-}
-#endif /* !__KERNEL__ */
-
 static inline void *encode16(void *at, unsigned val)
 {
-	*(be_u16 *)at = to_be_u16(val);
+	*(__be16 *)at = cpu_to_be16(val);
 	return at + sizeof(u16);
 }
 
 static inline void *encode32(void *at, unsigned val)
 {
-	*(be_u32 *)at = to_be_u32(val);
+	*(__be32 *)at = cpu_to_be32(val);
 	return at + sizeof(u32);
 }
 
 static inline void *encode64(void *at, u64 val)
 {
-	*(be_u64 *)at = to_be_u64(val);
+	*(__be64 *)at = cpu_to_be64(val);
 	return at + sizeof(u64);
 }
 
@@ -104,19 +67,19 @@ static inline void *encode48(void *at, u64 val)
 
 static inline void *decode16(void *at, unsigned *val)
 {
-	*val = from_be_u16(*(be_u16 *)at);
+	*val = be16_to_cpu(*(__be16 *)at);
 	return at + sizeof(u16);
 }
 
 static inline void *decode32(void *at, unsigned *val)
 {
-	*val = from_be_u32(*(be_u32 *)at);
+	*val = be32_to_cpu(*(__be32 *)at);
 	return at + sizeof(u32);
 }
 
 static inline void *decode64(void *at, u64 *val)
 {
-	*val = from_be_u64(*(be_u64 *)at);
+	*val = be64_to_cpu(*(__be64 *)at);
 	return at + sizeof(u64);
 }
 
@@ -178,27 +141,27 @@ static inline void *decode48(void *at, u64 *val)
 struct disksuper {
 	/* Update magic on any incompatible format change */
 	char magic[8];		/* Contains TUX3_LABEL magic string */
-	be_u64 birthdate;	/* Volume creation date */
-	be_u64 flags;		/* Need to assign some flags */
-	be_u16 blockbits;	/* Shift to get volume block size */
-	be_u16 unused[3];	/* Padding for alignment */
-	be_u64 volblocks;	/* Volume size */
+	__be64 birthdate;	/* Volume creation date */
+	__be64 flags;		/* Need to assign some flags */
+	__be16 blockbits;	/* Shift to get volume block size */
+	__be16 unused[3];	/* Padding for alignment */
+	__be64 volblocks;	/* Volume size */
 
 	/* The rest should be moved to a "metablock" that is updated frequently */
-	be_u64 iroot;		/* Root of the inode table btree */
-	be_u64 oroot;		/* Root of the orphan table btree */
+	__be64 iroot;		/* Root of the inode table btree */
+	__be64 oroot;		/* Root of the orphan table btree */
 #ifndef ATOMIC /* Obsoleted by LOG_FREEBLOCKS */
-	be_u64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
+	__be64 freeblocks;	/* Should match total of zero bits in allocation bitmap */
 #endif
-	be_u64 nextalloc;	/* Get rid of this when we have a real allocation policy */
-	be_u64 atomdictsize;	/*
+	__be64 nextalloc;	/* Get rid of this when we have a real allocation policy */
+	__be64 atomdictsize;	/*
 				 * Size of the atom dictionary instead of i_size
 				 * FIXME: we are better to remove this somehow
 				 */
-	be_u32 freeatom;	/* Beginning of persistent free atom list in atable */
-	be_u32 atomgen;		/* Next atom number if there are no free atoms */
-	be_u64 logchain;	/* Most recent delta commit block pointer */
-	be_u32 logcount;	/* Count of log blocks in the current log chain */
+	__be32 freeatom;	/* Beginning of persistent free atom list in atable */
+	__be32 atomgen;		/* Next atom number if there are no free atoms */
+	__be64 logchain;	/* Most recent delta commit block pointer */
+	__be32 logcount;	/* Count of log blocks in the current log chain */
 } __packed;
 
 struct root {
@@ -300,10 +263,10 @@ struct sb {
 /* logging  */
 
 struct logblock {
-	be_u16 magic;		/* Magic number */
-	be_u16 bytes;		/* Total data bytes on this block */
+	__be16 magic;		/* Magic number */
+	__be16 bytes;		/* Total data bytes on this block */
 	u32 unused;		/* padding */
-	be_u64 logchain;	/* Block number to previous logblock */
+	__be64 logchain;	/* Block number to previous logblock */
 	unsigned char data[];	/* Log data */
 };
 
@@ -480,8 +443,8 @@ static inline struct btree *otable_btree(struct sb *sb)
 
 /* directory entry */
 typedef struct {
-	be_u64 inum;
-	be_u16 rec_len;
+	__be64 inum;
+	__be16 rec_len;
 	u8 name_len, type;
 	char name[];
 } tux_dirent;

@@ -74,7 +74,7 @@ void atable_init_base(struct sb *sb)
 
 static inline atom_t entry_atom(tux_dirent *entry)
 {
-	return from_be_u64(entry->inum);
+	return be64_to_cpu(entry->inum);
 }
 
 static struct buffer_head *blockread_unatom(struct inode *atable, atom_t atom,
@@ -96,8 +96,8 @@ static loff_t unatom_dict_read(struct inode *atable, atom_t atom)
 	if (!buffer)
 		return -EIO;
 
-	be_u64 *unatom_dict = bufdata(buffer);
-	loff_t where = from_be_u64(unatom_dict[offset]);
+	__be64 *unatom_dict = bufdata(buffer);
+	loff_t where = be64_to_cpu(unatom_dict[offset]);
 	blockput(buffer);
 
 	return where;
@@ -120,9 +120,9 @@ static loff_t unatom_dict_write(struct inode *atable, atom_t atom, loff_t where)
 		return PTR_ERR(clone);
 	}
 
-	be_u64 *unatom_dict = bufdata(clone);
-	old = from_be_u64(unatom_dict[offset]);
-	unatom_dict[offset] = to_be_u64(where);
+	__be64 *unatom_dict = bufdata(clone);
+	old = be64_to_cpu(unatom_dict[offset]);
+	unatom_dict[offset] = cpu_to_be64(where);
 	mark_buffer_dirty_non(clone);
 	blockput(clone);
 
@@ -265,7 +265,7 @@ static int update_refcount(struct sb *sb, struct buffer_head *buffer,
 			   unsigned offset, u16 val)
 {
 	struct buffer_head *clone;
-	be_u16 *refcount;
+	__be16 *refcount;
 
 	clone = blockdirty(buffer, sb->delta);
 	if (IS_ERR(clone)) {
@@ -274,7 +274,7 @@ static int update_refcount(struct sb *sb, struct buffer_head *buffer,
 	}
 
 	refcount = bufdata(clone);
-	refcount[offset] = to_be_u16(val);
+	refcount[offset] = cpu_to_be16(val);
 	mark_buffer_dirty_non(clone);
 	blockput(clone);
 
@@ -289,7 +289,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 	unsigned block = sb->atomref_base + ATOMREF_SIZE * (atom >> shift);
 	unsigned offset = atom & ~(-1 << shift), kill = 0;
 	struct buffer_head *buffer;
-	be_u16 *refcount;
+	__be16 *refcount;
 	int err;
 
 	buffer = blockread(mapping(atable), block);
@@ -297,7 +297,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 		return -EIO;
 
 	refcount = bufdata(buffer);
-	int low = from_be_u16(refcount[offset]) + use;
+	int low = be16_to_cpu(refcount[offset]) + use;
 	trace("inc atom %x by %d, offset %x[%x], low = %d",
 	      atom, use, block, offset, low);
 
@@ -312,7 +312,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 			return -EIO;
 
 		refcount = bufdata(buffer);
-		int high = from_be_u16(refcount[offset]);
+		int high = be16_to_cpu(refcount[offset]);
 		if (!low)
 			blockput(buffer);
 		else {
@@ -387,9 +387,9 @@ void dump_atoms(struct inode *atable)
 			blockput(lobuf);
 			goto eek;
 		}
-		be_u16 *lorefs = bufdata(lobuf), *hirefs = bufdata(hibuf);
+		__be16 *lorefs = bufdata(lobuf), *hirefs = bufdata(hibuf);
 		for (unsigned i = 0; i < (sb->blocksize >> ATOMREF_BLKBITS); i++) {
-			unsigned refs = (from_be_u16(hirefs[i]) << 16) | from_be_u16(lorefs[i]);
+			unsigned refs = (be16_to_cpu(hirefs[i]) << 16) | be16_to_cpu(lorefs[i]);
 			if (!refs)
 				continue;
 			atom_t atom = i;

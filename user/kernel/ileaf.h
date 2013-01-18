@@ -2,7 +2,7 @@
 #define TUX3_ILEAF_H
 
 struct ileaf_attr_ops {
-	be_u16 magic;			/* magic number to set to ileaf */
+	__be16 magic;			/* magic number to set to ileaf */
 	int (*encoded_size)(struct btree *btree, void *data);
 	void (*encode)(struct btree *btree, void *data, void *attrs, int size);
 	int (*decode)(struct btree *btree, void *data, void *attrs, int size);

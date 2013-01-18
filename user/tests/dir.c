@@ -33,8 +33,8 @@ static void test01(struct sb *sb, struct inode *dir)
 
 	entry = tux_find_dirent(dir, &name1, &buffer);
 	test_assert(!IS_ERR(entry));
-	test_assert(from_be_u64(entry->inum) == 0x666);
-	test_assert(from_be_u16(entry->rec_len) >= name1.len + 2);
+	test_assert(be64_to_cpu(entry->inum) == 0x666);
+	test_assert(be16_to_cpu(entry->rec_len) >= name1.len + 2);
 	test_assert(entry->name_len == name1.len);
 	test_assert(entry->type == TUX_REG);
 
@@ -45,8 +45,8 @@ static void test01(struct sb *sb, struct inode *dir)
 
 	entry = tux_find_dirent(dir, &name2, &buffer);
 	test_assert(!IS_ERR(entry));
-	test_assert(from_be_u64(entry->inum) == 0x777);
-	test_assert(from_be_u16(entry->rec_len) >= name2.len + 2);
+	test_assert(be64_to_cpu(entry->inum) == 0x777);
+	test_assert(be16_to_cpu(entry->rec_len) >= name2.len + 2);
 	test_assert(entry->name_len == name2.len);
 	test_assert(entry->type == TUX_LNK);
 	blockput(buffer);

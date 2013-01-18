@@ -2,13 +2,13 @@
 #define TUX3_DLEAF_H
 
 /* version:10, count:6, block:48 */
-struct diskextent { be_u64 block_count_version; };
+struct diskextent { __be64 block_count_version; };
 #define MAX_GROUP_ENTRIES 255
 /* count:8, keyhi:24 */
-struct group { be_u32 count_and_keyhi; };
+struct group { __be32 count_and_keyhi; };
 /* limit:8, keylo:24 */
-struct entry { be_u32 limit_and_keylo; };
-struct dleaf { be_u16 magic, groups, free, used; struct diskextent table[]; };
+struct entry { __be32 limit_and_keylo; };
+struct dleaf { __be16 magic, groups, free, used; struct diskextent table[]; };
 
 /* Maximum size of one extent on dleaf. */
 #define DLEAF_MAX_EXTENT_SIZE \
@@ -30,12 +30,12 @@ struct dwalk {
 
 static inline struct group make_group(tuxkey_t keyhi, unsigned count)
 {
-	return (struct group){ to_be_u32(keyhi | (count << 24)) };
+	return (struct group){ cpu_to_be32(keyhi | (count << 24)) };
 }
 
 static inline unsigned group_keyhi(struct group *group)
 {
-	return from_be_u32(*(be_u32 *)group) & 0xffffff;
+	return be32_to_cpu(*(__be32 *)group) & 0xffffff;
 }
 
 static inline unsigned group_count(struct group *group)
@@ -57,12 +57,12 @@ static inline void inc_group_count(struct group *group, int n)
 
 static inline struct entry make_entry(tuxkey_t keylo, unsigned limit)
 {
-	return (struct entry){ to_be_u32(keylo | (limit << 24)) };
+	return (struct entry){ cpu_to_be32(keylo | (limit << 24)) };
 }
 
 static inline unsigned entry_keylo(struct entry *entry)
 {
-	return from_be_u32(*(be_u32 *)entry) & ~(-1 << 24);
+	return be32_to_cpu(*(__be32 *)entry) & ~(-1 << 24);
 }
 
 static inline unsigned entry_limit(struct entry *entry)
@@ -80,39 +80,39 @@ static inline void inc_entry_limit(struct entry *entry, int n)
 static inline struct diskextent make_extent(block_t block, unsigned count)
 {
 	assert(block < (1ULL << 48) && count - 1 < (1 << 6));
-	return (struct diskextent){ to_be_u64(((u64)(count - 1) << 48) | block) };
+	return (struct diskextent){ cpu_to_be64(((u64)(count - 1) << 48) | block) };
 }
 
 static inline block_t extent_block(struct diskextent extent)
 {
-	return from_be_u64(*(be_u64 *)&extent) & ~(-1LL << 48);
+	return be64_to_cpu(*(__be64 *)&extent) & ~(-1LL << 48);
 }
 
 static inline unsigned extent_count(struct diskextent extent)
 {
-	return ((from_be_u64(*(be_u64 *)&extent) >> 48) & 0x3f) + 1;
+	return ((be64_to_cpu(*(__be64 *)&extent) >> 48) & 0x3f) + 1;
 }
 
 static inline unsigned extent_version(struct diskextent extent)
 {
-	return from_be_u64(*(be_u64 *)&extent) >> 54;
+	return be64_to_cpu(*(__be64 *)&extent) >> 54;
 }
 
 /* dleaf wrappers */
 
 static inline unsigned dleaf_groups(struct dleaf *leaf)
 {
-	return from_be_u16(leaf->groups);
+	return be16_to_cpu(leaf->groups);
 }
 
 static inline void set_dleaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->groups = to_be_u16(n);
+	leaf->groups = cpu_to_be16(n);
 }
 
 static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
 {
-	leaf->groups = to_be_u16(from_be_u16(leaf->groups) + n);
+	leaf->groups = cpu_to_be16(be16_to_cpu(leaf->groups) + n);
 }
 
 int dleaf_init(struct btree *btree, void *leaf);

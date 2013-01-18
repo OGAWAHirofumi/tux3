@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <limits.h>
-#include <byteswap.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -22,46 +21,6 @@
 #include "libklib/mm.h"
 #include "libklib/fs.h"
 #include "writeback.h"
-
-/* Endian support */
-
-typedef u16 __bitwise be_u16;
-typedef u32 __bitwise be_u32;
-typedef u64 __bitwise be_u64;
-
-static inline u16 from_be_u16(be_u16 val)
-{
-	return bswap_16((__force u16)val);
-}
-
-static inline u32 from_be_u32(be_u32 val)
-{
-	return bswap_32((__force u32)val);
-}
-
-static inline u64 from_be_u64(be_u64 val)
-{
-	return bswap_64((__force u64)val);
-}
-
-static inline be_u16 __to_be_u16(u16 val)
-{
-	return (__force be_u16)bswap_16(val);
-}
-#define to_be_u16(__x)						\
-	(__builtin_constant_p((u16)(__x)) ?			\
-	 (__force be_u16)__bswap_constant_16((u16)(__x)) :	\
-	 __to_be_u16(__x))
-
-static inline be_u32 to_be_u32(u32 val)
-{
-	return (__force be_u32)bswap_32(val);
-}
-
-static inline be_u64 to_be_u64(u64 val)
-{
-	return (__force be_u64)bswap_64(val);
-}
 
 #include "kernel/tux3.h"
 
@@ -82,19 +41,19 @@ static inline struct timespec gettime(void)
 #ifdef ATOMIC
 #define INIT_DISKSB_FREEBLOCKS(_blocks)
 #else
-#define INIT_DISKSB_FREEBLOCKS(_blocks)	.freeblocks = to_be_u64(_blocks)
+#define INIT_DISKSB_FREEBLOCKS(_blocks)	.freeblocks = cpu_to_be64(_blocks)
 #endif
 #define INIT_DISKSB(_bits, _blocks) {				\
 	.magic		= TUX3_MAGIC,				\
 	.birthdate	= 0,					\
 	.flags		= 0,					\
-	.iroot		= to_be_u64(pack_root(&no_root)),	\
-	.oroot		= to_be_u64(pack_root(&no_root)),	\
-	.blockbits	= to_be_u16(_bits),			\
-	.volblocks	= to_be_u64(_blocks),			\
+	.iroot		= cpu_to_be64(pack_root(&no_root)),	\
+	.oroot		= cpu_to_be64(pack_root(&no_root)),	\
+	.blockbits	= cpu_to_be16(_bits),			\
+	.volblocks	= cpu_to_be64(_blocks),			\
 	.atomdictsize	= 0,					\
 	.freeatom	= 0,					\
-	.atomgen	= to_be_u32(1),				\
+	.atomgen	= cpu_to_be32(1),			\
 	.logchain	= 0,					\
 	.logcount	= 0,					\
 	INIT_DISKSB_FREEBLOCKS(_blocks)				\

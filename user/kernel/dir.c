@@ -45,22 +45,22 @@
 #define TUX_REC_LEN(name_len)	ALIGN((name_len) + TUX_DIR_HEAD, TUX_DIR_ALIGN)
 #define TUX_MAX_REC_LEN		((1 << 16) - 1)
 
-static inline unsigned tux_rec_len_from_disk(be_u16 dlen)
+static inline unsigned tux_rec_len_from_disk(__be16 dlen)
 {
-	unsigned len = from_be_u16(dlen);
+	unsigned len = be16_to_cpu(dlen);
 
 	if (len == TUX_MAX_REC_LEN)
 		return 1 << 16;
 	return len;
 }
 
-static inline be_u16 tux_rec_len_to_disk(unsigned len)
+static inline __be16 tux_rec_len_to_disk(unsigned len)
 {
 	if (len == (1 << 16))
-		return to_be_u16(TUX_MAX_REC_LEN);
+		return cpu_to_be16(TUX_MAX_REC_LEN);
 	else if (len > (1 << 16))
 		error("oops");
-	return to_be_u16(len);
+	return cpu_to_be16(len);
 }
 
 static inline int is_deleted(tux_dirent *entry)
@@ -110,7 +110,7 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 static void tux_update_entry(struct buffer_head *buffer, tux_dirent *entry,
 			     inum_t inum, umode_t mode)
 {
-	entry->inum = to_be_u64(inum);
+	entry->inum = cpu_to_be64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
 	mark_buffer_dirty_non(buffer);
 	blockput(buffer);
@@ -318,7 +318,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 				int lame = filldir(
 					state, entry->name, entry->name_len,
 					(block << blockbits) | ((void *)entry - base),
-					from_be_u64(entry->inum), type);
+					be64_to_cpu(entry->inum), type);
 				if (lame) {
 					blockput(buffer);
 					return 0;
@@ -383,7 +383,7 @@ int tux_dir_is_empty(struct inode *dir)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
 	block_t block, blocks = dir->i_size >> sb->blockbits;
-	be_u64 self = to_be_u64(tux_inode(dir)->inum);
+	__be64 self = cpu_to_be64(tux_inode(dir)->inum);
 	struct buffer_head *buffer;
 
 	for (block = 0; block < blocks; block++) {

@@ -146,12 +146,12 @@ static void draw_bnode(struct graph_info *gi, struct buffer_head *buffer)
 		" | magic 0x%04x, count %u |",
 		blocknr, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
-		from_be_u16(bnode->magic), bcount(bnode));
+		be16_to_cpu(bnode->magic), bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
 		fprintf(gi->f,
 			" %c <f%u> key %llu, block %lld",
 			n ? '|' : '{', n,
-			from_be_u64(index[n].key), from_be_u64(index[n].block));
+			be64_to_cpu(index[n].key), be64_to_cpu(index[n].block));
 	}
 	fprintf(gi->f,
 		" }}\"\n"
@@ -165,7 +165,7 @@ static void draw_bnode(struct graph_info *gi, struct buffer_head *buffer)
 		fprintf(gi->f,
 			"volmap_%llu:f%u -> volmap_%llu:head;\n",
 			blocknr, n,
-			from_be_u64(index[n].block));
+			be64_to_cpu(index[n].block));
 	}
 }
 
@@ -367,11 +367,11 @@ static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
 		fprintf(gi->f,
 			" | inum %llu, rec_len %hu, name_len %u,"
 			" type %u, '%.*s'",
-			from_be_u64(entry->inum), from_be_u16(entry->rec_len),
+			be64_to_cpu(entry->inum), be16_to_cpu(entry->rec_len),
 			entry->name_len, entry->type,
 			(int)entry->name_len, entry->name);
 
-		entry = (void *)entry + from_be_u16(entry->rec_len);
+		entry = (void *)entry + be16_to_cpu(entry->rec_len);
 	}
 }
 
@@ -384,13 +384,13 @@ static void draw_atable_atomref(struct graph_info *gi, struct btree *btree,
 	struct sb *sb = btree->sb;
 	unsigned shift = sb->blockbits - 1; /* atomref size is (1 << 1) bytes */
 	unsigned atom_base = (bufindex(low_buf) - sb->atomref_base) << shift;
-	be_u16 *limit, *base, *low = bufdata(low_buf), *hi = bufdata(hi_buf);
+	__be16 *limit, *base, *low = bufdata(low_buf), *hi = bufdata(hi_buf);
 
 	base = low;
 	limit = (void *)low + sb->blocksize;
 	while (low < limit) {
 		unsigned atom = atom_base + (low - base);
-		unsigned ref = (u32)from_be_u16(*hi) << 16 | from_be_u16(*low);
+		unsigned ref = (u32)be16_to_cpu(*hi) << 16 | be16_to_cpu(*low);
 
 		if (ref) {
 			if (!prev_atomref)
@@ -399,7 +399,7 @@ static void draw_atable_atomref(struct graph_info *gi, struct btree *btree,
 			fprintf(gi->f,
 				" | low 0x%04hx, hi 0x%04hx"
 				" (atom %u, refcnt %u)",
-				from_be_u16(*low), from_be_u16(*hi), atom, ref);
+				be16_to_cpu(*low), be16_to_cpu(*hi), atom, ref);
 
 			prev_atomref = 1;
 		} else
@@ -416,7 +416,7 @@ static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
 	struct sb *sb = btree->sb;
 	unsigned shift = sb->blockbits - 3; /* unatom size is (1 << 3) bytes */
 	unsigned atom_base = (bufindex(buffer) - sb->unatom_base) << shift;
-	be_u64 *limit, *base, *ptr = bufdata(buffer);
+	__be64 *limit, *base, *ptr = bufdata(buffer);
 
 	base = ptr;
 	limit = (void *)ptr + sb->blocksize;
@@ -426,7 +426,7 @@ static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
 		if (atom < sb->atomgen) {
 			fprintf(gi->f,
 				" | where 0x%08llx (atom %u)",
-				(u64)from_be_u64(*ptr), atom);
+				(u64)be64_to_cpu(*ptr), atom);
 
 		}
 
@@ -653,8 +653,8 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 
 	fprintf(gi->f,
 		" | magic 0x%04x, free %u, used %u, groups %u",
-		from_be_u16(leaf->magic), from_be_u16(leaf->free),
-		from_be_u16(leaf->used), dleaf_groups(leaf));
+		be16_to_cpu(leaf->magic), be16_to_cpu(leaf->free),
+		be16_to_cpu(leaf->used), dleaf_groups(leaf));
 
 	/* draw extents */
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
@@ -751,10 +751,10 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 
 	fprintf(gi->f,
 		" | magic 0x%04x, count %u",
-		from_be_u16(leaf->magic), from_be_u16(leaf->count));
+		be16_to_cpu(leaf->magic), be16_to_cpu(leaf->count));
 
 	dex = leaf->table;
-	dex_limit = dex + from_be_u16(leaf->count);
+	dex_limit = dex + be16_to_cpu(leaf->count);
 	while (dex < dex_limit) {
 		struct extent ex;
 		get_extent(dex, &ex);
@@ -799,7 +799,7 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree,
 
 	snprintf(dleaf_name, sizeof(dleaf_name), "volmap_%llu", blocknr);
 
-	if (leaf->magic == to_be_u16(TUX3_MAGIC_DLEAF))
+	if (leaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF))
 		draw_dleaf1(gi, btree, dleaf_name, buffer, data);
 	else
 		draw_dleaf2(gi, btree, dleaf_name, buffer, data);
@@ -812,7 +812,7 @@ static void draw_dleaf(struct graph_info *gi, struct btree *btree,
 typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
 				  inum_t, void *, u16);
 
-static inline u16 ileaf_attr_size(be_u16 *dict, int at)
+static inline u16 ileaf_attr_size(__be16 *dict, int at)
 {
 	int size = __atdict(dict, at + 1) - atdict(dict, at);
 	assert(size >= 0);
@@ -855,7 +855,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			 draw_ileaf_attr_t draw_ileaf_attr)
 {
 	struct ileaf *ileaf = bufdata(buffer);
-	be_u16 *dict = ileaf_dict(btree, ileaf);
+	__be16 *dict = ileaf_dict(btree, ileaf);
 	block_t blocknr = buffer->index;
 	int at;
 
@@ -872,7 +872,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		blocknr,
 		gi->lname, blocknr,
 		buffer_dirty(buffer) ? ", dirty" : "",
-		from_be_u16(ileaf->magic), icount(ileaf), ibase(ileaf));
+		be16_to_cpu(ileaf->magic), icount(ileaf), ibase(ileaf));
 
 	/* draw inode attributes */
 	u16 offset = 0, limit, size;
@@ -973,7 +973,7 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		       struct buffer_head *buffer, void *data)
 {
 	struct ileaf *ileaf = bufdata(buffer);
-	be_u16 *dict = ileaf_dict(btree, ileaf);
+	__be16 *dict = ileaf_dict(btree, ileaf);
 	block_t blocknr = buffer->index;
 	int at;
 
@@ -1116,10 +1116,10 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		" | <f0> magic 0x%04x, bytes %u, logchain %llu",
 		buffer->index, buffer->index, buffer->index,
 		buffer_dirty(buffer) ? ", dirty" : "",
-		from_be_u16(log->magic), from_be_u16(log->bytes),
-		from_be_u64(log->logchain));
+		be16_to_cpu(log->magic), be16_to_cpu(log->bytes),
+		be64_to_cpu(log->logchain));
 
-	while (data < log->data + from_be_u16(log->bytes)) {
+	while (data < log->data + be16_to_cpu(log->bytes)) {
 		unsigned char code = *data++;
 
 		fprintf(gi->f, " | [%s] ", log_name[code]);
@@ -1259,22 +1259,22 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 		"subgraph cluster_logchain {\n"
 		"label = \"logchain\"\n");
 
-	nextchain = from_be_u64(sb->super.logchain);
-	logcount = from_be_u32(sb->super.logcount);
+	nextchain = be64_to_cpu(sb->super.logchain);
+	logcount = be32_to_cpu(sb->super.logcount);
 	while (logcount > 0) {
 		buffer = vol_bread(sb, nextchain);
 		assert(buffer);
 		struct logblock *log = bufdata(buffer);
-		assert(log->magic == to_be_u16(TUX3_MAGIC_LOG));
+		assert(log->magic == cpu_to_be16(TUX3_MAGIC_LOG));
 		draw_log(gi, sb, buffer);
 		logcount--;
 		if (logcount) {
 			/* write link: logblock -> logblock */
 			fprintf(gi->f,
 				"logchain_%llu:f0:e -> logchain_%llu:n;\n",
-				nextchain, from_be_u64(log->logchain));
+				nextchain, be64_to_cpu(log->logchain));
 		}
-		nextchain = from_be_u64(log->logchain);
+		nextchain = be64_to_cpu(log->logchain);
 		blockput(buffer);
 	}
 
@@ -1310,22 +1310,22 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		txsb->magic,
 		(u8)txsb->magic[4], (u8)txsb->magic[5],
 		(u8)txsb->magic[6], (u8)txsb->magic[7],
-		from_be_u64(txsb->birthdate),
-		from_be_u64(txsb->flags),
-		from_be_u64(txsb->iroot),
+		be64_to_cpu(txsb->birthdate),
+		be64_to_cpu(txsb->flags),
+		be64_to_cpu(txsb->iroot),
 		itable_btree(sb)->root.depth, itable_btree(sb)->root.block,
-		from_be_u64(txsb->oroot),
+		be64_to_cpu(txsb->oroot),
 		otable_btree(sb)->root.depth, otable_btree(sb)->root.block,
 		sb->blockbits, sb->blocksize,
-		from_be_u64(txsb->volblocks),
+		be64_to_cpu(txsb->volblocks),
 #ifndef ATOMIC
-		from_be_u64(txsb->freeblocks),
+		be64_to_cpu(txsb->freeblocks),
 #endif
-		from_be_u64(txsb->nextalloc),
-		from_be_u64(txsb->atomdictsize),
-		from_be_u32(txsb->freeatom), from_be_u32(txsb->atomgen),
-		from_be_u64(txsb->logchain), from_be_u64(txsb->logchain),
-		from_be_u32(txsb->logcount));
+		be64_to_cpu(txsb->nextalloc),
+		be64_to_cpu(txsb->atomdictsize),
+		be32_to_cpu(txsb->freeatom), be32_to_cpu(txsb->atomgen),
+		be64_to_cpu(txsb->logchain), be64_to_cpu(txsb->logchain),
+		be32_to_cpu(txsb->logcount));
 
 	/* write link: sb -> itable root */
 	fprintf(gi->f, "tux3_sb:iroot0:e -> volmap_%llu:n;\n\n",
@@ -1335,7 +1335,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		otable_btree(sb)->root.block);
 	/* write link: sb -> logchain */
 	fprintf(gi->f, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
-		from_be_u64(txsb->logchain), from_be_u64(txsb->logchain));
+		be64_to_cpu(txsb->logchain), be64_to_cpu(txsb->logchain));
 }
 
 static void usage(void)

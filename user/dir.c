@@ -61,7 +61,7 @@ void tux_dump_entries(struct buffer_head *buffer)
 			printf("%.*s (%Lx:%i) ",
 			       entry->name_len,
 			       entry->name,
-			       from_be_u64(entry->inum),
+			       be64_to_cpu(entry->inum),
 			       entry->type);
 		entry = next_entry(entry);
 	}

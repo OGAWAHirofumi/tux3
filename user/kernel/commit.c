@@ -20,8 +20,8 @@
 
 static void setup_roots(struct sb *sb, struct disksuper *super)
 {
-	u64 iroot_val = from_be_u64(super->iroot);
-	u64 oroot_val = from_be_u64(sb->super.oroot);
+	u64 iroot_val = be64_to_cpu(super->iroot);
+	u64 oroot_val = be64_to_cpu(sb->super.oroot);
 	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
 	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
 }
@@ -41,8 +41,8 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 	stash_init(&sb->defree);
 	stash_init(&sb->derollup);
 
-	sb->blockbits = from_be_u16(super->blockbits);
-	sb->volblocks = from_be_u64(super->volblocks);
+	sb->blockbits = be16_to_cpu(super->blockbits);
+	sb->volblocks = be64_to_cpu(super->volblocks);
 	sb->version = 0;	/* FIXME: not yet implemented */
 
 	sb->blocksize = 1 << sb->blockbits;
@@ -55,12 +55,12 @@ void setup_sb(struct sb *sb, struct disksuper *super)
 #ifdef ATOMIC
 	sb->freeblocks = sb->volblocks;
 #else
-	sb->freeblocks = from_be_u64(super->freeblocks);
+	sb->freeblocks = be64_to_cpu(super->freeblocks);
 #endif
-	sb->nextalloc = from_be_u64(super->nextalloc);
-	sb->atomdictsize = from_be_u64(super->atomdictsize);
-	sb->atomgen = from_be_u32(super->atomgen);
-	sb->freeatom = from_be_u32(super->freeatom);
+	sb->nextalloc = be64_to_cpu(super->nextalloc);
+	sb->atomdictsize = be64_to_cpu(super->atomdictsize);
+	sb->atomgen = be32_to_cpu(super->atomgen);
+	sb->freeatom = be32_to_cpu(super->freeatom);
 	/* logchain and logcount are read from super directly */
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
@@ -91,19 +91,19 @@ int save_sb(struct sb *sb)
 {
 	struct disksuper *super = &sb->super;
 
-	super->blockbits = to_be_u16(sb->blockbits);
-	super->volblocks = to_be_u64(sb->volblocks);
+	super->blockbits = cpu_to_be16(sb->blockbits);
+	super->volblocks = cpu_to_be64(sb->volblocks);
 
 	/* Probably does not belong here (maybe metablock) */
-	super->iroot = to_be_u64(pack_root(&itable_btree(sb)->root));
-	super->oroot = to_be_u64(pack_root(&otable_btree(sb)->root));
+	super->iroot = cpu_to_be64(pack_root(&itable_btree(sb)->root));
+	super->oroot = cpu_to_be64(pack_root(&otable_btree(sb)->root));
 #ifndef ATOMIC
-	super->freeblocks = to_be_u64(sb->freeblocks);
+	super->freeblocks = cpu_to_be64(sb->freeblocks);
 #endif
-	super->nextalloc = to_be_u64(sb->nextalloc);
-	super->atomdictsize = to_be_u64(sb->atomdictsize);
-	super->freeatom = to_be_u32(sb->freeatom);
-	super->atomgen = to_be_u32(sb->atomgen);
+	super->nextalloc = cpu_to_be64(sb->nextalloc);
+	super->atomdictsize = cpu_to_be64(sb->atomdictsize);
+	super->freeatom = cpu_to_be32(sb->freeatom);
+	super->atomgen = cpu_to_be32(sb->atomgen);
 	/* logchain and logcount are written to super directly */
 
 	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
@@ -295,7 +295,7 @@ static int write_log(struct sb *sb)
 		struct buffer_head *buffer = blockget(mapping(sb->logmap), index);
 		assert(buffer);
 		struct logblock *log = bufdata(buffer);
-		assert(log->magic == to_be_u16(TUX3_MAGIC_LOG));
+		assert(log->magic == cpu_to_be16(TUX3_MAGIC_LOG));
 		log->logchain = sb->super.logchain;
 		err = blockio(WRITE, buffer, block);
 		if (err) {
@@ -312,14 +312,14 @@ static int write_log(struct sb *sb)
 
 		blockput(buffer);
 		trace("logchain %lld", block);
-		sb->super.logchain = to_be_u64(block);
+		sb->super.logchain = cpu_to_be64(block);
 	}
 
 	/* Add count of log on this delta to rollup logcount */
-	logcount = from_be_u32(sb->super.logcount);
+	logcount = be32_to_cpu(sb->super.logcount);
 	logcount += log_finish_cycle(sb);
 
-	sb->super.logcount = to_be_u32(logcount);
+	sb->super.logcount = cpu_to_be32(logcount);
 
 	return 0;
 }
@@ -332,7 +332,7 @@ int apply_defered_bfree(struct sb *sb, u64 val)
 
 static int commit_delta(struct sb *sb)
 {
-	trace("commit %i logblocks", from_be_u32(sb->super.logcount));
+	trace("commit %i logblocks", be32_to_cpu(sb->super.logcount));
 	int err = save_sb(sb);
 	if (err)
 		return err;

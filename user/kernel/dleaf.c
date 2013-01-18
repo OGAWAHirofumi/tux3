@@ -73,9 +73,9 @@ int dleaf_init(struct btree *btree, void *leaf)
 {
 	struct dleaf *dleaf = leaf;
 	*dleaf = (struct dleaf){
-		.magic	= to_be_u16(TUX3_MAGIC_DLEAF),
-		.free	= to_be_u16(sizeof(struct dleaf)),
-		.used	= to_be_u16(btree->sb->blocksize)
+		.magic	= cpu_to_be16(TUX3_MAGIC_DLEAF),
+		.free	= cpu_to_be16(sizeof(struct dleaf)),
+		.used	= cpu_to_be16(btree->sb->blocksize)
 	};
 	return 0;
 }
@@ -83,7 +83,7 @@ int dleaf_init(struct btree *btree, void *leaf)
 unsigned dleaf_free(struct btree *btree, void *leaf)
 {
 	struct dleaf *dleaf = leaf;
-	return from_be_u16(dleaf->used) - from_be_u16(dleaf->free);
+	return be16_to_cpu(dleaf->used) - be16_to_cpu(dleaf->free);
 }
 
 static unsigned dleaf_need(struct btree *btree, void *vleaf)
@@ -100,7 +100,7 @@ static inline tuxkey_t get_index(struct group *group, struct entry *entry)
 static int dleaf_sniff(struct btree *btree, void *leaf)
 {
 	struct dleaf *dleaf = leaf;
-	return dleaf->magic == to_be_u16(TUX3_MAGIC_DLEAF);
+	return dleaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF);
 }
 
 static int dleaf_can_free(struct btree *btree, void *vleaf)
@@ -196,17 +196,17 @@ static int dleaf_check(struct dleaf *leaf, unsigned blocksize)
 	}
 	//printf("encount = %i, excount = %i, \n", encount, excount);
 	why = "used count wrong";
-	if (from_be_u16(leaf->used) != (void *)(edict - encount) - (void *)leaf)
+	if (be16_to_cpu(leaf->used) != (void *)(edict - encount) - (void *)leaf)
 		goto eek;
 	why = "free count wrong";
-	if (from_be_u16(leaf->free) != (void *)(extents + excount) - (void *)leaf)
+	if (be16_to_cpu(leaf->free) != (void *)(extents + excount) - (void *)leaf)
 		goto eek;
 	why = "free check mismatch";
-	if (from_be_u16(leaf->used) - from_be_u16(leaf->free) != dleaf_free2(leaf, blocksize))
+	if (be16_to_cpu(leaf->used) - be16_to_cpu(leaf->free) != dleaf_free2(leaf, blocksize))
 		goto eek;
 	return 0;
 eek:
-	printf("free %i, used %i\n", from_be_u16(leaf->free), from_be_u16(leaf->used));
+	printf("free %i, used %i\n", be16_to_cpu(leaf->free), be16_to_cpu(leaf->used));
 	printf("%s!\n", why);
 	return -1;
 }
@@ -216,7 +216,7 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 	struct dleaf *leaf = from, *leaf2 = into;
 	unsigned groups = dleaf_groups(leaf), groups2;
 	struct group *gdict = from + blocksize, *gbase = gdict - groups;
-	struct entry *edict = (void *)gbase, *ebase = (void *)leaf + from_be_u16(leaf->used);
+	struct entry *edict = (void *)gbase, *ebase = (void *)leaf + be16_to_cpu(leaf->used);
 	unsigned recount = 0, grsplit = 0, exsplit = 0;
 	unsigned entries = edict - ebase;
 
@@ -240,7 +240,7 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 	printf("split %i entries at group %i, entry %x\n", entries, grsplit, cut);
 	printf("split extents at %i\n", exsplit);
 	/* copy extents */
-	unsigned size = from + from_be_u16(leaf->free) - (void *)(leaf->table + exsplit);
+	unsigned size = from + be16_to_cpu(leaf->free) - (void *)(leaf->table + exsplit);
 	memcpy(leaf2->table, leaf->table + exsplit, size);
 
 	/* copy groups */
@@ -256,7 +256,7 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 	/* copy entries */
 	struct entry *edict2 = (void *)(gdict2 - groups2);
 
-	assert((struct entry *)((void *)leaf + from_be_u16(leaf->used)) == edict - entries);
+	assert((struct entry *)((void *)leaf + be16_to_cpu(leaf->used)) == edict - entries);
 
 	unsigned encopy = entries - split;
 	veccopy(edict2 - encopy, ebase, encopy);
@@ -266,11 +266,11 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 	vecmove(gdict - groups - split, edict - split, split);
 
 	/* clean up */
-	leaf->free = to_be_u16((void *)(leaf->table + exsplit) - from);
-	leaf->used = to_be_u16((void *)(gbase - split) - from);
-	leaf2->free = to_be_u16((void *)leaf->table + size - from);
-	leaf2->used = to_be_u16((void *)(gdict - groups2 - encopy) - from);
-	memset(from + from_be_u16(leaf->free), 0, from_be_u16(leaf->used) - from_be_u16(leaf->free));
+	leaf->free = cpu_to_be16((void *)(leaf->table + exsplit) - from);
+	leaf->used = cpu_to_be16((void *)(gbase - split) - from);
+	leaf2->free = cpu_to_be16((void *)leaf->table + size - from);
+	leaf2->used = cpu_to_be16((void *)(gdict - groups2 - encopy) - from);
+	memset(from + be16_to_cpu(leaf->free), 0, be16_to_cpu(leaf->used) - be16_to_cpu(leaf->free));
 	assert(!dleaf_check(leaf, blocksize));
 	assert(!dleaf_check(leaf2, blocksize));
 	return groups2;
@@ -287,7 +287,7 @@ static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, void *from, void
 	unsigned blocksize = btree->sb->blocksize;
 	struct group *gdict = from + blocksize, *gbase = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gbase;
-	struct entry *ebase = (void *)leaf + from_be_u16(leaf->used);
+	struct entry *ebase = (void *)leaf + be16_to_cpu(leaf->used);
 	unsigned entries = edict - ebase;
 	assert(entries >= 2);
 	unsigned groups2 = dleaf_split_at(from, into, entries / 2, blocksize);
@@ -309,7 +309,7 @@ int dleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 	struct group *gdict = (void *)leaf + btree->sb->blocksize;
 	struct group *gstop = gdict - dleaf_groups(leaf);
 	struct entry *edict = (struct entry *)gstop;
-	unsigned free = from_be_u16(leaf->free);
+	unsigned free = be16_to_cpu(leaf->free);
 	struct group *gdict2 = (void *)from + btree->sb->blocksize;
 	struct group *group2 = gdict2 - 1;
 	struct group *gstop2 = gdict2 - dleaf_groups(from);
@@ -323,8 +323,8 @@ int dleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 
 	/* Destination is empty, so we just copy */
 	if (dleaf_groups(leaf) == 0) {
-		unsigned used = from_be_u16(from->used);
-		memcpy(leaf, from, from_be_u16(from->free));
+		unsigned used = be16_to_cpu(from->used);
+		memcpy(leaf, from, be16_to_cpu(from->free));
 		memcpy((void *)leaf + used, (void *)from + used, btree->sb->blocksize - used);
 		return 1;
 	}
@@ -354,15 +354,15 @@ int dleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 	}
 
 	/* append extents */
-	unsigned size = from_be_u16(from->free) - sizeof(struct dleaf);
+	unsigned size = be16_to_cpu(from->free) - sizeof(struct dleaf);
 	memcpy((void *)leaf + free, from->table, size);
-	leaf->free = to_be_u16(free + size);
+	leaf->free = cpu_to_be16(free + size);
 
 	/* make space and append groups except for possibly merged group */
 	assert(sizeof(struct group) == sizeof(struct entry));
 	unsigned addgroups = dleaf_groups(from) - can_merge_group;
-	struct entry *ebase2 = (void *)from + from_be_u16(from->used);
-	struct entry *ebase = (void *)leaf + from_be_u16(leaf->used);
+	struct entry *ebase2 = (void *)from + be16_to_cpu(from->used);
+	struct entry *ebase = (void *)leaf + be16_to_cpu(leaf->used);
 	vecmove(ebase - addgroups, ebase, edict - ebase);
 	veccopy(gstop - addgroups, gstop2, addgroups);
 	ebase -= addgroups;
@@ -371,7 +371,7 @@ int dleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 	/* append entries */
 	size = (void *)edict2 - (void *)ebase2;
 	memcpy((void *)ebase - size, ebase2, size);
-	leaf->used = to_be_u16((void *)ebase - size - (void *)leaf);
+	leaf->used = cpu_to_be16((void *)ebase - size - (void *)leaf);
 
 	if (merge_gcount) {
 		/* adjust merged group */
@@ -693,10 +693,10 @@ void dwalk_copy(struct dwalk *walk, struct dleaf *dest)
 
 	struct group *gdict2 = (void *)dest + blocksize;
 	unsigned groups2 = walk->group + 1 - walk->gstop;
-	struct entry *ebase = (void *)leaf + from_be_u16(leaf->used);
+	struct entry *ebase = (void *)leaf + be16_to_cpu(leaf->used);
 	unsigned entries = (walk->entry + 1) - ebase;
 	struct entry *edict2 = (struct entry *)(gdict2 - groups2);
-	struct diskextent *exend = (void *)leaf + from_be_u16(leaf->free);
+	struct diskextent *exend = (void *)leaf + be16_to_cpu(leaf->free);
 	struct diskextent *entry_exbase;
 	unsigned limit_adjust, extents;
 
@@ -715,8 +715,8 @@ void dwalk_copy(struct dwalk *walk, struct dleaf *dest)
 
 	unsigned gcount2 = (walk->entry + 1) - walk->estop;
 	set_dleaf_groups(dest, groups2);
-	dest->free = to_be_u16((void *)(dest->table + extents) - (void *)dest);
-	dest->used = to_be_u16((void *)(edict2 - entries) - (void *)dest);
+	dest->free = cpu_to_be16((void *)(dest->table + extents) - (void *)dest);
+	dest->used = cpu_to_be16((void *)(edict2 - entries) - (void *)dest);
 	set_group_count(gdict2 - 1, gcount2);
 	struct entry *entry2 = edict2 - 1, *estop2 = edict2 - gcount2;
 	while (entry2 >= estop2) {
@@ -737,8 +737,8 @@ void dwalk_chop(struct dwalk *walk)
 	if (dwalk_first(walk)) {
 		unsigned blocksize = (void *)walk->gdict - (void *)leaf;
 		set_dleaf_groups(leaf, 0);
-		leaf->free = to_be_u16(sizeof(struct dleaf));
-		leaf->used = to_be_u16(blocksize);
+		leaf->free = cpu_to_be16(sizeof(struct dleaf));
+		leaf->used = cpu_to_be16(blocksize);
 		/* Initialize dwalk state */
 		dwalk_probe(leaf, blocksize, walk, 0);
 		return;
@@ -757,8 +757,8 @@ void dwalk_chop(struct dwalk *walk)
 	walk->gstop = walk->group;
 	walk->exstop = walk->exbase + entry_limit(walk->entry);
 	walk->extent = walk->exstop;
-	leaf->free = to_be_u16((void *)walk->exstop - (void *)leaf);
-	leaf->used = to_be_u16((void *)walk->estop - (void *)leaf);
+	leaf->free = cpu_to_be16((void *)walk->exstop - (void *)leaf);
+	leaf->used = cpu_to_be16((void *)walk->estop - (void *)leaf);
 	dwalk_check(walk);
 	assert(!dleaf_check(leaf, (void *)walk->gdict - (void *)leaf));
 }
@@ -772,8 +772,8 @@ int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 {
 	struct dleaf *leaf = walk->leaf;
 	unsigned groups = dleaf_groups(leaf);
-	unsigned free = from_be_u16(leaf->free);
-	unsigned used = from_be_u16(leaf->used);
+	unsigned free = be16_to_cpu(leaf->free);
+	unsigned used = be16_to_cpu(leaf->used);
 
 	/* FIXME: assume entry has only one extent */
 	assert(!groups || dwalk_index(walk) != index);
@@ -799,14 +799,14 @@ int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent)
 		}
 		assert(free <= used - sizeof(*walk->entry));
 		used -= sizeof(*walk->entry);
-		leaf->used = to_be_u16(used);
+		leaf->used = cpu_to_be16(used);
 		*--walk->entry = make_entry(keylo, walk->extent - walk->exbase);
 		inc_group_count(walk->group, 1);
 	}
 	trace("add extent %ti", walk->extent - leaf->table);
 	assert(free + sizeof(*walk->extent) <= used);
 	free += sizeof(*walk->extent);
-	leaf->free = to_be_u16(free);
+	leaf->free = cpu_to_be16(free);
 	*walk->extent++ = extent;
 	inc_entry_limit(walk->entry, 1);
 

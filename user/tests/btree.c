@@ -617,8 +617,8 @@ static void test06(struct sb *sb, struct inode *inode)
 
 	/* Fill child pointer in root node */
 	struct bnode *root = bufdata(node[0]);
-	root->entries[0].block = to_be_u64(bufindex(node[1]));
-	root->entries[1].block = to_be_u64(bufindex(node[2]));
+	root->entries[0].block = cpu_to_be64(bufindex(node[1]));
+	root->entries[1].block = cpu_to_be64(bufindex(node[2]));
 	/* Set root node to btree */
 	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 2 };
 
@@ -652,7 +652,7 @@ static void test06(struct sb *sb, struct inode *inode)
 	/* Check if adjust_parent_sep() changed key from 8 to 12 */
 	test_assert(cursor_read_root(cursor) == 0);
 	root = bufdata(cursor->path[cursor->level].buffer);
-	test_assert(from_be_u64(root->entries[1].key) == 12);
+	test_assert(be64_to_cpu(root->entries[1].key) == 12);
 	release_cursor(cursor);
 
 	for (int i = 0; i < ARRAY_SIZE(leaf_key); i++) {

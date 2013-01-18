@@ -65,16 +65,16 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 	struct logblock *log = bufdata(logbuf);
 	unsigned char *data = log->data;
 
-	if (log->magic != to_be_u16(TUX3_MAGIC_LOG)) {
-		warn("bad log magic %x", from_be_u16(log->magic));
+	if (log->magic != cpu_to_be16(TUX3_MAGIC_LOG)) {
+		warn("bad log magic %x", be16_to_cpu(log->magic));
 		return -EINVAL;
 	}
-	if (from_be_u16(log->bytes) + sizeof(*log) > sb->blocksize) {
+	if (be16_to_cpu(log->bytes) + sizeof(*log) > sb->blocksize) {
 		warn("log bytes is too big");
 		return -EINVAL;
 	}
 
-	while (data < log->data + from_be_u16(log->bytes)) {
+	while (data < log->data + be16_to_cpu(log->bytes)) {
 		u8 code = *data;
 
 		/* Find latest rollup. */
@@ -96,8 +96,8 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 /* Prepare log info for replay and pin logblocks. */
 static struct replay *replay_prepare(struct sb *sb)
 {
-	block_t logchain = from_be_u64(sb->super.logchain);
-	unsigned j, i, logcount = from_be_u32(sb->super.logcount);
+	block_t logchain = be64_to_cpu(sb->super.logchain);
+	unsigned j, i, logcount = be32_to_cpu(sb->super.logcount);
 	struct replay *rp;
 	struct buffer_head *buffer;
 	int err;
@@ -135,7 +135,7 @@ static struct replay *replay_prepare(struct sb *sb)
 		rp->blocknrs[bufindex(buffer)] = logchain;
 
 		log = bufdata(buffer);
-		logchain = from_be_u64(log->logchain);
+		logchain = be64_to_cpu(log->logchain);
 	}
 
 	return rp;
@@ -161,7 +161,7 @@ static void replay_done(struct replay *rp)
 	clean_orphan_list(&rp->log_orphan_add);	/* for error path */
 	free_replay(rp);
 
-	sb->lognext = from_be_u32(sb->super.logcount);
+	sb->lognext = be32_to_cpu(sb->super.logcount);
 	log_finish_cycle(sb);
 }
 
@@ -185,7 +185,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 	if (bufindex(logbuf) == rp->rollup_index)
 		data = rp->rollup_pos;
 
-	while (data < log->data + from_be_u16(log->bytes)) {
+	while (data < log->data + be16_to_cpu(log->bytes)) {
 		u8 code = *data++;
 		switch (code) {
 		case LOG_BNODE_REDIRECT:
@@ -347,7 +347,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 	if (bufindex(logbuf) == rp->rollup_index)
 		data = rp->rollup_pos;
 
-	while (data < log->data + from_be_u16(log->bytes)) {
+	while (data < log->data + be16_to_cpu(log->bytes)) {
 		u8 code = *data++;
 		switch (code) {
 		case LOG_BALLOC:
@@ -491,7 +491,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 {
 	struct sb *sb = rp->sb;
-	unsigned logcount = from_be_u32(sb->super.logcount);
+	unsigned logcount = be32_to_cpu(sb->super.logcount);
 	int err;
 
 	sb->lognext = 0;

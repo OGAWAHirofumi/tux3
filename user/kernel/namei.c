@@ -21,7 +21,7 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 		inode = NULL;
 		goto out;
 	}
-	inum = from_be_u64(entry->inum);
+	inum = be64_to_cpu(entry->inum);
 	blockput(buffer);
 
 	inode = tux3_iget(tux_sb(dir->i_sb), inum);
@@ -241,7 +241,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 		return PTR_ERR(old_entry);
 
 	/* FIXME: is this needed? */
-	assert(from_be_u64(old_entry->inum) == tux_inode(old_inode)->inum);
+	assert(be64_to_cpu(old_entry->inum) == tux_inode(old_inode)->inum);
 
 	change_begin(sb);
 	if (new_inode) {

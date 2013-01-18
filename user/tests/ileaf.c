@@ -93,7 +93,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	for (int i = 0; i < ARRAY_SIZE(data); i++)
 		memset(data[i].buf, data[i].c, data[i].size);
 
-	leaf->ibase = to_be_u64(0x10);
+	leaf->ibase = cpu_to_be64(0x10);
 	/* Add data */
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
 		if (data[i].size == 0)

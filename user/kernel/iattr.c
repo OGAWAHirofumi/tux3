@@ -245,7 +245,7 @@ static int iattr_decode(struct btree *btree, void *data, void *attrs, int size)
 }
 
 struct ileaf_attr_ops iattr_ops = {
-	.magic		= to_be_u16(TUX3_MAGIC_ILEAF),
+	.magic		= cpu_to_be16(TUX3_MAGIC_ILEAF),
 	.encoded_size	= iattr_encoded_size,
 	.encode		= iattr_encode,
 	.decode		= iattr_decode,

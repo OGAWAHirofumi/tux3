@@ -38,10 +38,10 @@
  * logical position within that inode.
  */
 struct uptag {
-	be_u32 inum;
-	be_u32 offset;
-	be_u16 future;
-	be_u16 delta;
+	__be32 inum;
+	__be32 offset;
+	__be16 future;
+	__be16 delta;
 };
 
 /* FIXME: ignoring version at all */
@@ -52,13 +52,13 @@ struct uptag {
 #define ADDR_MASK		((1ULL << ADDR_BITS) - 1)
 
 struct dleaf2 {
-	be_u16 magic;			/* dleaf2 magic */
-	be_u16 count;			/* count of diskextent2 */
+	__be16 magic;			/* dleaf2 magic */
+	__be16 count;			/* count of diskextent2 */
 //	struct uptag tag;
-	be_u32 __unused;
+	__be32 __unused;
 	struct diskextent2 {
-		be_u64 verhi_logical;	/* verhi:16, logical:48 */
-		be_u64 verlo_physical;	/* verlo:16, physical:48 */
+		__be64 verhi_logical;	/* verhi:16, logical:48 */
+		__be64 verlo_physical;	/* verlo:16, physical:48 */
 	} table[];
 };
 
@@ -70,18 +70,18 @@ struct extent {
 
 static inline block_t get_logical(struct diskextent2 *dex)
 {
-	return from_be_u64(dex->verhi_logical) & ADDR_MASK;
+	return be64_to_cpu(dex->verhi_logical) & ADDR_MASK;
 }
 
 static inline void get_extent(struct diskextent2 *dex, struct extent *ex)
 {
 	u64 val;
 
-	val = from_be_u64(dex->verhi_logical);
+	val = be64_to_cpu(dex->verhi_logical);
 	ex->version = val >> ADDR_BITS;
 	ex->logical = val & ADDR_MASK;
 
-	val = from_be_u64(dex->verlo_physical);
+	val = be64_to_cpu(dex->verlo_physical);
 	ex->version = (ex->version << VER_BITS) | (val >> ADDR_BITS);
 	ex->physical = val & ADDR_MASK;
 }
@@ -90,8 +90,8 @@ static inline void put_extent(struct diskextent2 *dex, u32 version,
 			      block_t logical, block_t physical)
 {
 	u64 verhi = version >> VER_BITS, verlo = version & VER_MASK;
-	dex->verhi_logical  = to_be_u64(verhi << ADDR_BITS | logical);
-	dex->verlo_physical = to_be_u64(verlo << ADDR_BITS | physical);
+	dex->verhi_logical  = cpu_to_be64(verhi << ADDR_BITS | logical);
+	dex->verlo_physical = cpu_to_be64(verlo << ADDR_BITS | physical);
 }
 
 static void dleaf2_btree_init(struct btree *btree)
@@ -105,7 +105,7 @@ static int dleaf2_init(struct btree *btree, void *leaf)
 {
 	struct dleaf2 *dleaf = leaf;
 	*dleaf = (struct dleaf2){
-		.magic = to_be_u16(TUX3_MAGIC_DLEAF2),
+		.magic = cpu_to_be16(TUX3_MAGIC_DLEAF2),
 		.count = 0,
 	};
 	return 0;
@@ -114,13 +114,13 @@ static int dleaf2_init(struct btree *btree, void *leaf)
 static int dleaf2_sniff(struct btree *btree, void *leaf)
 {
 	struct dleaf2 *dleaf = leaf;
-	if (dleaf->magic != to_be_u16(TUX3_MAGIC_DLEAF2))
+	if (dleaf->magic != cpu_to_be16(TUX3_MAGIC_DLEAF2))
 		return 1;
 	if (!dleaf->count)
 		return 1;
 	/* Last should be sentinel */
 	struct extent ex;
-	get_extent(dleaf->table + from_be_u16(dleaf->count) - 1, &ex);
+	get_extent(dleaf->table + be16_to_cpu(dleaf->count) - 1, &ex);
 	if (ex.physical == 0)
 		return 1;
 	return 0;
@@ -129,7 +129,7 @@ static int dleaf2_sniff(struct btree *btree, void *leaf)
 static int dleaf2_can_free(struct btree *btree, void *leaf)
 {
 	struct dleaf2 *dleaf = leaf;
-	unsigned count = from_be_u16(dleaf->count);
+	unsigned count = be16_to_cpu(dleaf->count);
 
 	assert(dleaf2_sniff(btree, dleaf));
 	if (count > 1)
@@ -146,7 +146,7 @@ static struct diskextent2 *
 dleaf2_lookup_index(struct btree *btree, struct dleaf2 *dleaf, tuxkey_t index)
 {
 	struct diskextent2 *dex = dleaf->table;
-	struct diskextent2 *limit = dex + from_be_u16(dleaf->count);
+	struct diskextent2 *limit = dex + be16_to_cpu(dleaf->count);
 
 	/* FIXME: binsearch here */
 	while (dex < limit) {
@@ -179,7 +179,7 @@ static tuxkey_t dleaf2_split(struct btree *btree, tuxkey_t hint,
 	struct dleaf2 *from = vfrom, *into = vinto;
 	struct diskextent2 *dex;
 	struct extent ex;
-	unsigned split_at, count = from_be_u16(from->count);
+	unsigned split_at, count = be16_to_cpu(from->count);
 
 	/* need 2 extents except sentinel, at least */
 	assert(count >= 3);
@@ -202,8 +202,8 @@ static tuxkey_t dleaf2_split(struct btree *btree, tuxkey_t hint,
 
 	split_at = dex - from->table;
 
-	from->count = to_be_u16(split_at + 1);		/* +1 for sentinel */
-	into->count = to_be_u16(count - split_at);
+	from->count = cpu_to_be16(split_at + 1);	/* +1 for sentinel */
+	into->count = cpu_to_be16(count - split_at);
 
 	dex = from->table + split_at;
 	/* Copy diskextent2 */
@@ -229,13 +229,13 @@ static int dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 	int can_merge, from_size;
 
 	/* If "from" is empty or sentinel only, does nothing */
-	from_count = from_be_u16(from->count);
+	from_count = be16_to_cpu(from->count);
 	if (from_count <= 1)
 		return 1;
 
 	from_size = sizeof(from->table[0]) * from_count;
 	/* If "into" is empty, just copy. FIXME: why there is no sentinel? */
-	into_count = from_be_u16(into->count);
+	into_count = be16_to_cpu(into->count);
 	if (!into_count) {
 		into->count = from->count;
 		from->count = 0;
@@ -270,7 +270,7 @@ static int dleaf2_merge(struct btree *btree, void *vinto, void *vfrom)
 		/* Other cases are just copy */
 		memcpy(into->table + into_count, from->table, from_size);
 	}
-	into->count = to_be_u16(into_count + from_count - can_merge);
+	into->count = cpu_to_be16(into_count + from_count - can_merge);
 	from->count = 0;
 
 	return 1;
@@ -298,7 +298,7 @@ static int dleaf2_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 	if (!dleaf->count)
 		return 0;
 
-	dex_limit = dleaf->table + from_be_u16(dleaf->count);
+	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
 	/* Lookup the extent is including index */
 	dex = dleaf2_lookup_index(btree, dleaf, start);
 	if (dex >= dex_limit - 1)
@@ -327,7 +327,7 @@ static int dleaf2_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 		need_sentinel = 0;
 	}
 	/* Shrink space */
-	dleaf->count = to_be_u16((dex - dleaf->table) + 1 + need_sentinel);
+	dleaf->count = cpu_to_be16((dex - dleaf->table) + 1 + need_sentinel);
 
 	block = ex.physical + (start - ex.logical);
 	dex++;
@@ -360,7 +360,7 @@ static int dleaf2_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 static void dleaf2_resize(struct dleaf2 *dleaf, struct diskextent2 *head,
 			  int diff)
 {
-	void *limit = dleaf->table + from_be_u16(dleaf->count);
+	void *limit = dleaf->table + be16_to_cpu(dleaf->count);
 
 	if (diff == 0)
 		return;
@@ -369,7 +369,7 @@ static void dleaf2_resize(struct dleaf2 *dleaf, struct diskextent2 *head,
 		memmove(head + diff, head, limit - (void *)head);
 	else
 		memmove(head, head - diff, limit - (void *)(head - diff));
-	dleaf->count = to_be_u16(from_be_u16(dleaf->count) + diff);
+	dleaf->count = cpu_to_be16(be16_to_cpu(dleaf->count) + diff);
 }
 
 /* Initialize sentinel by bottom key */
@@ -377,7 +377,7 @@ static inline void dleaf2_init_sentinel(struct sb *sb, struct dleaf2 *dleaf,
 					tuxkey_t key_bottom)
 {
 	if (!dleaf->count) {
-		dleaf->count = to_be_u16(1);
+		dleaf->count = cpu_to_be16(1);
 		put_extent(dleaf->table, sb->version, key_bottom, 0);
 	}
 }
@@ -386,7 +386,7 @@ static inline void dleaf2_init_sentinel(struct sb *sb, struct dleaf2 *dleaf,
 static tuxkey_t dleaf2_split_at_center(struct dleaf2 *dleaf)
 {
 	struct extent ex;
-	get_extent(dleaf->table + from_be_u16(dleaf->count) / 2, &ex);
+	get_extent(dleaf->table + be16_to_cpu(dleaf->count) / 2, &ex);
 	return ex.logical;
 }
 
@@ -422,7 +422,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 
 	limit = key->start + key->len;
 	write_segs = rq->max_segs - rq->nr_segs;
-	dex_limit = dleaf->table + from_be_u16(dleaf->count);
+	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
 
 	need = write_segs + 1;	/* +1 is for sentinel */
 
@@ -495,7 +495,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 
 	/* Expand/shrink space for segs */
 	dleaf2_resize(dleaf, dex_start, (write_segs + 1) - between);
-	assert(need == from_be_u16(dleaf->count));
+	assert(need == be16_to_cpu(dleaf->count));
 
 	/* Fill extents */
 	while (rq->nr_segs < rq->max_segs - rest_segs) {
@@ -536,7 +536,7 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 	if (rq->nr_segs >= rq->max_segs)
 		return 0;
 
-	dex_limit = dleaf->table + from_be_u16(dleaf->count);
+	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
 
 	/* Lookup the extent is including index */
 	dex = dleaf2_lookup_index(btree, dleaf, key->start);
