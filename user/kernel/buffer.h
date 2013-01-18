@@ -117,6 +117,10 @@ static inline struct buffer_head *bufvec_contig_buf(struct bufvec *bufvec)
 	return list_entry(first, struct buffer_head, b_assoc_buffers);
 }
 
+/* buffer for each contiguous buffers */
+#define bufvec_buffer_for_each_contig(b, v)	\
+	list_for_each_entry(b, &(v)->contig, b_assoc_buffers)
+
 static inline block_t bufvec_contig_index(struct bufvec *bufvec)
 {
 	return bufindex(bufvec_contig_buf(bufvec));
@@ -133,6 +137,8 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
 int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
 	       struct list_head *head);
+int __tux3_volmap_io(int rw, struct bufvec *bufvec, block_t physical,
+		     unsigned count);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);
 
 /* block_fork.c */

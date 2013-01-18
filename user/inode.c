@@ -271,8 +271,10 @@ static void tux_setup_inode(struct inode *inode)
 		case TUX_VOLMAP_INO:
 		case TUX_LOGMAP_INO:
 			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
-			/* use default handler for map->io */
-			/* inode->map->io = dev_blockio; */
+			if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
+				/* use default handler (dev_blockio) */;
+			else
+				inode->map->io = tux3_logmap_io;
 			/* Flushed by tux3_flush_inode_internal() */
 			tux3_set_inode_no_flush(inode);
 			break;

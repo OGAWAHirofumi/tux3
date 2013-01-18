@@ -38,12 +38,12 @@ struct inode *tux_new_volmap(struct sb *sb)
 	return inode;
 }
 
-/* FIXME: kill this, and use another infrastructure instead of inode */
 struct inode *tux_new_logmap(struct sb *sb)
 {
 	struct inode *inode = new_inode(vfs_sb(sb));
 	if (inode) {
 		tux_set_inum(inode, TUX_LOGMAP_INO);
+		insert_inode_hash(inode);
 		tux_setup_inode(inode);
 	}
 	return inode;
@@ -906,7 +906,10 @@ static void tux_setup_inode(struct inode *inode)
 		case TUX_LOGMAP_INO:
 			inode->i_size = (loff_t)sb->volblocks << sb->blockbits;
 			inode->i_mapping->a_ops = &tux_vol_aops;
-			tux_inode(inode)->io = tux3_volmap_io;
+			if (inum == TUX_VOLMAP_INO)
+				tux_inode(inode)->io = tux3_volmap_io;
+			else
+				tux_inode(inode)->io = tux3_logmap_io;
 			/* Flushed by tux3_flush_inode_internal() */
 			tux3_set_inode_no_flush(inode);
 			break;

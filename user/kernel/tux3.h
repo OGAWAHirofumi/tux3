@@ -128,7 +128,7 @@ static inline void *decode48(void *at, u64 *val)
 #define TUX_ATABLE_INO		2
 #define TUX_ROOTDIR_INO		3
 #define TUX_VOLMAP_INO		61	/* This doesn't have entry in ileaf */
-#define TUX_LOGMAP_INO		62	/* FIXME: remove this */
+#define TUX_LOGMAP_INO		62	/* This is volmap for log blocks */
 #define TUX_INVALID_INO		63	/* FIXME: just for debugging */
 #define TUX_NORMAL_INO		64	/* until this ino, reserved ino */
 
@@ -797,6 +797,7 @@ void log_next(struct sb *sb, int pin);
 void log_drop(struct sb *sb);
 void log_finish(struct sb *sb);
 int log_finish_cycle(struct sb *sb);
+int tux3_logmap_io(int rw, struct bufvec *bufvec);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
 void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count);

@@ -257,7 +257,8 @@ void __tux3_mark_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 
 	inode = buffer_inode(buffer);
 #ifdef __KERNEL__
-	assert(inode == tux_sb(inode->i_sb)->volmap ||
+	assert(tux_inode(inode)->inum == TUX_VOLMAP_INO ||
+	       tux_inode(inode)->inum == TUX_LOGMAP_INO ||
 	       PageLocked(buffer->b_page));
 #endif
 
@@ -270,13 +271,14 @@ void __tux3_mark_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 /*
  * Mark buffer as dirty to flush at delta flush.
  *
- * Specified buffer must be for volmap (i.e. no buffer fork, and
+ * Specified buffer must be for volmap/logmap (i.e. no buffer fork, and
  * page->mapping is valid). Otherwise this will race with buffer fork.
  */
 void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 {
 	struct inode *inode = buffer_inode(buffer);
-	assert(inode == tux_sb(inode->i_sb)->volmap); /* must be volmap */
+	assert(tux_inode(inode)->inum == TUX_VOLMAP_INO ||
+	       tux_inode(inode)->inum == TUX_LOGMAP_INO);
 	__tux3_mark_buffer_dirty(buffer, TUX3_INIT_DELTA);
 }
 

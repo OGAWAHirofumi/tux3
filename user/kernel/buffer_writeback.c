@@ -787,6 +787,12 @@ int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
 /*
  * I/O helper for physical index buffers (e.g. buffers on volmap)
  */
+int __tux3_volmap_io(int rw, struct bufvec *bufvec, block_t physical,
+		     unsigned count)
+{
+	return blockio_vec(rw, bufvec, physical, count);
+}
+
 int tux3_volmap_io(int rw, struct bufvec *bufvec)
 {
 	block_t physical = bufvec_contig_index(bufvec);
@@ -795,5 +801,5 @@ int tux3_volmap_io(int rw, struct bufvec *bufvec)
 	/* FIXME: For now, this is only for write */
 	assert(rw == WRITE);
 
-	return blockio_vec(rw, bufvec, physical, count);
+	return __tux3_volmap_io(rw, bufvec, physical, count);
 }

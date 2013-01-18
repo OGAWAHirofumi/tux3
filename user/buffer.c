@@ -644,17 +644,23 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 #endif
 }
 
-static int dev_blockio(int rw, struct bufvec *bufvec)
+int __tux3_volmap_io(int rw, struct bufvec *bufvec, block_t block,
+		     unsigned count)
 {
-	block_t block = bufvec_contig_index(bufvec);
-	unsigned count = bufvec_contig_count(bufvec);
-
 	assert(bufvec_contig_buf(bufvec)->map->dev->bits >= 6 &&
 	       bufvec_contig_buf(bufvec)->map->dev->fd);
 
 	bufvec->end_io = __clear_buffer_dirty_for_endio;
 
 	return blockio_vec(rw, bufvec, block, count);
+}
+
+static int dev_blockio(int rw, struct bufvec *bufvec)
+{
+	block_t block = bufvec_contig_index(bufvec);
+	unsigned count = bufvec_contig_count(bufvec);
+
+	return __tux3_volmap_io(rw, bufvec, block, count);
 }
 
 int dev_errio(int rw, struct bufvec *bufvec)

@@ -5,6 +5,10 @@
 
 #include "tux3.h"
 
+#ifndef trace
+#define trace trace_on
+#endif
+
 /*
  * Log cache scheme
  *
@@ -132,8 +136,11 @@ static void *log_begin(struct sb *sb, unsigned bytes)
 	if (sb->logpos + bytes > sb->logtop) {
 		log_finish(sb);
 		log_next(sb, 1);
+
 		*(struct logblock *)bufdata(sb->logbuf) = (struct logblock){
-			.magic = cpu_to_be16(TUX3_MAGIC_LOG) };
+			.magic = cpu_to_be16(TUX3_MAGIC_LOG),
+		};
+		tux3_mark_buffer_dirty(sb->logbuf);
 	}
 	return sb->logpos;
 }
@@ -142,6 +149,55 @@ static void log_end(struct sb *sb, void *pos)
 {
 	sb->logpos = pos;
 	mutex_unlock(&sb->loglock);
+}
+
+/*
+ * Flush log blocks.
+ *
+ * Add log blocks to ->logchain list and adjust ->logcount. Then
+ * flush log blocks at once.
+ */
+int tux3_logmap_io(int rw, struct bufvec *bufvec)
+{
+	struct inode *logmap = bufvec_inode(bufvec);
+	struct sb *sb = tux_sb(logmap->i_sb);
+	unsigned count = bufvec_contig_count(bufvec);
+	block_t block, last;
+	struct buffer_head *buffer;
+	int err;
+
+	assert(rw == WRITE);
+	assert(bufvec_contig_index(bufvec) == 0);
+
+	err = balloc(sb, count, &block);
+	if (err) {
+		assert(err);
+		return err;
+	}
+
+	/*
+	 * We can obsolete the log blocks after next rollup
+	 * by LOG_BFREE_RELOG.
+	 */
+	defer_bfree(&sb->derollup, block, count);
+
+	/* Link log blocks to logchain */
+	last = block;
+	bufvec_buffer_for_each_contig(buffer, bufvec) {
+		struct logblock *log = bufdata(buffer);
+
+		assert(log->magic == cpu_to_be16(TUX3_MAGIC_LOG));
+		log->logchain = sb->super.logchain;
+
+		trace("logchain %lld", last);
+		sb->super.logchain = cpu_to_be64(last);
+		last++;
+	}
+
+	/* Add count of log on this delta to rollup logcount */
+	be32_add_cpu(&sb->super.logcount, count);
+
+	return __tux3_volmap_io(rw, bufvec, block, count);
 }
 
 static void log_intent(struct sb *sb, u8 intent)

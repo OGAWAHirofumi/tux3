@@ -26,6 +26,8 @@ static void clean_main(struct sb *sb, struct inode *inode)
 	free_map(inode->map);
 	destroy_defer_bfree(&sb->derollup);
 	destroy_defer_bfree(&sb->defree);
+	invalidate_buffers(sb->logmap->map);
+	tux3_clear_dirty_inode(sb->logmap);
 	invalidate_buffers(sb->volmap->map);
 	tux3_clear_dirty_inode(sb->volmap);
 	put_super(sb);

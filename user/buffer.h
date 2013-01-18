@@ -163,6 +163,8 @@ void remove_buffer_hash(struct buffer_head *buffer);
 void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend);
 void invalidate_buffers(map_t *map);
 void init_buffers(struct dev *dev, unsigned poolsize, int debug);
+int __tux3_volmap_io(int rw, struct bufvec *bufvec, block_t block,
+		     unsigned count);
 int dev_errio(int rw, struct bufvec *bufvec);
 map_t *new_map(struct dev *dev, blockio_t *io);
 void free_map(map_t *map);
@@ -204,6 +206,10 @@ static inline struct buffer_head *bufvec_contig_buf(struct bufvec *bufvec)
 	assert(!list_empty(&bufvec->contig));
 	return list_entry(first, struct buffer_head, link);
 }
+
+/* buffer for each contiguous buffers */
+#define bufvec_buffer_for_each_contig(b, v)	\
+	list_for_each_entry(b, &(v)->contig, link)
 
 static inline block_t bufvec_contig_index(struct bufvec *bufvec)
 {

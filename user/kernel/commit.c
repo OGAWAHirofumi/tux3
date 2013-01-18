@@ -296,47 +296,11 @@ static int write_btree(struct sb *sb, unsigned delta)
 /* allocate and write log blocks */
 static int write_log(struct sb *sb)
 {
-	unsigned index, logcount;
-
 	/* Finish to logging in this delta */
 	log_finish(sb);
+	log_finish_cycle(sb);
 
-	/* FIXME: maybe, we should use bufvec to write log blocks at once */
-	for (index = 0; index < sb->lognext; index++) {
-		block_t block;
-		int err = balloc(sb, 1, &block);
-		if (err)
-			return err;
-		struct buffer_head *buffer = blockget(mapping(sb->logmap), index);
-		assert(buffer);
-		struct logblock *log = bufdata(buffer);
-		assert(log->magic == cpu_to_be16(TUX3_MAGIC_LOG));
-		log->logchain = sb->super.logchain;
-		err = blockio(WRITE, sb, buffer, block);
-		if (err) {
-			blockput(buffer);
-			bfree(sb, block, 1);
-			return err;
-		}
-
-		/*
-		 * We can obsolete the log blocks after next rollup
-		 * by LOG_BFREE_RELOG.
-		 */
-		defer_bfree(&sb->derollup, block, 1);
-
-		blockput(buffer);
-		trace("logchain %lld", block);
-		sb->super.logchain = cpu_to_be64(block);
-	}
-
-	/* Add count of log on this delta to rollup logcount */
-	logcount = be32_to_cpu(sb->super.logcount);
-	logcount += log_finish_cycle(sb);
-
-	sb->super.logcount = cpu_to_be32(logcount);
-
-	return 0;
+	return tux3_flush_inode_internal(sb->logmap, TUX3_INIT_DELTA);
 }
 
 /* userland only */
@@ -776,10 +740,13 @@ unsigned tux3_inode_delta(struct inode *inode)
 
 	switch (tux_inode(inode)->inum) {
 	case TUX_VOLMAP_INO:
+	case TUX_LOGMAP_INO:
 		/*
 		 * Note: volmap are special, and has both of
 		 * TUX3_INIT_DELTA and sb->rollup. So TUX3_INIT_DELTA
 		 * can be incorrect if delta was used for buffer.
+		 * Note: logmap is similar to volmap, but it doesn't
+		 * have sb->rollup buffers.
 		 */
 		delta = TUX3_INIT_DELTA;
 		break;
