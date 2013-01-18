@@ -145,7 +145,7 @@ static inline int buffer_forked(struct buffer_head *buffer)
 	return PageForked(buffer->b_page);
 }
 
-void free_forked_buffers(struct sb *sb, int umount);
+void free_forked_buffers(struct sb *sb, struct inode *inode, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 struct page *pagefork_for_blockdirty(struct page *oldpage, unsigned newdelta);
 int bufferfork_to_invalidate(struct address_space *mapping, struct page *page);

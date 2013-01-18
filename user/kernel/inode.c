@@ -654,6 +654,19 @@ void tux3_evict_inode(struct inode *inode)
 #endif
 	change_end_atomic_nested(sb, ptr);
 
+
+	/*
+	 * On theory, reader can be holding the forked page until
+	 * evicting inode. So, we have to check the related forked
+	 * page, and free forked pages before freeing host
+	 * inode. Because page->mapping points freed inode->i_mapping.
+	 *
+	 * FIXME: we would want to avoid this (e.g. we want to use
+	 * refcount to free). If impossible, we would want to use
+	 * per-inode forked-buffers list, instead.
+	 */
+	free_forked_buffers(sb, inode, 0);
+
 	clear_inode(inode);
 	free_xcache(inode);
 }

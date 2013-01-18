@@ -234,7 +234,7 @@ static inline int buffer_forked(struct buffer_head *buffer)
 	return 0;
 }
 
-void free_forked_buffers(struct sb *sb, int umount);
+void free_forked_buffers(struct sb *sb, struct inode *inode, int umount);
 struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta);
 int bufferfork_to_invalidate(map_t *map, struct buffer_head *buffer);
 #endif

@@ -364,7 +364,7 @@ static void post_commit(struct sb *sb, unsigned delta)
 	 * Check referencer of forked buffer was gone, and can free.
 	 * FIXME: is this right timing and place to do this?
 	 */
-	free_forked_buffers(sb, 0);
+	free_forked_buffers(sb, NULL, 0);
 
 	tux3_clear_dirty_inodes(sb, delta);
 }

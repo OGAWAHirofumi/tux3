@@ -109,10 +109,17 @@ static int is_freeable_forked(struct buffer_head *buffer, struct page *page)
 }
 
 /*
- * Try to free forked page. If it is called from umount, there should
- * be no referencer. So we free forked page forcefully.
+ * Try to free forked page. If it is called from umount or evict_inode
+ * path, there should be no referencer. So we free forked page
+ * forcefully.
+ *
+ * inode: If caller is evicting inode, pass inode. Otherwise NULL.
+ * umount: If caller is umount path, 1. Otherwise 0.
+ *
+ * FIXME: we need the better way, instead of polling the freeable
+ * forked pages periodically.
  */
-void free_forked_buffers(struct sb *sb, int umount)
+void free_forked_buffers(struct sb *sb, struct inode *inode, int umount)
 {
 	struct link free_list, *node, *prev, *n;
 
@@ -123,18 +130,24 @@ void free_forked_buffers(struct sb *sb, int umount)
 	link_for_each_safe(node, prev, n, &sb->forked_buffers) {
 		struct buffer_head *buffer = buffer_link_entry(node);
 		struct page *page = buffer->b_page;
+		int force = 0;
 
 		trace_on("buffer %p, page %p, count %u",
 			 buffer, page, page_count(page));
+
+		/* We have to free this forked page forcefully */
+		if (umount || (inode && inode->i_mapping == page->mapping))
+			force = 1;
+
 #ifdef DISABLE_ASYNC_BACKEND
 		/* The page should already be submitted if no async frontend */
 		assert(!PageDirty(page));
 #endif
-		assert(!umount || (!PageDirty(page) && !PageWriteback(page)));
+		assert(!force || (!PageDirty(page) && !PageWriteback(page)));
 		/* I/O was submitted, and I/O was done? */
 		if (!PageDirty(page) && !PageWriteback(page)) {
-			/* All users were gone or from umount? */
-			if (umount || is_freeable_forked(buffer, page)) {
+			/* All users were gone or force=1? */
+			if (force || is_freeable_forked(buffer, page)) {
 				clear_buffer_freeable(buffer);
 
 				link_del_next(prev);

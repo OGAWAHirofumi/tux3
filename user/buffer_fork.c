@@ -6,7 +6,7 @@
  * For now, there is no concurrent reader in the userland, so we can
  * free the buffer at I/O completion.
  */
-void free_forked_buffers(struct sb *sb, int umount)
+void free_forked_buffers(struct sb *sb, struct inode *inode, int umount)
 {
 }
 
