@@ -134,6 +134,7 @@ void log_finish_cycle(struct sb *sb, int discard)
 
 static void *log_begin(struct sb *sb, unsigned bytes)
 {
+	assert(tux3_under_backend(sb));
 	if (sb->logpos + bytes > sb->logtop) {
 		log_finish(sb);
 		log_next(sb);

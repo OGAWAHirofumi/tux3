@@ -17,11 +17,18 @@ static void clean_main(struct sb *sb)
 static int tux3_flush_inode_hack(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
+	unsigned delta;
 	int err;
 
+	/* Get delta to flush */
 	change_begin_atomic(sb);
-	err = tux3_flush_inode(inode, tux3_get_current_delta());
+	delta = tux3_get_current_delta();
 	change_end_atomic(sb);
+
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
+	err = tux3_flush_inode(inode, delta);
+	tux3_end_backend();
 
 	return err;
 }

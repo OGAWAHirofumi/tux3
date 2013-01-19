@@ -805,6 +805,9 @@ int main(int argc, char *argv[])
 
 	test_init(argv[0]);
 
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
+
 	if (test_start("test01"))
 		test01(sb, inode);
 	test_end();
@@ -832,6 +835,8 @@ int main(int argc, char *argv[])
 	if (test_start("test07"))
 		test07(sb, inode);
 	test_end();
+
+	tux3_end_backend();
 
 	clean_main(sb, inode);
 

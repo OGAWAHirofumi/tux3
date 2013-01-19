@@ -113,8 +113,17 @@ int make_tux3(struct sb *sb)
 		goto error_change_end;
 	}
 
-	if (reserve_superblock(sb) < 0)
-		goto error_change_end;
+	change_end_atomic(sb);
+
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
+	if (reserve_superblock(sb) < 0) {
+		tux3_end_backend();
+		goto error;
+	}
+	tux3_end_backend();
+
+	change_begin_atomic(sb);
 
 	trace("create version table");
 	sb->vtable = create_internal_inode(sb, TUX_VTABLE_INO, NULL);

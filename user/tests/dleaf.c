@@ -398,6 +398,9 @@ int main(int argc, char *argv[])
 	struct btree btree;
 	init_btree(&btree, sb, no_root, &dtree1_ops);
 
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
+
 	if (test_start("test01"))
 		test01(sb, &btree);
 	test_end();
@@ -417,6 +420,8 @@ int main(int argc, char *argv[])
 	if (test_start("test05"))
 		test05(sb, &btree);
 	test_end();
+
+	tux3_end_backend();
 
 	clean_main(sb);
 	return test_failures();

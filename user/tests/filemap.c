@@ -96,7 +96,8 @@ static void test01(struct sb *sb, struct inode *inode)
 		struct seg seg;
 		int err, segs;
 
-		change_begin_atomic(sb);
+		/* Set fake backend mark to modify backend objects. */
+		tux3_start_backend(sb);
 
 		for (int i = 0, j = 0; i < 30; i++, j++) {
 			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
@@ -138,7 +139,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == SEG_HOLE);
 
-		change_end_atomic(sb);
+		tux3_end_backend();
 
 		test_assert(force_delta(sb) == 0);
 		clean_main(sb, inode);
@@ -150,7 +151,8 @@ static void test01(struct sb *sb, struct inode *inode)
 		struct seg seg;
 		int err, segs;
 
-		change_begin_atomic(sb);
+		/* Set fake backend mark to modify backend objects. */
+		tux3_start_backend(sb);
 
 		for (int i = 30; i >= 0; i--) {
 			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
@@ -175,7 +177,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == SEG_HOLE);
 
-		change_end_atomic(sb);
+		tux3_end_backend();
 
 		test_assert(force_delta(sb) == 0);
 		clean_main(sb, inode);
@@ -197,7 +199,8 @@ static void test02(struct sb *sb, struct inode *inode)
 		{ .index = 80, .count = 10, .mode = MAP_REDIRECT, },
 	};
 
-	change_begin_atomic(sb);
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
 
 	int total_segs = 0;
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
@@ -217,9 +220,11 @@ static void test02(struct sb *sb, struct inode *inode)
 	int segs = check_map_region(inode, 0, 200, map, ARRAY_SIZE(map));
 	test_assert(segs >= total_segs);
 
-	/* Clear dirty page to prevent to call map_region again */
-	truncate_inode_pages(mapping(inode), 0);
+	tux3_end_backend();
 
+	/* Clear dirty page to prevent to call map_region again */
+	change_begin_atomic(sb);
+	truncate_inode_pages(mapping(inode), 0);
 	change_end_atomic(sb);
 
 	test_assert(force_delta(sb) == 0);
@@ -232,7 +237,8 @@ static void test03(struct sb *sb, struct inode *inode)
 	struct seg map1[32], map2[32];
 	int segs1, segs2;
 
-	change_begin_atomic(sb);
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
 
 	/* Create range */
 	segs1 = d_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1), MAP_WRITE);
@@ -260,9 +266,11 @@ static void test03(struct sb *sb, struct inode *inode)
 	segs2 = check_map_region(inode, 0, 200, map2, ARRAY_SIZE(map2));
 	test_assert(segs2 >= segs1);
 
-	/* Clear dirty page to prevent to call map_region again */
-	truncate_inode_pages(mapping(inode), 0);
+	tux3_end_backend();
 
+	/* Clear dirty page to prevent to call map_region again */
+	change_begin_atomic(sb);
+	truncate_inode_pages(mapping(inode), 0);
 	change_end_atomic(sb);
 
 	test_assert(force_delta(sb) == 0);
@@ -275,7 +283,8 @@ static void test04(struct sb *sb, struct inode *inode)
 	struct seg map1[32], map2[32];
 	int segs1, segs2;
 
-	change_begin_atomic(sb);
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
 
 	/* Create extents */
 	segs1 = d_map_region(inode, 2, 2, map1, ARRAY_SIZE(map1), MAP_WRITE);
@@ -293,9 +302,11 @@ static void test04(struct sb *sb, struct inode *inode)
 	segs2 = check_map_region(inode, 0, 200, map2, ARRAY_SIZE(map2));
 	test_assert(segs2 >= segs1);
 
-	/* Clear dirty page to prevent to call map_region again */
-	truncate_inode_pages(mapping(inode), 0);
+	tux3_end_backend();
 
+	/* Clear dirty page to prevent to call map_region again */
+	change_begin_atomic(sb);
+	truncate_inode_pages(mapping(inode), 0);
 	change_end_atomic(sb);
 
 	test_assert(force_delta(sb) == 0);
@@ -347,7 +358,8 @@ static void test05(struct sb *sb, struct inode *inode)
 		},
 	};
 
-	change_begin_atomic(sb);
+	/* Set fake backend mark to modify backend objects. */
+	tux3_start_backend(sb);
 
 	for (int test = 0; test < ARRAY_SIZE(data); test++) {
 		__test05(data[test], ARRAY_SIZE(data[test]), inode);
@@ -356,7 +368,7 @@ static void test05(struct sb *sb, struct inode *inode)
 		test_assert(!err);
 	}
 
-	change_end_atomic(sb);
+	tux3_end_backend();
 
 	test_assert(force_delta(sb) == 0);
 	clean_main(sb, inode);
