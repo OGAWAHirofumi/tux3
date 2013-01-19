@@ -275,7 +275,6 @@ struct sb {
 	unsigned lognext;	/* Index of next log block in log map */
 	struct buffer_head *logbuf; /* Cached log block */
 	unsigned char *logpos, *logtop; /* Where to emit next log entry */
-	struct mutex loglock;	/* serialize log entries (spinlock me) */
 
 	struct list_head orphan_add; /* defered orphan inode add list */
 	struct list_head orphan_del; /* defered orphan inode del list */

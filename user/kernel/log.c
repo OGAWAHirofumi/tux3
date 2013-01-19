@@ -58,6 +58,9 @@
  *
  *  - Integer fields are big endian, byte aligned.
  *
+ * Log block locking
+ *
+ *  - Log block must be touched only by the backend. So, we don't need to lock.
  */
 
 unsigned log_size[] = {
@@ -131,7 +134,6 @@ void log_finish_cycle(struct sb *sb, int discard)
 
 static void *log_begin(struct sb *sb, unsigned bytes)
 {
-	mutex_lock(&sb->loglock);
 	if (sb->logpos + bytes > sb->logtop) {
 		log_finish(sb);
 		log_next(sb);
@@ -149,7 +151,6 @@ static void *log_begin(struct sb *sb, unsigned bytes)
 static void log_end(struct sb *sb, void *pos)
 {
 	sb->logpos = pos;
-	mutex_unlock(&sb->loglock);
 }
 
 /*

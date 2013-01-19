@@ -37,7 +37,6 @@ static void init_sb(struct sb *sb)
 	init_rwsem(&sb->delta_lock);
 #endif
 	init_waitqueue_head(&sb->delta_event_wq);
-	mutex_init(&sb->loglock);
 	INIT_LIST_HEAD(&sb->orphan_add);
 	INIT_LIST_HEAD(&sb->orphan_del);
 	stash_init(&sb->defree);

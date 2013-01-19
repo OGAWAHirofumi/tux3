@@ -23,9 +23,6 @@
  * This lock may be first lock except vfs locks (lock_super, i_mutex).
  * sb->delta_lock (change_begin, change_end) [only for DISABLE_ASYNC_BACKEND]
  *
- * This lock may be last lock. (care about blockget())
- * sb->loglock (log_begin, log_end)
- *
  * memory allocation: (blockread, blockget, kmalloc, etc.)
  *     lock_page() (for write)
  *         write (bitmap) dirty buffers:
