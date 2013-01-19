@@ -793,10 +793,10 @@ void iget_if_dirty(struct inode *inode);
 
 /* log.c */
 extern unsigned log_size[];
-void log_next(struct sb *sb, int pin);
+void log_next(struct sb *sb);
 void log_drop(struct sb *sb);
 void log_finish(struct sb *sb);
-void log_finish_cycle(struct sb *sb);
+void log_finish_cycle(struct sb *sb, int discard);
 int tux3_logmap_io(int rw, struct bufvec *bufvec);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);

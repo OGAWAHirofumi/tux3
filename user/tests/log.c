@@ -14,8 +14,7 @@
 /* cleanup bitmap of main() */
 static void clean_main(struct sb *sb)
 {
-	log_finish_cycle(sb);
-	invalidate_buffers(sb->logmap->map);
+	log_finish_cycle(sb, 1);
 	tux3_clear_dirty_inode(sb->logmap);
 	put_super(sb);
 	tux3_exit_mem();

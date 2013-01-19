@@ -83,14 +83,12 @@ unsigned log_size[] = {
 	[LOG_DELTA]		= 1,
 };
 
-void log_next(struct sb *sb, int pin)
+void log_next(struct sb *sb)
 {
 	/* FIXME: error handling of blockget() */
 	sb->logbuf = blockget(mapping(sb->logmap), sb->lognext++);
 	sb->logpos = bufdata(sb->logbuf) + sizeof(struct logblock);
 	sb->logtop = bufdata(sb->logbuf) + sb->blocksize;
-	if (pin)
-		get_bh(sb->logbuf);
 }
 
 void log_drop(struct sb *sb)
@@ -111,19 +109,22 @@ void log_finish(struct sb *sb)
 	}
 }
 
-void log_finish_cycle(struct sb *sb)
+void log_finish_cycle(struct sb *sb, int discard)
 {
-	struct buffer_head *logbuf;
-	unsigned count = sb->lognext;
-
 	/* ->logbuf must be finished */
 	assert(sb->logbuf == NULL);
 
-	for (int i = 0; i < count; i++) {
-		logbuf = blockget(mapping(sb->logmap), i);
-		blockput(logbuf);
-		blockput(logbuf); /* unpin */
+	if (discard) {
+		struct buffer_head *logbuf;
+		unsigned i, logcount = sb->lognext;
+
+		/* Clear dirty of buffer */
+		for (i = 0; i < logcount; i++) {
+			logbuf = blockget(mapping(sb->logmap), i);
+			blockput_free(sb, logbuf);
+		}
 	}
+
 	/* Initialize for new delta cycle */
 	sb->lognext = 0;
 }
@@ -133,11 +134,13 @@ static void *log_begin(struct sb *sb, unsigned bytes)
 	mutex_lock(&sb->loglock);
 	if (sb->logpos + bytes > sb->logtop) {
 		log_finish(sb);
-		log_next(sb, 1);
+		log_next(sb);
 
 		*(struct logblock *)bufdata(sb->logbuf) = (struct logblock){
 			.magic = cpu_to_be16(TUX3_MAGIC_LOG),
 		};
+
+		/* Dirty for write, and prevent to be reclaimed */
 		tux3_mark_buffer_dirty(sb->logbuf);
 	}
 	return sb->logpos;

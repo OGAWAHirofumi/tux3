@@ -96,11 +96,26 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 	return 0;
 }
 
+/* Unpin logblocks. */
+static void replay_unpin_logblocks(struct sb *sb, unsigned i, unsigned logcount)
+{
+	struct buffer_head *logbuf;
+
+	while (i < logcount) {
+		logbuf = blockget(mapping(sb->logmap), i);
+		assert(logbuf != NULL);
+		blockput(logbuf);
+		blockput(logbuf);	/* Unpin */
+
+		i++;
+	}
+}
+
 /* Prepare log info for replay and pin logblocks. */
 static struct replay *replay_prepare(struct sb *sb)
 {
 	block_t logchain = be64_to_cpu(sb->super.logchain);
-	unsigned j, i, logcount = be32_to_cpu(sb->super.logcount);
+	unsigned i, logcount = be32_to_cpu(sb->super.logcount);
 	struct replay *rp;
 	struct buffer_head *buffer;
 	int err;
@@ -119,21 +134,18 @@ static struct replay *replay_prepare(struct sb *sb)
 
 		buffer = blockget(mapping(sb->logmap), i);
 		if (!buffer) {
+			i++;
 			err = -ENOMEM;
 			goto error;
 		}
 		assert(bufindex(buffer) == i);
 		err = blockio(READ, sb, buffer, logchain);
-		if (err) {
-			blockput(buffer);
+		if (err)
 			goto error;
-		}
 
 		err = replay_check_log(rp, buffer);
-		if (err) {
-			blockput(buffer);
+		if (err)
 			goto error;
-		}
 
 		/* Store index => blocknr map */
 		rp->blocknrs[bufindex(buffer)] = logchain;
@@ -146,14 +158,8 @@ static struct replay *replay_prepare(struct sb *sb)
 
 error:
 	free_replay(rp);
+	replay_unpin_logblocks(sb, i, logcount);
 
-	j = logcount;
-	while (--j > i) {
-		buffer = blockget(mapping(sb->logmap), j);
-		assert(buffer != NULL);
-		blockput(buffer);
-		blockput(buffer);
-	}
 	return ERR_PTR(err);
 }
 
@@ -166,7 +172,8 @@ static void replay_done(struct replay *rp)
 	free_replay(rp);
 
 	sb->lognext = be32_to_cpu(sb->super.logcount);
-	log_finish_cycle(sb);
+	replay_unpin_logblocks(sb, 0, sb->lognext);
+	log_finish_cycle(sb, 0);
 }
 
 typedef int (*replay_log_t)(struct replay *, struct buffer_head *);
@@ -504,7 +511,7 @@ static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 	sb->lognext = 0;
 	while (sb->lognext < logcount) {
 		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, rp->blocknrs[sb->lognext], rp->rollup_index);
-		log_next(sb, 0);
+		log_next(sb);
 		err = replay_log_func(rp, sb->logbuf);
 		log_drop(sb);
 
