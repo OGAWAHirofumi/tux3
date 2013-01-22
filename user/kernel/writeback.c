@@ -324,6 +324,11 @@ void tux3_mark_inode_orphan(struct tux3_inode *tuxnode)
 	tuxnode->flags |= TUX3_INODE_ORPHANED;
 }
 
+int tux3_inode_is_orphan(struct tux3_inode *tuxnode)
+{
+	return !!(tuxnode->flags & TUX3_INODE_ORPHANED);
+}
+
 static void tux3_state_read_and_clear(struct inode *inode,
 				      struct tux3_iattr_data *idata,
 				      unsigned *orphaned, unsigned *deleted,

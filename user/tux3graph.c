@@ -828,7 +828,7 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 	struct inode *cache_inode = tux3_ilookup(sb, inum);
 	int orphan = 0;
 	if (cache_inode) {
-		orphan = !list_empty(&tux_inode(cache_inode)->orphan_list);
+		orphan = tux3_inode_is_orphan(tux_inode(cache_inode));
 		iput(cache_inode);
 	}
 
