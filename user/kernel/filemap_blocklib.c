@@ -95,6 +95,12 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 		if (buffer_new(bh))
 			clear_buffer_new(bh);
 		if (!buffer_mapped(bh)) {
+			/*
+			 * FIXME: If user overwrites block fully, we
+			 * don't need get_block(). Since we know it is
+			 * delayed allocation, so, we can use SEG_HOLE
+			 * as delayed allocation.
+			 */
 			WARN_ON(bh->b_size != blocksize);
 			err = get_block(inode, block, bh, 1);
 			if (err)
