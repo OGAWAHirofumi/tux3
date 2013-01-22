@@ -143,10 +143,10 @@ static void ileaf_dump(struct btree *btree, void *vleaf)
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= ibase(leaf));
-	unsigned at = inum - ibase(leaf), size = 0;
+	tuxkey_t at = inum - ibase(leaf), size = 0;
 	void *attrs = NULL;
 
-	trace("lookup inode 0x%Lx, %Lx + %x", inum, ibase(leaf), at);
+	trace("lookup inode 0x%Lx, %Lx + %Lx", inum, ibase(leaf), at);
 	if (at < icount(leaf)) {
 		__be16 *dict = ileaf_dict(btree, leaf);
 		unsigned offset = atdict(dict, at);
@@ -310,7 +310,7 @@ static int ileaf_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 	__be16 *dict = ileaf_dict(btree, leaf);
 	tuxkey_t base = ibase(ileaf);
 	unsigned count = icount(ileaf);
-	unsigned at = start - base;
+	tuxkey_t at = start - base;
 	void *startp, *endp, *tailp;
 	unsigned size;
 
@@ -346,13 +346,17 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 	struct ileaf *ileaf = vleaf;
 	__be16 *dict = ileaf_dict(btree, ileaf);
 	unsigned count = icount(ileaf);
-	unsigned at = inum - ibase(ileaf);
+	tuxkey_t at = inum - ibase(ileaf);
 	int extend_dict, offset, size;
 
 	assert(inum >= ibase(ileaf));
 
 	/* Get existent attributes, and calculate expand/shrink size */
 	if (at + 1 > count) {
+		/* Check size roughly to avoid overflow int */
+		if ((at + 1) * sizeof(*dict) >= btree->sb->blocksize)
+			goto overflow;
+
 		/* Need to extend dict */
 		extend_dict = (at + 1 - count) * sizeof(*dict);
 		offset = atdict(dict, count);
@@ -364,8 +368,10 @@ static void *ileaf_resize(struct btree *btree, tuxkey_t inum, void *vleaf,
 		size = __atdict(dict, at + 1) - offset;
 	}
 
-	if (ileaf_free(btree, ileaf) < newsize - size + extend_dict)
+	if (ileaf_free(btree, ileaf) < newsize - size + extend_dict) {
+overflow:
 		return NULL;
+	}
 
 	/* Extend dict */
 	if (extend_dict) {
@@ -504,7 +510,7 @@ int ileaf_find_free(struct btree *btree, tuxkey_t key_bottom,
 		    tuxkey_t key_limit, void *leaf,
 		    tuxkey_t key, u64 len, void *data)
 {
-	unsigned at = key - ibase(leaf);
+	tuxkey_t at = key - ibase(leaf);
 	unsigned count = icount(leaf);
 
 	key_limit = min(key_limit, key + len);
@@ -543,31 +549,33 @@ int ileaf_enumerate(struct btree *btree, tuxkey_t key_bottom,
 	struct ileaf *ileaf = leaf;
 	__be16 *dict = ileaf_dict(btree, ileaf);
 	struct ileaf_enumrate_cb *cb = data;
-	tuxkey_t base = ibase(ileaf);
-	unsigned at, count, offset;
+	tuxkey_t at, base = ibase(ileaf);
+	unsigned count;
 
 	at = key - base;
 	count = min_t(u64, key + len - base, icount(ileaf));
 
-	offset = atdict(dict, at);
-	for (; at < count; at++) {
-		unsigned size, limit;
-		inum_t inum;
-		void *attrs;
-		int err;
+	if (at < count) {
+		unsigned offset = atdict(dict, at);
+		for (; at < count; at++) {
+			unsigned size, limit;
+			inum_t inum;
+			void *attrs;
+			int err;
 
-		limit = __atdict(dict, at + 1);
-		if (limit <= offset)
-			continue;
-		attrs = ileaf->table + offset;
-		size = limit - offset;
+			limit = __atdict(dict, at + 1);
+			if (limit <= offset)
+				continue;
+			attrs = ileaf->table + offset;
+			size = limit - offset;
 
-		inum = base + at;
-		err = cb->callback(btree, inum, attrs, size, cb->data);
-		if (err)
-			return err;
+			inum = base + at;
+			err = cb->callback(btree, inum, attrs, size, cb->data);
+			if (err)
+				return err;
 
-		offset = limit;
+			offset = limit;
+		}
 	}
 
 	return 0;
