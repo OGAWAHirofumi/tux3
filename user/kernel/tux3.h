@@ -649,6 +649,14 @@ int devio(int rw, struct block_device *dev, loff_t offset, void *data,
 int blockio(int rw, struct sb *sb, struct buffer_head *buffer, block_t block);
 int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 
+#define tux3_msg(sb, fmt, ...)						\
+	__tux3_msg(sb, KERN_INFO, "", fmt, ##__VA_ARGS__)
+#define tux3_err(sb, fmt, ...)						\
+	__tux3_msg(sb, KERN_ERR, " error",				\
+		   "%s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+#define tux3_warn(sb, fmt, ...)					\
+	__tux3_msg(sb, KERN_WARNING, " warning", fmt, ##__VA_ARGS__)
+
 /* temporary hack for buffer */
 struct buffer_head *peekblk(struct address_space *mapping, block_t iblock);
 struct buffer_head *blockread(struct address_space *mapping, block_t iblock);
@@ -853,6 +861,19 @@ int replay_stage2(struct replay *rp);
 int replay_stage3(struct replay *rp, int apply);
 
 /* utility.c */
+void __printf(4, 5)
+__tux3_msg(struct sb *sb, const char *level, const char *prefix,
+	   const char *fmt, ...);
+void __printf(1, 2)
+__tux3_dbg(const char *fmt, ...);
+#define tux3_dbg(fmt , ...)						\
+	__tux3_dbg("%s:%d: " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+void __printf(4, 5)
+__tux3_fs_error(struct sb *sb, const char *func, unsigned int line,
+		const char *fmt, ...);
+#define tux3_fs_error(sb, fmt, ...)	 \
+	__tux3_fs_error(sb, __func__, __LINE__, fmt , ##__VA_ARGS__)
+
 void hexdump(void *data, unsigned size);
 void set_bits(u8 *bitmap, unsigned start, unsigned count);
 void clear_bits(u8 *bitmap, unsigned start, unsigned count);

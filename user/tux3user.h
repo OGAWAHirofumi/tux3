@@ -140,4 +140,12 @@ int devio_vec(int rw, struct dev *dev, loff_t offset, struct iovec *iov,
 int blockio(int rw, struct sb *sb, struct buffer_head *buffer, block_t block);
 int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 
+#define tux3_msg(sb, fmt, ...)						\
+	__tux3_msg(sb, "", "", fmt "\n", ##__VA_ARGS__)
+#define tux3_err(sb, fmt, ...)						\
+	__tux3_msg(sb, "", "",						\
+		   "Error: %s:%d: " fmt "\n", __func__, __LINE__, ##__VA_ARGS__)
+#define tux3_warn(sb, fmt, ...)					\
+	__tux3_msg(sb, "", "", "Warning: " fmt "\n", ##__VA_ARGS__)
+
 #endif /* !TUX3_USER_H */

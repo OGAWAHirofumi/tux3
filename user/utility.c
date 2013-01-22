@@ -35,3 +35,40 @@ int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count)
 	      bufvec, count, block);
 	return bufvec_io(rw, bufvec, block, count);
 }
+
+/*
+ * Message helpers
+ */
+
+void __tux3_msg(struct sb *sb, const char *level, const char *prefix,
+		const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
+}
+
+void __tux3_fs_error(struct sb *sb, const char *func, unsigned int line,
+		     const char *fmt, ...)
+{
+	va_list args;
+
+	printf("Error: %s:%d: ", func, line);
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
+	printf("\n");
+
+	assert(0);		/* FIXME: what to do here? */
+}
+
+void __tux3_dbg(const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	vprintf(fmt, args);
+	va_end(args);
+}

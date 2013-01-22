@@ -75,6 +75,49 @@ void hexdump(void *data, unsigned size)
 {
 	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_ADDRESS, 16, 1, data, size, 1);
 }
+
+/*
+ * Message helpers
+ */
+
+void __tux3_msg(struct sb *sb, const char *level, const char *prefix,
+		const char *fmt, ...)
+{
+	struct va_format vaf;
+	va_list args;
+
+	va_start(args, fmt);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	printk("%sTUX3-fs%s (%s): %pV\n", level, prefix,
+	       vfs_sb(sb)->s_id, &vaf);
+	va_end(args);
+}
+
+void __tux3_fs_error(struct sb *sb, const char *func, unsigned int line,
+		     const char *fmt, ...)
+{
+	struct va_format vaf;
+	va_list args;
+
+	va_start(args, fmt);
+	vaf.fmt = fmt;
+	vaf.va = &args;
+	printk(KERN_ERR "TUX3-fs error (%s): %s:%d: %pV\n",
+	       vfs_sb(sb)->s_id, func, line, &vaf);
+	va_end(args);
+
+	BUG();		/* FIXME: maybe panic() or MS_RDONLY */
+}
+
+void __tux3_dbg(const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	vprintk(fmt, args);
+	va_end(args);
+}
 #endif /* !__KERNEL__ */
 
 /* Bitmap operations... try to use linux/lib/bitmap.c */
