@@ -588,16 +588,25 @@ static void *data_pool;
 
 static int preallocate_buffers(unsigned bufsize)
 {
-	int i, err = -ENOMEM; /* if malloc fails */
+	int i, err;
 
 	buftrace("Pre-allocating buffers...");
 	prealloc_heads = malloc(max_buffers * sizeof(*prealloc_heads));
-	if (!prealloc_heads)
-		goto buffers_allocation_failure;
+	if (!prealloc_heads) {
+		warn("Unable to pre-allocate buffers."
+		     " Using on demand allocation for buffers");
+		err = -ENOMEM;
+		goto error;
+	}
+
 	buftrace("Pre-allocating data for buffers...");
 	err = posix_memalign(&data_pool, SECTOR_SIZE, max_buffers * bufsize);
-	if (err)
-		goto data_allocation_failure;
+	if (err) {
+		warn("Error: %s unable to allocate space for buffer data",
+		     strerror(err));
+		err = -err;
+		goto error_memalign;
+	}
 
 	//memset(data_pool, 0xdd, max_buffers*bufsize); /* first time init to deadly data */
 	for (i = 0; i < max_buffers; i++) {
@@ -613,12 +622,10 @@ static int preallocate_buffers(unsigned bufsize)
 
 	return 0; /* sucess on pre-allocation of buffers */
 
-data_allocation_failure:
-	warn("Error: %s unable to allocate space for buffer data", strerror(err));
+error_memalign:
 	free(prealloc_heads);
-buffers_allocation_failure:
-	warn("Unable to pre-allocate buffers. Using on demand allocation for buffers");
-	return -err;
+error:
+	return err;
 }
 #endif /* !BUFFER_PARANOIA_DEBUG */
 

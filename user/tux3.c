@@ -59,14 +59,15 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 
 int main(int argc, char *argv[])
 {
-	char *seekarg = NULL;
-	unsigned blocksize = 0;
 	static struct option long_options[] = {
 		{ "seek", required_argument, NULL, 's' },
 		{ "blocksize", required_argument, NULL, 'b' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
+	unsigned blocksize = 0;
+	char *seekarg = NULL;
+	int err;
 
 	while (1) {
 		int c, optindex = 0;
@@ -89,42 +90,47 @@ int main(int argc, char *argv[])
 	if (argc - optind < 2)
 		goto usage;
 
-	if ((errno = -tux3_init_mem()))
-		goto eek;
+	err = tux3_init_mem();
+	if (err)
+		goto error;
 
 	/* open volume, create superblock */
 	const char *command = argv[optind++];
 	const char *volname = argv[optind++];
 	int fd = open(volname, O_RDWR);
 	if (fd < 0)
-		goto eek;
+		goto error_errno;
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (optind != argc)
 			goto usage;
-		if ((errno = -mkfs(fd, volname, blocksize)))
-			goto eek;
+		err = mkfs(fd, volname, blocksize);
+		if (err)
+			goto error;
 		return 0;
 	}
 
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	struct dev *dev = &(struct dev){ .fd = fd };
 	struct sb *sb = rapid_sb(dev);
-	if ((errno = -load_sb(sb)))
-		goto eek;
+	err = load_sb(sb);
+	if (err)
+		goto error;
+
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 2);
 
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
-		errno = -PTR_ERR(rp);
-		goto eek;
+		err = PTR_ERR(rp);
+		goto error;
 	}
 	show_tree_range(&tux_inode(sb->rootdir)->btree, 0, -1);
 	show_tree_range(&tux_inode(sb->bitmap)->btree, 0, -1);
 
-	if ((errno = -replay_stage3(rp, 1)))
-		goto eek;
+	err = replay_stage3(rp, 1);
+	if (err)
+		goto error;
 
 	if (!strcmp(command, "delta")) {
 		force_delta(sb);
@@ -149,15 +155,15 @@ int main(int argc, char *argv[])
 					  &iattr);
 		}
 		if (IS_ERR(inode)) {
-			errno = -PTR_ERR(inode);
-			goto eek;
+			err = PTR_ERR(inode);
+			goto error;
 		}
 		printf("---- write file ----\n");
 		struct file *file = &(struct file){ .f_inode = inode };
 
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
-			goto eek;
+			goto error_errno;
 		if (seekarg) {
 			loff_t seek = strtoull(seekarg, NULL, 0);
 			printf("seek to %Li\n", (s64)seek);
@@ -167,15 +173,20 @@ int main(int argc, char *argv[])
 		while (1) {
 			int len = read(0, text, sizeof(text));
 			if (len < 0)
-				goto eek;
+				goto error_errno;
 			if (!len)
 				break;
-			if ((errno = -tuxwrite(file, text, len)) > 0)
-				goto eek;
+			len = tuxwrite(file, text, len);
+			if (len < 0) {
+				err = len;
+				goto error;
+			}
 		}
 		iput(inode);
-		if ((errno = -sync_super(sb)))
-			goto eek;
+
+		err = sync_super(sb);
+		if (err)
+			goto error;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		//tux_dump_entries(blockget(sb->rootdir->map, 0));
 		//show_tree_range(&sb->itable, 0, -1);
@@ -187,8 +198,8 @@ int main(int argc, char *argv[])
 		//tux_dump_entries(blockread(sb->rootdir->map, 0));
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
-			errno = -PTR_ERR(inode);
-			goto eek;
+			err = PTR_ERR(inode);
+			goto error;
 		}
 		struct file *file = &(struct file){ .f_inode = inode };
 		char buf[100] = { };
@@ -201,8 +212,10 @@ int main(int argc, char *argv[])
 		int got = tuxread(file, buf, sizeof(buf));
 		//printf("got %x bytes\n", got);
 		iput(inode);
-		if (got < 0)
-			return 1;
+		if (got < 0) {
+			err = got;
+			goto error;
+		}
 		hexdump(buf, got);
 	}
 
@@ -210,8 +223,8 @@ int main(int argc, char *argv[])
 		printf("---- read attribute ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
-			errno = -PTR_ERR(inode);
-			goto eek;
+			err = PTR_ERR(inode);
+			goto error;
 		}
 		if (argc - optind < 1)
 			goto usage;
@@ -220,19 +233,19 @@ int main(int argc, char *argv[])
 			printf("read xattr %.*s\n", (int)strlen(name), name);
 			int size = get_xattr(inode, name, strlen(name), NULL, 0);
 			if (size < 0) {
-				errno = -size;
-				goto eek;
+				err = size;
+				goto error;
 			}
 			void *data = malloc(size);
 			if (!data) {
-				errno = ENOMEM;
-				goto eek;
+				err = -ENOMEM;
+				goto error;
 			}
 			size = get_xattr(inode, name, strlen(name), data, size);
 			if (size < 0) {
 				free(data);
-				errno = -size;
-				goto eek;
+				err = size;
+				goto error;
 			}
 			hexdump(data, size);
 			free(data);
@@ -242,10 +255,14 @@ int main(int argc, char *argv[])
 			unsigned len;
 			len = read(0, text, sizeof(text));
 			printf("got %i bytes\n", len);
-			if ((errno = -set_xattr(inode, "foo", 3, "foobar", 6, 0)))
-				goto eek;
-			if ((errno = -sync_super(sb)))
-				goto eek;
+
+			err = set_xattr(inode, "foo", 3, "foobar", 6, 0);
+			if (err)
+				goto error;
+
+			err = sync_super(sb);
+			if (err)
+				goto error;
 		}
 		iput(inode);
 	}
@@ -254,8 +271,8 @@ int main(int argc, char *argv[])
 		printf("---- stat file ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
-			errno = -PTR_ERR(inode);
-			goto eek;
+			err = PTR_ERR(inode);
+			goto error;
 		}
 		dump_attrs(inode);
 		iput(inode);
@@ -263,29 +280,35 @@ int main(int argc, char *argv[])
 
 	if (!strcmp(command, "delete")) {
 		printf("---- delete file ----\n");
-		if ((errno = -tuxunlink(sb->rootdir, filename, strlen(filename))))
-			goto eek;
+		err = tuxunlink(sb->rootdir, filename, strlen(filename));
+		if (err)
+			goto error;
 		tux_dump_entries(blockread(sb->rootdir->map, 0));
-		if ((errno = -sync_super(sb)))
-			goto eek;
+
+		err = sync_super(sb);
+		if (err)
+			goto error;
 	}
 
 	if (!strcmp(command, "truncate")) {
 		printf("---- truncate file ----\n");
 		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
-			errno = -PTR_ERR(inode);
-			goto eek;
+			err = PTR_ERR(inode);
+			goto error;
 		}
 		loff_t seek = 0;
 		if (seekarg)
 			seek = strtoull(seekarg, NULL, 0);
 		printf("---- new size %Lu ----\n", (s64)seek);
-		if ((errno = -tuxtruncate(inode, seek)))
-			goto eek;
+		err = tuxtruncate(inode, seek);
+		if (err)
+			goto error;
 		iput(inode);
-		if ((errno = -sync_super(sb)))
-			goto eek;
+
+		err = sync_super(sb);
+		if (err)
+			goto error;
 	}
 
 out:
@@ -296,9 +319,13 @@ out:
 	tux3_exit_mem();
 
 	return 0;
-eek:
+
+error:
+	errno = -err;
+error_errno:
 	fprintf(stderr, "%s!\n", strerror(errno));
 	exit(1);
+
 usage:
 	usage();
 	exit(1);

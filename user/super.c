@@ -151,7 +151,8 @@ int make_tux3(struct sb *sb)
 
 	change_end_atomic(sb);
 
-	if ((err = sync_super(sb)))
+	err = sync_super(sb);
+	if (err)
 		goto error;
 
 	show_buffers(mapping(sb->bitmap));

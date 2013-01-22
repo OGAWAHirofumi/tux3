@@ -64,13 +64,14 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 	fd = open(volname, O_RDWR);
 	if (fd < 0) {
 		error("volume %s not found", volname);
-		goto error;
+		goto error_errno;
 	}
 
 	err = tux3_init_mem();
 	if (err)
 		goto error;
 
+	err = -ENOMEM;
 	dev = malloc(sizeof(*dev));
 	if (!dev)
 		goto error;
@@ -82,18 +83,21 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 		goto error;
 	*sb = *rapid_sb(dev);
 
-	if ((errno = -load_sb(sb)))
+	err = load_sb(sb);
+	if (err)
 		goto error;
+
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 50 << 20, 2);
 
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
-		errno = -PTR_ERR(rp);
+		err = PTR_ERR(rp);
 		goto error;
 	}
 
-	if ((errno = -replay_stage3(rp, 1)))
+	err = replay_stage3(rp, 1);
+	if (err)
 		goto error;
 
 	tux3fuse->sb = sb;
@@ -101,6 +105,8 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 	return;
 
 error:
+	errno = -err;
+error_errno:
 	warn("Eek! %s", strerror(errno));
 	exit(1);
 }
@@ -564,6 +570,7 @@ static void tux3fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	trace("(%lx)", ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *file = &(struct file){ .f_inode = inode, };
+	int err;
 
 	/* FIXME: better to use map_region() directly */
 	trace("userspace tries to seek to %Li\n", (s64)offset);
@@ -585,7 +592,7 @@ static void tux3fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	int read = tuxread(file, buf, size);
 	if (read < 0) {
-		errno = -read;
+		err = read;
 		goto error;
 	}
 	assert(read <= size);
@@ -595,8 +602,8 @@ static void tux3fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	return;
 
 error:
-	trace("Eek! %s", strerror(errno));
-	fuse_reply_err(req, errno);
+	trace("Eek! %s", strerror(-err));
+	fuse_reply_err(req, -err);
 	free(buf);
 }
 
@@ -612,9 +619,8 @@ static void tux3fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 
 	int written = tuxwrite(file, buf, size);
 	if (written < 0) {
-		errno = -written;
-		warn("Eek! %s", strerror(errno));
-		fuse_reply_err(req, errno);
+		warn("Eek! %s", strerror(-written));
+		fuse_reply_err(req, -written);
 		return;
 	}
 
@@ -668,8 +674,11 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	while (dirfile->f_pos < dirfile->f_inode->i_size) {
 		struct fillstate fstate = { .dirent = dirent };
-		if ((errno = -tux_readdir(dirfile, &fstate, tux3fuse_filler))) {
-			fuse_reply_err(req, errno);
+		int err;
+
+		err = tux_readdir(dirfile, &fstate, tux3fuse_filler);
+		if (err) {
+			fuse_reply_err(req, -err);
 			free(buf);
 			return;
 		}
@@ -677,7 +686,8 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			.st_ino = fstate.ino,
 			.st_mode = fstate.type,
 		};
-		size_t len = fuse_add_direntry(req, buf, size, dirent, &stbuf, dirfile->f_pos);
+		size_t len = fuse_add_direntry(req, buf, size, dirent, &stbuf,
+					       dirfile->f_pos);
 		fuse_reply_buf(req, buf, len);
 		free(buf);
 		return;

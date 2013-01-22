@@ -1347,7 +1347,7 @@ int main(int argc, char *argv[])
 		{ NULL, 0, NULL, 0 }
 	};
 	const char *volname = NULL;
-	int ret = 0;
+	int err, ret = 0;
 
 	while (1) {
 		int c, optindex = 0;
@@ -1367,27 +1367,30 @@ int main(int argc, char *argv[])
 	if (argc - optind < 1)
 		goto usage;
 
-	if ((errno = -tux3_init_mem()))
-		goto eek;
+	err = tux3_init_mem();
+	if (err)
+		goto error;
 
 	/* open volume, create superblock */
 	volname = argv[optind++];
 	int fd = open(volname, O_RDONLY);
 	if (fd < 0)
-		goto eek;
+		goto error_errno;
 
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	struct dev *dev = &(struct dev){ .fd = fd };
 	struct sb *sb = rapid_sb(dev);
-	if ((errno = -load_sb(sb)))
-		goto eek;
+	err = load_sb(sb);
+	if (err)
+		goto error;
+
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 2);
 
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
-		errno = -PTR_ERR(rp);
-		goto eek;
+		err = PTR_ERR(rp);
+		goto error;
 	}
 
 	struct graph_info ginfo;
@@ -1426,21 +1429,22 @@ int main(int argc, char *argv[])
 	fprintf(ginfo.f, "}\n");
 	fclose(ginfo.f);
 
-	if ((errno = -replay_stage3(rp, 0)))
-		goto eek;
+	err = replay_stage3(rp, 0);
+	if (err)
+		goto error;
 
 	put_super(sb);
 	tux3_exit_mem();
 
-out:
 	return ret;
 
-eek:
+error:
+	errno = -err;
+error_errno:
 	fprintf(stderr, "%s!\n", strerror(errno));
-	ret = 1;
-	goto out;
+	return 1;
+
 usage:
 	usage();
-	ret = 1;
-	goto out;
+	return 1;
 }

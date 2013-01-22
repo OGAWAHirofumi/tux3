@@ -413,7 +413,8 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	}
 
 	/* Initialize and load sbi */
-	if ((err = load_sb(sbi))) {
+	err = load_sb(sbi);
+	if (err) {
 		if (!silent) {
 			if (err == -EINVAL)
 				warn("invalid superblock [%Lx]",
