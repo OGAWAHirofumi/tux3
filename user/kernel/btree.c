@@ -131,7 +131,9 @@ static void cursor_root_add(struct cursor *cursor, struct buffer_head *buffer,
 	cursor->path[0].next = next;
 }
 
-static void level_replace_blockput(struct cursor *cursor, int level, struct buffer_head *buffer, struct index_entry *next)
+static void level_replace_blockput(struct cursor *cursor, int level,
+				   struct buffer_head *buffer,
+				   struct index_entry *next)
 {
 #ifdef CURSOR_DEBUG
 	assert(buffer);
@@ -144,7 +146,8 @@ static void level_replace_blockput(struct cursor *cursor, int level, struct buff
 	cursor->path[level].next = next;
 }
 
-void cursor_push(struct cursor *cursor, struct buffer_head *buffer, struct index_entry *next)
+static void cursor_push(struct cursor *cursor, struct buffer_head *buffer,
+			struct index_entry *next)
 {
 	cursor->level++;
 #ifdef CURSOR_DEBUG
@@ -396,7 +399,7 @@ static int cursor_advance_down(struct cursor *cursor)
  *   0 - Finished traverse
  *   1 - Reached leaf
  */
-int cursor_advance(struct cursor *cursor)
+static int cursor_advance(struct cursor *cursor)
 {
 	int ret;
 
