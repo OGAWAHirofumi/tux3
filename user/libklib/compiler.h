@@ -46,6 +46,8 @@
 #warn "Unknown gcc version"
 #endif
 
+#define __printf(a, b)			__attribute__((format(printf, a, b)))
+
 /*
  * A trick to suppress uninitialized variable warning without generating any
  * code
