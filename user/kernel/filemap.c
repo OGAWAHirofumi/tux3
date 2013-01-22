@@ -1042,7 +1042,7 @@ const struct address_space_operations tux_file_aops = {
 #ifdef TUX3_DIRECT_IO
 	.direct_IO		= tux3_direct_IO,
 #endif
-	.migratepage		= buffer_migrate_page,
+//	.migratepage		= buffer_migrate_page,	/* FIXME */
 //	.is_partially_uptodate	= block_is_partially_uptodate,
 };
 
@@ -1071,7 +1071,7 @@ const struct address_space_operations tux_symlink_aops = {
 #ifdef TUX3_DIRECT_IO
 	.direct_IO		= tux3_direct_IO,
 #endif
-	.migratepage		= buffer_migrate_page,
+//	.migratepage		= buffer_migrate_page,	/* FIXME */
 //	.is_partially_uptodate	= block_is_partially_uptodate,
 };
 
@@ -1108,6 +1108,7 @@ const struct address_space_operations tux_blk_aops = {
 	.write_begin	= tux3_blk_write_begin,
 	.bmap		= tux3_bmap,
 	.invalidatepage	= tux3_invalidatepage,
+//	.migratepage	= buffer_migrate_page,		/* FIXME */
 };
 
 static int tux3_vol_get_block(struct inode *inode, sector_t iblock,
