@@ -56,6 +56,7 @@ enum map_mode {
 	MAP_WRITE	= 1,	/* map_region for overwrite */
 	MAP_REDIRECT	= 2,	/* map_region for redirected write
 				 * (copy-on-write) */
+	MAX_MAP_MODE,
 };
 
 #include "filemap_hole.c"
@@ -606,50 +607,25 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 	return err;
 }
 
-/* create modes: 0 - read, 1 - write, 2 - redirect, 3 - delalloc */
-static int __tux3_get_block(struct inode *inode, sector_t iblock,
-			    struct buffer_head *bh_result, int create)
+static void seg_to_buffer(struct sb *sb, struct buffer_head *buffer,
+			  struct seg *seg, int delalloc)
 {
-	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
-	      tux_inode(inode)->inum, (u64)iblock, bh_result->b_size, create);
-
-	struct sb *sb = tux_sb(inode->i_sb);
-	size_t max_blocks = bh_result->b_size >> inode->i_blkbits;
-	enum map_mode mode;
-
-	int delalloc;
-	if (create == 3) {
-		delalloc = 1;
-		mode = MAP_READ;
-	} else {
-		delalloc = 0;
-		mode = create;
-	}
-
-	struct seg seg;
-	int segs = map_region(inode, iblock, max_blocks, &seg, 1, mode);
-	if (segs < 0) {
-		warn("map_region failed: %d", -segs);
-		return -EIO;
-	}
-	assert(segs == 1);
-	size_t blocks = min_t(size_t, max_blocks, seg.count);
-	switch (seg.state) {
+	switch (seg->state) {
 	case SEG_HOLE:
-		if (delalloc && !buffer_delay(bh_result)) {
-			map_bh(bh_result, inode->i_sb, 0);
-			set_buffer_new(bh_result);
-			set_buffer_delay(bh_result);
-			bh_result->b_size = blocks << sb->blockbits;
+		if (delalloc && !buffer_delay(buffer)) {
+			map_bh(buffer, vfs_sb(sb), 0);
+			set_buffer_new(buffer);
+			set_buffer_delay(buffer);
+			buffer->b_size = seg->count << sb->blockbits;
 		}
 		break;
 	case SEG_NEW:
-		assert(create && !delalloc);
-		assert(seg.block);
-		if (buffer_delay(bh_result)) {
+		assert(!delalloc);
+		assert(seg->block);
+		if (buffer_delay(buffer)) {
 			/* for now, block_write_full_page() clear delay */
-//			clear_buffer_delay(bh_result);
-			bh_result->b_blocknr = seg.block;
+//			clear_buffer_delay(buffer);
+			buffer->b_blocknr = seg->block;
 			/*
 			 * FIXME: do we need to unmap_underlying_metadata()
 			 * for sb->volmap? (at least, check buffer state?)
@@ -657,22 +633,55 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 			 */
 			break;
 		}
-#if 1
-		/*
-		 * We doesn't use get_block() on write path in
-		 * atomic-commit, so SEG_NEW never happen.
-		 * (FIXME: Current direct I/O implementation is using
-		 * this path.)
-		 */
-		dump_stack();
-#endif
-		set_buffer_new(bh_result);
+		set_buffer_new(buffer);
 		/* FALLTHRU */
 	default:
-		map_bh(bh_result, inode->i_sb, seg.block);
-		bh_result->b_size = blocks << sb->blockbits;
+		map_bh(buffer, vfs_sb(sb), seg->block);
+		buffer->b_size = seg->count << sb->blockbits;
 		break;
 	}
+}
+
+/* create modes: 0 - read, 1 - write, 2 - redirect, 3 - delalloc */
+static int __tux3_get_block(struct inode *inode, sector_t iblock,
+			    struct buffer_head *bh_result, int create)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	size_t max_blocks = bh_result->b_size >> sb->blockbits;
+	enum map_mode mode;
+	struct seg seg;
+	int segs, delalloc;
+
+	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
+	      tux_inode(inode)->inum, (u64)iblock, bh_result->b_size, create);
+
+	if (create == 3) {
+		delalloc = 1;
+		mode = MAP_READ;
+	} else {
+		delalloc = 0;
+		mode = create;
+	}
+	assert(mode < MAX_MAP_MODE);
+
+	segs = map_region(inode, iblock, max_blocks, &seg, 1, mode);
+	if (segs < 0) {
+		warn("map_region failed: %d", segs);
+		return -EIO;
+	}
+	assert(segs == 1);
+	assert(seg.count <= max_blocks);
+#if 1
+	/*
+	 * We doesn't use get_block() on write path in atomic-commit,
+	 * so SEG_NEW never happen.  (FIXME: Current direct I/O
+	 * implementation is using this path.)
+	 */
+	assert(seg.state != SEG_NEW /*|| (create && !delalloc) */);
+#endif
+
+	seg_to_buffer(sb, bh_result, &seg, delalloc);
+
 	trace("<== inum %Lu, mapped %d, block %Lu, size %zu",
 	      tux_inode(inode)->inum, buffer_mapped(bh_result),
 	      (u64)bh_result->b_blocknr, bh_result->b_size);
@@ -680,10 +689,40 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	return 0;
 }
 
+/* Prepare buffer state for ->write_begin() to use as delalloc */
 static int tux3_da_get_block(struct inode *inode, sector_t iblock,
 			     struct buffer_head *bh_result, int create)
 {
 	/* FIXME: We should reserve the space */
+
+	/* buffer should not be mapped */
+	assert(!buffer_mapped(bh_result));
+	/* If page is uptodate, buffer should be uptodate too */
+	assert(!PageUptodate(bh_result->b_page) || buffer_uptodate(bh_result));
+
+	/*
+	 * If buffer is uptodate, we don't need physical address to
+	 * read block. So, we don't need to find current physical
+	 * address, just setup as SEG_HOLE for delalloc.
+	 */
+	if (buffer_uptodate(bh_result)) {
+		struct sb *sb = tux_sb(inode->i_sb);
+		static struct seg seg = {
+			.state = SEG_HOLE,
+			.block = 0,
+			.count = 1,
+		};
+		assert(bh_result->b_size == sb->blocksize);
+
+		seg_to_buffer(sb, bh_result, &seg, 1);
+
+		trace("inum %Lu, mapped %d, block %Lu, size %zu",
+		      tux_inode(inode)->inum, buffer_mapped(bh_result),
+		      (u64)bh_result->b_blocknr, bh_result->b_size);
+
+		return 0;
+	}
+
 	return __tux3_get_block(inode, iblock, bh_result, 3);
 }
 
