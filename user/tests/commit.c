@@ -18,6 +18,8 @@
 
 #define trace trace_on
 
+#include "tux3_fsck.c"
+
 static block_t check_block;
 
 static int check_defree_block(struct sb *sb, u64 val)
@@ -77,6 +79,13 @@ struct open_result {
 	int err;
 	inum_t inum;
 };
+
+static void fsck(struct sb *sb)
+{
+	test_assert(load_sb(sb) == 0);
+	test_assert(fsck_main(sb) == 0);
+	put_super(sb);
+}
 
 static struct replay *check_replay(struct sb *sb)
 {
@@ -196,8 +205,7 @@ static void test01(struct sb *sb)
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, results, NUM_FILES + NUM_FAIL);
 		clean_main(sb);
@@ -208,8 +216,7 @@ static void test01(struct sb *sb)
 		test_assert(force_rollup(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, results, NUM_FILES + NUM_FAIL);
 		clean_main(sb);
@@ -254,8 +261,7 @@ static void test02(struct sb *sb)
 	test_assert(force_delta(sb) == 0);
 	clean_sb(sb);
 
-	/* FIXME: fsck please */
-	/* fsck(); */
+	fsck(sb);
 
 	check_files(sb, &r, 1);
 	clean_main(sb);
@@ -297,8 +303,7 @@ static void test03(struct sb *sb)
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please, check leak */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, &r, 1);
 		clean_main(sb);
@@ -316,8 +321,7 @@ static void test03(struct sb *sb)
 		test_assert(force_rollup(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please, check leak */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, &r, 1);
 		clean_main(sb);
@@ -467,7 +471,11 @@ static void test04(struct sb *sb)
 
 		int err = replay_stage3(rp, 0);
 		test_assert(!err);
-		clean_main(sb);
+		clean_sb(sb);
+
+		fsck(sb);
+
+		tux3_exit_mem();
 	}
 	test_end();
 
@@ -482,8 +490,11 @@ static void test04(struct sb *sb)
 
 		/* Just add defer orphan deletion request */
 		test_assert(force_delta(sb) == 0);
+		clean_sb(sb);
 
-		clean_main(sb);
+		fsck(sb);
+
+		tux3_exit_mem();
 	}
 	test_end();
 
@@ -504,8 +515,11 @@ static void test04(struct sb *sb)
 
 		/* Remove orphan from sb->otable */
 		test_assert(force_rollup(sb) == 0);
+		clean_sb(sb);
 
-		clean_main(sb);
+		fsck(sb);
+
+		tux3_exit_mem();
 	}
 	test_end();
 
@@ -519,8 +533,11 @@ static void test04(struct sb *sb)
 
 		int err = replay_stage3(rp, 1);
 		test_assert(!err);
+		clean_sb(sb);
 
-		clean_main(sb);
+		fsck(sb);
+
+		tux3_exit_mem();
 	}
 	test_end();
 
@@ -568,8 +585,7 @@ static void test05(struct sb *sb)
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please, check leak */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, &r, 1);
 		clean_main(sb);
@@ -585,8 +601,7 @@ static void test05(struct sb *sb)
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please, check leak */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, &r, 1);
 		clean_main(sb);
@@ -676,8 +691,7 @@ static void test06(struct sb *sb)
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please, check leak */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, r, ARRAY_SIZE(r));
 		clean_main(sb);
@@ -706,8 +720,7 @@ static void test06(struct sb *sb)
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
 
-		/* FIXME: fsck please, check leak */
-		/* fsck(); */
+		fsck(sb);
 
 		check_files(sb, r, ARRAY_SIZE(r));
 		clean_main(sb);
