@@ -12,6 +12,8 @@
 #include "tux3user.h"
 #include "diskio.h"
 
+#include "tux3_fsck.c"
+
 static void usage(void)
 {
 	printf("tux3 [-s|--seek=<offset>] [-b|--blocksize=<size>] [-h|--help]\n"
@@ -120,6 +122,13 @@ int main(int argc, char *argv[])
 
 	dev->bits = sb->blockbits;
 	init_buffers(dev, 1 << 20, 2);
+
+	if (!strcmp(command, "fsck")) {
+		err = fsck_main(sb);
+		if (err)
+			goto error;
+		goto out;
+	}
 
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
