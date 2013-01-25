@@ -188,6 +188,31 @@ error:
 	free_cursor(cursor);
 }
 
+static const char *log_name[] = {
+#define X(x)	[x] = #x
+	X(LOG_BALLOC),
+	X(LOG_BFREE),
+	X(LOG_BFREE_ON_ROLLUP),
+	X(LOG_BFREE_RELOG),
+	X(LOG_LEAF_REDIRECT),
+	X(LOG_LEAF_FREE),
+	X(LOG_BNODE_REDIRECT),
+	X(LOG_BNODE_ROOT),
+	X(LOG_BNODE_SPLIT),
+	X(LOG_BNODE_ADD),
+	X(LOG_BNODE_UPDATE),
+	X(LOG_BNODE_MERGE),
+	X(LOG_BNODE_DEL),
+	X(LOG_BNODE_ADJUST),
+	X(LOG_BNODE_FREE),
+	X(LOG_ORPHAN_ADD),
+	X(LOG_ORPHAN_DEL),
+	X(LOG_FREEBLOCKS),
+	X(LOG_ROLLUP),
+	X(LOG_DELTA),
+#undef X
+};
+
 static void walk_logchain(struct sb *sb, struct walk_logchain_ops *cb,
 			  void *data)
 {
@@ -195,6 +220,9 @@ static void walk_logchain(struct sb *sb, struct walk_logchain_ops *cb,
 	block_t nextchain;
 	unsigned logcount;
 	int obsolete = 0;
+
+	/* Check whether array is uptodate */
+	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
 
 	nextchain = be64_to_cpu(sb->super.logchain);
 	logcount = be32_to_cpu(sb->super.logcount);

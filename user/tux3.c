@@ -13,6 +13,7 @@
 #include "diskio.h"
 
 #include "tux3_fsck.c"
+#include "tux3_image.c"
 
 static void usage(void)
 {
@@ -125,6 +126,17 @@ int main(int argc, char *argv[])
 
 	if (!strcmp(command, "fsck")) {
 		err = fsck_main(sb);
+		if (err)
+			goto error;
+		goto out;
+	}
+	if (!strcmp(command, "image")) {
+		if (argc - optind < 1)
+			goto usage;
+
+		char *filename = argv[optind++];
+
+		err = image_main(sb, filename);
 		if (err)
 			goto error;
 		goto out;

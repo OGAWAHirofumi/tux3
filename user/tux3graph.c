@@ -1550,33 +1550,6 @@ static void draw_log_pre(struct sb *sb, struct buffer_head *buffer,
 static void draw_log(struct sb *sb, struct buffer_head *buffer,
 		     u8 code, u8 *p, unsigned len, int obsolete, void *data)
 {
-	static const char *log_name[] = {
-#define X(x)	[x] = #x
-		X(LOG_BALLOC),
-		X(LOG_BFREE),
-		X(LOG_BFREE_ON_ROLLUP),
-		X(LOG_BFREE_RELOG),
-		X(LOG_LEAF_REDIRECT),
-		X(LOG_LEAF_FREE),
-		X(LOG_BNODE_REDIRECT),
-		X(LOG_BNODE_ROOT),
-		X(LOG_BNODE_SPLIT),
-		X(LOG_BNODE_ADD),
-		X(LOG_BNODE_UPDATE),
-		X(LOG_BNODE_MERGE),
-		X(LOG_BNODE_DEL),
-		X(LOG_BNODE_ADJUST),
-		X(LOG_BNODE_FREE),
-		X(LOG_ORPHAN_ADD),
-		X(LOG_ORPHAN_DEL),
-		X(LOG_FREEBLOCKS),
-		X(LOG_ROLLUP),
-		X(LOG_DELTA),
-#undef X
-	};
-	/* Check whether array is uptodate */
-	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
-
 	struct graph_info *gi = data;
 
 	fprintf(gi->fp, " | [%s] ", log_name[code]);
