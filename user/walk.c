@@ -258,6 +258,7 @@ static void walk_logchain(struct sb *sb, struct walk_logchain_ops *cb,
 	}
 }
 
-void *unuse_walk_logchain = walk_logchain;
+void *unuse_walk_logchain = walk_logchain;	/* fsck doesn't use this */
+void *unuse_walk_dleaf = walk_dleaf;		/* graph doesn't use this */
 
 #endif /* !TUX3_WALK_C */
