@@ -12,6 +12,7 @@
 #include "walk.c"
 
 #define FSCK_BITMAP_ERROR	100
+#define FSCK_INODE_ERROR	101
 
 struct fsck_context {
 	int error;
@@ -26,6 +27,7 @@ struct fsck_context {
 	loff_t mappos;
 
 	block_t freeblocks;
+	block_t freeinodes;
 };
 
 /*
@@ -57,6 +59,7 @@ static void fsck_init_context(struct sb *sb, struct fsck_context *context,
 	context->mapsize	= 0;
 
 	context->freeblocks	= sb->volblocks;
+	context->freeinodes = MAX_INODES - TUX_NORMAL_INO;
 }
 
 static void fsck_destroy_context(struct fsck_context *context)
@@ -230,6 +233,15 @@ static void fsck_check_bitmap(struct sb *sb, struct fsck_context *context)
 	}
 }
 
+static void fsck_check_inodes(struct sb *sb, struct fsck_context *context)
+{
+	if (context->freeinodes != sb->freeinodes) {
+		tux3_err(sb, "shadow freeinodes %Lu, freeinodes %Lu",
+		     context->freeinodes, sb->freeinodes);
+		context->error = FSCK_INODE_ERROR;
+	}
+}
+
 /*
  * Walk filesystem
  */
@@ -266,7 +278,12 @@ static struct walk_btree_ops fsck_dtree_ops = {
 static void fsck_ileaf_cb(struct buffer_head *leafbuf, int at,
 			  struct inode *inode, void *data)
 {
+	struct fsck_context *context = data;
 	struct btree *dtree = &tux_inode(inode)->btree;
+
+	if (tux_inode(inode)->inum >= TUX_NORMAL_INO)
+		context->freeinodes--;
+
 	walk_btree(dtree, &fsck_dtree_ops, data);
 }
 
@@ -340,6 +357,7 @@ static int fsck_main(struct sb *sb)
 	walk_btree(otable_btree(sb), &fsck_otable_ops, &context);
 
 	fsck_check_bitmap(sb, &context);
+	fsck_check_inodes(sb, &context);
 
 	err = replay_stage3(rp, 0);
 	if (err)
