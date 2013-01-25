@@ -721,7 +721,7 @@ static void test06(struct sb *sb)
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
-		error("usage: %s <volname>", argv[0]);
+		error_exit("usage: %s <volname>", argv[0]);
 
 	int fd = open(argv[1], O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
 	assert(fd >= 0);

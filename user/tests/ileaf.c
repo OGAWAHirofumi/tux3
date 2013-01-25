@@ -43,7 +43,7 @@ static void test_remove(struct btree *btree, struct ileaf *leaf, inum_t inum, in
 {
 	unsigned size = 0;
 	char *attrs = ileaf_lookup(btree, inum, leaf, &size);
-	printf("attrs %p, attrs size = %i\n", attrs, size);
+	test_assert(attrs);
 	attrs = ileaf_resize(btree, inum, leaf, size - less);
 }
 

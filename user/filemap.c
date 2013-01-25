@@ -8,6 +8,7 @@
 
 static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
 {
+	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct buffer_head *buffer;
 
 	trace("%s inode 0x%Lx block 0x%Lx",
@@ -21,9 +22,9 @@ static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)
 
 	list_for_each_entry(buffer, &bufvec->contig, link) {
 		if (mode != MAP_READ && buffer_empty(buffer))
-			warn("egad, writing an invalid buffer");
+			tux3_warn(sb, "egad, writing an invalid buffer");
 		if (mode == MAP_READ && buffer_dirty(buffer))
-			warn("egad, reading a dirty buffer");
+			tux3_warn(sb, "egad, reading a dirty buffer");
 	}
 
 	return 0;
@@ -288,7 +289,6 @@ int tuxwrite(struct file *file, const void *data, unsigned len)
 
 void tuxseek(struct file *file, loff_t pos)
 {
-	warn("seek to 0x%Lx", (s64)pos);
 	file->f_pos = pos;
 }
 

@@ -197,10 +197,13 @@ void release_cursor(struct cursor *cursor)
 /* unused */
 void show_cursor(struct cursor *cursor, int depth)
 {
-	printf(">>> cursor %p/%i:", cursor, depth);
-	for (int i = 0; i < depth; i++)
-		printf(" [%Lx/%i]", bufindex(cursor->path[i].buffer), bufcount(cursor->path[i].buffer));
-	printf("\n");
+	__tux3_dbg(">>> cursor %p/%i:", cursor, depth);
+	for (int i = 0; i < depth; i++) {
+		__tux3_dbg(" [%Lx/%i]",
+			   bufindex(cursor->path[i].buffer),
+			   bufcount(cursor->path[i].buffer));
+	}
+	__tux3_dbg("\n");
 }
 
 static void cursor_check(struct cursor *cursor)
@@ -495,21 +498,29 @@ out:
 
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 {
-	printf("%i level btree at %Li:\n", btree->root.depth, btree->root.block);
+	__tux3_dbg("%i level btree at %Li:\n",
+		   btree->root.depth, btree->root.block);
 	if (!has_root(btree))
 		return;
 
 	struct cursor *cursor = alloc_cursor(btree, 0);
-	if (!cursor)
-		error("out of memory");
-	if (btree_probe(cursor, start))
-		error("tell me why!!!");
+	if (!cursor) {
+		tux3_err(btree->sb, "out of memory");
+		return;
+	}
+	if (btree_probe(cursor, start)) {
+		tux3_fs_error(btree->sb, "tell me why!!!");
+		goto out;
+	}
+
 	struct buffer_head *buffer;
 	do {
 		buffer = cursor_leafbuf(cursor);
 		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 	} while (--count && cursor_advance(cursor));
+
+out:
 	free_cursor(cursor);
 }
 

@@ -62,10 +62,8 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 	int err, fd;
 
 	fd = open(volname, O_RDWR);
-	if (fd < 0) {
-		error("volume %s not found", volname);
-		goto error_errno;
-	}
+	if (fd < 0)
+		strerror_exit(1, errno, "volume %s not found", volname);
 
 	err = tux3_init_mem();
 	if (err)
@@ -105,10 +103,7 @@ static void tux3fuse_init(void *userdata, struct fuse_conn_info *conn)
 	return;
 
 error:
-	errno = -err;
-error_errno:
-	warn("Eek! %s", strerror(errno));
-	exit(1);
+	strerror_exit(1, -err, "Eek!");
 }
 
 /* Stub methods */
@@ -453,7 +448,7 @@ static void tux3fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		iput(dir);
 	}
 	if (err)
-		warn("Eek! %s", strerror(-err));
+		tux3_warn(sb, "Eek! %s", strerror(-err));
 
 	fuse_reply_err(req, -err);
 }
@@ -473,7 +468,7 @@ static void tux3fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 		iput(dir);
 	}
 	if (err)
-		warn("Eek! %s", strerror(-err));
+		tux3_warn(sb, "Eek! %s", strerror(-err));
 
 	fuse_reply_err(req, -err);
 }
@@ -619,7 +614,7 @@ static void tux3fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 
 	int written = tuxwrite(file, buf, size);
 	if (written < 0) {
-		warn("Eek! %s", strerror(-written));
+		tux3_warn(tux_sb(inode->i_sb), "Eek! %s", strerror(-written));
 		fuse_reply_err(req, -written);
 		return;
 	}
@@ -899,7 +894,8 @@ static void tux3fuse_removexattr(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_getlk(fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_file_info *fi, struct flock *lock)
 {
-	warn("not implemented");
+	struct sb *sb = tux3fuse_get_sb(req);
+	tux3_warn(sb, "not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 
@@ -907,7 +903,8 @@ static void tux3fuse_setlk(fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_file_info *fi, struct flock *lock,
 			   int sleep)
 {
-	warn("not implemented");
+	struct sb *sb = tux3fuse_get_sb(req);
+	tux3_warn(sb, "not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 #endif /* !NEED_REMOTE_LOCKS */
@@ -916,7 +913,8 @@ static void tux3fuse_setlk(fuse_req_t req, fuse_ino_t ino,
 static void tux3fuse_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 			  uint64_t idx)
 {
-	warn("not implemented");
+	struct sb *sb = tux3fuse_get_sb(req);
+	tux3_warn(sb, "not implemented");
 	fuse_reply_err(req, ENOSYS);
 }
 

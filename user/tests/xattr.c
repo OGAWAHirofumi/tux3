@@ -283,10 +283,8 @@ static void test02(struct sb *sb)
 
 int main(int argc, char *argv[])
 {
-	if (argc < 2) {
-		error("usage: %s <volname>", argv[0]);
-		exit(1);
-	}
+	if (argc < 2)
+		error_exit("usage: %s <volname>", argv[0]);
 
 	size_t volsize = 1 << 24;
 	int fd, err;

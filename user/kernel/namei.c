@@ -318,8 +318,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 	err = tux_delete_dirent(old_dir, old_buffer, old_entry);
 	if (err) {
-		error("TUX3: %s: couldn't delete old entry (%Lu)",
-		      __func__, tux_inode(old_inode)->inum);
+		tux3_fs_error(sb, "couldn't delete old entry (%Lu)",
+			      tux_inode(old_inode)->inum);
 		/* FIXME: now, we have hardlink even if it's dir. */
 		inode_inc_link_count(old_inode);
 	}

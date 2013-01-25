@@ -342,8 +342,9 @@ static int check_present(struct inode *inode)
 		}
 		break;
 	default:
-		error("Unknown mode: inum %Lx, mode %07ho",
-		      tuxnode->inum, inode->i_mode);
+		tux3_fs_error(tux_sb(inode->i_sb),
+			      "Unknown mode: inum %Lx, mode %07ho",
+			      tuxnode->inum, inode->i_mode);
 		break;
 	}
 	return 0;
@@ -373,7 +374,7 @@ static int open_inode(struct inode *inode)
 	};
 	err = btree_read(cursor, &rq.key);
 	if (err == -ENOENT)
-		warn("inum %llx couldn't found", tux_inode(inode)->inum);
+		tux3_warn(sb, "inum %Lu not found", tux_inode(inode)->inum);
 	if (!err) {
 		check_present(inode);
 		tux_setup_inode(inode);
@@ -659,9 +660,11 @@ int tux3_drop_inode(struct inode *inode)
 #ifdef __KERNEL__
 			/* If unmount path, inode should be clean */
 			if (!(inode->i_sb->s_flags & MS_ACTIVE)) {
-				warn("inode %p, inum %Lu, state %lx/%x",
-				     inode, tux_inode(inode)->inum,
-				     inode->i_state, tux_inode(inode)->flags);
+				tux3_err(tux_sb(inode->i_sb),
+					 "inode %p, inum %Lu, state %lx/%x",
+					 inode, tux_inode(inode)->inum,
+					 inode->i_state,
+					 tux_inode(inode)->flags);
 				assert(inode->i_sb->s_flags & MS_ACTIVE);
 			}
 #endif
@@ -742,8 +745,9 @@ int tux3_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	static int print_once;
 	if (!print_once) {
 		print_once++;
-		warn("fsync(2) fall-back to sync(2): %Lx-%Lx, datasync %d",
-		     start, end, datasync);
+		tux3_warn(sb,
+			  "fsync(2) fall-back to sync(2): %Lx-%Lx, datasync %d",
+			  start, end, datasync);
 	}
 
 	return force_delta(sb);
@@ -948,8 +952,8 @@ static void tux_setup_inode(struct inode *inode)
 		break;
 	}
 	default:
-		error("Unknown mode: inum %Lx, mode %07ho",
-		      tux_inode(inode)->inum, inode->i_mode);
+		tux3_fs_error(sb, "Unknown mode: inum %Lx, mode %07ho",
+			      tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
 }

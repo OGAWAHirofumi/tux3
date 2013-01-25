@@ -75,11 +75,11 @@ static void uleaf_dump(struct btree *btree, void *data)
 {
 #if 0
 	struct uleaf *leaf = data;
-	printf("leaf %p/%i", leaf, leaf->count);
+	__tux3_dbg("leaf %p/%i", leaf, leaf->count);
 	struct uentry *entry, *limit = leaf->entries + leaf->count;
 	for (entry = leaf->entries; entry < limit; entry++)
-		printf(" %x:%x", entry->key, entry->val);
-	printf(" (%x free)\n", uleaf_free(btree, leaf));
+		__tux3_dbg(" %x:%x", entry->key, entry->val);
+	__tux3_dbg(" (%x free)\n", uleaf_free(btree, leaf));
 #endif
 }
 

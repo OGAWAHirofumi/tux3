@@ -66,11 +66,11 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 	unsigned char *data = log->data;
 
 	if (log->magic != cpu_to_be16(TUX3_MAGIC_LOG)) {
-		warn("bad log magic %x", be16_to_cpu(log->magic));
+		tux3_err(sb, "bad log magic %x", be16_to_cpu(log->magic));
 		return -EINVAL;
 	}
 	if (be16_to_cpu(log->bytes) + sizeof(*log) > sb->blocksize) {
-		warn("log bytes is too big");
+		tux3_err(sb, "log bytes is too big");
 		return -EINVAL;
 	}
 
@@ -87,7 +87,7 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 		}
 
 		if (log_size[code] == 0) {
-			warn("invalid log code: 0x%02x", code);
+			tux3_err(sb, "invalid log code: 0x%02x", code);
 			return -EINVAL;
 		}
 		data += log_size[code];
@@ -321,7 +321,7 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 			data += log_size[code] - sizeof(code);
 			break;
 		default:
-			warn("unrecognized log code 0x%x", code);
+			tux3_err(rp->sb, "unrecognized log code 0x%x", code);
 			return -EINVAL;
 		}
 	}
@@ -494,7 +494,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			data += log_size[code] - sizeof(code);
 			break;
 		default:
-			warn("unrecognized log code 0x%x", code);
+			tux3_err(sb, "unrecognized log code 0x%x", code);
 			return -EINVAL;
 		}
 	}

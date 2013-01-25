@@ -48,23 +48,26 @@
 
 void tux_dump_entries(struct buffer_head *buffer)
 {
+	struct inode *dir = buffer->map->inode;
 	unsigned blocksize = bufsize(buffer);
-	printf("entries <%Lx:%Lx>: ", tux_inode(buffer->map->inode)->inum, bufindex(buffer));
 	tux_dirent *entry = (tux_dirent *)bufdata(buffer);
 	tux_dirent *limit = bufdata(buffer) + blocksize;
+
+	__tux3_dbg("entries <%Lx:%Lx>: ",
+		   tux_inode(dir)->inum, bufindex(buffer));
 	while (entry < limit) {
 		if (!entry->rec_len) {
-			warn("Zero length entry");
+			tux_zero_len_error(dir, bufindex(buffer));
 			break;
 		}
 		if (!is_deleted(entry))
-			printf("%.*s (%Lx:%i) ",
-			       entry->name_len,
-			       entry->name,
-			       be64_to_cpu(entry->inum),
-			       entry->type);
+			__tux3_dbg("%.*s (%Lx:%i) ",
+				   entry->name_len,
+				   entry->name,
+				   be64_to_cpu(entry->inum),
+				   entry->type);
 		entry = next_entry(entry);
 	}
 	blockput(buffer);
-	printf("\n");
+	__tux3_dbg("\n");
 }

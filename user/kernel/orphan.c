@@ -218,8 +218,9 @@ int tux3_make_orphan_del(struct inode *inode)
 		int err = add_defer_oprhan_del(sb, tuxnode->inum);
 		if (err) {
 			/* FIXME: what to do? */
-			warn("orphan inum %Lu was leaved due to low memory",
-			     tuxnode->inum);
+			tux3_warn(sb,
+				  "orphan inum %Lu was leaved due to low memory",
+				  tuxnode->inum);
 			return err;
 		}
 	}

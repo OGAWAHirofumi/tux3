@@ -164,7 +164,7 @@ int make_tux3(struct sb *sb)
 error_change_end:
 	change_end_atomic(sb);
 error:
-	warn("eek, %s", strerror(-err));
+	tux3_err(sb, "eek, %s", strerror(-err));
 	iput(sb->bitmap);
 	sb->bitmap = NULL;
 

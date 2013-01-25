@@ -14,10 +14,6 @@
 #include <linux/magic.h>
 #include <linux/slab.h>
 
-#define printf(fmt, args...)	printk(fmt , ##args)
-#define vprintf(fmt, args...)	vprintk(fmt , ##args)
-#define die(code)		BUG_ON(1)
-
 #include "trace.h"
 #include "buffer.h"
 #endif /* !__KERNEL__ */

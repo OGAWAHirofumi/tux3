@@ -161,7 +161,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 	}
 	tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 	if (entry_atom(entry) != atom) {
-		warn("atom %x reverse entry broken", atom);
+		tux3_fs_error(sb, "atom %x reverse entry broken", atom);
 		err = -EIO;
 		goto error_blockput;
 	}
@@ -198,7 +198,7 @@ static int get_freeatom(struct inode *atable, atom_t *atom)
 	if (next < 0)
 		return next;
 	if (!is_free_unatom(next)) {
-		warn("something horrible happened");
+		tux3_fs_error(sb, "something horrible happened");
 		return -EIO;
 	}
 
@@ -348,7 +348,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 	}
 
 	if (kill) {
-		warn("delete atom %x", atom);
+		trace("delete atom %x", atom);
 		loff_t next = UNATOM_FREE_MAGIC | sb->freeatom;
 		loff_t where = unatom_dict_write(atable, atom, next);
 		if (where < 0) {
@@ -376,7 +376,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 			/* FIXME: better set a flag that unatom broke
 			 * or something! */
 			/* Corruption of refcount or something */
-			warn("atom entry not found");
+			tux3_fs_error(sb, "atom entry not found");
 			blockput(buffer);
 			return -EIO;
 		}
@@ -411,16 +411,16 @@ void dump_atoms(struct inode *atable)
 			int len = unatom(atable, atom, name, sizeof(name));
 			if (len < 0)
 				goto eek;
-			trace_on("%.*s: atom 0x%08x, ref %u",
-				 len, name, atom, refs);
+			__tux3_dbg("%.*s: atom 0x%08x, ref %u\n",
+				   len, name, atom, refs);
 		}
 		blockput(lobuf);
 		blockput(hibuf);
 	}
 	return;
+
 eek:
-	warn("atom name lookup failed");
-	return;
+	tux3_err(sb, "atom name lookup failed");
 }
 
 /* userland only */
@@ -430,7 +430,7 @@ void show_freeatoms(struct sb *sb)
 	atom_t atom = sb->freeatom;
 
 	while (atom) {
-		warn("free atom: %x", atom);
+		tux3_dbg("free atom: %x", atom);
 		loff_t next = unatom_dict_read(atable, atom);
 		if (next < 0)
 			goto eek;
@@ -439,8 +439,9 @@ void show_freeatoms(struct sb *sb)
 		atom = next & ~UNATOM_FREE_MASK;
 	}
 	return;
+
 eek:
-	warn("eek");
+	tux3_err(sb, "eek");
 }
 
 /* Xattr cache */
@@ -496,7 +497,7 @@ static int expand_xcache(struct inode *inode, unsigned size)
 		size = max_t(unsigned, old->maxsize * 2, size);
 	else
 		size = ALIGN(size, MIN_ALLOC_SIZE);
-	warn("realloc xcache to %i", size);
+	trace("realloc xcache to %i", size);
 
 	assert(size);
 	assert(size <= USHRT_MAX);
@@ -534,27 +535,29 @@ int xcache_dump(struct inode *inode)
 	if (!tux_inode(inode)->xcache)
 		return 0;
 
-	//warn("xattrs %p/%i", inode->xcache, inode->xcache->size);
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
 
+	//__tux3_dbg("xattrs %p/%i", inode->xcache, inode->xcache->size);
 	while (xattr < limit) {
 		if (xattr->size > tux_sb(inode->i_sb)->blocksize)
 			goto bail;
-		printf("atom %.3x => ", xattr->atom);
+		__tux3_dbg("atom %.3x => ", xattr->atom);
 		if (xattr->size)
 			hexdump(xattr->body, xattr->size);
 		else
-			printf("<empty>\n");
+			__tux3_dbg("<empty>\n");
 		if ((xattr = xcache_next(xattr)) > limit)
 			goto fail;
 	}
 	assert(xattr == limit);
 	return 0;
+
 fail:
-	error("corrupt xattrs");
+	tux3_err(tux_sb(inode->i_sb), "corrupt xattrs");
+	return -1;
 bail:
-	error("xattr too big");
+	tux3_err(tux_sb(inode->i_sb), "xattr too big");
 	return -1;
 }
 
@@ -627,7 +630,7 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data,
 			return err;
 	}
 	xattr = xcache_limit(tux_inode(inode)->xcache);
-	//warn("expand by %i\n", more);
+	//trace("expand by %i\n", more);
 	tux_inode(inode)->xcache->size += more;
 	memcpy(xattr->body, data, (xattr->size = len));
 	xattr->atom = atom;
@@ -759,7 +762,8 @@ int list_xattr(struct inode *inode, char *text, size_t size)
 {
 	if (!tux_inode(inode)->xcache)
 		return 0;
-	struct inode *atable = tux_sb(inode->i_sb)->atable;
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct inode *atable = sb->atable;
 	mutex_lock(&atable->i_mutex);
 	struct xcache *xcache = tux_inode(inode)->xcache;
 	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
@@ -793,7 +797,7 @@ int list_xattr(struct inode *inode, char *text, size_t size)
 		}
 
 		if ((xattr = xcache_next(xattr)) > limit) {
-			error("xcache bug");
+			tux3_fs_error(sb, "xcache bug");
 			err = -EIO;
 			goto error;
 		}

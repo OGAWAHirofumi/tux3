@@ -284,8 +284,8 @@ static void tux_setup_inode(struct inode *inode)
 		}
 		break;
 	default:
-		error("Unknown mode: inum %Lx, mode %07ho",
-		      tux_inode(inode)->inum, inode->i_mode);
+		tux3_fs_error(sb, "Unknown mode: inum %Lx, mode %07ho",
+			      tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
 }

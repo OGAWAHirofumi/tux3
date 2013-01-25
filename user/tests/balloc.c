@@ -69,7 +69,7 @@ static void clean_main(struct sb *sb)
 /* Tests bits set/clear/test functions */
 static void test01(struct sb *sb, block_t blocks)
 {
-	warn("---- test bitops ----");
+	tux3_msg(sb, "---- test bitops ----");
 	unsigned char bits[16];
 	memset(bits, 0, sizeof(bits));
 	/* set some bits */

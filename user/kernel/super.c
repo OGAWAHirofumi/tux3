@@ -417,21 +417,21 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	if (err) {
 		if (!silent) {
 			if (err == -EINVAL)
-				warn("invalid superblock [%Lx]",
+				tux3_err(sbi, "invalid superblock [%Lx]",
 				     be64_to_cpup((__be64 *)sbi->super.magic));
 			else
-				warn("Unable to read superblock");
+				tux3_err(sbi, "unable to read superblock");
 		}
 		goto error;
 	}
 
 	if (sbi->blocksize != blocksize) {
 		if (!sb_set_blocksize(sb, sbi->blocksize)) {
-			printk(KERN_ERR "TUX3: blocksize too small for device.\n");
+			tux3_err(sbi, "blocksize too small for device");
 			goto error;
 		}
 	}
-	warn("s_blocksize %lu", sb->s_blocksize);
+	tux3_dbg("s_blocksize %lu", sb->s_blocksize);
 
 	rp = tux3_init_fs(sbi);
 	if (IS_ERR(rp)) {

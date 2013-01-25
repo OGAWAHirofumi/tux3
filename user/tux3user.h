@@ -148,4 +148,16 @@ int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 #define tux3_warn(sb, fmt, ...)					\
 	__tux3_msg(sb, "", "", "Warning: " fmt "\n", ##__VA_ARGS__)
 
+#define strerror_exit(ret, err, fmt, ...) do {				\
+	if (err)							\
+		tux3_err(NULL, fmt ": %s", ##__VA_ARGS__, strerror(err)); \
+	else								\
+		tux3_err(NULL, fmt, ##__VA_ARGS__);			\
+	exit(ret);							\
+} while (0)
+
+#define error_exit(fmt, ...) do {					\
+	strerror_exit(1, 0, fmt, ##__VA_ARGS__);			\
+} while (0)
+
 #endif /* !TUX3_USER_H */

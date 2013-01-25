@@ -62,7 +62,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 	unsigned startbit = start & 7;
 	block_t tail = (count + startbit + 7) >> 3, begin = -1;
 
-	printf("%Ld bitmap blocks:\n", blocks);
+	__tux3_dbg("%Ld bitmap blocks:\n", blocks);
 	for (block_t block = start >> mapshift; block < blocks; block++) {
 		int ended = 0, any = 0;
 		struct buffer_head *buffer = blockread(mapping(inode), block);
@@ -75,7 +75,7 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		for (; p < top; p++, startbit = 0) {
 			unsigned c = *p;
 			if (!any && c)
-				printf("[%Lx] ", block);
+				__tux3_dbg("[%Lx] ", block);
 			any |= c;
 			if ((!c && begin < 0) || (c == 0xff && begin >= 0))
 				continue;
@@ -87,11 +87,11 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 					begin = found;
 				else {
 					if ((begin >> mapshift) != block)
-						printf("-%Lx ", found - 1);
+						__tux3_dbg("-%Lx ", found - 1);
 					else if (begin == found - 1)
-						printf("%Lx ", begin);
+						__tux3_dbg("%Lx ", begin);
 					else
-						printf("%Lx-%Lx ", begin, found - 1);
+						__tux3_dbg("%Lx-%Lx ", begin, found - 1);
 					begin = -1;
 					ended++;
 				}
@@ -102,11 +102,11 @@ block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
 		tail -= bytes;
 		offset = 0;
 		if (begin >= 0)
-			printf("%Lx-", begin);
+			__tux3_dbg("%Lx-", begin);
 		if (any)
-			printf("\n");
+			__tux3_dbg("\n");
 	}
-	printf("(%Ld active)\n", active);
+	__tux3_dbg("(%Ld active)\n", active);
 	return -1;
 }
 #endif
@@ -173,7 +173,7 @@ static int bitmap_modify(struct sb *sb, block_t start, unsigned blocks, int set)
 
 		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
-			warn("block read failed");
+			tux3_err(sb, "block read failed");
 			// !!! error return sucks here
 			return -EIO;
 		}
@@ -220,7 +220,7 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 
 		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
-			warn("block read failed");
+			tux3_err(sb, "block read failed");
 			// !!! error return sucks here
 			return -EIO;
 		}
@@ -229,9 +229,9 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 		if (!test(bufdata(buffer), mapoffset, len)) {
 			blockput(buffer);
 
-			error("%s: start 0x%Lx, count %x",
-			      set ? "already allocated" : "double free",
-			      start, blocks);
+			tux3_fs_error(sb, "%s: start 0x%Lx, count %x",
+				      set ? "already allocated" : "double free",
+				      start, blocks);
 
 			return -EIO;	/* FIXME: error code? */
 		}
@@ -276,7 +276,7 @@ block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
 
 		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
-			warn("block read failed");
+			tux3_err(sb, "block read failed");
 			// !!! error return sucks here
 			return -EIO;
 		}
@@ -358,7 +358,7 @@ int balloc(struct sb *sb, unsigned blocks, block_t *block)
 	if (ret < 0) {
 		if (ret == -ENOSPC) {
 			/* FIXME: This is for debugging. Remove this */
-			warn("couldn't balloc: blocks %u", blocks);
+			tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
 		}
 		return ret;
 	}

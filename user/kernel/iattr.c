@@ -99,7 +99,7 @@ int attr_check(void *attrs, unsigned size)
 
 void dump_attrs(struct inode *inode)
 {
-	//printf("present = %x\n", inode->present);
+	//tux3_dbg("present = %x", inode->present);
 	struct tux3_inode *tuxnode = tux_inode(inode);
 
 	for (int kind = 0; kind < MAX_ATTRS; kind++) {
@@ -107,31 +107,31 @@ void dump_attrs(struct inode *inode)
 			continue;
 		switch (kind) {
 		case RDEV_ATTR:
-			printf("rdev %x:%x ", MAJOR(inode->i_rdev), MINOR(inode->i_rdev));
+			__tux3_dbg("rdev %x:%x ", MAJOR(inode->i_rdev), MINOR(inode->i_rdev));
 			break;
 		case MODE_OWNER_ATTR:
-			printf("mode %07ho uid %x gid %x ", inode->i_mode, i_uid_read(inode), i_gid_read(inode));
+			__tux3_dbg("mode %07ho uid %x gid %x ", inode->i_mode, i_uid_read(inode), i_gid_read(inode));
 			break;
 		case CTIME_SIZE_ATTR:
-			printf("ctime %Lx size %Lx ", tuxtime(inode->i_ctime), (s64)inode->i_size);
+			__tux3_dbg("ctime %Lx size %Lx ", tuxtime(inode->i_ctime), (s64)inode->i_size);
 			break;
 		case LINK_COUNT_ATTR:
-			printf("links %u ", inode->i_nlink);
+			__tux3_dbg("links %u ", inode->i_nlink);
 			break;
 		case MTIME_ATTR:
-			printf("mtime %Lx ", tuxtime(inode->i_mtime));
+			__tux3_dbg("mtime %Lx ", tuxtime(inode->i_mtime));
 			break;
 		case XATTR_ATTR:
-			printf("xattr(s) ");
+			__tux3_dbg("xattr(s) ");
 			break;
 		default:
-			printf("<%i>? ", kind);
+			__tux3_dbg("<%i>? ", kind);
 			break;
 		}
 	}
 	if (has_root(&tuxnode->btree))
-		printf("root %Lx:%u ", tuxnode->btree.root.block, tuxnode->btree.root.depth);
-	printf("\n");
+		__tux3_dbg("root %Lx:%u ", tuxnode->btree.root.block, tuxnode->btree.root.depth);
+	__tux3_dbg("\n");
 }
 
 void *encode_kind(void *attrs, unsigned kind, unsigned version)

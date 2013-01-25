@@ -181,7 +181,7 @@ int ileaf_check(struct btree *btree, struct ileaf *leaf)
 		goto eek;
 	return 0;
 eek:
-	printf("%s!\n", why);
+	tux3_err(btree->sb, "%s!", why);
 	return -1;
 }
 

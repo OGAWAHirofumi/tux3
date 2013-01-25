@@ -64,10 +64,10 @@ enum map_mode {
 /* userland only */
 void show_segs(struct seg map[], unsigned segs)
 {
-	printf("%i segs: ", segs);
+	__tux3_dbg("%i segs: ", segs);
 	for (int i = 0; i < segs; i++)
-		printf("%Lx/%i ", map[i].block, map[i].count);
-	printf("\n");
+		__tux3_dbg("%Lx/%i ", map[i].block, map[i].count);
+	__tux3_dbg("\n");
 }
 
 static int map_bfree(struct inode *inode, block_t block, unsigned count)
@@ -666,7 +666,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 
 	segs = map_region(inode, iblock, max_blocks, &seg, 1, mode);
 	if (segs < 0) {
-		warn("map_region failed: %d", segs);
+		tux3_err(sb, "map_region failed: %d", segs);
 		return -EIO;
 	}
 	assert(segs == 1);

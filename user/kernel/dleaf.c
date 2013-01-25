@@ -119,29 +119,29 @@ void dleaf_dump(struct btree *btree, void *vleaf)
 	struct entry *edict = (void *)(gbase + 1), *entry = edict;
 	struct diskextent *extents = leaf->table;
 
-	printf("%i entry groups:\n", dleaf_groups(leaf));
+	__tux3_dbg("%i entry groups:\n", dleaf_groups(leaf));
 	for (struct group *group = gdict; group > gbase; group--) {
-		printf("  %ti/%i:", gdict - group, group_count(group));
-		//printf(" [%i]", extents - leaf->table);
+		__tux3_dbg("  %ti/%i:", gdict - group, group_count(group));
+		//__tux3_dbg(" [%i]", extents - leaf->table);
 		struct entry *ebase = entry - group_count(group);
 		while (entry > ebase) {
 			--entry;
 			unsigned offset = entry == edict - 1 ? 0 : entry_limit(entry + 1);
 			int count = entry_limit(entry) - offset;
-			printf(" %Lx =>", get_index(group, entry));
-			//printf(" %p (%i)", entry, entry_limit(entry));
+			__tux3_dbg(" %Lx =>", get_index(group, entry));
+			//__tux3_dbg(" %p (%i)", entry, entry_limit(entry));
 			if (count < 0)
-				printf(" <corrupt>");
+				__tux3_dbg(" <corrupt>");
 			else for (int i = 0; i < count; i++) {
 				struct diskextent extent = extents[offset + i];
-				printf(" %Lx", extent_block(extent));
+				__tux3_dbg(" %Lx", extent_block(extent));
 				if (extent_count(extent))
-					printf("/%x", extent_count(extent));
+					__tux3_dbg("/%x", extent_count(extent));
 			}
-			//printf(" {%u}", entry_limit(entry));
-			printf(";");
+			//__tux3_dbg(" {%u}", entry_limit(entry));
+			__tux3_dbg(";");
 		}
-		printf("\n");
+		__tux3_dbg("\n");
 		extents += entry_limit(entry);
 		edict -= group_count(group);
 	}
@@ -194,7 +194,7 @@ static int dleaf_check(struct dleaf *leaf, unsigned blocksize)
 		excount += entry_limit(estop);
 		encount += group_count(group);
 	}
-	//printf("encount = %i, excount = %i, \n", encount, excount);
+	//tux3_dbg("encount = %i, excount = %i", encount, excount);
 	why = "used count wrong";
 	if (be16_to_cpu(leaf->used) != (void *)(edict - encount) - (void *)leaf)
 		goto eek;
@@ -205,9 +205,10 @@ static int dleaf_check(struct dleaf *leaf, unsigned blocksize)
 	if (be16_to_cpu(leaf->used) - be16_to_cpu(leaf->free) != dleaf_free2(leaf, blocksize))
 		goto eek;
 	return 0;
+
 eek:
-	printf("free %i, used %i\n", be16_to_cpu(leaf->free), be16_to_cpu(leaf->used));
-	printf("%s!\n", why);
+	tux3_dbg("error: free %i, used %i", be16_to_cpu(leaf->free), be16_to_cpu(leaf->used));
+	tux3_dbg("error: %s!", why);
 	return -1;
 }
 
@@ -220,7 +221,7 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 	unsigned recount = 0, grsplit = 0, exsplit = 0;
 	unsigned entries = edict - ebase;
 
-	printf("split %p into %p at %x\n", leaf, leaf2, split);
+	trace("split %p into %p at %x", leaf, leaf2, split);
 	if (!groups)
 		return 0;
 	assert(split < entries);
@@ -237,8 +238,8 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 	if (cut)
 		exsplit += entry_limit(edict - cut);
 	edict = (void *)gbase; /* restore it */
-	printf("split %i entries at group %i, entry %x\n", entries, grsplit, cut);
-	printf("split extents at %i\n", exsplit);
+	trace("split %i entries at group %i, entry %x", entries, grsplit, cut);
+	trace("split extents at %i", exsplit);
 	/* copy extents */
 	unsigned size = from + be16_to_cpu(leaf->free) - (void *)(leaf->table + exsplit);
 	memcpy(leaf2->table, leaf->table + exsplit, size);

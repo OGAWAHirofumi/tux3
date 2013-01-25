@@ -23,12 +23,12 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 {
 	loff_t volsize = 0;
 	if (fdsize64(fd, &volsize))
-		error("fdsize64 failed for '%s' (%s)", volname, strerror(errno));
+		strerror_exit(1, errno, "fdsize64 failed for '%s'", volname);
 	int blockbits = 12;
 	if (blocksize) {
 		blockbits = ffs(blocksize) - 1;
 		if (1 << blockbits != blocksize)
-			error("blocksize must be a power of two");
+			error_exit("blocksize must be a power of two");
 	}
 
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = blockbits };
@@ -47,7 +47,8 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	if (!sb->logmap)
 		return -ENOMEM;
 
-	printf("make tux3 filesystem on %s (0x%Lx bytes)\n", volname, (s64)volsize);
+	tux3_msg(sb, "make tux3 filesystem on %s (0x%Lx bytes), blocksize %u",
+		 volname, (s64)volsize, blocksize);
 	int err = make_tux3(sb);
 	if (!err) {
 		show_tree_range(itable_btree(sb), 0, -1);
@@ -99,7 +100,7 @@ int main(int argc, char *argv[])
 	const char *volname = argv[optind++];
 	int fd = open(volname, O_RDWR);
 	if (fd < 0)
-		goto error_errno;
+		strerror_exit(1, errno, "couldn't open %s", volname);
 
 	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
 		if (optind != argc)
@@ -163,7 +164,7 @@ int main(int argc, char *argv[])
 
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
-			goto error_errno;
+			strerror_exit(1, errno, "fstat");
 		if (seekarg) {
 			loff_t seek = strtoull(seekarg, NULL, 0);
 			printf("seek to %Li\n", (s64)seek);
@@ -173,7 +174,7 @@ int main(int argc, char *argv[])
 		while (1) {
 			int len = read(0, text, sizeof(text));
 			if (len < 0)
-				goto error_errno;
+				strerror_exit(1, errno, "read");
 			if (!len)
 				break;
 			len = tuxwrite(file, text, len);
@@ -321,9 +322,7 @@ out:
 	return 0;
 
 error:
-	errno = -err;
-error_errno:
-	fprintf(stderr, "%s!\n", strerror(errno));
+	strerror_exit(1, -err, "eek!");
 	exit(1);
 
 usage:

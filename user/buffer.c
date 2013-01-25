@@ -76,13 +76,13 @@ void show_buffers_(map_t *map, int all)
 
 void show_active_buffers(map_t *map)
 {
-	warn("(map %p)", map);
+	printf("(map %p)\n", map);
 	show_buffers_(map, 0);
 }
 
 void show_buffers(map_t *map)
 {
-	warn("(map %p)", map);
+	printf("(map %p)\n", map);
 	show_buffers_(map, 1);
 }
 
@@ -302,8 +302,8 @@ void get_bh(struct buffer_head *buffer)
 static void __blockput_free(struct buffer_head *buffer, unsigned delta)
 {
 	if (bufcount(buffer) != 2) { /* caller + hashlink == 2 */
-		warn("free block %Lx/%x still in use!",
-		     bufindex(buffer), bufcount(buffer));
+		printf("Error: free block %Lx/%x still in use!\n",
+		       bufindex(buffer), bufcount(buffer));
 		blockput(buffer);
 		assert(bufcount(buffer) == 1);
 		return;
@@ -383,7 +383,8 @@ struct buffer_head *new_buffer(map_t *map)
 
 	buftrace("expand buffer pool");
 	if (buffer_count == max_buffers) {
-		warn("Maximum buffer count exceeded (%i)", buffer_count);
+		printf("Warning: maximum buffer count exceeded (%i)\n",
+		       buffer_count);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -399,7 +400,8 @@ struct buffer_head *new_buffer(map_t *map)
 
 	err = posix_memalign(&buffer->data, SECTOR_SIZE, 1 << map->dev->bits);
 	if (err) {
-		warn("Error: %s unable to expand buffer pool", strerror(err));
+		printf("Error: unable to expand buffer pool: %s\n",
+		       strerror(err));
 		free(buffer);
 		return ERR_PTR(-err);
 	}
@@ -544,7 +546,7 @@ static void __destroy_buffers(void)
 			}
 		}
 		if (!list_empty(head)) {
-			warn("state %d: buffer leak, or list corruption?", i);
+			printf("Error: state %d: buffer leak, or list corruption?\n", i);
 			list_for_each_entry(buffer, head, link) {
 				printf("map [%p] ", buffer->map);
 				show_buffer(buffer);
@@ -566,7 +568,7 @@ static void __destroy_buffers(void)
 		}
 	}
 	if (!list_empty(&lru_buffers)) {
-		warn("dirty buffer leak, or list corruption?");
+		printf("Error: dirty buffer leak, or list corruption?\n");
 		list_for_each_entry(buffer, &lru_buffers, lru) {
 			if (buffer_dirty(buffer)) {
 				printf("map [%p] ", buffer->map);
@@ -593,8 +595,8 @@ static int preallocate_buffers(unsigned bufsize)
 	buftrace("Pre-allocating buffers...");
 	prealloc_heads = malloc(max_buffers * sizeof(*prealloc_heads));
 	if (!prealloc_heads) {
-		warn("Unable to pre-allocate buffers."
-		     " Using on demand allocation for buffers");
+		printf("Warning: unable to pre-allocate buffers."
+		       " Using on demand allocation for buffers\n");
 		err = -ENOMEM;
 		goto error;
 	}
@@ -602,8 +604,8 @@ static int preallocate_buffers(unsigned bufsize)
 	buftrace("Pre-allocating data for buffers...");
 	err = posix_memalign(&data_pool, SECTOR_SIZE, max_buffers * bufsize);
 	if (err) {
-		warn("Error: %s unable to allocate space for buffer data",
-		     strerror(err));
+		printf("Error: unable to allocate space for buffer data: %s\n",
+		       strerror(err));
 		err = -err;
 		goto error_memalign;
 	}

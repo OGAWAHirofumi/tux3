@@ -64,7 +64,7 @@ static void add_link(struct graph_info *gi, const char *fmt, ...)
 
 	linfo = malloc(sizeof(*linfo));
 	if (!linfo)
-		error("out of memory");
+		strerror_exit(1, ENOMEM, "out of memory");
 	INIT_LIST_HEAD(&linfo->list);
 	list_add_tail(&linfo->list, &gi->link_head);
 
@@ -92,7 +92,7 @@ static struct dtree_info *alloc_tmpfile(void)
 
 	dinfo = malloc(sizeof(*dinfo));
 	if (!dinfo)
-		error("out of memory");
+		strerror_exit(1, ENOMEM, "out of memory");
 
 	INIT_LIST_HEAD(&dinfo->list);
 	list_add_tail(&dinfo->list, &tmpfile_head);
@@ -115,7 +115,7 @@ static void merge_file(FILE *dst, FILE *src)
 	while ((size = read(fd, buf, sizeof(buf))) > 0) {
 		size_t n = fwrite(buf, size, 1, dst);
 		if (n != 1)
-			error("fwrite error: %s", strerror(errno));
+			strerror_exit(1, errno, "fwrite");
 	}
 }
 
@@ -174,13 +174,15 @@ static void walk_btree(struct graph_info *gi, struct btree *btree,
 {
 	struct cursor *cursor;
 	struct buffer_head *buffer;
+	int err;
 
 	cursor = alloc_cursor(btree, 0);
 	if (!cursor)
-		error("out of memory");
+		strerror_exit(1, ENOMEM, "out of memory");
 
-	if (cursor_read_root(cursor) < 0)
-		error("cursor_read_root() error");
+	err = cursor_read_root(cursor);
+	if (err < 0)
+		strerror_exit(1, -err, "cursor_read_root()");
 
 	buffer = cursor->path[cursor->level].buffer;
 	draw_bnode(gi, buffer);
@@ -188,7 +190,7 @@ static void walk_btree(struct graph_info *gi, struct btree *btree,
 	while (1) {
 		int ret = cursor_advance_down(cursor);
 		if (ret < 0)
-			error("cursor_advance_down() error");
+			strerror_exit(1, -ret, "cursor_advance_down()");
 		if (ret) {
 			buffer = cursor->path[cursor->level].buffer;
 			draw_bnode(gi, buffer);
@@ -992,7 +994,8 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		inum_t inum = ibase(ileaf) + at;
 		struct inode *inode = tux3_iget(btree->sb, inum);
 		if (IS_ERR(inode))
-			error("inode couldn't get: inum %Lu", inum);
+			strerror_exit(1, -PTR_ERR(inode),
+				      "inode couldn't get: inum %Lu", inum);
 
 		if (!has_root(&tux_inode(inode)->btree))
 			goto out_iput;
@@ -1347,7 +1350,7 @@ int main(int argc, char *argv[])
 		{ NULL, 0, NULL, 0 }
 	};
 	const char *volname = NULL;
-	int err, ret = 0;
+	int err;
 
 	while (1) {
 		int c, optindex = 0;
@@ -1375,7 +1378,7 @@ int main(int argc, char *argv[])
 	volname = argv[optind++];
 	int fd = open(volname, O_RDONLY);
 	if (fd < 0)
-		goto error_errno;
+		strerror_exit(1, errno, "couldn't open %s", volname);
 
 	/* dev->bits is still unknown. Note, some structure can't use yet. */
 	struct dev *dev = &(struct dev){ .fd = fd };
@@ -1399,7 +1402,7 @@ int main(int argc, char *argv[])
 	sprintf(filename, "%s.dot", volname);
 	file = fopen(filename, "w");
 	if (!file)
-		error("coundn't open: %s\n", filename);
+		strerror_exit(1, errno, "coundn't open %s\n", filename);
 
 	fprintf(file,
 		"digraph tux3_g {\n"
@@ -1436,12 +1439,10 @@ int main(int argc, char *argv[])
 	put_super(sb);
 	tux3_exit_mem();
 
-	return ret;
+	return 0;
 
 error:
-	errno = -err;
-error_errno:
-	fprintf(stderr, "%s!\n", strerror(errno));
+	strerror_exit(1, -err, "eek!");
 	return 1;
 
 usage:

@@ -377,7 +377,7 @@ static void test05(struct sb *sb, struct inode *inode)
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
-		error("usage: %s <volname>", argv[0]);
+		error_exit("usage: %s <volname>", argv[0]);
 
 	char *name = argv[1];
 	int fd = open(name, O_CREAT|O_TRUNC|O_RDWR, S_IRUSR|S_IWUSR);
