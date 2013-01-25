@@ -19,13 +19,362 @@
 #define TABLE_STYLE \
 	"border=\"0\" cellborder=\"1\" cellpadding=\"5\" cellspacing=\"0\""
 
-static int verbose;
+static int opt_verbose;
+static int opt_stats;
+
 #define DRAWN_DTREE	(1 << 0)
 #define DRAWN_DLEAF	(1 << 1)
 #define DRAWN_ILEAF	(1 << 2)
 #define DRAWN_OLEAF	(1 << 3)
 static int drawn;
 static LIST_HEAD(tmpfile_head);
+
+struct stats_seek {
+	block_t blocks;				/* total seek blocks */
+	block_t nr;				/* number of seek */
+	block_t io;				/* number of I/O */
+};
+
+struct stats_btree_block {
+	block_t blocks;				/* number of blocks */
+	block_t empty;				/* number of empty blocks */
+	block_t bytes;				/* number of used bytes */
+};
+
+struct stats_btree_data {
+	block_t blocks;				/* number of blocks */
+	block_t nr;				/* number of extents */
+	unsigned max;				/* maximum extent */
+	unsigned min;				/* minimum extent */
+	block_t last;				/* last seek pos of data */
+	struct stats_seek data_seek;		/* seek to next data */
+	struct stats_seek dir_seek;		/* dir => ileaf seek */
+};
+
+struct stats_btree_level {
+	struct stats_btree_block block;		/* block space stats */
+	struct stats_seek child_seek;		/* seek to child object */
+};
+
+struct stats_btree {
+	struct stats_seek depth_seek;		/* seek for depth-first */
+	struct stats_btree_data data;		/* data blocks stats */
+	int depth;
+	struct stats_btree_level levels[];	/* block stats for each level */
+};
+
+struct stats_fs {
+	struct stats_btree *own;
+	struct stats_btree *dtree_sum;
+
+	block_t logblock;			/* number of log blocks */
+	block_t logblock_bytes;			/* number of log bytes */
+	struct stats_seek logblock_seek;	/* seek for depth-first */
+};
+
+static double percentage(u64 numerator, u64 denominator)
+{
+	if (!denominator)
+		return 0;
+	return ((double)numerator / denominator) * 100;
+}
+
+static u64 average(u64 total, u64 nr)
+{
+	if (!nr)
+		return 0;
+	return total / nr;
+}
+
+static struct stats_btree *alloc_stats_btree(int depth)
+{
+	size_t size = sizeof(struct stats_btree)
+		+ (depth + 1) * sizeof(struct stats_btree_level);
+	struct stats_btree *own;
+
+	own = malloc(size);
+	if (!own)
+		strerror_exit(1, ENOMEM, "malloc");
+
+	memset(own, 0, size);
+	own->depth	= depth;
+	own->data.min	= UINT_MAX;
+
+	return own;
+}
+
+static void free_stats_btree(struct stats_btree *stats)
+{
+	if (stats)
+		free(stats);
+}
+
+static struct stats_fs init_stats_fs(struct btree *btree)
+{
+	int depth = btree->root.depth;
+
+	if (!opt_stats)
+		return (struct stats_fs){};
+	return (struct stats_fs){ .own = alloc_stats_btree(depth), };
+}
+
+static void destroy_stats_fs(struct stats_fs *stats)
+{
+	free_stats_btree(stats->own);
+	free_stats_btree(stats->dtree_sum);
+}
+
+static block_t stats_suppose_seek(block_t physical, unsigned count)
+{
+	static block_t last;
+	block_t len = llabs(last - physical);
+
+	trace("depth-first seek: %Lu => %Lu, seek %Lu", last, physical, len);
+	last = physical + count;
+
+	return len;
+}
+
+static void stats_seek_add(struct stats_seek *stats, block_t seek_len)
+{
+	stats->blocks += seek_len;
+	stats->nr += !!seek_len;
+	stats->io++;
+}
+
+static void stats_data_seek_add(struct stats_btree *stats, block_t block,
+				unsigned count)
+{
+	block_t seek = llabs(block - (stats->data.last ? : block));
+	stats_seek_add(&stats->data.data_seek, seek);
+	stats->data.last = block + count;
+}
+
+static void stats_dir_seek_add(struct stats_btree *stats, block_t dir,
+			       block_t ileaf)
+{
+	static block_t last_ileaf;
+	block_t seek = llabs(ileaf - dir);
+
+	trace("dir => ileaf seek: %Lu => %Lu, seek %Lu, last %Lu",
+	      dir, ileaf, seek, last_ileaf);
+	if (last_ileaf != ileaf) {
+		stats_seek_add(&stats->data.dir_seek, seek);
+		last_ileaf = ileaf;
+	}
+}
+
+static void stats_child_seek_add(struct stats_btree *stats, int level,
+				block_t cur, block_t child)
+{
+	block_t seek = llabs(child - (cur + 1));
+	stats_seek_add(&stats->levels[level].child_seek, seek);
+}
+
+static void stats_block_add(struct stats_btree *stats, int level,
+			    block_t block, unsigned bytes, int empty)
+{
+	block_t seek = stats_suppose_seek(block, 1);
+
+	stats->levels[level].block.blocks++;
+	stats->levels[level].block.empty += empty;
+	stats->levels[level].block.bytes += bytes;
+
+	stats_seek_add(&stats->depth_seek, seek);
+}
+
+static void stats_data_add(struct stats_btree *stats, block_t block,
+			   unsigned count)
+{
+	block_t seek = stats_suppose_seek(block, count);
+
+	stats->data.blocks += count;
+	stats->data.nr++;
+	stats->data.max = max(stats->data.max, count);
+	stats->data.min = min(stats->data.min, count);
+
+	stats_seek_add(&stats->depth_seek, seek);
+}
+
+static struct stats_btree_level
+stats_levels_sum(struct stats_btree *stats, int depth)
+{
+	struct stats_btree_level sum = {};
+
+	for (int i = 0; i <= depth; i++) {
+		sum.block.blocks	+= stats->levels[i].block.blocks;
+		sum.block.empty		+= stats->levels[i].block.empty;
+		sum.block.bytes		+= stats->levels[i].block.bytes;
+		sum.child_seek.blocks	+= stats->levels[i].child_seek.blocks;
+		sum.child_seek.nr	+= stats->levels[i].child_seek.nr;
+		sum.child_seek.io	+= stats->levels[i].child_seek.io;
+	}
+
+	return sum;
+}
+
+static void stats_btree_merge(struct stats_btree **a, struct stats_btree *b)
+{
+	/* No need to merge */
+	if (b == NULL)
+		return;
+
+	if (*a == NULL) {
+		/* Just copy b to a */
+		*a = alloc_stats_btree(b->depth);
+	} else {
+		/* Merge b to a */
+		if ((*a)->depth < b->depth) {
+			struct stats_btree *tmp = alloc_stats_btree(b->depth);
+
+			/* Copy (*a) to tmp */
+			tmp->depth_seek = (*a)->depth_seek;
+			tmp->data = (*a)->data;
+			for (int i = 0; i < (*a)->depth; i++)
+				tmp->levels[i] = (*a)->levels[i];
+			/* Set leaf info to new depth */
+			tmp->levels[tmp->depth] = (*a)->levels[(*a)->depth];
+
+			free_stats_btree(*a);
+			*a = tmp;
+		}
+	}
+
+	/* Merge bnode => bnode, and leaf => leaf */
+	for (int i = 0; i <= b->depth; i++) {
+		int level = i < b->depth ? i : (*a)->depth;
+		struct stats_btree_level *la = &(*a)->levels[level];
+		struct stats_btree_level *lb = &b->levels[i];
+
+		la->block.blocks	+= lb->block.blocks;
+		la->block.empty		+= lb->block.empty;
+		la->block.bytes		+= lb->block.bytes;
+		la->child_seek.blocks	+= lb->child_seek.blocks;
+		la->child_seek.nr	+= lb->child_seek.nr;
+		la->child_seek.io	+= lb->child_seek.io;
+	}
+
+	(*a)->depth_seek.blocks	+= b->depth_seek.blocks;
+	(*a)->depth_seek.nr	+= b->depth_seek.nr;
+	(*a)->depth_seek.io	+= b->depth_seek.io;
+
+	struct stats_btree_data *da = &(*a)->data;
+	struct stats_btree_data *db = &b->data;
+	da->blocks		+= db->blocks;
+	da->nr			+= db->nr;
+	da->max			= max(da->max, db->max);
+	da->min			= min(da->min, db->min);
+	da->data_seek.blocks	+= db->data_seek.blocks;
+	da->data_seek.nr	+= db->data_seek.nr;
+	da->data_seek.io	+= db->data_seek.io;
+	da->dir_seek.blocks	+= db->dir_seek.blocks;
+	da->dir_seek.nr		+= db->dir_seek.nr;
+	da->dir_seek.io		+= db->dir_seek.io;
+}
+
+static void stats_print_seek(struct stats_seek *stats, const char *prefix)
+{
+	printf("%s seek:\n"
+	       "    %14Lu blocks, %10Lu seeks,       %10Lu IO\n"
+	       "    avg %13c      %10Lu blocks/seek, %10Lu blocks/IO\n",
+	       prefix, stats->blocks, stats->nr, stats->io, ' ',
+	       average(stats->blocks, stats->nr),
+	       average(stats->blocks, stats->io));
+}
+
+static void stats_print_depth_seek(struct stats_seek *stats)
+{
+	stats_print_seek(stats, "depth-first");
+}
+
+static void stats_print_seeks(struct sb *sb, struct stats_btree *stats,
+			      int data, int dir)
+{
+	for (int i = 0; i <= stats->depth; i++) {
+		char prefix[64];
+
+		if (i < stats->depth)
+			snprintf(prefix, sizeof(prefix), "level %d => %d",
+				 i, i + 1);
+		else
+			strcpy(prefix, "leaf => child");
+
+		stats_print_seek(&stats->levels[i].child_seek, prefix);
+	}
+
+	if (data)
+		stats_print_seek(&stats->data.data_seek, "data => data");
+
+	if (dir)
+		stats_print_seek(&stats->data.dir_seek, "dir => ileaf");
+}
+
+static void stats_print_log(struct sb *sb, struct stats_fs *stats)
+{
+	block_t bytes;
+
+	bytes = stats->logblock << sb->blockbits;
+	printf("[log]\n");
+	printf("logblock:\n"
+	       "    %14Lu blocks, %14Lu bytes, %5.02f%% full\n",
+	       stats->logblock, stats->logblock_bytes,
+	       percentage(stats->logblock_bytes, bytes));
+
+	stats_print_depth_seek(&stats->logblock_seek);
+}
+
+static void stats_print_level(struct sb *sb, struct stats_btree_level *level,
+			      const char *prefix)
+{
+	block_t bytes;
+
+	bytes = level->block.blocks << sb->blockbits;
+	printf("%s:\n"
+	       "    %14Lu blocks, %14Lu bytes, %5.02f%% full\n"
+	       "    %14Lu blocks empty\n",
+	       prefix, level->block.blocks, level->block.bytes,
+	       percentage(level->block.bytes, bytes),
+	       level->block.empty);
+}
+
+static void __printf(5, 6)
+stats_print(struct sb *sb, struct stats_btree *stats, int data, int dir,
+	    const char *fmt, ...)
+{
+	va_list ap;
+	struct stats_btree_level sum;
+
+	if (stats == NULL)
+		return;
+
+	printf("[");
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+	printf("]\n");
+
+	/* Calc sum of bnode */
+	sum = stats_levels_sum(stats, stats->depth - 1);
+	stats_print_level(sb, &sum, "bnode");
+
+	stats_print_level(sb, &stats->levels[stats->depth], "leaf");
+
+	/* Calc sum of bnode + leaf */
+	sum = stats_levels_sum(stats, stats->depth);
+	stats_print_level(sb, &sum, "btree");
+
+	if (data) {
+		printf("data:\n"
+		       "    %14Lu blocks"
+		       " (extent: min %u, max %u, avg %Lu, nr %Lu)\n",
+		       stats->data.blocks, stats->data.min, stats->data.max,
+		       average(stats->data.blocks, stats->data.nr),
+		       stats->data.nr);
+	}
+
+	stats_print_seeks(sb, stats, data, dir);
+	stats_print_depth_seek(&stats->depth_seek);
+}
 
 struct graph_info {
 	FILE *fp;
@@ -36,6 +385,8 @@ struct graph_info {
 	struct list_head link_head;
 
 	void *private;
+
+	struct stats_fs *stats;
 };
 
 struct link_info {
@@ -169,6 +520,18 @@ static void draw_bnode(struct btree *btree, struct buffer_head *buffer,
 			"volmap_%llu:f%u -> volmap_%llu:head;\n",
 			blocknr, n,
 			be64_to_cpu(index[n].block));
+
+		if (opt_stats)
+			stats_child_seek_add(gi->stats->own, level, blocknr,
+					     be64_to_cpu(index[n].block));
+	}
+
+	if (opt_stats) {
+		unsigned bytes = sizeof(*bnode)
+			+ sizeof(*index) * bcount(bnode);
+		int empty = !bcount(bnode);
+
+		stats_block_add(gi->stats->own, level, blocknr, bytes, empty);
 	}
 }
 
@@ -185,7 +548,8 @@ static void draw_btree_post(struct btree *btree, void *data)
 struct draw_data_ops {
 	void (*draw_start)(struct graph_info *gi, struct btree *btree);
 	void (*draw_data)(struct graph_info *gi, struct btree *btree,
-			  block_t index, unsigned count);
+			  struct buffer_head *leafbuf,
+			  block_t index, block_t block, unsigned count);
 	void (*draw_end)(struct graph_info *gi, struct btree *btree);
 };
 
@@ -206,7 +570,8 @@ static void draw_data_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void draw_data(struct graph_info *gi, struct btree *btree,
-		      block_t index, unsigned count)
+		      struct buffer_head *leafbuf,
+		      block_t index, block_t block, unsigned count)
 {
 }
 
@@ -233,7 +598,8 @@ static void draw_bitmap_start(struct graph_info *gi, struct btree *btree)
 static int bitmap_has_dirty;
 
 static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
-			     block_t index, unsigned count)
+			     struct buffer_head *leafbuf,
+			     block_t index, block_t block, unsigned count)
 {
 	struct sb *sb = btree->sb;
 	struct inode *bitmap = sb->bitmap;
@@ -312,7 +678,9 @@ static void draw_atable_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
-			    struct buffer_head *buffer)
+			    struct buffer_head *leafbuf,
+			    struct buffer_head *buffer, block_t block,
+			    int atable)
 {
 	struct sb *sb = btree->sb;
 	tux_dirent *entry = bufdata(buffer);
@@ -325,6 +693,29 @@ static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
 			be64_to_cpu(entry->inum), be16_to_cpu(entry->rec_len),
 			entry->name_len, entry->type,
 			(int)entry->name_len, entry->name);
+
+		if (opt_stats && !atable) {
+			struct btree *itable = itable_btree(sb);
+			int err;
+
+			struct cursor *cursor = alloc_cursor(itable, 0);
+			if (!cursor)
+				strerror_exit(1, ENOMEM, "alloc_cursor");
+
+			down_read(&cursor->btree->lock);
+			err = btree_probe(cursor, be64_to_cpu(entry->inum));
+			if (err)
+				strerror_exit(1, -err,
+				      "btree_probe error for inum in dir");
+
+			stats_dir_seek_add(gi->stats->own, block,
+					   bufindex(cursor_leafbuf(cursor)));
+
+			release_cursor(cursor);
+
+			up_read(&cursor->btree->lock);
+			free_cursor(cursor);
+		}
 
 		entry = (void *)entry + be16_to_cpu(entry->rec_len);
 	}
@@ -390,7 +781,8 @@ static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
 }
 
 static void draw_atable_data(struct graph_info *gi, struct btree *btree,
-			     block_t index, unsigned count)
+			     struct buffer_head *leafbuf,
+			     block_t index, block_t block, unsigned count)
 {
 	static int start_atomref = 1, start_unatom = 1;
 
@@ -403,7 +795,7 @@ static void draw_atable_data(struct graph_info *gi, struct btree *btree,
 
 		if (index < sb->atomref_base) {
 			/* atom name table */
-			__draw_dir_data(gi, btree, buffer);
+			__draw_dir_data(gi, btree, leafbuf, buffer, block+i, 1);
 		} else if (index < sb->unatom_base) {
 			/* atom refcount table */
 			if (start_atomref) {
@@ -462,7 +854,8 @@ static void draw_dir_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void draw_dir_data(struct graph_info *gi, struct btree *btree,
-			  block_t index, unsigned count)
+			  struct buffer_head *leafbuf,
+			  block_t index, block_t block, unsigned count)
 {
 	struct buffer_head *buffer;
 
@@ -470,7 +863,7 @@ static void draw_dir_data(struct graph_info *gi, struct btree *btree,
 		buffer = blockread(mapping(btree_inode(btree)), index + i);
 		assert(buffer);
 
-		__draw_dir_data(gi, btree, buffer);
+		__draw_dir_data(gi, btree, leafbuf, buffer, block + i, 0);
 
 		blockput(buffer);
 	}
@@ -602,6 +995,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 	struct dleaf *dleaf = bufdata(leafbuf);
 	struct group *groups = dleaf_groups_ptr(btree, dleaf);
 	struct diskextent *extents;
+	int depth = btree->root.depth;
 	int gr;
 
 	draw_dleaf_start(gi, dleaf_name, leafbuf);
@@ -679,6 +1073,14 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 		}
 	}
 
+	if (opt_stats) {
+		unsigned bytes = sizeof(*dleaf) + dleaf_free(btree, dleaf);
+		int empty = dleaf_can_free(btree, dleaf);
+
+		stats_block_add(gi->stats->own, depth, bufindex(leafbuf),
+				bytes, empty);
+	}
+
 	/* Walk again for file data */
 	struct graph_info *gi_data = data;
 	struct draw_data_ops *draw_data_ops = gi_data->private;
@@ -686,8 +1088,18 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 	if (dwalk_probe(dleaf, btree->sb->blocksize, &walk, 0)) {
 		do {
 			block_t index = dwalk_index(&walk);
+			block_t block = dwalk_block(&walk);
 			unsigned count = dwalk_count(&walk);
-			draw_data_ops->draw_data(gi_data, btree, index, count);
+			draw_data_ops->draw_data(gi_data, btree, leafbuf,
+						 index, block, count);
+
+			if (opt_stats) {
+				stats_data_seek_add(gi->stats->own, block,
+						    count);
+				stats_child_seek_add(gi->stats->own, depth,
+						     bufindex(leafbuf), block);
+				stats_data_add(gi->stats->own, block, count);
+			}
 		} while (dwalk_next(&walk));
 	}
 }
@@ -701,6 +1113,16 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 	struct dleaf2 *dleaf = bufdata(leafbuf);
 	struct diskextent2 *dex, *dex_limit;
 	struct extent prev = { .logical = TUXKEY_LIMIT, };
+	int depth = btree->root.depth;
+
+	if (opt_stats) {
+		unsigned bytes = sizeof(*dleaf)
+			+ sizeof(*dleaf->table) * be16_to_cpu(dleaf->count);
+		int empty = dleaf2_can_free(btree, dleaf);
+
+		stats_block_add(gi->stats->own, depth, bufindex(leafbuf),
+				bytes, empty);
+	}
 
 	draw_dleaf_start(gi, dleaf_name, leafbuf);
 
@@ -715,16 +1137,28 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 		get_extent(dex, &ex);
 
 		if (prev.logical != TUXKEY_LIMIT) {
+			block_t logical = prev.logical;
+			block_t physical = prev.physical;
 			unsigned count = ex.logical - prev.logical;
 			fprintf(gi->fp, " (count %u)", count);
 
-			if (prev.physical) {
-				/* Draw file data */
-				draw_data_ops->draw_data(gi_data, btree,
-							 prev.logical, count);
+			if (!physical)
+				goto skip;
+
+			/* Draw file data */
+			draw_data_ops->draw_data(gi_data, btree, leafbuf,
+						 logical, physical, count);
+
+			if (opt_stats) {
+				stats_data_seek_add(gi->stats->own, physical,
+						    count);
+				stats_child_seek_add(gi->stats->own, depth,
+						   bufindex(leafbuf), physical);
+				stats_data_add(gi->stats->own, physical, count);
 			}
 		}
 
+skip:
 		fprintf(gi->fp,
 			" | verhi 0x%04x, logical %llu,"
 			" verlo 0x%04x, physical %llu",
@@ -750,7 +1184,7 @@ static void draw_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 	block_t blocknr = leafbuf->index;
 	char dleaf_name[32];
 
-	if (!verbose && (drawn & DRAWN_DLEAF))
+	if (!opt_verbose && (drawn & DRAWN_DLEAF))
 		return;
 	drawn |= DRAWN_DLEAF;
 
@@ -836,7 +1270,7 @@ static void draw_ileaf_cb(struct buffer_head *leafbuf, int at,
 	assert(draw_data_ops);
 
 	if (!special_inode) {
-		if (!verbose && (drawn & DRAWN_DTREE))
+		if (!opt_verbose && (drawn & DRAWN_DTREE))
 			return;
 
 		drawn |= DRAWN_DTREE;
@@ -848,13 +1282,15 @@ static void draw_ileaf_cb(struct buffer_head *leafbuf, int at,
 		 dtree->root.block);
 
 	/* for draw dtree */
-	struct tmpfile_info *tmp;
-	tmp = alloc_tmpfile();
+	struct stats_fs stats_dtree = init_stats_fs(dtree);
+	struct tmpfile_info *tmp = alloc_tmpfile();
+
 	struct graph_info ginfo_dtree = {
 		.fp = tmp->fp,
 		.bname = bname,
 		.lname = "dleaf",
 		.link_head = LIST_HEAD_INIT(ginfo_dtree.link_head),
+		.stats = &stats_dtree,
 	};
 	snprintf(ginfo_dtree.filedata, sizeof(ginfo_dtree.filedata),
 		 "%s_data", bname);
@@ -867,6 +1303,7 @@ static void draw_ileaf_cb(struct buffer_head *leafbuf, int at,
 		.lname = ginfo_dtree.filedata,
 		.link_head = LIST_HEAD_INIT(ginfo_data.link_head),
 		.private = draw_data_ops,
+		.stats = &stats_dtree,
 	};
 
 	ginfo_dtree.private = &ginfo_data;
@@ -875,18 +1312,45 @@ static void draw_ileaf_cb(struct buffer_head *leafbuf, int at,
 	walk_btree(dtree, &draw_dtree_ops, &ginfo_dtree);
 	draw_data_ops->draw_end(&ginfo_data, dtree);
 
+	if (opt_stats > 1) {
+		if (special_inode) {
+			stats_print(dtree->sb, stats_dtree.own,
+				    1, S_ISDIR(inode->i_mode),
+				    "dtree, %s", dtree_types[inum].name);
+		} else {
+			stats_print(dtree->sb, stats_dtree.own,
+				    1, S_ISDIR(inode->i_mode),
+				    "dtree, inum %Lu", inum);
+		}
+	} else if (opt_stats) {
+		static int print_once;
+		if (!print_once) {
+			print_once++;
+			printf("Per-inode stats was suppressed."
+			       " To see per-inode stats, use -s -s.\n");
+		}
+	}
+	if (opt_stats) {
+		/* Merge dtree stats to dtree_sum */
+		stats_btree_merge(&gi->stats->dtree_sum, stats_dtree.own);
+	}
+
+	destroy_stats_fs(&stats_dtree);
+
 	/* draw at least one dleaf */
 	drawn &= ~DRAWN_DLEAF;
 }
 
 typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
-				  inum_t, void *, u16);
+				  struct buffer_head *, inum_t, void *, u16);
 
 static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
-			    inum_t inum, void *attrs, u16 size)
+			    struct buffer_head *leafbuf, inum_t inum,
+			    void *attrs, u16 size)
 {
 	struct sb *sb = btree->sb;
 	struct inode *inode = rapid_open_inode(sb, NULL, 0);
+	int depth = btree->root.depth;
 
 	/* Check there is orphaned inode */
 	struct inode *cache_inode = tux3_ilookup(sb, inum);
@@ -909,6 +1373,11 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 		orphan ? ", orphan" : "",
 		orphan ? "</font>" : "");
 
+	if (opt_stats && has_root(&tux_inode(inode)->btree)) {
+		stats_child_seek_add(gi->stats->own, depth, bufindex(leafbuf),
+				     tux_inode(inode)->btree.root.block);
+	}
+
 	free_xcache(inode);
 	free_map(inode->map);
 }
@@ -920,6 +1389,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 	struct ileaf *ileaf = bufdata(leafbuf);
 	__be16 *dict = ileaf_dict(btree, ileaf);
 	block_t blocknr = leafbuf->index;
+	int depth = btree->root.depth;
 	int at;
 
 	fprintf(gi->fp,
@@ -940,7 +1410,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 	/* draw inode attributes */
 	u16 offset = 0, limit, size;
 	for (at = 0; at < icount(ileaf); at++) {
-		limit =__atdict(dict, at + 1);
+		limit = __atdict(dict, at + 1);
 		if (offset >= limit)
 			continue;
 		size = limit - offset;
@@ -955,7 +1425,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			"    <td port=\"a%d\">",
 			at);
 
-		draw_ileaf_attr(gi, btree, inum, attrs, size);
+		draw_ileaf_attr(gi, btree, leafbuf, inum, attrs, size);
 
 		fprintf(gi->fp,
 			"</td>\n"
@@ -995,6 +1465,14 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			blocknr, at,
 			blocknr, at);
 	}
+
+	if (opt_stats) {
+		unsigned bytes = sizeof(*ileaf) + ileaf_need(btree, ileaf);
+		int empty = btree->ops->leaf_can_free(btree, ileaf);
+
+		stats_block_add(gi->stats->own, depth, bufindex(leafbuf),
+				bytes, empty);
+	}
 }
 
 static void draw_ileaf(struct btree *btree, struct buffer_head *leafbuf,
@@ -1002,7 +1480,7 @@ static void draw_ileaf(struct btree *btree, struct buffer_head *leafbuf,
 {
 	struct graph_info *gi = data;
 
-	if (!verbose && (drawn & DRAWN_ILEAF))
+	if (!opt_verbose && (drawn & DRAWN_ILEAF))
 		return;
 	drawn |= DRAWN_ILEAF;
 
@@ -1019,7 +1497,8 @@ static struct walk_btree_ops draw_itable_ops = {
 };
 
 static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
-			    inum_t inum, void *attrs, u16 size)
+			    struct buffer_head *leafbuf, inum_t inum,
+			    void *attrs, u16 size)
 {
 	fprintf(gi->fp, "attrs (ino %llu, size %u)", inum, size);
 }
@@ -1029,7 +1508,7 @@ static void draw_oleaf(struct btree *btree, struct buffer_head *leafbuf,
 {
 	struct graph_info *gi = data;
 
-	if (!verbose && (drawn & DRAWN_OLEAF))
+	if (!opt_verbose && (drawn & DRAWN_OLEAF))
 		return;
 	drawn |= DRAWN_OLEAF;
 
@@ -1057,6 +1536,15 @@ static void draw_log_pre(struct sb *sb, struct buffer_head *buffer,
 		buffer_dirty(buffer) ? ", dirty" : "",
 		be16_to_cpu(log->magic), be16_to_cpu(log->bytes),
 		be64_to_cpu(log->logchain));
+
+	if (opt_stats) {
+		block_t seek = stats_suppose_seek(bufindex(buffer), 1);
+		unsigned bytes = sizeof(*log) + be16_to_cpu(log->bytes);
+
+		gi->stats->logblock++;
+		gi->stats->logblock_bytes += bytes;
+		stats_seek_add(&gi->stats->logblock_seek, seek);
+	}
 }
 
 static void draw_log(struct sb *sb, struct buffer_head *buffer,
@@ -1309,6 +1797,7 @@ static void usage(void)
 int main(int argc, char *argv[])
 {
 	static struct option long_options[] = {
+		{ "stats", no_argument, NULL, 's' },
 		{ "verbose", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -1318,12 +1807,20 @@ int main(int argc, char *argv[])
 
 	while (1) {
 		int c, optindex = 0;
-		c = getopt_long(argc, argv, "b:vh", long_options, &optindex);
+		c = getopt_long(argc, argv, "svh", long_options, &optindex);
 		if (c == -1)
 			break;
 		switch (c) {
+		case 's':
+			opt_stats++;
+			/* stats needs to walk whole */
+			if (!opt_verbose) {
+				opt_verbose++;
+				printf("Turn --verbose on for stats\n");
+			}
+			break;
 		case 'v':
-			verbose++;
+			opt_verbose++;
 			break;
 		case 'h':
 		default:
@@ -1368,6 +1865,9 @@ int main(int argc, char *argv[])
 	if (!file)
 		strerror_exit(1, errno, "coundn't open %s\n", filename);
 
+	struct stats_fs stats_itable = init_stats_fs(itable_btree(sb));
+	struct stats_fs stats_otable = init_stats_fs(otable_btree(sb));
+
 	fprintf(file,
 		"digraph tux3_g {\n"
 		"graph [compound = true];\n"
@@ -1378,6 +1878,7 @@ int main(int argc, char *argv[])
 		.bname = "itable",
 		.lname = "ileaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
+		.stats = &stats_itable,
 	};
 	draw_sb(&ginfo, sb);
 	draw_logchain(&ginfo, sb);
@@ -1388,6 +1889,7 @@ int main(int argc, char *argv[])
 		.bname = "otable",
 		.lname = "oleaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
+		.stats = &stats_otable,
 	};
 	walk_btree(otable_btree(sb), &draw_otable_ops, &ginfo);
 
@@ -1402,6 +1904,21 @@ int main(int argc, char *argv[])
 
 	put_super(sb);
 	tux3_exit_mem();
+
+	if (opt_stats) {
+		stats_print(sb, stats_itable.dtree_sum, 1, 1, "dtree");
+		stats_print(sb, stats_itable.own, 0, 0, "itable");
+		stats_print(sb, stats_otable.own, 0, 0, "otable");
+
+		stats_print_log(sb, &stats_itable);
+
+		stats_btree_merge(&stats_itable.own, stats_itable.dtree_sum);
+		stats_btree_merge(&stats_itable.own, stats_otable.own);
+		stats_print(sb, stats_itable.own, 1, 1, "total");
+	}
+
+	destroy_stats_fs(&stats_itable);
+	destroy_stats_fs(&stats_otable);
 
 	return 0;
 
