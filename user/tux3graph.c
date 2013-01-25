@@ -23,9 +23,6 @@
 #define TABLE_STYLE \
 	"border=\"0\" cellborder=\"1\" cellpadding=\"5\" cellspacing=\"0\""
 
-static const char itable_name[] = "itable";
-static const char otable_name[] = "otable";
-
 static int verbose;
 #define DRAWN_DTREE	(1 << 0)
 #define DRAWN_DLEAF	(1 << 1)
@@ -35,7 +32,7 @@ static int drawn;
 static LIST_HEAD(tmpfile_head);
 
 struct graph_info {
-	FILE *f;
+	FILE *fp;
 	char subgraph[32];	/* subgraph name */
 	char filedata[32];	/* filedata name */
 	const char *bname;	/* btree name */
@@ -51,11 +48,11 @@ struct link_info {
 };
 #define linfo_entry(x)		list_entry(x, struct link_info, list)
 
-struct dtree_info {
-	FILE *f;
+struct tmpfile_info {
+	FILE *fp;
 	struct list_head list;
 };
-#define dtree_entry(x)		list_entry(x, struct dtree_info, list)
+#define tmpfile_entry(x)	list_entry(x, struct tmpfile_info, list)
 
 static void add_link(struct graph_info *gi, const char *fmt, ...)
 {
@@ -76,29 +73,29 @@ static void add_link(struct graph_info *gi, const char *fmt, ...)
 static void write_link(struct graph_info *gi)
 {
 	if (!list_empty(&gi->link_head)) {
-		fprintf(gi->f, "\n");
+		fprintf(gi->fp, "\n");
 		while (!list_empty(&gi->link_head)) {
 			struct link_info *l = linfo_entry(gi->link_head.next);
 			list_del(&l->list);
-			fputs(l->link, gi->f);
+			fputs(l->link, gi->fp);
 			free(l);
 		}
 	}
 }
 
-static struct dtree_info *alloc_tmpfile(void)
+static struct tmpfile_info *alloc_tmpfile(void)
 {
-	struct dtree_info *dinfo;
+	struct tmpfile_info *tmpfile;
 
-	dinfo = malloc(sizeof(*dinfo));
-	if (!dinfo)
+	tmpfile = malloc(sizeof(*tmpfile));
+	if (!tmpfile)
 		strerror_exit(1, ENOMEM, "out of memory");
 
-	INIT_LIST_HEAD(&dinfo->list);
-	list_add_tail(&dinfo->list, &tmpfile_head);
-	dinfo->f = tmpfile64();
+	INIT_LIST_HEAD(&tmpfile->list);
+	list_add_tail(&tmpfile->list, &tmpfile_head);
+	tmpfile->fp = tmpfile64();
 
-	return dinfo;
+	return tmpfile;
 }
 
 static void merge_file(FILE *dst, FILE *src)
@@ -122,11 +119,11 @@ static void merge_file(FILE *dst, FILE *src)
 static void merge_tmpfiles(struct graph_info *gi)
 {
 	while (!list_empty(&tmpfile_head)) {
-		struct dtree_info *info = dtree_entry(tmpfile_head.next);
-		list_del(&info->list);
-		merge_file(gi->f, info->f);
-		fclose(info->f);
-		free(info);
+		struct tmpfile_info *tmpf = tmpfile_entry(tmpfile_head.next);
+		list_del(&tmpf->list);
+		merge_file(gi->fp, tmpf->fp);
+		fclose(tmpf->fp);
+		free(tmpf);
 	}
 }
 
@@ -140,7 +137,7 @@ static void draw_bnode(struct graph_info *gi, struct buffer_head *buffer)
 	struct index_entry *index = bnode->entries;
 	int n;
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"volmap_%llu [\n"
 		"label = \"{ <head> [bnode] (blocknr %llu%s)"
 		" | magic 0x%04x, count %u |",
@@ -148,12 +145,12 @@ static void draw_bnode(struct graph_info *gi, struct buffer_head *buffer)
 		buffer_dirty(buffer) ? ", dirty" : "",
 		be16_to_cpu(bnode->magic), bcount(bnode));
 	for (n = 0; n < bcount(bnode); n++) {
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			" %c <f%u> key %llu, block %lld",
 			n ? '|' : '{', n,
 			be64_to_cpu(index[n].key), be64_to_cpu(index[n].block));
 	}
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" }}\"\n"
 		"shape = record\n"
 		"%s"
@@ -162,7 +159,7 @@ static void draw_bnode(struct graph_info *gi, struct buffer_head *buffer)
 
 	/* write link: bnode -> bnode or leaf */
 	for (n = 0; n < bcount(bnode); n++) {
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			"volmap_%llu:f%u -> volmap_%llu:head;\n",
 			blocknr, n,
 			be64_to_cpu(index[n].block));
@@ -216,14 +213,14 @@ static void draw_btree(struct graph_info *gi, struct btree *btree,
 		return;
 
 	snprintf(gi->subgraph, sizeof(gi->subgraph), "cluster_%s", gi->bname);
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"subgraph %s {\n"
 		"label = \"%s\"\n",
 		gi->subgraph, gi->bname);
 
 	walk_btree(gi, btree, draw_leaf, data);
 
-	fprintf(gi->f, "}\n");
+	fprintf(gi->fp, "}\n");
 
 	/* add external link for this tree */
 	write_link(gi);
@@ -239,12 +236,12 @@ struct draw_data_ops {
 static void draw_subdata_start(struct graph_info *gi, struct btree *btree,
 			       const char *postfix)
 {
-	fprintf(gi->f, "%s%s [\n", gi->lname, postfix);
+	fprintf(gi->fp, "%s%s [\n", gi->lname, postfix);
 }
 
 static void draw_data_start(struct graph_info *gi, struct btree *btree)
 {
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"subgraph cluster_%s {\n"
 		"label = \"%s\"\n",
 		gi->lname, gi->lname);
@@ -259,7 +256,7 @@ static void draw_data(struct graph_info *gi, struct btree *btree,
 
 static void draw_subdata_end(struct graph_info *gi, struct btree *btree)
 {
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"shape = record\n"
 		"];\n");
 }
@@ -268,13 +265,13 @@ static void draw_data_end(struct graph_info *gi, struct btree *btree)
 {
 	draw_subdata_end(gi, btree);
 
-	fprintf(gi->f, "}\n");
+	fprintf(gi->fp, "}\n");
 }
 
 static void draw_bitmap_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f, "label = \"{ dump of bitmap data");
+	fprintf(gi->fp, "label = \"{ dump of bitmap data");
 }
 
 static int bitmap_has_dirty;
@@ -293,7 +290,7 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 		/* bit offset from index 0 and bit 0 */
 		block_t offset = (index + i) * size;
 
-		fprintf(gi->f, " | index %llu:", (index + i));
+		fprintf(gi->fp, " | index %llu:", (index + i));
 		buffer = blockread(mapping(bitmap), index + i);
 		assert(buffer);
 		data = bufdata(buffer);
@@ -307,9 +304,9 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 			end = offset + idx - 1;
 
 			if (start != end)
-				fprintf(gi->f, " %llu-%llu,", start, end);
+				fprintf(gi->fp, " %llu-%llu,", start, end);
 			else
-				fprintf(gi->f, " %llu,", start);
+				fprintf(gi->fp, " %llu,", start);
 
 			if (idx >= size)
 				break;
@@ -317,7 +314,7 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 			if (idx >= size)
 				break;
 		}
-		fprintf(gi->f, " \\l"); /* left align */
+		fprintf(gi->fp, " \\l"); /* left align */
 
 		if (buffer_dirty(buffer))
 			bitmap_has_dirty = 1;
@@ -327,7 +324,7 @@ static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
 
 static void draw_bitmap_end(struct graph_info *gi, struct btree *btree)
 {
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" }\"\n"
 		"%s",
 		bitmap_has_dirty ? "color = red\n" : "");
@@ -343,7 +340,7 @@ struct draw_data_ops draw_bitmap = {
 static void draw_vtable_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f, "label = \"version table\"\n");
+	fprintf(gi->fp, "label = \"version table\"\n");
 }
 
 struct draw_data_ops draw_vtable = {
@@ -355,7 +352,7 @@ struct draw_data_ops draw_vtable = {
 static void draw_atable_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f, "label = \"{ dump of atable");
+	fprintf(gi->fp, "label = \"{ dump of atable");
 }
 
 static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
@@ -366,7 +363,7 @@ static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
 	tux_dirent *limit = (void *)entry + sb->blocksize;
 
 	while (entry < limit) {
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			" | inum %llu, rec_len %hu, name_len %u,"
 			" type %u, '%.*s'",
 			be64_to_cpu(entry->inum), be16_to_cpu(entry->rec_len),
@@ -396,9 +393,9 @@ static void draw_atable_atomref(struct graph_info *gi, struct btree *btree,
 
 		if (ref) {
 			if (!prev_atomref)
-				fprintf(gi->f, " | ...");
+				fprintf(gi->fp, " | ...");
 
-			fprintf(gi->f,
+			fprintf(gi->fp,
 				" | low 0x%04hx, hi 0x%04hx"
 				" (atom %u, refcnt %u)",
 				be16_to_cpup(low), be16_to_cpup(hi), atom, ref);
@@ -426,7 +423,7 @@ static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
 		unsigned atom = atom_base + (ptr - base);
 
 		if (atom < sb->atomgen) {
-			fprintf(gi->f,
+			fprintf(gi->fp,
 				" | where 0x%08llx (atom %u)",
 				be64_to_cpup(ptr), atom);
 
@@ -455,10 +452,10 @@ static void draw_atable_data(struct graph_info *gi, struct btree *btree,
 			/* atom refcount table */
 			if (start_atomref) {
 				start_atomref = 0;
-				fprintf(gi->f, " }\"\n");
+				fprintf(gi->fp, " }\"\n");
 				draw_subdata_end(gi, btree);
 				draw_subdata_start(gi, btree, "_atomref");
-				fprintf(gi->f, "label = \"{ dump of atomref");
+				fprintf(gi->fp, "label = \"{ dump of atomref");
 			}
 
 			/* Dump low and high at once */
@@ -475,10 +472,10 @@ static void draw_atable_data(struct graph_info *gi, struct btree *btree,
 			/* unatom table */
 			if (start_unatom) {
 				start_unatom = 0;
-				fprintf(gi->f, " }\"\n");
+				fprintf(gi->fp, " }\"\n");
 				draw_subdata_end(gi, btree);
 				draw_subdata_start(gi, btree, "_unatom");
-				fprintf(gi->f, "label = \"{ dump of unatom");
+				fprintf(gi->fp, "label = \"{ dump of unatom");
 			}
 
 			draw_atable_unatom(gi, btree, buffer);
@@ -491,7 +488,7 @@ next:
 
 static void draw_atable_end(struct graph_info *gi, struct btree *btree)
 {
-	fprintf(gi->f, " }\"\n");
+	fprintf(gi->fp, " }\"\n");
 	draw_data_end(gi, btree);
 }
 
@@ -504,7 +501,7 @@ struct draw_data_ops draw_atable = {
 static void draw_dir_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"label = \"{ dump of directory");
 }
 
@@ -525,7 +522,7 @@ static void draw_dir_data(struct graph_info *gi, struct btree *btree,
 
 static void draw_dir_end(struct graph_info *gi, struct btree *btree)
 {
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" }\"\n");
 	draw_data_end(gi, btree);
 }
@@ -539,7 +536,7 @@ struct draw_data_ops draw_dir = {
 static void draw_file_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f, "label = \"file data\"\n");
+	fprintf(gi->fp, "label = \"file data\"\n");
 }
 
 struct draw_data_ops draw_file = {
@@ -551,7 +548,7 @@ struct draw_data_ops draw_file = {
 static void draw_symlink_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->f, "label = \"symlink data\"\n");
+	fprintf(gi->fp, "label = \"symlink data\"\n");
 }
 
 struct draw_data_ops draw_symlink = {
@@ -565,7 +562,7 @@ static void draw_dleaf_start(struct graph_info *gi, const char *dleaf_name,
 {
 	block_t blocknr = buffer->index;
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"%s [\n"
 		"label = \"{ <head> [%s] (blocknr %llu%s)",
 		dleaf_name, gi->lname, blocknr,
@@ -575,7 +572,7 @@ static void draw_dleaf_start(struct graph_info *gi, const char *dleaf_name,
 static void draw_dleaf_end(struct graph_info *gi, const char *dleaf_name,
 			   struct buffer_head *buffer)
 {
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" }\"\n"
 		"shape = record\n"
 		"%s"
@@ -653,7 +650,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 
 	draw_dleaf_start(gi, dleaf_name, buffer);
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" | magic 0x%04x, free %u, used %u, groups %u",
 		be16_to_cpu(leaf->magic), be16_to_cpu(leaf->free),
 		be16_to_cpu(leaf->used), dleaf_groups(leaf));
@@ -666,7 +663,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 			int ex, ex_count = dleaf_extent_count(entries, ent);
 			extents = dleaf_extents(leaf, groups, gr, ent);
 			for (ex = 0; ex < ex_count; ex++) {
-				fprintf(gi->f,
+				fprintf(gi->fp,
 					" | <gr%uent%uex%u>"
 					" version 0x%03x, count %u, block %llu "
 					" (extent %u)",
@@ -678,7 +675,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 			}
 		}
 	}
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" | .....");
 
 	/* draw entries */
@@ -690,7 +687,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 		for (ent = group_count(group) - 1; ent >= 0; ent--) {
 			struct entry *entry = dleaf_entry(entries, ent);
 
-			fprintf(gi->f,
+			fprintf(gi->fp,
 				" | <gr%uent%u> limit %u, keylo 0x%06x"
 				" (entry %u, count %u, iblock %llu)",
 				gr, ent, entry_limit(entry), entry_keylo(entry),
@@ -703,7 +700,7 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 	for (gr = dleaf_groups(leaf) - 1; gr >= 0; gr--) {
 		struct group *group = dleaf_group_ptr(groups, gr);
 
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			" | <gr%u> count %u, keyhi 0x%06x (group %u)",
 			gr, group_count(group), group_keyhi(group), gr);
 	}
@@ -713,13 +710,13 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 	for (gr = 0; gr < dleaf_groups(leaf); gr++) {
 		struct group *group = dleaf_group_ptr(groups, gr);
 		/* write link: dleaf:group -> dleaf:entry */
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			"%s:gr%u:w -> %s:gr%uent%u:w;\n",
 			dleaf_name, gr,
 			dleaf_name, gr, 0);
 		for (int ent = 0; ent < group_count(group); ent++) {
 			/* write link: dleaf:entry -> dleaf:extent */
-			fprintf(gi->f,
+			fprintf(gi->fp,
 				"%s:gr%uent%u:w -> %s:gr%uent%uex%u:w;\n",
 				dleaf_name, gr, ent,
 				dleaf_name, gr, ent, 0);
@@ -751,7 +748,7 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 
 	draw_dleaf_start(gi, dleaf_name, buffer);
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		" | magic 0x%04x, count %u",
 		be16_to_cpu(leaf->magic), be16_to_cpu(leaf->count));
 
@@ -763,7 +760,7 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 
 		if (prev.logical != TUXKEY_LIMIT) {
 			unsigned count = ex.logical - prev.logical;
-			fprintf(gi->f, " (count %u)", count);
+			fprintf(gi->fp, " (count %u)", count);
 
 			if (prev.physical) {
 				/* Draw file data */
@@ -772,14 +769,14 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 			}
 		}
 
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			" | verhi 0x%04x, logical %llu,"
 			" verlo 0x%04x, physical %llu",
 			ex.version >> VER_BITS, ex.logical,
 			ex.version & VER_MASK, ex.physical);
 
 		if (dex == dex_limit - 1)
-			fprintf(gi->f, " (sentinel)");
+			fprintf(gi->fp, " (sentinel)");
 
 		prev = ex;
 		dex++;
@@ -837,7 +834,7 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 
 	iattr_ops.decode(btree, inode, attrs, size);
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"%s"
 		"attrs (ino %llu, size %u, block %llu, depth %d%s)"
 		"%s",
@@ -861,7 +858,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 	block_t blocknr = buffer->index;
 	int at;
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"volmap_%llu [\n"
 		"label =\n"
 		"<<table " TABLE_STYLE ">\n"
@@ -889,25 +886,25 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 
 		offset = limit;
 
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			"  <tr>\n"
 			"    <td port=\"a%d\">",
 			at);
 
 		draw_ileaf_attr(gi, btree, inum, attrs, size);
 
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			"</td>\n"
 			"  </tr>\n");
 	}
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"  <tr>\n"
 		"   <td>.....</td>\n"
 		"  </tr>\n");
 
 	/* draw offset part */
 	for (at = icount(ileaf) - 1; at >= 0; at--) {
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			"  <tr>\n"
 			"   <td port=\"o%d\">"
 			"limit %u (offset %u, size %u, ino %llu)</td>\n"
@@ -916,7 +913,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			ileaf_attr_size(dict, at), ibase(ileaf) + at);
 	}
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"</table>>\n"
 		"shape = plaintext\n"
 		"%s"
@@ -929,7 +926,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			continue;
 
 		/* write link: ileaf offset -> ileaf attrs */
-		fprintf(gi->f,
+		fprintf(gi->fp,
 			"volmap_%llu:o%d:w -> volmap_%llu:a%d:w;\n",
 			blocknr, at,
 			blocknr, at);
@@ -1029,10 +1026,10 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 		}
 
 		/* for draw dtree */
-		struct dtree_info *dinfo;
-		dinfo = alloc_tmpfile();
+		struct tmpfile_info *tmpfile;
+		tmpfile = alloc_tmpfile();
 		struct graph_info ginfo_dtree = {
-			.f = dinfo->f,
+			.fp = tmpfile->fp,
 			.bname = name,
 			.lname = "dleaf",
 			.link_head = LIST_HEAD_INIT(ginfo_dtree.link_head),
@@ -1041,9 +1038,9 @@ static void draw_ileaf(struct graph_info *gi, struct btree *btree,
 			 "%s_data", name);
 
 		/* for draw file data */
-		dinfo = alloc_tmpfile();
+		tmpfile = alloc_tmpfile();
 		struct graph_info ginfo_data = {
-			.f = dinfo->f,
+			.fp = tmpfile->fp,
 			.bname = ginfo_dtree.filedata,
 			.lname = ginfo_dtree.filedata,
 			.link_head = LIST_HEAD_INIT(ginfo_data.link_head),
@@ -1067,7 +1064,7 @@ out_iput:
 static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
 			    inum_t inum, void *attrs, u16 size)
 {
-	fprintf(gi->f, "attrs (ino %llu, size %u)", inum, size);
+	fprintf(gi->fp, "attrs (ino %llu, size %u)", inum, size);
 }
 
 static void draw_oleaf(struct graph_info *gi, struct btree *btree,
@@ -1113,7 +1110,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 	struct logblock *log = bufdata(buffer);
 	unsigned char *data = log->data;
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"logchain_%llu [\n"
 		"label = \"{ <logchain_%llu> [log] (blocknr %llu%s)"
 		" | <f0> magic 0x%04x, bytes %u, logchain %llu",
@@ -1125,7 +1122,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 	while (data < log->data + be16_to_cpu(log->bytes)) {
 		unsigned char code = *data++;
 
-		fprintf(gi->f, " | [%s] ", log_name[code]);
+		fprintf(gi->fp, " | [%s] ", log_name[code]);
 
 		switch (code) {
 		case LOG_BALLOC:
@@ -1136,7 +1133,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 block;
 			data = decode32(data, &count);
 			data = decode48(data, &block);
-			fprintf(gi->f, "count %u, block %llu ",
+			fprintf(gi->fp, "count %u, block %llu ",
 				count, block);
 			break;
 		}
@@ -1145,7 +1142,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 old, new;
 			data = decode48(data, &old);
 			data = decode48(data, &new);
-			fprintf(gi->f, "old %llu, new %llu ",
+			fprintf(gi->fp, "old %llu, new %llu ",
 				old, new);
 			break;
 		}
@@ -1153,7 +1150,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 		case LOG_BNODE_FREE: {
 			u64 block;
 			data = decode48(data, &block);
-			fprintf(gi->f, "%s %llu ",
+			fprintf(gi->fp, "%s %llu ",
 				code == LOG_LEAF_FREE ? "leaf" : "bnode",
 				block);
 			break;
@@ -1165,7 +1162,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &left);
 			data = decode48(data, &right);
 			data = decode48(data, &rkey);
-			fprintf(gi->f,
+			fprintf(gi->fp,
 				"count %u, root %llu, left %llu, right %llu, "
 				"right key %llu ",
 				count, root, left, right, rkey);
@@ -1177,7 +1174,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode16(data, &pos);
 			data = decode48(data, &src);
 			data = decode48(data, &dest);
-			fprintf(gi->f, "pos %u, src %llu, dest %llu ",
+			fprintf(gi->fp, "pos %u, src %llu, dest %llu ",
 				pos, src, dest);
 			break;
 		}
@@ -1187,7 +1184,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &parent);
 			data = decode48(data, &child);
 			data = decode48(data, &key);
-			fprintf(gi->f, "parent %llu, child %llu, key %llu ",
+			fprintf(gi->fp, "parent %llu, child %llu, key %llu ",
 				parent, child, key);
 			break;
 		}
@@ -1196,7 +1193,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 src, dst;
 			data = decode48(data, &src);
 			data = decode48(data, &dst);
-			fprintf(gi->f, "src %llu, dst %llu ", src, dst);
+			fprintf(gi->fp, "src %llu, dst %llu ", src, dst);
 			break;
 		}
 		case LOG_BNODE_DEL:
@@ -1206,7 +1203,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode16(data, &count);
 			data = decode48(data, &bnode);
 			data = decode48(data, &key);
-			fprintf(gi->f, "count %u, bnode %llu, key %llu ",
+			fprintf(gi->fp, "count %u, bnode %llu, key %llu ",
 				count, bnode, key);
 			break;
 		}
@@ -1216,7 +1213,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			data = decode48(data, &node);
 			data = decode48(data, &from);
 			data = decode48(data, &to);
-			fprintf(gi->f, "node %llu, from %llu, to %llu ",
+			fprintf(gi->fp, "node %llu, from %llu, to %llu ",
 				node, from, to);
 			break;
 		}
@@ -1226,14 +1223,14 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			u64 inum;
 			data = decode16(data, &version);
 			data = decode48(data, &inum);
-			fprintf(gi->f, "version %x, inum %llu ",
+			fprintf(gi->fp, "version %x, inum %llu ",
 				version, inum);
 			break;
 		}
 		case LOG_FREEBLOCKS: {
 			u64 freeblocks;
 			data = decode48(data, &freeblocks);
-			fprintf(gi->f, "freeblocks %llu ", freeblocks);
+			fprintf(gi->fp, "freeblocks %llu ", freeblocks);
 			break;
 		}
 		case LOG_ROLLUP:
@@ -1245,7 +1242,7 @@ static void draw_log(struct graph_info *gi, struct sb *sb,
 			break;
 		}
 	}
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"}\"\n"
 		"shape = record\n"
 		"%s"
@@ -1259,7 +1256,7 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 	block_t nextchain;
 	unsigned logcount;
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"subgraph cluster_logchain {\n"
 		"label = \"logchain\"\n");
 
@@ -1274,7 +1271,7 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 		logcount--;
 		if (logcount) {
 			/* write link: logblock -> logblock */
-			fprintf(gi->f,
+			fprintf(gi->fp,
 				"logchain_%llu:f0:e -> logchain_%llu:n;\n",
 				nextchain, be64_to_cpu(log->logchain));
 		}
@@ -1282,7 +1279,7 @@ static void draw_logchain(struct graph_info *gi, struct sb *sb)
 		blockput(buffer);
 	}
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"}\n\n");
 }
 
@@ -1290,7 +1287,7 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 {
 	struct disksuper *txsb = &sb->super;
 
-	fprintf(gi->f,
+	fprintf(gi->fp,
 		"subgraph cluster_disksuper {\n"
 		"label = \"disksuper\"\n"
 		"tux3_sb [\n"
@@ -1326,13 +1323,13 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		be32_to_cpu(txsb->logcount));
 
 	/* write link: sb -> itable root */
-	fprintf(gi->f, "tux3_sb:iroot0:e -> volmap_%llu:n;\n\n",
+	fprintf(gi->fp, "tux3_sb:iroot0:e -> volmap_%llu:n;\n\n",
 		itable_btree(sb)->root.block);
 	/* write link: sb -> otable root */
-	fprintf(gi->f, "tux3_sb:oroot0:e -> volmap_%llu:n;\n\n",
+	fprintf(gi->fp, "tux3_sb:oroot0:e -> volmap_%llu:n;\n\n",
 		otable_btree(sb)->root.block);
 	/* write link: sb -> logchain */
-	fprintf(gi->f, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
+	fprintf(gi->fp, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
 		be64_to_cpu(txsb->logchain), be64_to_cpu(txsb->logchain));
 }
 
@@ -1410,8 +1407,8 @@ int main(int argc, char *argv[])
 		"\n");
 
 	ginfo = (struct graph_info){
-		.f = file,
-		.bname = itable_name,
+		.fp = file,
+		.bname = "itable",
 		.lname = "ileaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
 	};
@@ -1420,8 +1417,8 @@ int main(int argc, char *argv[])
 	draw_btree(&ginfo, itable_btree(sb), draw_ileaf, NULL);
 
 	ginfo = (struct graph_info){
-		.f = file,
-		.bname = otable_name,
+		.fp = file,
+		.bname = "otable",
 		.lname = "oleaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
 	};
@@ -1429,8 +1426,8 @@ int main(int argc, char *argv[])
 
 	merge_tmpfiles(&ginfo);
 
-	fprintf(ginfo.f, "}\n");
-	fclose(ginfo.f);
+	fprintf(ginfo.fp, "}\n");
+	fclose(ginfo.fp);
 
 	err = replay_stage3(rp, 0);
 	if (err)
