@@ -38,7 +38,8 @@ LDFLAGS =
 AFLAGS	= rcs
 
 CHECKER	   = sparse
-CHECKFLAGS = -D__CHECKER__ -D__CHECK_ENDIAN__
+CHECKFLAGS = -gcc-base-dir $(shell $(CC) -print-file-name=)
+CHECKFLAGS += -D__CHECKER__ -D__CHECK_ENDIAN__
 CHECKFLAGS += -Wsparse-all -Wno-transparent-union
 CHECKFLAGS += -Wno-declaration-after-statement
 CHECKFLAGS += -Wno-decl
