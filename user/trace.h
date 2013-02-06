@@ -8,7 +8,7 @@
 #include <stdarg.h>
 
 //#define die(code) exit(code)
-#define die(code)	asm("int3")
+#define die(code)	do { int *__p = NULL; *__p = code; } while (0)
 #define assert(expr)	do {						\
 	if (!(expr)) {							\
 		fprintf(stderr, "%s:%d: Failed assert(" #expr ")\n",	\
