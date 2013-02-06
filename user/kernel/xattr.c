@@ -446,7 +446,7 @@ eek:
 
 /* Xattr cache */
 
-struct xattr {
+struct xcache_entry {
 	/* FIXME: 16bits? */
 	u16 atom;		/* atom of xattr data */
 	u16 size;		/* size of body[] */
@@ -456,7 +456,7 @@ struct xattr {
 struct xcache {
 	u16 size;		/* size of xattrs[] */
 	u16 maxsize;		/* allocated memory size */
-	struct xattr xattrs[];
+	struct xcache_entry xattrs[];
 };
 
 /* Free xcache memory */
@@ -520,26 +520,28 @@ static int expand_xcache(struct inode *inode, unsigned size)
 	return 0;
 }
 
-static inline struct xattr *xcache_next(struct xattr *xattr)
+static inline struct xcache_entry *xcache_next(struct xcache_entry *xattr)
 {
 	return (void *)xattr->body + xattr->size;
 }
 
-static inline struct xattr *xcache_limit(struct xcache *xcache)
+static inline struct xcache_entry *xcache_limit(struct xcache *xcache)
 {
 	return (void *)xcache->xattrs + xcache->size;
 }
 
 int xcache_dump(struct inode *inode)
 {
-	if (!tux_inode(inode)->xcache)
+	struct xcache *xcache = tux_inode(inode)->xcache;
+
+	if (!xcache)
 		return 0;
 
-	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
+	struct xcache_entry *xattr = xcache->xattrs;
+	struct xcache_entry *xlimit = xcache_limit(xcache);
 
 	//__tux3_dbg("xattrs %p/%i", inode->xcache, inode->xcache->size);
-	while (xattr < limit) {
+	while (xattr < xlimit) {
 		if (xattr->size > tux_sb(inode->i_sb)->blocksize)
 			goto bail;
 		__tux3_dbg("atom %.3x => ", xattr->atom);
@@ -547,10 +549,10 @@ int xcache_dump(struct inode *inode)
 			hexdump(xattr->body, xattr->size);
 		else
 			__tux3_dbg("<empty>\n");
-		if ((xattr = xcache_next(xattr)) > limit)
+		if ((xattr = xcache_next(xattr)) > xlimit)
 			goto fail;
 	}
-	assert(xattr == limit);
+	assert(xattr == xlimit);
 	return 0;
 
 fail:
@@ -561,28 +563,28 @@ bail:
 	return -1;
 }
 
-static struct xattr *xcache_lookup(struct xcache *xcache, unsigned atom)
+static struct xcache_entry *xcache_lookup(struct xcache *xcache, unsigned atom)
 {
 	if (xcache) {
-		struct xattr *xattr = xcache->xattrs;
-		struct xattr *limit = xcache_limit(xcache);
-		while (xattr < limit) {
+		struct xcache_entry *xattr = xcache->xattrs;
+		struct xcache_entry *xlimit = xcache_limit(xcache);
+		while (xattr < xlimit) {
 			if (xattr->atom == atom)
 				return xattr;
-			if ((xattr = xcache_next(xattr)) > limit)
+			if ((xattr = xcache_next(xattr)) > xlimit)
 				return ERR_PTR(-EINVAL);
 		}
-		assert(xattr == limit);
+		assert(xattr == xlimit);
 	}
 	return ERR_PTR(-ENOATTR);
 }
 
-static inline int remove_old(struct xcache *xcache, struct xattr *xattr)
+static inline int remove_old(struct xcache *xcache, struct xcache_entry *xattr)
 {
 	if (xattr) {
-		void *limit = xcache_limit(xcache);
+		void *xlimit = xcache_limit(xcache);
 		void *next = xcache_next(xattr);
-		memmove(xattr, next, limit - next);
+		memmove(xattr, next, xlimit - next);
 		xcache->size -= next - (void *)xattr;
 		return 1;
 	}
@@ -604,7 +606,7 @@ static int xcache_update(struct inode *inode, unsigned atom, const void *data,
 			 unsigned len, unsigned flags)
 {
 	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache_lookup(xcache, atom);
+	struct xcache_entry *xattr = xcache_lookup(xcache, atom);
 	int use = 0;
 
 	if (IS_ERR(xattr)) {
@@ -652,9 +654,9 @@ int xcache_remove_all(struct inode *inode)
 	struct xcache *xcache = tux_inode(inode)->xcache;
 
 	if (xcache) {
-		struct xattr *xattr = xcache->xattrs;
-		struct xattr *limit = xcache_limit(xcache);
-		while (xattr < limit) {
+		struct xcache_entry *xattr = xcache->xattrs;
+		struct xcache_entry *xlimit = xcache_limit(xcache);
+		while (xattr < xlimit) {
 			/*
 			 * FIXME: Inode is going to purse, what to do
 			 * if error ?
@@ -665,7 +667,7 @@ int xcache_remove_all(struct inode *inode)
 
 			xattr = xcache_next(xattr);
 		}
-		assert(xattr == limit);
+		assert(xattr == xlimit);
 	}
 
 	free_xcache(inode);
@@ -685,7 +687,8 @@ int get_xattr(struct inode *inode, const char *name, unsigned len, void *data,
 	if (ret)
 		goto out;
 
-	struct xattr *xattr = xcache_lookup(tux_inode(inode)->xcache, atom);
+	struct xcache *xcache = tux_inode(inode)->xcache;
+	struct xcache_entry *xattr = xcache_lookup(xcache, atom);
 	if (IS_ERR(xattr)) {
 		ret = PTR_ERR(xattr);
 		goto out;
@@ -737,7 +740,7 @@ int del_xattr(struct inode *inode, const char *name, unsigned len)
 	err = find_atom(atable, name, len, &atom);
 	if (!err) {
 		struct xcache *xcache = tux_inode(inode)->xcache;
-		struct xattr *xattr = xcache_lookup(xcache, atom);
+		struct xcache_entry *xattr = xcache_lookup(xcache, atom);
 		if (IS_ERR(xattr)) {
 			err = PTR_ERR(xattr);
 			goto out;
@@ -760,17 +763,21 @@ out:
 
 int list_xattr(struct inode *inode, char *text, size_t size)
 {
-	if (!tux_inode(inode)->xcache)
-		return 0;
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct inode *atable = sb->atable;
+
 	mutex_lock(&atable->i_mutex);
+
 	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache->xattrs, *limit = xcache_limit(xcache);
+	if (!xcache)
+		return 0;
+
+	struct xcache_entry *xattr = xcache->xattrs;
+	struct xcache_entry *xlimit = xcache_limit(xcache);
 	char *base = text, *top = text + size;
 	int err;
 
-	while (xattr < limit) {
+	while (xattr < xlimit) {
 		atom_t atom = xattr->atom;
 		if (size) {
 			/* FIXME: check error code for POSIX */
@@ -796,13 +803,13 @@ int list_xattr(struct inode *inode, char *text, size_t size)
 			text += len + 1;
 		}
 
-		if ((xattr = xcache_next(xattr)) > limit) {
+		if ((xattr = xcache_next(xattr)) > xlimit) {
 			tux3_fs_error(sb, "xcache bug");
 			err = -EIO;
 			goto error;
 		}
 	}
-	assert(xattr == limit);
+	assert(xattr == xlimit);
 	mutex_unlock(&atable->i_mutex);
 
 	return text - base;
@@ -816,29 +823,35 @@ error:
 
 unsigned encode_xsize(struct inode *inode)
 {
-	if (!tux_inode(inode)->xcache)
-		return 0;
-	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
-	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
-	struct xattr *limit = xcache_limit(tux_inode(inode)->xcache);
+	struct xcache *xcache = tux_inode(inode)->xcache;
 
-	while (xattr < limit) {
+	if (!xcache)
+		return 0;
+
+	unsigned size = 0, xatsize = atsize[XATTR_ATTR];
+	struct xcache_entry *xattr = xcache->xattrs;
+	struct xcache_entry *xlimit = xcache_limit(xcache);
+
+	while (xattr < xlimit) {
 		size += 2 + xatsize + xattr->size;
 		xattr = xcache_next(xattr);
 	}
-	assert(xattr == limit);
+	assert(xattr == xlimit);
 	return size;
 }
 
 void *encode_xattrs(struct inode *inode, void *attrs, unsigned size)
 {
-	if (!tux_inode(inode)->xcache)
+	struct xcache *xcache = tux_inode(inode)->xcache;
+
+	if (!xcache)
 		return attrs;
-	struct xattr *xattr = tux_inode(inode)->xcache->xattrs;
-	struct xattr *xtop = xcache_limit(tux_inode(inode)->xcache);
+
+	struct xcache_entry *xattr = xcache->xattrs;
+	struct xcache_entry *xlimit = xcache_limit(xcache);
 	void *limit = attrs + size - 3;
 
-	while (xattr < xtop) {
+	while (xattr < xlimit) {
 		if (attrs >= limit)
 			break;
 		//immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
@@ -870,7 +883,7 @@ unsigned decode_xsize(struct inode *inode, void *attrs, unsigned size)
 			attrs = decode16(attrs, &bytes);
 			attrs += bytes;
 			if (version == sb->version)
-				total += sizeof(struct xattr) + bytes - 2;
+				total += sizeof(struct xcache_entry) + bytes - 2;
 			continue;
 		}
 		attrs += atsize[kind];
@@ -882,7 +895,7 @@ void *decode_xattr(struct inode *inode, void *attrs)
 {
 	// immediate xattr: kind+version:16, bytes:16, atom:16, data[bytes - 2]
 	struct xcache *xcache = tux_inode(inode)->xcache;
-	struct xattr *xattr = xcache_limit(xcache);
+	struct xcache_entry *xattr = xcache_limit(xcache);
 	void *limit = xcache->xattrs + xcache->maxsize;
 	unsigned xsize, bytes, atom;
 
@@ -891,7 +904,7 @@ void *decode_xattr(struct inode *inode, void *attrs)
 
 	/* FIXME: check limit!!! */
 	assert((void *)xattr + sizeof(*xattr) <= limit);
-	*xattr = (struct xattr){
+	*xattr = (struct xcache_entry){
 		.atom = atom,
 		.size = bytes - 2,
 	};

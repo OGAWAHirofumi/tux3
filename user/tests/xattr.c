@@ -34,7 +34,7 @@ static void __check_xcache(struct inode *inode, struct xcache_data *data,
 			   int nr_data)
 {
 	for (int i = 0; i < nr_data; i++) {
-		struct xattr *xattr;
+		struct xcache_entry *xattr;
 		xattr = xcache_lookup(tux_inode(inode)->xcache, data[i].atom);
 		if (data[i].len == -1)
 			test_assert(IS_ERR(xattr));
@@ -53,7 +53,7 @@ static void __check_xcache(struct inode *inode, struct xcache_data *data,
 static void test01(struct sb *sb)
 {
 	char attrs[1000] = { };
-	struct xattr *xattr;
+	struct xcache_entry *xattr;
 	int err;
 
 	change_begin_atomic(sb);

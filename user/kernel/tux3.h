@@ -13,6 +13,7 @@
 #include <linux/mutex.h>
 #include <linux/magic.h>
 #include <linux/slab.h>
+#include <linux/xattr.h>
 
 #include "trace.h"
 #include "buffer.h"
@@ -549,15 +550,6 @@ struct btree_ops {
 	void (*leaf_dump)(struct btree *btree, void *leaf);
 };
 
-#ifndef ENOATTR
-#define ENOATTR ENODATA
-#endif
-
-#ifndef XATTR_CREATE
-#define XATTR_CREATE 1 // fail if xattr already exists
-#define XATTR_REPLACE 2 // fail if xattr does not exist
-#endif
-
 /* Information for replay */
 struct replay {
 	struct sb *sb;
@@ -908,6 +900,10 @@ void tux3_clear_dirty_inodes(struct sb *sb, unsigned delta);
 void tux3_check_destroy_inode_flags(struct inode *inode);
 
 /* xattr.c */
+#ifndef ENOATTR
+#define ENOATTR ENODATA
+#endif
+
 void atable_init_base(struct sb *sb);
 int xcache_dump(struct inode *inode);
 void free_xcache(struct inode *inode);
