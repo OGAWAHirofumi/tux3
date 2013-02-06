@@ -63,20 +63,36 @@ int put_super(struct sb *sb)
 	return 0;
 }
 
+/* Clear first and last block to get rid of other magic */
 static int clear_other_magic(struct sb *sb)
 {
+	struct {
+		loff_t loc;
+		unsigned len;
+	} area[] = {
+		{ 0, SB_LOC },
+		{ (sb->volblocks - 1) << sb->blockbits, sb->blocksize },
+	};
+	void *data;
+	unsigned maxlen = 0;
 	int err;
 
-	/* Clear first and last block to get rid of other magic */
-	for (int i = 0; i <= 1; i++) {
-		loff_t loc = (loff_t[2]){ 0, (sb->volblocks - 1) << sb->blockbits }[i];
-		unsigned len = (loff_t[2]){ SB_LOC, sb->blocksize }[i];
-		char data[len];
-		memset(data, 0, len);
-		err = devio(WRITE, sb->dev, loc, data, len);
+	for (int i = 0; i < ARRAY_SIZE(area); i++)
+		maxlen = max(maxlen, area[i].len);
+
+	data = malloc(maxlen);
+	if (!data)
+		return -ENOMEM;
+	memset(data, 0, maxlen);
+
+	for (int i = 0; i < ARRAY_SIZE(area); i++) {
+		err = devio(WRITE, sb->dev, area[i].loc, data, area[i].len);
 		if (err)
 			break;
 	}
+
+	free(data);
+
 	return err;
 }
 
