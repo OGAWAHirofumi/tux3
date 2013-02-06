@@ -4,10 +4,10 @@
 #ifdef __KERNEL__
 extern int tux3_trace;
 #define assert(expr)		BUG_ON(!(expr))
-#define logline(fmt, ...)	printk(fmt, ##__VA_ARGS__);
+#define logline(fmt, ...)	printk(fmt, ##__VA_ARGS__)
 #else
 #define tux3_trace	1
-#define logline(fmt, ...)	printf(fmt, ##__VA_ARGS__);
+#define logline(fmt, ...)	printf(fmt, ##__VA_ARGS__)
 #endif
 
 #define trace_off(...) do {} while (0)
