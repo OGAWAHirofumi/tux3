@@ -39,6 +39,9 @@ AFLAGS	= rcs
 
 CHECKER	   = sparse
 CHECKFLAGS = -gcc-base-dir $(shell $(CC) -print-file-name=)
+# Add multiarch include if need (workaround for debian's multiarch)
+CHECKFLAGS += $(shell if gcc -print-multiarch > /dev/null 2>&1; then \
+		echo "-isystem /usr/include/`gcc -print-multiarch`"; fi)
 CHECKFLAGS += -D__CHECKER__ -D__CHECK_ENDIAN__
 CHECKFLAGS += -Wsparse-all -Wno-transparent-union
 CHECKFLAGS += -Wno-declaration-after-statement
@@ -141,14 +144,14 @@ DEP_FILES_PRESENT := $(wildcard $(DEP_FILES))
 $(COMMON_OBJS): %.o: %.c $(MISSING_DEP_DIRS)
 	$(CC) $(DEP_ARGS) $(CFLAGS) -c -o $@ $<
 ifeq ($(CHECK),1)
-	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) -c $<
+	$(CHECKER) $(CHECKFLAGS) $(CFLAGS) -c $<
 endif
 
 # use -include tux3user.h to compile kernel/* without any change
 $(KERN_OBJS): %.o: %.c $(MISSING_DEP_DIRS)
 	$(CC) $(DEP_ARGS) $(CFLAGS) -include tux3user.h -c -o $@ $<
 ifeq ($(CHECK),1)
-	$(CHECKER) $(CFLAGS) -include tux3user.h $(CHECKFLAGS) -c $<
+	$(CHECKER) $(CHECKFLAGS) $(CFLAGS) -include tux3user.h -c $<
 endif
 
 # build libraries rules
@@ -162,7 +165,7 @@ $(TEST_BIN) $(TUX3_BIN):
 $(FUSE_BIN): tux3fuse.c $(ALL_LIBS) $(MISSING_DEP_DIRS)
 	$(CC) $(DEP_ARGS) $(CFLAGS) $(LDFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c -lfuse -o tux3fuse $(ALL_LIBS)
 ifeq ($(CHECK),1)
-	$(CHECKER) $(CFLAGS) $(CHECKFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
+	$(CHECKER) $(CHECKFLAGS) $(CFLAGS) $$(pkg-config --cflags fuse) tux3fuse.c
 endif
 
 clean:
