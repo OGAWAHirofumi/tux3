@@ -54,6 +54,8 @@ OWNER	= root
 GROUP	= root
 
 GCOV_DIR = gcov
+LCOV_FLAGS = --capture
+GENHTML_FLAGS = --prefix $(abspath $(TOPDIR)/../) --show-details --legend
 
 DISTDIR	=
 PREFIX	= /usr/local
@@ -195,12 +197,13 @@ install-test: install-bin $(TEST_BIN)
 # tests rules
 tests: $(TEST_BIN)
 	make -C tests
-ifneq ($(GCOV),)
-	# Use lcov to summarize gcov data
+
+# Use lcov to summarize gcov data
+coverage:
+	# NOTE: need to compile with GCOV=1
 	[ -d $(GCOV_DIR) ] || mkdir $(GCOV_DIR)
-	lcov -b $(TOPDIR) -d $(TOPDIR) -c -o $(GCOV_DIR)/tux3.info
-	genhtml --show-details --legend -o $(GCOV_DIR) $(GCOV_DIR)/tux3.info
-endif
+	lcov $(LCOV_FLAGS) -b $(TOPDIR) -d $(TOPDIR) -o $(GCOV_DIR)/tux3.info
+	genhtml $(GENHTML_FLAGS) -o $(GCOV_DIR) $(GCOV_DIR)/tux3.info
 
 makefs mkfs: tux3
 	dd if=/dev/zero of=$(TESTDIR)/testdev bs=1 count=1 seek=1M
