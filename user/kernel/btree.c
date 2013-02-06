@@ -1305,13 +1305,13 @@ int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock)
 	int err = 0;
 
 	newbuf = vol_getblk(sb, newblock);
-	if (IS_ERR(newbuf)) {
-		err = PTR_ERR(newbuf);
+	if (!newbuf) {
+		err = -ENOMEM;	/* FIXME: error code */
 		goto error;
 	}
 	oldbuf = vol_bread(sb, oldblock);
-	if (IS_ERR(oldbuf)) {
-		err = PTR_ERR(oldbuf);
+	if (!oldbuf) {
+		err = -EIO;	/* FIXME: error code */
 		goto error_put_newbuf;
 	}
 	assert(bnode_sniff(bufdata(oldbuf)));
@@ -1357,14 +1357,14 @@ int replay_bnode_split(struct replay *rp, block_t src, unsigned pos,
 	int err = 0;
 
 	srcbuf = vol_getblk(sb, src);
-	if (IS_ERR(srcbuf)) {
-		err = -ENOMEM;
+	if (!srcbuf) {
+		err = -ENOMEM;	/* FIXME: error code */
 		goto error;
 	}
 
 	dstbuf = vol_getblk(sb, dst);
-	if (IS_ERR(dstbuf)) {
-		err = -ENOMEM;
+	if (!dstbuf) {
+		err = -ENOMEM;	/* FIXME: error code */
 		goto error_put_srcbuf;
 	}
 	bnode_buffer_init(dstbuf);
@@ -1392,8 +1392,8 @@ static int replay_bnode_change(struct sb *sb, block_t bnodeblock,
 	struct buffer_head *bnodebuf;
 
 	bnodebuf = vol_getblk(sb, bnodeblock);
-	if (IS_ERR(bnodebuf))
-		return PTR_ERR(bnodebuf);
+	if (!bnodebuf)
+		return -ENOMEM;	/* FIXME: error code */
 
 	struct bnode *bnode = bufdata(bnodebuf);
 	change(bnode, val1, val2);
@@ -1436,14 +1436,14 @@ int replay_bnode_merge(struct replay *rp, block_t src, block_t dst)
 	int err = 0, ret;
 
 	srcbuf = vol_getblk(sb, src);
-	if (IS_ERR(srcbuf)) {
-		err = -ENOMEM;
+	if (!srcbuf) {
+		err = -ENOMEM;	/* FIXME: error code */
 		goto error;
 	}
 
 	dstbuf = vol_getblk(sb, dst);
-	if (IS_ERR(dstbuf)) {
-		err = -ENOMEM;
+	if (!dstbuf) {
+		err = -ENOMEM;	/* FIXME: error code */
 		goto error_put_srcbuf;
 	}
 

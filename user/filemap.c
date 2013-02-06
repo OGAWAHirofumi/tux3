@@ -60,7 +60,7 @@ static int guess_readahead(struct bufvec *bufvec, struct inode *inode,
 	 */
 	buffer = blockget(mapping(inode), index++);
 	if (!buffer)
-		return -EIO;
+		return -ENOMEM;		/* FIXME: error code */
 	ret = bufvec_contig_add(bufvec, buffer);
 	assert(ret);
 
