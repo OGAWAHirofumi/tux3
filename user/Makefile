@@ -101,6 +101,8 @@ COMMON_OBJS	= $(USER_OBJS) $(TEST_LIB_OBJS) $(LIBKLIB_OBJS) $(OBJS) \
 
 ALL_OBJS	= $(USER_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS) $(LIBKLIB_OBJS) \
 	$(OBJS) $(FUSE_OBJS) $(TEST_OBJS)
+# directories includes objects
+OBJS_DIRS := $(sort $(dir $(ALL_OBJS)))
 
 .PHONY: tests
 all: $(ALL_BIN)
@@ -127,7 +129,7 @@ tests/xattr: tests/xattr.o $(ALL_LIBS)
 # dependency generation
 DEPDIR	  := .deps
 DEP_FILES := $(foreach f,$(ALL_OBJS),$(dir $f)$(DEPDIR)/$(notdir $f).d)
-DEP_DIRS  := $(addsuffix $(DEPDIR),$(sort $(dir $(ALL_OBJS))))
+DEP_DIRS  := $(addsuffix $(DEPDIR),$(OBJS_DIRS))
 MISSING_DEP_DIRS := $(filter-out $(wildcard $(DEP_DIRS)),$(DEP_DIRS))
 
 $(DEP_DIRS):
@@ -171,12 +173,12 @@ endif
 clean:
 	rm -f $(ALL_BIN) $(ALL_LIBS) $(ALL_OBJS)
 	rm -f a.out $(TESTDIR)/testdev
-	rm -f *.gcda tests/*.gcda kernel/*.gcda
-	rm -f *.gcno tests/*.gcno kernel/*.gcno
+	rm -f $(addsuffix *.gcda,$(OBJS_DIRS))
+	rm -f $(addsuffix *.gcno,$(OBJS_DIRS))
 	make -C tests clean
 
 distclean: clean
-	rm -f *.orig kernel/*.orig
+	rm -f $(addsuffix *.orig,$(OBJS_DIRS))
 	rm -rf $(DEP_DIRS)
 	rm -rf $(GCOV_DIR)
 
