@@ -7,7 +7,8 @@ AR	= ar
 
 ifeq ($(ARCH),x86_64)
 CFLAGS	+= -m64
-else
+endif
+ifeq ($(ARCH),i686)
 CFLAGS	+= -m32
 endif
 
