@@ -715,7 +715,7 @@ void tux3_evict_inode(struct inode *inode)
 	 * refcount to free). If impossible, we would want to use
 	 * per-inode forked-buffers list, instead.
 	 */
-	free_forked_buffers(sb, inode, 0);
+	free_forked_buffers(sb, inode, 1);
 
 	clear_inode(inode);
 	free_xcache(inode);

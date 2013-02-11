@@ -113,17 +113,17 @@ static int is_freeable_forked(struct buffer_head *buffer, struct page *page)
 }
 
 /*
- * Try to free forked page. If it is called from umount or evict_inode
+ * Try to free forked page. (If it is called from umount or evict_inode
  * path, there should be no referencer. So we free forked page
- * forcefully.
+ * forcefully.)
  *
- * inode: If caller is evicting inode, pass inode. Otherwise NULL.
- * umount: If caller is umount path, 1. Otherwise 0.
+ * inode: Free only if page is related to this inode.
+ * force: If true, even if refcount != 0 try to free.
  *
  * FIXME: we need the better way, instead of polling the freeable
  * forked pages periodically.
  */
-void free_forked_buffers(struct sb *sb, struct inode *inode, int umount)
+void free_forked_buffers(struct sb *sb, struct inode *inode, int force)
 {
 	struct link free_list, *node, *prev, *n;
 
@@ -134,14 +134,15 @@ void free_forked_buffers(struct sb *sb, struct inode *inode, int umount)
 	link_for_each_safe(node, prev, n, &sb->forked_buffers) {
 		struct buffer_head *buffer = buffer_link_entry(node);
 		struct page *page = buffer->b_page;
-		int force = 0;
 
 		trace_on("buffer %p, page %p, count %u",
 			 buffer, page, page_count(page));
 
-		/* We have to free this forked page forcefully */
-		if (umount || (inode && inode->i_mapping == page->mapping))
-			force = 1;
+		if (inode) {
+			/* Free only if page is related to inode */
+			if (page->mapping != inode->i_mapping)
+				continue;
+		}
 
 #ifdef DISABLE_ASYNC_BACKEND
 		/* The page should already be submitted if no async frontend */
