@@ -195,11 +195,22 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	struct tux3_iattr_data *idata = bufvec->idata;
 	pgoff_t last_index;
 	unsigned offset;
-	int old_flag;
+	int old_flag, old_writeback;
 
 	lock_page(page);
 	assert(PageDirty(page));
 	assert(!PageWriteback(page));
+
+	/*
+	 * Set "writeback" flag before clearing "dirty" flag, so, page
+	 * presents either of "dirty" or "writeback" flag.  With this,
+	 * free_forked_buffers() can check page flags without locking
+	 * page. See FIXME of forked_buffers().
+	 *
+	 * And writeback flag prevents vmscan releases page.
+	 */
+	old_writeback = TestSetPageWriteback(page);
+	assert(!old_writeback);
 
 	/*
 	 * NOTE: This has the race if there is concurrent mark
@@ -218,14 +229,13 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	}
 
 	/*
-	 * set_page_writeback() is assuming to be called after clearing dirty.
-	 * This is under lock_page, so, buffer fork will see the dirty
-	 * or writeback are presented.
+	 * This fixes incoherency of page accounting and radix-tree
+	 * tag by above change of dirty and writeback.
 	 *
-	 * And writeback flag prevents vmscan releases page.
+	 * NOTE: This is assuming to be called after clearing dirty
+	 * (See comment of tux3_clear_page_dirty_for_io()).
 	 */
-	old_flag = tux3_test_set_page_writeback(page);
-	assert(!old_flag);
+	__tux3_test_set_page_writeback(page, old_writeback);
 
 	/*
 	 * Zero fill the page for mmap outside i_size after clear dirty.

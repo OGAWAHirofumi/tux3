@@ -76,18 +76,16 @@ static int tux3_clear_page_dirty_for_io(struct page *page)
 	return TestClearPageDirty(page);
 }
 
-static int tux3_test_set_page_writeback(struct page *page)
+static void __tux3_test_set_page_writeback(struct page *page, int old_writeback)
 {
 	struct address_space *mapping = page->mapping;
-	int ret;
 
 	if (mapping) {
 		struct backing_dev_info *bdi = mapping->backing_dev_info;
 		unsigned long flags;
 
 		spin_lock_irqsave(&mapping->tree_lock, flags);
-		ret = TestSetPageWriteback(page);
-		if (!ret) {
+		if (!old_writeback) {
 			/* If PageForked(), don't touch tag */
 			if (!PageForked(page))
 				radix_tree_tag_set(&mapping->page_tree,
@@ -105,11 +103,7 @@ static int tux3_test_set_page_writeback(struct page *page)
 				     page_index(page),
 				     PAGECACHE_TAG_TOWRITE);
 		spin_unlock_irqrestore(&mapping->tree_lock, flags);
-	} else {
-		ret = TestSetPageWriteback(page);
 	}
-	if (!ret)
+	if (!old_writeback)
 		account_page_writeback(page);
-	return ret;
-
 }

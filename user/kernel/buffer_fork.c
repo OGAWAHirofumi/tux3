@@ -75,6 +75,10 @@ static void free_forked_page(struct page *page)
 
 static inline int buffer_busy(struct buffer_head *buffer, int refcount)
 {
+	/*
+	 * Page didn't have dirty and writeback, so this buffer should
+	 * already be flushed. Check if reader is still using this.
+	 */
 	assert(!buffer_dirty(buffer));
 	assert(!buffer_async_write(buffer));
 	assert(!buffer_async_read(buffer));
@@ -144,7 +148,26 @@ void free_forked_buffers(struct sb *sb, struct inode *inode, int umount)
 		assert(!PageDirty(page));
 #endif
 		assert(!force || (!PageDirty(page) && !PageWriteback(page)));
-		/* I/O was submitted, and I/O was done? */
+
+		/*
+		 * I/O was submitted and I/O was done?
+		 *
+		 * NOTE: order of checking flags is important.
+		 *
+		 * free_forked_buffers	    bufvec_prepare_and_lock_page
+		 *	PageWriteback()
+		 *				TestSetPageWriteback()
+		 *				TestClearPageDirty()
+		 *	PageDirty()
+		 *	[missed both flags]
+		 *
+		 * Above order has race. So, we have to check "dirty"
+		 * at first, then check "writeback".
+		 *
+		 * FIXME: we would not want to depend on this fragile
+		 * way, and would want to use refcount simply to free
+		 * forked page.
+		 */
 		if (!PageDirty(page) && !PageWriteback(page)) {
 			/* All users were gone or force=1? */
 			if (force || is_freeable_forked(buffer, page)) {
