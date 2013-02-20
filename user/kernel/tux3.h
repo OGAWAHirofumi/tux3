@@ -602,7 +602,12 @@ static inline block_t bufindex(struct buffer_head *buffer)
 {
 	struct page *page = buffer->b_page;
 	/* FIXME: maybe we want to remove buffer->b_size */
+#if BITS_PER_LONG == 64
 	return (page_offset(page) + bh_offset(buffer)) / buffer->b_size;
+#else
+	const int blockbits = ffs(buffer->b_size) - 1;
+	return (page_offset(page) + bh_offset(buffer)) >> blockbits;
+#endif
 }
 
 /* dir.c */
