@@ -8,39 +8,71 @@
  * the right to distribute those changes under any license.
  */
 
-#include <getopt.h>
 #include "tux3user.h"
 #include "diskio.h"
 
 #include "tux3_fsck.c"
 #include "tux3_image.c"
 
-static void usage(void)
+#define VERSION 0.0
+#define STRINGIFY2(text) #text
+#define STRINGIFY(text) STRINGIFY2(text)
+
+static int open_volume(const char *volname)
 {
-	printf("tux3 [-s|--seek=<offset>] [-b|--blocksize=<size>] [-h|--help]\n"
-	       "     <command> <volume> [<file>]\n");
-	exit(1);
+	int fd = open(volname, O_RDWR);
+	if (fd < 0)
+		strerror_exit(1, errno, "could not open '%s'", volname);
+	return fd;
 }
 
-static int mkfs(int fd, const char *volname, unsigned blocksize)
+static int open_sb(const char *volname, struct sb *sb)
 {
+	sb->dev->fd = open_volume(volname);
+
+	int err = load_sb(sb);
+	if (!err) {
+		sb->dev->bits = sb->blockbits;
+		init_buffers(sb->dev, 1 << 20, 2);
+	}
+	return err;
+}
+
+static int open_fs(const char *volname, struct sb *sb)
+{
+	int err = open_sb(volname, sb);
+	if (err)
+		return err;
+
+	struct replay *rp = tux3_init_fs(sb);
+	if (IS_ERR(rp))
+		return PTR_ERR(rp);
+	show_tree_range(&tux_inode(sb->rootdir)->btree, 0, -1);
+	show_tree_range(&tux_inode(sb->bitmap)->btree, 0, -1);
+
+	return replay_stage3(rp, 1);
+}
+
+static int mkfs(const char *volname, struct sb *sb, unsigned blocksize)
+{
+	int fd = open_volume(volname);
+
 	loff_t volsize = 0;
 	if (fdsize64(fd, &volsize))
 		strerror_exit(1, errno, "fdsize64 failed for '%s'", volname);
-	int blockbits = 12;
-	if (blocksize) {
-		blockbits = ffs(blocksize) - 1;
-		if (1 << blockbits != blocksize)
-			error_exit("blocksize must be a power of two");
-	}
 
-	struct dev *dev = &(struct dev){ .fd = fd, .bits = blockbits };
-	init_buffers(dev, 1 << 20, 2);
+	printf("Volume size = %Lu bytes\n", (s64)volsize);
 
-	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
-	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	int blockbits = ffs(blocksize) - 1;
+	if (1 << blockbits != blocksize)
+		error_exit("blocksize must be a power of two");
+
+	sb->dev->fd = fd;
+	sb->dev->bits = blockbits;
+	init_buffers(sb->dev, 1 << 20, 2);
+
+	sb->super = (struct disksuper)INIT_DISKSB(blockbits, volsize >> blockbits);
+	setup_sb(sb, &sb->super);
 
 	sb->volmap = tux_new_volmap(sb);
 	if (!sb->volmap)
@@ -50,129 +82,241 @@ static int mkfs(int fd, const char *volname, unsigned blocksize)
 	if (!sb->logmap)
 		return -ENOMEM;
 
-	tux3_msg(sb, "make tux3 filesystem on %s (0x%Lx bytes), blocksize %u",
-		 volname, (s64)volsize, blocksize);
-	int err = make_tux3(sb);
-	if (!err) {
-		show_tree_range(itable_btree(sb), 0, -1);
-		put_super(sb);
-		tux3_exit_mem();
+	return make_tux3(sb);
+}
+
+static void usage(struct options *options, const char *progname,
+		  const char *cmdname, const char *name, const char *blurb)
+{
+	int cols = 80, tabs[] = { 3, 40, cols < 60 ? 60 : cols };
+	char lead[300], help[3000] = {};
+
+	if (cmdname)
+		snprintf(lead, sizeof(lead), "Usage: %s %s %s%s",
+			 progname, cmdname, name, blurb ? : "");
+	else
+		snprintf(lead, sizeof(lead), "Usage: %s %s%s",
+			 progname, name, blurb ? : "");
+
+	opthelp(help, sizeof(help), options, tabs, lead, !blurb);
+	printf("%s\n", help);
+}
+
+struct vars { unsigned blocksize; long long seek; int verbose; };
+
+static void command_options(int *argc, const char ***args,
+		struct options *options, int need, const char *progname,
+		const char *cmdname, const char *blurb, struct vars *vars)
+{
+	unsigned space = optspace(options, *argc, *args);
+	void *optv = malloc(space);
+	if (!optv)
+		strerror_exit(1, errno, "malloc");
+
+	int optc = optscan(options, argc, args, optv, space);
+	if (optc < 0)
+		error_exit("%s!", opterror(optv));
+
+	for (int i = 0; i < optc; i++) {
+		const char *value = optvalue(optv, i);
+		switch (options[optindex(optv, i)].terse[0]) {
+		case 'b':
+			vars->blocksize = strtoul(value, NULL, 0);
+			break;
+		case 's':
+			vars->seek = strtoull(value, NULL, 0);
+			break;
+		case '?':
+			usage(options, progname, cmdname, blurb, " [OPTIONS]");
+			exit(0);
+		case 0:
+			usage(options, progname, cmdname, blurb, NULL);
+			exit(0);
+		}
 	}
-	return err;
+
+	if (*argc != need) {
+		usage(options, progname, cmdname, blurb, NULL);
+		exit(1);
+	}
 }
 
 int main(int argc, char *argv[])
 {
-	static struct option long_options[] = {
-		{ "seek", required_argument, NULL, 's' },
-		{ "blocksize", required_argument, NULL, 'b' },
-		{ "help", no_argument, NULL, 'h' },
-		{ NULL, 0, NULL, 0 }
-	};
-	unsigned blocksize = 0;
-	char *seekarg = NULL;
-	int err;
+	const char *progname = optbasename(argv[0]);
+	const char **args = (const char **)argv;
+	const char *blurb = "<command> <volume>";
 
-	while (1) {
-		int c, optindex = 0;
-		c = getopt_long(argc, argv, "s:b:h", long_options, &optindex);
-		if (c == -1)
+	enum {
+		MKFS, FSCK, DELTA, ROLLUP, IMAGE, READ, WRITE,
+		GET, SET, STAT, DELETE, TRUNCATE, UNKNOWN,
+	};
+
+	static char *commands[] = {
+		[MKFS] = "mkfs", [FSCK] = "fsck", [DELTA] = "delta",
+		[ROLLUP] = "rollup", [IMAGE] = "image", [READ] = "read",
+		[WRITE] = "write", [GET] = "get", [SET] = "set",
+		[STAT] = "stat", [DELETE] = "delete", [TRUNCATE] = "truncate",
+	};
+
+	struct options options[] = {
+		{ "commands", "L", 0, "List commands", },
+		{ "verbose", "v", OPT_MANY, "Verbose output", },
+		{ "version", "V", 0, "Show version", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+
+	unsigned space = optspace(options, argc, args);
+	void *optv = malloc(space);
+	if (!optv)
+		strerror_exit(1, errno, "malloc");
+
+	int optc = opthead(options, &argc, &args, optv, space, 2);
+	if (optc < 0)
+		error_exit("%s!", opterror(optv));
+
+	int verbose = 0;
+
+	for (int i = 0; i < optc; i++) {
+		switch (options[optindex(optv, i)].terse[0]) {
+		case 'L':
+			for (int j = 0; j < ARRAY_SIZE(commands); j++)
+				printf("%s ", commands[j]);
+			printf("\n");
+			exit(0);
+		case 'V':
+			printf("Tux3 tools version %s\n", STRINGIFY(VERSION));
+			exit(0);
+		case '?':
+			usage(options, progname, NULL, blurb, " [OPTIONS]");
+			exit(0);
+		case 0:
+			usage(options, progname, NULL, blurb, NULL);
+			exit(0);
+		case 'v':
+			verbose++;
 			break;
-		switch (c) {
-		case 's':
-			seekarg = optarg;
-			break;
-		case 'b':
-			blocksize = strtoul(optarg, NULL, 0);
-			break;
-		case 'h':
-		default:
-			goto usage;
 		}
 	}
 
-	if (argc - optind < 2)
-		goto usage;
-
-	err = tux3_init_mem();
-	if (err)
-		goto error;
-
-	/* open volume, create superblock */
-	const char *command = argv[optind++];
-	const char *volname = argv[optind++];
-	int fd = open(volname, O_RDWR);
-	if (fd < 0)
-		strerror_exit(1, errno, "couldn't open %s", volname);
-
-	if (!strcmp(command, "mkfs") || !strcmp(command, "make")) {
-		if (optind != argc)
-			goto usage;
-		err = mkfs(fd, volname, blocksize);
-		if (err)
-			goto error;
-		return 0;
+	if (argc < 3) {
+		usage(options, progname, NULL, blurb, NULL);
+		exit(1);
 	}
 
-	/* dev->bits is still unknown. Note, some structure can't use yet. */
-	struct dev *dev = &(struct dev){ .fd = fd };
-	struct sb *sb = rapid_sb(dev);
-	err = load_sb(sb);
+	const char *command = args[1], *volname = args[2], *filename, *attrname;
+	struct vars vars = { .blocksize = 1 << 12, .verbose = verbose };
+	struct inode *inode = NULL;
+	struct file *file = NULL;
+
+	int err = tux3_init_mem();
 	if (err)
 		goto error;
 
-	dev->bits = sb->blockbits;
-	init_buffers(dev, 1 << 20, 2);
+	struct dev *dev = &(struct dev){};
+	struct sb *sb = rapid_sb(dev);	/* dev->bits still zero, take care */
 
-	if (!strcmp(command, "fsck")) {
+	struct options onlyhelp[] = {
+		{ "verbose", "v", OPT_MANY, "Verbose output", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+
+	struct options onlyseek[] = {
+		{ "seek", "s", OPT_HASARG | OPT_NUMBER, "Set file position", },
+		{ "verbose", "v", OPT_MANY, "Verbose output", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+
+	struct options onlysize[] = {
+		{ "size", "s", OPT_HASARG | OPT_NUMBER, "Specify file size", },
+		{ "verbose", "v", OPT_MANY, "Verbose output", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+
+	int cmd;
+	for (cmd = 0; cmd < ARRAY_SIZE(commands); cmd++) {
+		if (commands[cmd] && !strcmp(command, commands[cmd]))
+			break;
+	}
+
+	switch (cmd) {
+	case MKFS: {
+		struct options mkfs_options[] = {
+			{ "blocksize", "b", OPT_HASARG | OPT_NUMBER,
+			  "Set block size", },
+			{ "usage", "", 0, "Show usage", },
+			{ "help", "?", 0, "Show help", },
+			{},
+		};
+		command_options(&argc, &args, mkfs_options, 3, progname, command,
+				"<volume>", &vars);
+		printf("Make tux3 filesystem on %s (blocksize %u)\n", volname, vars.blocksize);
+		err = mkfs(volname, sb, vars.blocksize);
+		if (err)
+			goto error;
+		show_tree_range(itable_btree(sb), 0, -1);
+	}
+		break;
+
+	case FSCK:
+		command_options(&argc, &args, onlyhelp, 3, progname, command,
+				"<volume>", &vars);
+		err = open_sb(volname, sb);
+		if (err)
+			goto error;
 		err = fsck_main(sb);
 		if (err)
 			goto error;
-		goto out;
-	}
-	if (!strcmp(command, "image")) {
-		if (argc - optind < 1)
-			goto usage;
+		break;
 
-		char *filename = argv[optind++];
-
+	case IMAGE:
+		command_options(&argc, &args, onlyhelp, 4, progname, command,
+				"<src> <dest>", &vars);
+		filename = args[3];
+		err = open_sb(volname, sb);
+		if (err)
+			goto error;
 		err = image_main(sb, filename);
 		if (err)
 			goto error;
-		goto out;
-	}
+		break;
 
-	struct replay *rp = tux3_init_fs(sb);
-	if (IS_ERR(rp)) {
-		err = PTR_ERR(rp);
-		goto error;
-	}
-	show_tree_range(&tux_inode(sb->rootdir)->btree, 0, -1);
-	show_tree_range(&tux_inode(sb->bitmap)->btree, 0, -1);
-
-	err = replay_stage3(rp, 1);
-	if (err)
-		goto error;
-
-	if (!strcmp(command, "delta")) {
+	case DELTA:
+		command_options(&argc, &args, onlyhelp, 3, progname, command,
+				"<volume>", &vars);
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
 		force_delta(sb);
-		goto out;
-	}
-	if (!strcmp(command, "rollup")) {
+		break;
+
+	case ROLLUP:
+		command_options(&argc, &args, onlyhelp, 3, progname, command,
+				"<volume>", &vars);
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
 		force_rollup(sb);
-		goto out;
-	}
+		break;
 
-	if (argc - optind < 1)
-		goto usage;
-	char *filename = argv[optind++];
-
-	if (!strcmp(command, "write")) {
-		printf("---- open file ----\n");
-		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+	case WRITE:
+		command_options(&argc, &args, onlyseek, 4, progname, command,
+				"<volume> <filename>", &vars);
+		filename = args[3];
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
+		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode) && PTR_ERR(inode) == -ENOENT) {
 			struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU, };
-			printf("---- create file ----\n");
 			inode = tuxcreate(sb->rootdir, filename, strlen(filename),
 					  &iattr);
 		}
@@ -180,20 +324,15 @@ int main(int argc, char *argv[])
 			err = PTR_ERR(inode);
 			goto error;
 		}
-		printf("---- write file ----\n");
-		struct file *file = &(struct file){ .f_inode = inode };
-
+		file = &(struct file){ .f_inode = inode };
 		struct stat stat;
 		if ((fstat(0, &stat)) == -1)
 			strerror_exit(1, errno, "fstat");
-		if (seekarg) {
-			loff_t seek = strtoull(seekarg, NULL, 0);
-			printf("seek to %Li\n", (s64)seek);
-			tuxseek(file, seek);
-		}
+		if (vars.seek)
+			tuxseek(file, vars.seek);
 		char text[1 << 16];
 		while (1) {
-			int len = read(0, text, sizeof(text));
+			ssize_t len = read(0, text, sizeof(text));
 			if (len < 0)
 				strerror_exit(1, errno, "read");
 			if (!len)
@@ -212,25 +351,27 @@ int main(int argc, char *argv[])
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		//tux_dump_entries(blockget(sb->rootdir->map, 0));
 		//show_tree_range(&sb->itable, 0, -1);
-	}
+		break;
 
-	if (!strcmp(command, "read")) {
-		printf("---- read file ----\n");
+	case READ:
+		command_options(&argc, &args, onlyseek, 4, progname, command,
+				"<volume> <filename>", &vars);
+		filename = args[3];
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
 		//show_tree_range(&sb->itable, 0, -1);
 		//tux_dump_entries(blockread(sb->rootdir->map, 0));
-		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
 			err = PTR_ERR(inode);
 			goto error;
 		}
-		struct file *file = &(struct file){ .f_inode = inode };
-		char buf[100] = { };
-		if (seekarg) {
-			loff_t seek = strtoull(seekarg, NULL, 0);
-			printf("seek to %Li\n", (s64)seek);
-			tuxseek(file, seek);
-		}
+		file = &(struct file){ .f_inode = inode };
+		char buf[100];
 		memset(buf, 0, sizeof(buf));
+		if (vars.seek)
+			tuxseek(file, vars.seek);
 		int got = tuxread(file, buf, sizeof(buf));
 		//printf("got %x bytes\n", got);
 		iput(inode);
@@ -239,114 +380,143 @@ int main(int argc, char *argv[])
 			goto error;
 		}
 		hexdump(buf, got);
-	}
+		break;
 
-	if (!strcmp(command, "get") || !strcmp(command, "set")) {
-		printf("---- read attribute ----\n");
-		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+	case SET:
+		command_options(&argc, &args, onlyhelp, 5, progname, command,
+				"<volume> <filename> <attribute>", &vars);
+		filename = args[3];
+		attrname = args[4];
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
+		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
 			err = PTR_ERR(inode);
 			goto error;
 		}
-		if (argc - optind < 1)
-			goto usage;
-		char *name = argv[optind++];
-		if (!strcmp(command, "get")) {
-			printf("read xattr %.*s\n", (int)strlen(name), name);
-			int size = get_xattr(inode, name, strlen(name), NULL, 0);
-			if (size < 0) {
-				err = size;
-				goto error;
-			}
-			void *data = malloc(size);
-			if (!data) {
-				err = -ENOMEM;
-				goto error;
-			}
-			size = get_xattr(inode, name, strlen(name), data, size);
-			if (size < 0) {
-				free(data);
-				err = size;
-				goto error;
-			}
-			hexdump(data, size);
-			free(data);
-		}
-		if (!strcmp(command, "set")) {
-			char text[2 << 16];
-			unsigned len;
-			len = read(0, text, sizeof(text));
-			printf("got %i bytes\n", len);
-
-			err = set_xattr(inode, "foo", 3, "foobar", 6, 0);
-			if (err)
-				goto error;
-
-			err = sync_super(sb);
-			if (err)
-				goto error;
-		}
+		ssize_t len;
+		len = read(0, text, sizeof(text));
+		if (len < 0)
+			strerror_exit(1, errno, "read");
+		if (verbose)
+			printf("got %zd bytes\n", len);
+		err = set_xattr(inode, attrname, strlen(attrname), text, len, 0);
 		iput(inode);
-	}
+		if (err)
+			goto error;
 
-	if (!strcmp(command, "stat")) {
-		printf("---- stat file ----\n");
-		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+		err = sync_super(sb);
+		if (err)
+			goto error;
+		break;
+
+	case GET:
+		command_options(&argc, &args, onlyhelp, 5, progname, command,
+				"<volume> <filename> <attribute>", &vars);
+		filename = args[3];
+		attrname = args[4];
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
+		inode = tuxopen(sb->rootdir, filename, strlen(filename));
+		if (IS_ERR(inode)) {
+			err = PTR_ERR(inode);
+			goto error;
+		}
+		int size = get_xattr(inode, attrname, strlen(attrname), NULL, 0);
+		if (size < 0) {
+			err = size;
+			goto error;
+		}
+		void *data = malloc(size);
+		if (!data) {
+			err = -ENOMEM;
+			goto error;
+		}
+		size = get_xattr(inode, attrname, strlen(attrname), data, size);
+		if (size < 0) {
+			free(data);
+			err = size;
+			goto error;
+		}
+		hexdump(data, size);
+		free(data);
+		iput(inode);
+		break;
+
+	case STAT:
+		command_options(&argc, &args, onlyhelp, 4, progname, command,
+				"<volume> <filename>", &vars);
+		filename = args[3];
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
+		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
 			err = PTR_ERR(inode);
 			goto error;
 		}
 		dump_attrs(inode);
 		iput(inode);
-	}
+		break;
 
-	if (!strcmp(command, "delete")) {
-		printf("---- delete file ----\n");
-		err = tuxunlink(sb->rootdir, filename, strlen(filename));
+	case DELETE:
+		command_options(&argc, &args, onlyhelp, 4, progname, command,
+				"<volume> <filename>", &vars);
+		filename = args[3];
+		err = open_fs(volname, sb);
 		if (err)
 			goto error;
+		err = tuxunlink(sb->rootdir, filename, strlen(filename));
+		if (err) {
+			if (err == -ENOENT)
+				printf("File not found\n");
+			else
+				goto error;
+		}
 		tux_dump_entries(blockread(sb->rootdir->map, 0));
 
 		err = sync_super(sb);
 		if (err)
 			goto error;
-	}
+		break;
 
-	if (!strcmp(command, "truncate")) {
-		printf("---- truncate file ----\n");
-		struct inode *inode = tuxopen(sb->rootdir, filename, strlen(filename));
+	case TRUNCATE:
+		command_options(&argc, &args, onlysize, 4, progname, command,
+				"<volume> <filename>", &vars);
+		filename = args[3];
+		err = open_fs(volname, sb);
+		if (err)
+			goto error;
+		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {
 			err = PTR_ERR(inode);
 			goto error;
 		}
-		loff_t seek = 0;
-		if (seekarg)
-			seek = strtoull(seekarg, NULL, 0);
-		printf("---- new size %Lu ----\n", (s64)seek);
-		err = tuxtruncate(inode, seek);
+		err = tuxtruncate(inode, vars.seek);
+		iput(inode);
 		if (err)
 			goto error;
-		iput(inode);
 
 		err = sync_super(sb);
 		if (err)
 			goto error;
+		break;
+
+	default:
+		error_exit("'%s' is not a command", command);
 	}
 
-out:
 	//printf("---- show state ----\n");
 	//show_buffers(sb->rootdir->map);
 	//show_buffers(sb->volmap->map);
 	put_super(sb);
 	tux3_exit_mem();
-
+	free(argv2optv(args));	/* Free memory allocated by command_options() */
+	free(optv);
 	return 0;
 
 error:
 	strerror_exit(1, -err, "eek!");
-	exit(1);
-
-usage:
-	usage();
-	exit(1);
 }
