@@ -790,10 +790,9 @@ int main(int argc, char *argv[])
 	int err = tux3_init_mem();
 	assert(!err);
 
-	struct disksuper super = INIT_DISKSB(dev->bits, 1024);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, 1024);
+	setup_sb(sb, &sb->super);
 
 	sb->volmap = tux_new_volmap(sb);
 	assert(sb->volmap);

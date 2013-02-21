@@ -264,10 +264,9 @@ int main(int argc, char *argv[])
 	init_buffers(dev, 1 << 20, 1);
 
 	block_t volblocks = BITMAP_BLOCKS << (dev->bits + 3);
-	struct disksuper super = INIT_DISKSB(dev->bits, volblocks);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, volblocks);
+	setup_sb(sb, &sb->super);
 
 	test_init(argv[0]);
 

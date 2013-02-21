@@ -175,10 +175,9 @@ static void test01(struct sb *sb, struct btree *btree)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
-	struct disksuper super = INIT_DISKSB(dev->bits, 150);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, 150);
+	setup_sb(sb, &sb->super);
 
 	struct btree btree;
 	init_btree(&btree, sb, no_root, &itable_ops);

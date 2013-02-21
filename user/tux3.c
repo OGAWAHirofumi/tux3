@@ -71,7 +71,7 @@ static int mkfs(const char *volname, struct sb *sb, unsigned blocksize)
 	sb->dev->bits = blockbits;
 	init_buffers(sb->dev, 1 << 20, 2);
 
-	sb->super = (struct disksuper)INIT_DISKSB(blockbits, volsize >> blockbits);
+	sb->super = INIT_DISKSB(blockbits, volsize >> blockbits);
 	setup_sb(sb, &sb->super);
 
 	sb->volmap = tux_new_volmap(sb);

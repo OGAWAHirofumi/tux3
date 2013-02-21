@@ -54,7 +54,7 @@ struct file {
 
 #include "kernel/tux3.h"
 
-#define INIT_DISKSB(_bits, _blocks) {				\
+#define INIT_DISKSB(_bits, _blocks) (struct disksuper){		\
 	.magic		= TUX3_MAGIC,				\
 	.birthdate	= 0,					\
 	.flags		= 0,					\

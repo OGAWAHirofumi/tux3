@@ -298,10 +298,9 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .bits = 8, .fd = fd, };
 	init_buffers(dev, volsize, 2);
 
-	struct disksuper super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
+	setup_sb(sb, &sb->super);
 
 	sb->atomref_base = 1 << 10;
 	sb->unatom_base = 1 << 11;

@@ -899,10 +899,9 @@ int main(int argc, char *argv[])
 	int err = tux3_init_mem();
 	assert(!err);
 
-	struct disksuper super = INIT_DISKSB(dev->bits, 150);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, 150);
+	setup_sb(sb, &sb->super);
 
 	sb->logmap = tux_new_logmap(sb);
 	assert(sb->logmap);

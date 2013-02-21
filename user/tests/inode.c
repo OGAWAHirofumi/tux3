@@ -172,10 +172,9 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){ .fd = fd, .bits = 12 };
 	init_buffers(dev, 1 << 24, 2);
 
-	struct disksuper super = INIT_DISKSB(dev->bits, size >> dev->bits);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, size >> dev->bits);
+	setup_sb(sb, &sb->super);
 
 	sb->volmap = tux_new_volmap(sb);
 	assert(sb->volmap);

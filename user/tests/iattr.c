@@ -89,10 +89,9 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 9 };
 
-	struct disksuper super = INIT_DISKSB(dev->bits, 100);
 	struct sb *sb = rapid_sb(dev);
-	sb->super = super;
-	setup_sb(sb, &super);
+	sb->super = INIT_DISKSB(dev->bits, 100);
+	setup_sb(sb, &sb->super);
 
 	test_init(argv[0]);
 
