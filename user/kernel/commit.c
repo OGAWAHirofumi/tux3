@@ -129,7 +129,7 @@ int load_sb(struct sb *sb)
 	err = devio(READ, sb_dev(sb), SB_LOC, super, SB_LEN);
 	if (err)
 		return err;
-	if (memcmp(super->magic, TUX3_MAGIC, sizeof(super->magic)))
+	if (memcmp(super->magic, TUX3_MAGIC_STR, sizeof(super->magic)))
 		return -EINVAL;
 
 	__setup_sb(sb, super);

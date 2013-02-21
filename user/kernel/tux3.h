@@ -82,7 +82,6 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Tux3 disk format */
 
-#define TUX3_MAGIC		"tux3" "\x20\x12\x12\x20"
 /*
  * TUX3_LABEL includes the date of the last incompatible disk format change
  * NOTE: Always update this history for each incompatible change!
@@ -96,7 +95,11 @@ static inline void *decode48(void *at, u64 *val)
  * 2009-03-10: Alignment fix of disksuper
  * 2012-02-16: Update for atomic commit
  * 2012-07-02: Use timestamp 32.32 fixed point. Increase log_balloc size.
+ * 2012-12-20: Add ->usedinodes
  */
+#define TUX3_MAGIC		{ 't', 'u', 'x', '3', 0x20, 0x12, 0x12, 0x20 }
+#define TUX3_MAGIC_STR					\
+	((typeof(((struct disksuper *)0)->magic))TUX3_MAGIC)
 
 #define TUX3_MAGIC_LOG		0x10ad
 #define TUX3_MAGIC_BNODE	0xb4de
