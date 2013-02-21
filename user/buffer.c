@@ -530,7 +530,7 @@ void invalidate_buffers(map_t *map)
 }
 
 #ifdef BUFFER_PARANOIA_DEBUG
-static void __destroy_buffers(void)
+static void destroy_buffers(void)
 {
 	struct buffer_head *buffer, *safe;
 	struct list_head *head;
@@ -579,12 +579,8 @@ static void __destroy_buffers(void)
 		assert(list_empty(&lru_buffers));
 	}
 }
-
-static void destroy_buffers(void)
-{
-	atexit(__destroy_buffers);
-}
 #else /* !BUFFER_PARANOIA_DEBUG */
+
 static struct buffer_head *prealloc_heads;
 static void *data_pool;
 
@@ -646,10 +642,10 @@ void init_buffers(struct dev *dev, unsigned poolsize, int debug)
 	if (max_buffers < min_buffers)
 		max_buffers = min_buffers;
 
-#ifndef BUFFER_PARANOIA_DEBUG
-	preallocate_buffers(bufsize);
+#ifdef BUFFER_PARANOIA_DEBUG
+	atexit(destroy_buffers);
 #else
-	destroy_buffers();
+	preallocate_buffers(bufsize);
 #endif
 }
 
