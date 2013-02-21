@@ -16,6 +16,7 @@
 #include "buffer.h"
 #include "trace.h"
 #include "current_task.h"
+#include "options.h"
 
 #include "libklib/libklib.h"
 #include "libklib/lockdebug.h"
