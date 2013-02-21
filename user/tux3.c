@@ -102,7 +102,7 @@ static void usage(struct options *options, const char *progname,
 	printf("%s\n", help);
 }
 
-struct vars { unsigned blocksize; long long seek; int verbose; };
+struct vars { const char *volname; unsigned blocksize; long long seek; int verbose; };
 
 static void command_options(int *argc, const char ***args,
 		struct options *options, int need, const char *progname,
@@ -126,6 +126,9 @@ static void command_options(int *argc, const char ***args,
 		case 's':
 			vars->seek = strtoull(value, NULL, 0);
 			break;
+		case 'v':
+			vars->verbose++;
+			break;
 		case '?':
 			usage(options, progname, cmdname, blurb, " [OPTIONS]");
 			exit(0);
@@ -139,6 +142,9 @@ static void command_options(int *argc, const char ***args,
 		usage(options, progname, cmdname, blurb, NULL);
 		exit(1);
 	}
+
+	assert(need > 2);
+	vars->volname = (*args)[2];
 }
 
 int main(int argc, char *argv[])
@@ -173,6 +179,7 @@ int main(int argc, char *argv[])
 	if (!optv)
 		strerror_exit(1, errno, "malloc");
 
+	/* 2 == require progname and command */
 	int optc = opthead(options, &argc, &args, optv, space, 2);
 	if (optc < 0)
 		error_exit("%s!", opterror(optv));
@@ -186,6 +193,9 @@ int main(int argc, char *argv[])
 				printf("%s ", commands[j]);
 			printf("\n");
 			exit(0);
+		case 'v':
+			verbose++;
+			break;
 		case 'V':
 			printf("Tux3 tools version %s\n", STRINGIFY(VERSION));
 			exit(0);
@@ -195,18 +205,16 @@ int main(int argc, char *argv[])
 		case 0:
 			usage(options, progname, NULL, blurb, NULL);
 			exit(0);
-		case 'v':
-			verbose++;
-			break;
 		}
 	}
 
-	if (argc < 3) {
+	/* At least, user has to specify "command" */
+	if (argc < 2) {
 		usage(options, progname, NULL, blurb, NULL);
 		exit(1);
 	}
 
-	const char *command = args[1], *volname = args[2], *filename, *attrname;
+	const char *command = args[1], *filename, *attrname;
 	struct vars vars = { .blocksize = 1 << 12, .verbose = verbose };
 	struct inode *inode = NULL;
 	struct file *file = NULL;
@@ -252,14 +260,18 @@ int main(int argc, char *argv[])
 		struct options mkfs_options[] = {
 			{ "blocksize", "b", OPT_HASARG | OPT_NUMBER,
 			  "Set block size", },
+			{ "verbose", "v", OPT_MANY, "Verbose output", },
 			{ "usage", "", 0, "Show usage", },
 			{ "help", "?", 0, "Show help", },
 			{},
 		};
 		command_options(&argc, &args, mkfs_options, 3, progname, command,
 				"<volume>", &vars);
-		printf("Make tux3 filesystem on %s (blocksize %u)\n", volname, vars.blocksize);
-		err = mkfs(volname, sb, vars.blocksize);
+
+		printf("Make tux3 filesystem on %s (blocksize %u)\n",
+		       vars.volname, vars.blocksize);
+
+		err = mkfs(vars.volname, sb, vars.blocksize);
 		if (err)
 			goto error;
 		show_tree_range(itable_btree(sb), 0, -1);
@@ -269,7 +281,7 @@ int main(int argc, char *argv[])
 	case FSCK:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
-		err = open_sb(volname, sb);
+		err = open_sb(vars.volname, sb);
 		if (err)
 			goto error;
 		err = fsck_main(sb);
@@ -281,7 +293,7 @@ int main(int argc, char *argv[])
 		command_options(&argc, &args, onlyhelp, 4, progname, command,
 				"<src> <dest>", &vars);
 		filename = args[3];
-		err = open_sb(volname, sb);
+		err = open_sb(vars.volname, sb);
 		if (err)
 			goto error;
 		err = image_main(sb, filename);
@@ -292,7 +304,7 @@ int main(int argc, char *argv[])
 	case DELTA:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		force_delta(sb);
@@ -301,7 +313,7 @@ int main(int argc, char *argv[])
 	case ROLLUP:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		force_rollup(sb);
@@ -311,7 +323,7 @@ int main(int argc, char *argv[])
 		command_options(&argc, &args, onlyseek, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
@@ -357,7 +369,7 @@ int main(int argc, char *argv[])
 		command_options(&argc, &args, onlyseek, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		//show_tree_range(&sb->itable, 0, -1);
@@ -387,7 +399,7 @@ int main(int argc, char *argv[])
 				"<volume> <filename> <attribute>", &vars);
 		filename = args[3];
 		attrname = args[4];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
@@ -416,7 +428,7 @@ int main(int argc, char *argv[])
 				"<volume> <filename> <attribute>", &vars);
 		filename = args[3];
 		attrname = args[4];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
@@ -449,7 +461,7 @@ int main(int argc, char *argv[])
 		command_options(&argc, &args, onlyhelp, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
@@ -465,7 +477,7 @@ int main(int argc, char *argv[])
 		command_options(&argc, &args, onlyhelp, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		err = tuxunlink(sb->rootdir, filename, strlen(filename));
@@ -486,7 +498,7 @@ int main(int argc, char *argv[])
 		command_options(&argc, &args, onlysize, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
-		err = open_fs(volname, sb);
+		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
