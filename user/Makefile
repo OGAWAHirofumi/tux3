@@ -47,6 +47,7 @@ CHECKFLAGS += -D__CHECKER__ -D__CHECK_ENDIAN__
 CHECKFLAGS += -Wsparse-all -Wno-transparent-union
 CHECKFLAGS += -Wno-declaration-after-statement
 CHECKFLAGS += -Wno-decl
+CHECKFLAGS += -Wno-ptr-subtraction-blows
 
 INSTALL	= install
 
