@@ -1,33 +1,16 @@
-/* Lifted from Ext2, blush. GPLv2. Portions (c) Daniel Phillips 2008 */
+/* Lifted from Ext2, blush. GPLv2. Portions (c) Daniel Phillips 2008-2013 */
 
 /*
- *  linux/include/linux/ext2_fs.h
+ * from linux/include/linux/ext2_fs.h and linux/fs/ext2/dir.c
  *
  * Copyright (C) 1992, 1993, 1994, 1995
  * Remy Card (card@masi.ibp.fr)
  * Laboratoire MASI - Institut Blaise Pascal
  * Universite Pierre et Marie Curie (Paris VI)
  *
- *  from
+ * from linux/include/linux/minix_fs.h
  *
- *  linux/include/linux/minix_fs.h
- *
- *  Copyright (C) 1991, 1992  Linus Torvalds
- */
-
-/*
- *  linux/fs/ext2/dir.c
- *
- * Copyright (C) 1992, 1993, 1994, 1995
- * Remy Card (card@masi.ibp.fr)
- * Laboratoire MASI - Institut Blaise Pascal
- * Universite Pierre et Marie Curie (Paris VI)
- *
- *  from
- *
- *  linux/fs/minix/dir.c
- *
- *  Copyright (C) 1991, 1992  Linus Torvalds
+ * Copyright (C) 1991, 1992  Linus Torvalds
  *
  *  ext2 directory handling functions
  *
@@ -36,6 +19,7 @@
  *
  * All code that works with directory layout had been switched to pagecache
  * and moved here. AV
+ * Copied to tux3 and switched back to buffers, Daniel Phillips 2008
  */
 
 #include "tux3.h"
