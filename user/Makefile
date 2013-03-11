@@ -20,8 +20,9 @@ CFLAGS	+= -Wundef -Wstrict-prototypes -Werror-implicit-function-declaration
 CFLAGS	+= -Wno-unused-parameter -Wno-sign-compare
 CFLAGS	+= -Wno-missing-field-initializers
 #CFLAGS += -Wp,-Wunused-macros
-# gcc checker
-CFLAGS	+= -D_FORTIFY_SOURCE=2
+# gcc checker (_FORTIFY_SOURCE requires optimize option >= 1)
+# Rethink about this when optimization become default
+#CFLAGS	+= -O1 -D_FORTIFY_SOURCE=2
 # gcov
 ifneq ($(GCOV),)
 CFLAGS	+= --coverage
