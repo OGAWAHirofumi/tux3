@@ -316,6 +316,12 @@ struct block_segment {
 	unsigned state;		/* State of this segment */
 };
 
+/*
+ * Balloc flags
+ */
+/* Allow fewer allocation than requested */
+#define BALLOC_PARTIAL		(1 << 0)
+
 /* logging  */
 
 struct logblock {
@@ -674,8 +680,11 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 /* balloc.c */
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
 int balloc_from_range(struct sb *sb, block_t start, block_t count,
-		      unsigned blocks, struct block_segment *seg, int segs);
+		      unsigned blocks, unsigned flags,
+		      struct block_segment *seg, int segs);
 int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs);
+int balloc_partial(struct sb *sb, unsigned blocks,
+		   struct block_segment *seg, int segs);
 int bfree(struct sb *sb, block_t start, unsigned blocks);
 int replay_update_bitmap(struct replay *rp, block_t start, unsigned blocks, int set);
 

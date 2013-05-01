@@ -106,7 +106,7 @@ static int reserve_superblock(struct sb *sb)
 	trace("reserve superblock");
 
 	/* Reserve blocks from 0 to 8KB */
-	err = balloc_from_range(sb, 0, count, count, &seg, 1);
+	err = balloc_from_range(sb, 0, count, count, 0, &seg, 1);
 	if (err < 0)
 		return err;
 

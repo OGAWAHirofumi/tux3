@@ -44,7 +44,7 @@ static int buffer_is_allocated(struct sb *sb, struct buffer_head *buf)
 	tux3_start_backend(sb);
 	struct block_segment seg;
 	int allocated = 1;
-	int err = balloc_from_range(sb, bufindex(buf), 1, 1, &seg, 1);
+	int err = balloc_from_range(sb, bufindex(buf), 1, 1, 0, &seg, 1);
 	if (!err) {
 		bfree(sb, seg.block, seg.count);
 		allocated = 0; /* buffer is free block */

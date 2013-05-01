@@ -250,6 +250,15 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 	return 0;
 }
 
+static void save_seg(struct block_segment *seg, int segs, block_t start,
+		     unsigned count)
+{
+	if (seg[0].count < count) {
+		seg[0].block = start;
+		seg[0].count = count;
+	}
+}
+
 /*
  * Allocate block segments from specified range.
  *
@@ -259,7 +268,8 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
  * userland only
  */
 int balloc_from_range(struct sb *sb, block_t start, block_t len,
-		      unsigned blocks, struct block_segment *seg, int segs)
+		      unsigned blocks, unsigned flags,
+		      struct block_segment *seg, int segs)
 {
 	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
@@ -273,6 +283,9 @@ int balloc_from_range(struct sb *sb, block_t start, block_t len,
 	assert(len <= sb->volblocks);
 	assert(tux3_under_backend(sb));
 
+	/* Initialize seg[] */
+	memset(seg, 0, sizeof(*seg) * segs);
+
 	need = blocks;
 	while (len > 0) {
 		block_t mapstart;
@@ -280,6 +293,13 @@ int balloc_from_range(struct sb *sb, block_t start, block_t len,
 		void *p;
 
 		if (unlikely(start >= sb->volblocks)) {
+			if (need < blocks) {
+				/* Found partial free segment */
+				unsigned blks = blocks - need;
+				found = sb->volblocks - blks;
+				save_seg(seg, segs, found, blks);
+			}
+
 			start = 0;
 			/*
 			 * Wrapped at end of volblocks, this is not
@@ -319,7 +339,16 @@ int balloc_from_range(struct sb *sb, block_t start, block_t len,
 
 				/* Found requested free blocks */
 				found = mapstart + idx - blocks;
+				save_seg(seg, segs, found, blocks);
 				goto found_range;
+			}
+
+			need -= idx - mapoffset;
+			if (need < blocks) {
+				/* Found partial free segment */
+				unsigned blks = blocks - need;
+				found = mapstart + idx - blks;
+				save_seg(seg, segs, found, blks);
 			}
 
 			/* Reset needed blocks */
@@ -335,6 +364,14 @@ int balloc_from_range(struct sb *sb, block_t start, block_t len,
 		len -= maplen;
 
 		blockput(buffer);
+	}
+
+	if ((flags & BALLOC_PARTIAL) && seg[0].count) {
+		tux3_dbg("partial blocks %u, block %llu, count %u",
+			 blocks, seg[0].block, seg[0].count);
+		found = seg[0].block;
+		blocks = seg[0].count;
+		goto found_partial;
 	}
 
 	return -ENOSPC;
@@ -355,6 +392,7 @@ found_range:
 		int err;
 
 		blockput(buffer);
+found_partial:
 		err = bitmap_modify(sb, found, blocks, 1);
 		if (err)
 			return err;
@@ -362,7 +400,6 @@ found_range:
 
 	seg->block = found;
 	seg->count = blocks;
-	seg->state = 0;
 
 	sb->nextalloc = found + blocks;
 	if (sb->nextalloc >= sb->volblocks)
@@ -374,18 +411,32 @@ found_range:
 	return 0;
 }
 
-int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
+static int __balloc(struct sb *sb, unsigned blocks, unsigned flags,
+		    struct block_segment *seg, int segs)
 {
 	block_t goal = sb->nextalloc;
 	int err;
 
-	err = balloc_from_range(sb, goal, sb->volblocks, blocks, seg, segs);
+	/* For now, allow partial unconditionally */
+	err = balloc_from_range(sb, goal, sb->volblocks, blocks, flags,
+				seg, segs);
 	if (err == -ENOSPC) {
 		/* FIXME: This is for debugging. Remove this */
 		tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
 	}
 
 	return err;
+}
+
+int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
+{
+	return __balloc(sb, blocks, 0, seg, segs);
+}
+
+int balloc_partial(struct sb *sb, unsigned blocks,
+		   struct block_segment *seg, int segs)
+{
+	return __balloc(sb, blocks, BALLOC_PARTIAL, seg, segs);
 }
 
 int bfree(struct sb *sb, block_t start, unsigned blocks)

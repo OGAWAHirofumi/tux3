@@ -128,7 +128,7 @@ static void test02(struct sb *sb, block_t blocks)
 	unsigned count = 10;
 	for (int i = 0; i < count + 2; i++) {
 		struct block_segment seg;
-		int err = balloc_from_range(sb, start, count, 1, &seg, 1);
+		int err = balloc_from_range(sb, start, count, 1, 0, &seg, 1);
 		if (i < count)
 			test_assert(!err && seg.block == start + i);
 		else
@@ -230,7 +230,7 @@ static void test06(struct sb *sb, block_t blocks)
 	assert(seg);
 
 	for (int i = 0; i < nr; i++) {
-		err = balloc_from_range(sb, 0, total, ALLOC_UNIT, &seg[i], 1);
+		err = balloc_from_range(sb, 0, total, ALLOC_UNIT, 0, &seg[i], 1);
 		test_assert(!err);
 		test_assert(seg[i].count == ALLOC_UNIT);
 	}
