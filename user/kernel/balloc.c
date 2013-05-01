@@ -250,29 +250,52 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 	return 0;
 }
 
-/* userland only */
-int balloc_from_range(struct sb *sb, block_t start, block_t count,
+/*
+ * Allocate block segments from specified range.
+ *
+ * The specified range is cyclic. I.e. if start + len bigger than
+ * volblocks, search wrapped to 0.
+ *
+ * userland only
+ */
+int balloc_from_range(struct sb *sb, block_t start, block_t len,
 		      unsigned blocks, struct block_segment *seg, int segs)
 {
 	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapsize = 1 << mapshift;
 	unsigned mapmask = mapsize - 1;
-	unsigned mapoffset = start & mapmask;
-	block_t limit = start + count;
-	block_t mapblock, mapblocks = (limit + mapmask) >> mapshift;
 	struct buffer_head *buffer;
-	block_t need, found;
+	block_t need, found, mapblock;
 
-	trace("balloc find %i blocks, range [%Lx, %Lx]", blocks, start, count);
+	trace("balloc find %i blocks, range [%Lx, %Lx]", blocks, start, len);
 	assert(blocks > 0);
-	assert(start + count <= sb->volblocks);
+	assert(len <= sb->volblocks);
 	assert(tux3_under_backend(sb));
 
 	need = blocks;
-	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
-		unsigned idx, maplimit;
+	while (len > 0) {
+		block_t mapstart;
+		unsigned mapoffset, maplimit, maplen;
 		void *p;
+
+		if (unlikely(start >= sb->volblocks)) {
+			start = 0;
+			/*
+			 * Wrapped at end of volblocks, this is not
+			 * contiguous. So resets "need".
+			 */
+			need = blocks;
+		}
+
+		mapblock = start >> mapshift;
+		mapstart = mapblock << mapshift;
+		mapoffset = start & mapmask;
+		maplimit = min_t(block_t, mapsize, mapoffset + len);
+		/* If out of range, apply limit */
+		if (unlikely(mapstart + maplimit > sb->volblocks))
+			maplimit = sb->volblocks & mapmask;
+		maplen = maplimit - mapoffset;
 
 		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
@@ -281,25 +304,21 @@ int balloc_from_range(struct sb *sb, block_t start, block_t count,
 			return -EIO;
 		}
 
-		/* If last block of range, apply limit */
-		if (mapblock == mapblocks - 1) {
-			if (limit & mapmask)
-				mapsize = limit & mapmask;
-		}
-
 		p = bufdata(buffer);
 		while (1) {
-			maplimit = min_t(block_t, mapoffset + need, mapsize);
+			unsigned idx, mapnext;
+
+			mapnext = min_t(block_t, mapoffset + need, maplimit);
 
 			/* Check if there is no non-zero bits */
-			idx = find_next_bit_le(p, maplimit, mapoffset);
-			if (idx == maplimit) {
+			idx = find_next_bit_le(p, mapnext, mapoffset);
+			if (idx == mapnext) {
 				need -= idx - mapoffset;
 				if (need)
 					break;	/* Need more blocks */
 
 				/* Found requested free blocks */
-				found = (mapblock << mapshift) + idx - blocks;
+				found = mapstart + idx - blocks;
 				goto found_range;
 			}
 
@@ -307,13 +326,15 @@ int balloc_from_range(struct sb *sb, block_t start, block_t count,
 			need = blocks;
 
 			/* Skip non-zero bit */
-			mapoffset = find_next_zero_bit_le(p, mapsize, idx + 1);
-			if (mapoffset == mapsize)
+			mapoffset = find_next_zero_bit_le(p, maplimit, idx + 1);
+			if (mapoffset == maplimit)
 				break;	/* Search next blocks */
 		}
 
+		start += maplen;
+		len -= maplen;
+
 		blockput(buffer);
-		mapoffset = 0;
 	}
 
 	return -ENOSPC;
@@ -344,6 +365,8 @@ found_range:
 	seg->state = 0;
 
 	sb->nextalloc = found + blocks;
+	if (sb->nextalloc >= sb->volblocks)
+		sb->nextalloc = 0;
 	//set_sb_dirty(sb);
 
 	trace("balloc extent [block %Lx, count %x]", found, blocks);
@@ -353,22 +376,16 @@ found_range:
 
 int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
 {
-	block_t goal = sb->nextalloc, total = sb->volblocks;
+	block_t goal = sb->nextalloc;
 	int err;
 
-	err = balloc_from_range(sb, goal, total - goal, blocks, seg, segs);
-	if (goal && err == -ENOSPC)
-		err = balloc_from_range(sb, 0, goal, blocks, seg, segs);
-
-	if (err < 0) {
-		if (err == -ENOSPC) {
-			/* FIXME: This is for debugging. Remove this */
-			tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
-		}
-		return err;
+	err = balloc_from_range(sb, goal, sb->volblocks, blocks, seg, segs);
+	if (err == -ENOSPC) {
+		/* FIXME: This is for debugging. Remove this */
+		tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
 	}
 
-	return 0;
+	return err;
 }
 
 int bfree(struct sb *sb, block_t start, unsigned blocks)

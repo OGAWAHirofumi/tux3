@@ -15,22 +15,16 @@ int balloc_from_range(struct sb *sb, block_t start, block_t count,
 
 int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
 {
-	block_t goal = sb->nextalloc, total = sb->volblocks;
+	block_t goal = sb->nextalloc;
 	int err;
 
-	err = balloc_from_range(sb, goal, total - goal, blocks, seg, segs);
-	if (goal && err == -ENOSPC)
-		err = balloc_from_range(sb, 0, goal, blocks, seg, segs);
-
-	if (err < 0) {
-		if (err == -ENOSPC) {
-			/* FIXME: This is for debugging. Remove this */
-			tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
-		}
-		return err;
+	err = balloc_from_range(sb, goal, sb->volblocks, blocks, seg, segs);
+	if (err == -ENOSPC) {
+		/* FIXME: This is for debugging. Remove this */
+		tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
 	}
 
-	return 0;
+	return err;
 }
 
 int bfree(struct sb *sb, block_t block, unsigned blocks)
