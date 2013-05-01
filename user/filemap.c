@@ -144,20 +144,20 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 	}
 	count = bufvec_contig_count(bufvec_io);
 
-	struct seg map[10];
+	struct block_segment seg[10];
 
-	int segs = map_region(inode, index, count, map, ARRAY_SIZE(map), mode);
+	int segs = map_region(inode, index, count, seg, ARRAY_SIZE(seg), mode);
 	if (segs < 0)
 		return segs;
 	assert(segs);
 
 	for (int i = 0; i < segs; i++) {
-		block = map[i].block;
-		count = map[i].count;
+		block = seg[i].block;
+		count = seg[i].count;
 
 		trace("extent 0x%Lx/%x => %Lx", index, count, block);
 
-		if (map[i].state != SEG_HOLE) {
+		if (seg[i].state != BLOCK_SEG_HOLE) {
 			if (rw == READ)
 				bufvec_io->end_io = filemap_read_endio;
 			else

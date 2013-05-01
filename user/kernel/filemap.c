@@ -62,11 +62,11 @@ enum map_mode {
 #include "filemap_hole.c"
 
 /* userland only */
-void show_segs(struct seg map[], unsigned segs)
+void show_segs(struct block_segment seg[], unsigned segs)
 {
 	__tux3_dbg("%i segs: ", segs);
 	for (int i = 0; i < segs; i++)
-		__tux3_dbg("%Lx/%i ", map[i].block, map[i].count);
+		__tux3_dbg("%Lx/%i ", seg[i].block, seg[i].count);
 	__tux3_dbg("\n");
 }
 
@@ -85,7 +85,8 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 
 /* map_region() by using dleaf1 */
 static int map_region1(struct inode *inode, block_t start, unsigned count,
-		       struct seg map[], unsigned max_segs, enum map_mode mode)
+		       struct block_segment seg[], unsigned max_segs,
+		       enum map_mode mode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -181,48 +182,54 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			ex_index = min(ex_index, limit);
 			unsigned gap = ex_index - index;
 			index = ex_index;
-			map[segs++] = (struct seg){ .count = gap, .state = SEG_HOLE };
+			seg[segs++] = (struct block_segment){
+				.count = gap,
+				.state = BLOCK_SEG_HOLE,
+			};
 		} else {
 			block = dwalk_block(walk);
 			count = dwalk_count(walk);
 			trace("emit %Lx/%x", block, count);
-			map[segs++] = (struct seg){ .block = block, .count = count };
+			seg[segs++] = (struct block_segment){
+				.block = block,
+				.count = count,
+			};
 			index = ex_index + count;
 			dwalk_next(walk);
  		}
 	}
 	assert(segs);
 	unsigned below = start - seg_start, above = index - min(index, limit);
-	map[0].block += below;
-	map[0].count -= below;
-	map[segs - 1].count -= above;
+	seg[0].block += below;
+	seg[0].count -= below;
+	seg[segs - 1].count -= above;
 
 	if (mode == MAP_READ)
 		goto out_release;
 
-	/* Save blocks before change map[] for below or above. */
+	/* Save blocks before change seg[] for below or above. */
 	block_t below_block, above_block;
-	below_block = map[0].block - below;
-	above_block = map[segs - 1].block + map[segs - 1].count;
+	below_block = seg[0].block - below;
+	above_block = seg[segs - 1].block + seg[segs - 1].count;
 	if (mode == MAP_REDIRECT) {
-		/* Change the map[] to redirect this region as one extent */
+		/* Change the seg[] to redirect this region as one extent */
 		count = 0;
 		for (int i = 0; i < segs; i++) {
 			/* Logging overwrited extents as free */
-			if (map[i].state != SEG_HOLE)
-				map_bfree(inode, map[i].block, map[i].count);
-			count += map[i].count;
+			if (seg[i].state != BLOCK_SEG_HOLE)
+				map_bfree(inode, seg[i].block, seg[i].count);
+			count += seg[i].count;
 		}
 		segs = 1;
-		map[0].block = 0;
-		map[0].count = count;
-		map[0].state = SEG_HOLE;
+		seg[0].block = 0;
+		seg[0].count = count;
+		seg[0].state = BLOCK_SEG_HOLE;
 	}
 	for (int i = 0; i < segs; i++) {
-		if (map[i].state != SEG_HOLE)
+		if (seg[i].state != BLOCK_SEG_HOLE)
 			continue;
 
-		count = map[i].count;
+		count = seg[i].count;
 		if ((err = balloc(sb, count, &block))) { // goal ???
 			/*
 			 * Out of space on file data allocation.  It happens.  Tread
@@ -244,13 +251,13 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		log_balloc(sb, block, count);
 		trace("fill in %Lx/%i ", block, count);
 
-		map[i].block = block;
-		map[i].count = count;
+		seg[i].block = block;
+		seg[i].count = count;
 		/* if mode == MAP_REDIRECT, buffer should be dirty */
-		map[i].state = (mode == MAP_REDIRECT) ? 0 : SEG_NEW;
+		seg[i].state = (mode == MAP_REDIRECT) ? 0 : BLOCK_SEG_NEW;
 	}
 
-	/* Start to reflect the map[] changes to the data btree */
+	/* Start to reflect the seg[] changes to the data btree */
 	if ((err = cursor_redirect(cursor))) {
 		segs = err;
 		goto out_release;
@@ -268,7 +275,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		tailkey = dwalk_index(walk);
 		dwalk_copy(walk, tail);
 	}
-	/* Go back to region start and pack in new segs */
+	/* Go back to region start and pack in new seg */
 	dwalk_chop(&headwalk);
 	index = start;
 	for (int i = -!!below; i < segs + !!above; i++) {
@@ -302,11 +309,11 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			dwalk_add(&headwalk, index, make_extent(above_block, above));
 			continue;
 		}
-		trace("pack 0x%Lx => %Lx/%x", index, map[i].block, map[i].count);
+		trace("pack 0x%Lx => %Lx/%x", index, seg[i].block, seg[i].count);
 		dleaf_dump(btree, leaf);
-		dwalk_add(&headwalk, index, make_extent(map[i].block, map[i].count));
+		dwalk_add(&headwalk, index, make_extent(seg[i].block, seg[i].count));
 		dleaf_dump(btree, leaf);
-		index += map[i].count;
+		index += seg[i].count;
 	}
 	if (tail) {
 		if (!dleaf_merge(btree, leaf, tail)) {
@@ -357,7 +364,7 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 		     int write_segs, int seg_state)
 {
 	struct sb *sb = btree->sb;
-	struct seg *seg = rq->seg;
+	struct block_segment *seg = rq->seg;
 	int i;
 
 	assert(rq->nr_segs + write_segs <= rq->max_segs);
@@ -366,7 +373,7 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 		block_t block;
 		int err;
 
-		if (seg[i].state != SEG_HOLE)
+		if (seg[i].state != BLOCK_SEG_HOLE)
 			continue;
 
 		err = balloc(sb, rq->seg[i].count, &block);
@@ -403,7 +410,7 @@ static int overwrite_seg_alloc(struct btree *btree, struct dleaf_req *rq,
 			       int write_segs)
 {
 	/* If overwrite mode, set SEG_NEW to allocated seg */
-	return seg_alloc(btree, rq, write_segs, SEG_NEW);
+	return seg_alloc(btree, rq, write_segs, BLOCK_SEG_NEW);
 }
 
 static int redirect_seg_alloc(struct btree *btree, struct dleaf_req *rq,
@@ -420,7 +427,8 @@ static int (*seg_alloc_funs[])(struct btree *, struct dleaf_req *, int) = {
 
 /* map_region() by using dleaf2 */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
-		       struct seg seg[], unsigned max_segs, enum map_mode mode)
+		       struct block_segment seg[], unsigned max_segs,
+		       enum map_mode mode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
 	struct cursor *cursor = NULL;
@@ -499,7 +507,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		segs = 1;
 		seg[0].block = 0;
 		seg[0].count = count;
-		seg[0].state = SEG_HOLE;
+		seg[0].state = BLOCK_SEG_HOLE;
 	}
 	assert(segs);
 
@@ -511,7 +519,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		unsigned total = 0;
 		for (int i = 0; i < segs; i++) {
 			/* Logging overwrited extents as free */
-			if (seg[i].state != SEG_HOLE)
+			if (seg[i].state != BLOCK_SEG_HOLE)
 				map_bfree(inode, seg[i].block, seg[i].count);
 			total += seg[i].count;
 		}
@@ -519,7 +527,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		segs = 1;
 		seg[0].block = 0;
 		seg[0].count = total;
-		seg[0].state = SEG_HOLE;
+		seg[0].state = BLOCK_SEG_HOLE;
 	}
 
 	/* Write extents from data btree */
@@ -563,7 +571,8 @@ out_unlock:
  * 0 < - number of physical extents which were mapped
  */
 static int map_region(struct inode *inode, block_t start, unsigned count,
-		      struct seg map[], unsigned max_segs, enum map_mode mode)
+		      struct block_segment seg[], unsigned max_segs,
+		      enum map_mode mode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
 	int segs;
@@ -577,21 +586,21 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 		/* If whole region was hole, don't need to call map_region */
 		if (tux3_is_hole(inode, start, count)) {
 			assert(max_segs >= 1);
-			map[0].state = SEG_HOLE;
-			map[0].block = 0;
-			map[0].count = count;
+			seg[0].state = BLOCK_SEG_HOLE;
+			seg[0].block = 0;
+			seg[0].count = count;
 			return 1;
 		}
 	}
 
 	if (btree->ops == &dtree1_ops)
-		segs = map_region1(inode, start, count, map, max_segs, mode);
+		segs = map_region1(inode, start, count, seg, max_segs, mode);
 	else
-		segs = map_region2(inode, start, count, map, max_segs, mode);
+		segs = map_region2(inode, start, count, seg, max_segs, mode);
 
 	if (mode == MAP_READ) {
-		/* Update map[] with hole information */
-		segs = tux3_map_hole(inode, start, count, map, segs, max_segs);
+		/* Update seg[] with hole information */
+		segs = tux3_map_hole(inode, start, count, seg, segs, max_segs);
 	}
 
 	return segs;
@@ -619,19 +628,19 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 	block_t block, index = bufvec_contig_index(bufvec);
 	unsigned count = bufvec_contig_count(bufvec);
 	int err, rw = (mode == MAP_READ) ? READ : WRITE;
-	struct seg map[10];
+	struct block_segment seg[10];
 
 	/* FIXME: For now, this is only for write */
 	assert(mode != MAP_READ);
 
-	int segs = map_region(inode, index, count, map, ARRAY_SIZE(map), mode);
+	int segs = map_region(inode, index, count, seg, ARRAY_SIZE(seg), mode);
 	if (segs < 0)
 		return segs;
 	assert(segs);
 
 	for (int i = 0; i < segs; i++) {
-		block = map[i].block;
-		count = map[i].count;
+		block = seg[i].block;
+		count = seg[i].count;
 
 		trace("extent 0x%Lx/%x => %Lx", index, count, block);
 
@@ -646,10 +655,10 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 }
 
 static void seg_to_buffer(struct sb *sb, struct buffer_head *buffer,
-			  struct seg *seg, int delalloc)
+			  struct block_segment *seg, int delalloc)
 {
 	switch (seg->state) {
-	case SEG_HOLE:
+	case BLOCK_SEG_HOLE:
 		if (delalloc && !buffer_delay(buffer)) {
 			map_bh(buffer, vfs_sb(sb), 0);
 			set_buffer_new(buffer);
@@ -657,7 +666,7 @@ static void seg_to_buffer(struct sb *sb, struct buffer_head *buffer,
 			buffer->b_size = seg->count << sb->blockbits;
 		}
 		break;
-	case SEG_NEW:
+	case BLOCK_SEG_NEW:
 		assert(!delalloc);
 		assert(seg->block);
 		if (buffer_delay(buffer)) {
@@ -687,7 +696,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	struct sb *sb = tux_sb(inode->i_sb);
 	size_t max_blocks = bh_result->b_size >> sb->blockbits;
 	enum map_mode mode;
-	struct seg seg;
+	struct block_segment seg;
 	int segs, delalloc;
 
 	trace("==> inum %Lu, iblock %Lu, b_size %zu, create %d",
@@ -715,7 +724,7 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	 * so SEG_NEW never happen.  (FIXME: Current direct I/O
 	 * implementation is using this path.)
 	 */
-	assert(seg.state != SEG_NEW /*|| (create && !delalloc) */);
+	assert(seg.state != BLOCK_SEG_NEW /*|| (create && !delalloc) */);
 #endif
 
 	seg_to_buffer(sb, bh_result, &seg, delalloc);
@@ -745,8 +754,8 @@ static int tux3_da_get_block(struct inode *inode, sector_t iblock,
 	 */
 	if (buffer_uptodate(bh_result)) {
 		struct sb *sb = tux_sb(inode->i_sb);
-		static struct seg seg = {
-			.state = SEG_HOLE,
+		static struct block_segment seg = {
+			.state = BLOCK_SEG_HOLE,
 			.block = 0,
 			.count = 1,
 		};

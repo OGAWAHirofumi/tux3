@@ -12,13 +12,13 @@ static void clean_main(struct sb *sb, struct inode *inode)
 	tux3_exit_mem();
 }
 
-static void add_maps(struct inode *inode, block_t index, struct seg *seg,
-		     int nr_segs)
+static void add_maps(struct inode *inode, block_t index,
+		     struct block_segment *seg, int nr_segs)
 {
 	unsigned delta = tux3_get_current_delta();
 
 	for (int i = 0; i < nr_segs; i++) {
-		struct seg *s = &seg[i];
+		struct block_segment *s = &seg[i];
 		for (unsigned j = 0; j < s->count; j++) {
 			struct buffer_head *buf;
 			buf = blockget(inode->map, index + j);
@@ -34,7 +34,8 @@ static void add_maps(struct inode *inode, block_t index, struct seg *seg,
 
 /* Create segments, then save state to buffer */
 static int d_map_region(struct inode *inode, block_t start, unsigned count,
-			struct seg *seg, unsigned max_segs, enum map_mode mode)
+			struct block_segment *seg, unsigned max_segs,
+			enum map_mode mode)
 {
 	int nr_segs;
 	/* this should be called with "mode != MAP_READ" */
@@ -45,15 +46,15 @@ static int d_map_region(struct inode *inode, block_t start, unsigned count,
 	return nr_segs;
 }
 
-static void check_maps(struct inode *inode, block_t index, struct seg *seg,
-		       int nr_segs)
+static void check_maps(struct inode *inode, block_t index,
+		       struct block_segment *seg, int nr_segs)
 {
 	for (int i = 0; i < nr_segs; i++) {
-		struct seg *s = &seg[i];
+		struct block_segment *s = &seg[i];
 		for (unsigned j = 0; j < s->count; j++) {
 			struct buffer_head *buf;
 			buf = peekblk(inode->map, index + j);
-			if (s->state == SEG_HOLE)
+			if (s->state == BLOCK_SEG_HOLE)
 				test_assert(buf == NULL);
 			else {
 				block_t blk = *(block_t *)buf->data;
@@ -67,7 +68,7 @@ static void check_maps(struct inode *inode, block_t index, struct seg *seg,
 
 /* Check returned segments are same state with buffer */
 static int check_map_region(struct inode *inode, block_t start, unsigned count,
-			    struct seg *seg, unsigned max_segs)
+			    struct block_segment *seg, unsigned max_segs)
 {
 	int nr_segs;
 	nr_segs = map_region(inode, start, count, seg, max_segs, MAP_READ);
@@ -93,7 +94,7 @@ static void test01(struct sb *sb, struct inode *inode)
 
 	/* Create by ascending order */
 	if (test_start("test01.1")) {
-		struct seg seg;
+		struct block_segment seg;
 		int err, segs;
 
 		/* Set fake backend mark to modify backend objects. */
@@ -109,7 +110,7 @@ static void test01(struct sb *sb, struct inode *inode)
 			test_assert(segs == 1);
 		}
 #else
-		segs = check_map_region(inode, 0, 30*2, map, ARRAY_SIZE(map));
+		segs = check_map_region(inode, 0, 30*2, seg, ARRAY_SIZE(seg));
 		test_assert(segs == 30*2);
 #endif
 
@@ -127,8 +128,8 @@ static void test01(struct sb *sb, struct inode *inode)
 				test_assert(segs == 1);
 			}
 #else
-			segs = check_map_region(inode, 0, 30*2, map,
-						ARRAY_SIZE(map));
+			segs = check_map_region(inode, 0, 30*2, seg,
+						ARRAY_SIZE(seg));
 			test_assert(segs == i*2);
 #endif
 		}
@@ -137,7 +138,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, MAP_READ);
 		test_assert(segs == 1);
 		test_assert(seg.count == INT_MAX);
-		test_assert(seg.state == SEG_HOLE);
+		test_assert(seg.state == BLOCK_SEG_HOLE);
 
 		tux3_end_backend();
 
@@ -148,7 +149,7 @@ static void test01(struct sb *sb, struct inode *inode)
 
 	/* Create by descending order */
 	if (test_start("test01.2")) {
-		struct seg seg;
+		struct block_segment seg;
 		int err, segs;
 
 		/* Set fake backend mark to modify backend objects. */
@@ -164,7 +165,7 @@ static void test01(struct sb *sb, struct inode *inode)
 			test_assert(segs == 1);
 		}
 #else
-		segs = check_map_region(inode, 0, 30*2, map, ARRAY_SIZE(map));
+		segs = check_map_region(inode, 0, 30*2, seg, ARRAY_SIZE(seg));
 		test_assert(segs == i*2);
 #endif
 
@@ -175,7 +176,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		segs = map_region(inode, 0, INT_MAX, &seg, 1, MAP_READ);
 		test_assert(segs == 1);
 		test_assert(seg.count == INT_MAX);
-		test_assert(seg.state == SEG_HOLE);
+		test_assert(seg.state == BLOCK_SEG_HOLE);
 
 		tux3_end_backend();
 
@@ -191,7 +192,7 @@ static void test01(struct sb *sb, struct inode *inode)
 /* Test redirect mode (create == 2) */
 static void test02(struct sb *sb, struct inode *inode)
 {
-	struct seg map[32];
+	struct block_segment seg[32];
 
 	struct test_data data[] = {
 		{ .index = 5,  .count = 64, .mode = MAP_WRITE, },
@@ -207,17 +208,17 @@ static void test02(struct sb *sb, struct inode *inode)
 		int segs1, segs2;
 
 		segs1 = d_map_region(inode, data[i].index, data[i].count,
-				    map, ARRAY_SIZE(map), data[i].mode);
+				    seg, ARRAY_SIZE(seg), data[i].mode);
 		test_assert(segs1 > 0);
 		total_segs += segs1;
 
 		segs2 = check_map_region(inode, data[i].index, data[i].count,
-					 map, ARRAY_SIZE(map));
+					 seg, ARRAY_SIZE(seg));
 		test_assert(segs1 == segs2);
 	}
 
 	/* Check whole rage from 0 */
-	int segs = check_map_region(inode, 0, 200, map, ARRAY_SIZE(map));
+	int segs = check_map_region(inode, 0, 200, seg, ARRAY_SIZE(seg));
 	test_assert(segs >= total_segs);
 
 	tux3_end_backend();
@@ -234,36 +235,36 @@ static void test02(struct sb *sb, struct inode *inode)
 /* Test overwrite seg entirely inside existing */
 static void test03(struct sb *sb, struct inode *inode)
 {
-	struct seg map1[32], map2[32];
+	struct block_segment seg1[32], seg2[32];
 	int segs1, segs2;
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
 
 	/* Create range */
-	segs1 = d_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1), MAP_WRITE);
+	segs1 = d_map_region(inode, 2, 5, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 2, 5, map2, ARRAY_SIZE(map2));
+	segs2 = check_map_region(inode, 2, 5, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs1 == segs2);
 
 	/* Overwrite range */
-	segs1 = d_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1), MAP_WRITE);
+	segs1 = d_map_region(inode, 4, 1, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 4, 1, map1, ARRAY_SIZE(map1));
+	segs2 = check_map_region(inode, 4, 1, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 == segs2);
 
-	segs1 = check_map_region(inode, 2, 5, map1, ARRAY_SIZE(map1));
+	segs1 = check_map_region(inode, 2, 5, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 > segs2);
-	test_assert(map1[0].block == map2[0].block);
-	test_assert(map1[0].count < map2[0].count);
-	test_assert(map1[0].count == 2);
-	test_assert(map1[1].block != map1[0].block);
-	test_assert(map1[1].count == 1);
-	test_assert(map1[2].block != map1[1].block);
-	test_assert(map1[2].count == 2);
+	test_assert(seg1[0].block == seg2[0].block);
+	test_assert(seg1[0].count < seg2[0].count);
+	test_assert(seg1[0].count == 2);
+	test_assert(seg1[1].block != seg1[0].block);
+	test_assert(seg1[1].count == 1);
+	test_assert(seg1[2].block != seg1[1].block);
+	test_assert(seg1[2].count == 2);
 
 	/* Check whole rage from 0 */
-	segs2 = check_map_region(inode, 0, 200, map2, ARRAY_SIZE(map2));
+	segs2 = check_map_region(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs2 >= segs1);
 
 	tux3_end_backend();
@@ -280,26 +281,26 @@ static void test03(struct sb *sb, struct inode *inode)
 /* Test overwrite extent and hole at once */
 static void test04(struct sb *sb, struct inode *inode)
 {
-	struct seg map1[32], map2[32];
+	struct block_segment seg1[32], seg2[32];
 	int segs1, segs2;
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
 
 	/* Create extents */
-	segs1 = d_map_region(inode, 2, 2, map1, ARRAY_SIZE(map1), MAP_WRITE);
+	segs1 = d_map_region(inode, 2, 2, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 2, 2, map2, ARRAY_SIZE(map2));
+	segs2 = check_map_region(inode, 2, 2, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs1 == segs2);
 
 	/* Overwrite extent and hole at once */
-	segs1 = d_map_region(inode, 2, 4, map1, ARRAY_SIZE(map1), MAP_WRITE);
+	segs1 = d_map_region(inode, 2, 4, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 2, 4, map1, ARRAY_SIZE(map1));
+	segs2 = check_map_region(inode, 2, 4, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 == segs2);
 
 	/* Check whole rage from 0 */
-	segs2 = check_map_region(inode, 0, 200, map2, ARRAY_SIZE(map2));
+	segs2 = check_map_region(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs2 >= segs1);
 
 	tux3_end_backend();
@@ -316,26 +317,26 @@ static void test04(struct sb *sb, struct inode *inode)
 static void __test05(struct test_data data[], int nr, struct inode *inode)
 {
 	struct test_data *t = data;
-	struct seg map[32];
+	struct block_segment seg[32];
 	int total_segs = 0;
 
 	for (int i = 0; i < nr; i++, t++) {
 		int segs1, segs2;
 
 		segs1 = d_map_region(inode, t->index, t->count,
-				     map, ARRAY_SIZE(map), t->mode);
+				     seg, ARRAY_SIZE(seg), t->mode);
 		test_assert(segs1 > 0);
 		total_segs += segs1;
 
 		segs2 = check_map_region(inode, t->index, t->count,
-					 map, ARRAY_SIZE(map));
+					 seg, ARRAY_SIZE(seg));
 		test_assert(segs1 == segs2);
 	}
 #if 0
 	/* Check whole rage */
 	block_t idx = data[0].index;
 	unsigned end = data[nr - 1].index + data[nr - 1].count + 10;
-	segs = check_map_region(inode, idx, end - idx, map, ARRAY_SIZE(map));
+	segs = check_map_region(inode, idx, end - idx, seg, ARRAY_SIZE(seg));
 	test_assert(segs >= total_segs);
 #endif
 }

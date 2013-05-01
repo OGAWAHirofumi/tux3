@@ -525,7 +525,7 @@ recheck:
 
 	/* Fill extents */
 	while (rq->nr_segs < rq->max_segs - rest_segs) {
-		struct seg *seg = rq->seg + rq->nr_segs;
+		struct block_segment *seg = rq->seg + rq->nr_segs;
 
 		put_extent(dex_start, sb->version, key->start, seg->block);
 
@@ -585,7 +585,7 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 	dex++;
 
 	do {
-		struct seg *seg = rq->seg + rq->nr_segs;
+		struct block_segment *seg = rq->seg + rq->nr_segs;
 
 		get_extent(dex, &next);
 
@@ -596,7 +596,7 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 			seg->state = 0;
 		} else {
 			seg->block = 0;
-			seg->state = SEG_HOLE;
+			seg->state = BLOCK_SEG_HOLE;
 		}
 
 		physical = next.physical;
@@ -609,11 +609,11 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 fill_seg:
 	/* Between sentinel and key_limit is hole */
 	if (key->start < key_limit && key->len && rq->nr_segs < rq->max_segs) {
-		struct seg *seg = rq->seg + rq->nr_segs;
+		struct block_segment *seg = rq->seg + rq->nr_segs;
 
 		seg->count = min_t(tuxkey_t, key->len, key_limit - key->start);
 		seg->block = 0;
-		seg->state = SEG_HOLE;
+		seg->state = BLOCK_SEG_HOLE;
 
 		key->start += seg->count;
 		key->len -= seg->count;

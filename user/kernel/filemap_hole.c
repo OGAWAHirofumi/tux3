@@ -230,9 +230,10 @@ static int tux3_is_hole(struct inode *inode, block_t start, unsigned count)
 	return whole;
 }
 
-/* Update specified map[] with holes. */
+/* Update specified segs[] with holes. */
 static int tux3_map_hole(struct inode *inode, block_t start, unsigned count,
-			 struct seg map[], unsigned segs, unsigned max_segs)
+			 struct block_segment seg[], unsigned segs,
+			 unsigned max_segs)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
 	struct hole_extent *hole;
@@ -253,31 +254,31 @@ static int tux3_map_hole(struct inode *inode, block_t start, unsigned count,
 	if (start + count <= hole_start)
 		return segs;
 
-	/* Update map[] */
+	/* Update seg[] */
 	for (i = 0; i < segs; i++) {
 		/* Matched start of hole */
-		if (hole_start < start + map[i].count) {
-			if (map[i].state == SEG_HOLE) {
+		if (hole_start < start + seg[i].count) {
+			if (seg[i].state == BLOCK_SEG_HOLE) {
 				/* Expand if hole */
-				map[i].count = count;
+				seg[i].count = count;
 				i++;
 			} else {
 				/* Update region */
-				map[i].count = hole_start - start;
+				seg[i].count = hole_start - start;
 				i++;
 
 				/* If there is space, add hole region */
 				if (i < max_segs) {
-					map[i].state = SEG_HOLE;
-					map[i].block = 0;
-					map[i].count = count;
+					seg[i].state = BLOCK_SEG_HOLE;
+					seg[i].block = 0;
+					seg[i].count = count;
 					i++;
 				}
 			}
 			break;
 		}
-		start += map[i].count;
-		count -= map[i].count;
+		start += seg[i].count;
+		count -= seg[i].count;
 	}
 
 	return i;

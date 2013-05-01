@@ -51,7 +51,7 @@ struct test_extent {
 };
 
 static void __check_seg(struct test_extent *res, block_t index,
-			struct seg *seg, int nr_segs)
+			struct block_segment *seg, int nr_segs)
 {
 	for (int i = 0; i < nr_segs; i++) {
 		test_assert(res[i].logical == index);
@@ -74,7 +74,7 @@ static int dummy_seg_alloc(struct btree *btree, struct dleaf_req *rq,
 
 static struct btree_key_range *
 dleaf2_set_req(struct dleaf_req *rq, block_t index, unsigned count,
-	       struct seg *seg, unsigned max_segs)
+	       struct block_segment *seg, unsigned max_segs)
 {
 	rq->key.start = index;
 	rq->key.len = count;
@@ -92,7 +92,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	struct dleaf2 *leaf;
 	struct dleaf_req rq;
 	struct btree_key_range *key;
-	struct seg seg[10];
+	struct block_segment seg[10];
 	tuxkey_t hint;
 	int err, ret;
 
@@ -129,7 +129,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	 * test01.c:  +---------------------------------------+
 	 *            1                                      30
 	 */
-	struct seg seg1[] = {
+	struct block_segment seg1[] = {
 		{ .block = 10, .count = 7, },
 		{ .block = 20, .count = 5, },
 		{ .block = 30, .count = 3, },
@@ -169,7 +169,7 @@ static void test01(struct sb *sb, struct btree *btree)
 
 	if (test_start("test01.1")) {
 		/* Overwrite from 0 */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 110, .count = 5, },
 			{ .block = 120, .count = 5, },
 		};
@@ -198,7 +198,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.2")) {
 		/* Overwrite same logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 120, .count = 5, },
 			{ .block = 130, .count = 3, },
 		};
@@ -226,7 +226,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.3")) {
 		/* Overwrite middle of logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 120, .count = 4, },
 			{ .block = 130, .count = 5, },
 			{ .block = 140, .count = 2, },
@@ -257,7 +257,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.4")) {
 		/* Overwrite end of logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 130, .count = 3, },
 			{ .block = 140, .count = 5, },
 		};
@@ -285,7 +285,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.5")) {
 		/* Overwrite beyond end of logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 140, .count = 4, },
 			{ .block = 150, .count = 7, },
 		};
@@ -314,7 +314,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.6")) {
 		/* Overwrite at logical address for sentinel */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 160, .count = 7, },
 		};
 		key = dleaf2_set_req(&rq, 25, 7, seg2, ARRAY_SIZE(seg2));
@@ -342,7 +342,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.7")) {
 		/* Overwrite outside of logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 160, .count = 7, },
 		};
 		key = dleaf2_set_req(&rq, 33, 7, seg2, ARRAY_SIZE(seg2));
@@ -371,7 +371,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.8")) {
 		/* Overwrite split range */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 110, .count = 1, },
 		};
 		key = dleaf2_set_req(&rq, 5, 1, seg2, ARRAY_SIZE(seg2));
@@ -400,7 +400,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.9")) {
 		/* Overwrite from before minimum logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 110, .count = 8, },
 			{ .block = 120, .count = 5, },
 		};
@@ -428,7 +428,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.a")) {
 		/* Overwrite from less than minimum logical to minimum */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 110, .count = 3, },
 		};
 		key = dleaf2_set_req(&rq, 0, 3, seg2, ARRAY_SIZE(seg2));
@@ -455,7 +455,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.b")) {
 		/* Overwrite only before minimum logical address */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 110, .count = 2, },
 		};
 		key = dleaf2_set_req(&rq, 0, 2, seg2, ARRAY_SIZE(seg2));
@@ -483,7 +483,7 @@ static void test01(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test01.c")) {
 		/* Overwrite all */
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 110, .count = 29, },
 		};
 		key = dleaf2_set_req(&rq, 1, 29, seg2, ARRAY_SIZE(seg2));
@@ -524,7 +524,7 @@ static void test02(struct sb *sb, struct btree *btree)
 
 	/* Make full dleaf (-2 is for hole from 0 and sentinel) */
 	for (int i = 0; i < btree->entries_per_leaf - 2; i++) {
-		struct seg seg[] = {
+		struct block_segment seg[] = {
 			{ .block = 0x100 + i, .count = 1, },
 		};
 		key = dleaf2_set_req(&rq, BASE + i, 1, seg, ARRAY_SIZE(seg));
@@ -533,7 +533,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	}
 
 	/* Can't write at all */
-	struct seg seg1[] = {
+	struct block_segment seg1[] = {
 		{ .block = 0x200, .count = 1, },
 	};
 	key = dleaf2_set_req(&rq, 0x100000, 1, seg1, ARRAY_SIZE(seg1));
@@ -542,7 +542,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	test_assert(rq.nr_segs == 0);
 
 	/* Can't overwrite at all */
-	struct seg seg2[] = {
+	struct block_segment seg2[] = {
 		{ .block = 0x200, .count = 1, },
 	};
 	key = dleaf2_set_req(&rq, BASE / 2, 1, seg2, ARRAY_SIZE(seg2));
@@ -551,7 +551,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	test_assert(rq.nr_segs == 0);
 
 	/* Can write partially */
-	struct seg seg3[] = {
+	struct block_segment seg3[] = {
 		{ .block = 0x200, .count = 2, },
 		{ .block = 0x300, .count = 1, },
 		{ .block = 0x301, .count = 1, },
@@ -563,7 +563,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	test_assert(rq.nr_segs == 1);
 
 	/* Check temporary hole by made in seg3[] */
-	struct seg seg4[10];
+	struct block_segment seg4[10];
 	unsigned written = seg3[0].count;
 	struct test_extent res1[] = {
 		{ .logical = index, .physical = 0x200, .count = written, },
@@ -585,7 +585,7 @@ static void test03(struct sb *sb, struct btree *btree)
 	struct dleaf2 *leaf;
 	struct dleaf_req rq;
 	struct btree_key_range *key;
-	struct seg seg[10];
+	struct block_segment seg[10];
 	tuxkey_t hint;
 	int err, ret;
 
@@ -606,7 +606,7 @@ static void test03(struct sb *sb, struct btree *btree)
 	 * test02.5:                                          |
 	 *                                                    30
 	 */
-	struct seg seg1[] = {
+	struct block_segment seg1[] = {
 		{ .block = 20, .count =  5, },
 		{ .block =  0, .count =  3, },
 		{ .block = 40, .count =  2, },
@@ -736,7 +736,7 @@ static void test04(struct sb *sb, struct btree *btree)
 	struct dleaf2 *leaf1, *leaf2;
 	struct dleaf_req rq;
 	struct btree_key_range *key;
-	struct seg seg[10];
+	struct block_segment seg[10];
 	tuxkey_t hint, newkey;
 	int err, ret;
 
@@ -749,7 +749,7 @@ static void test04(struct sb *sb, struct btree *btree)
 	 * base    :          |--------+-----+--+-------|
 	 *           0        10      15    18  20      25
 	 */
-	struct seg seg1[] = {
+	struct block_segment seg1[] = {
 		{ .block = 10, .count =  5, },
 		{ .block = 20, .count =  3, },
 		{ .block = 30, .count =  2, },
@@ -794,7 +794,7 @@ static void test05(struct sb *sb, struct btree *btree)
 	struct dleaf2 *leaf1, *leaf2;
 	struct dleaf_req rq;
 	struct btree_key_range *key;
-	struct seg seg[10];
+	struct block_segment seg[10];
 	tuxkey_t hint;
 	int err, ret;
 
@@ -814,7 +814,7 @@ static void test05(struct sb *sb, struct btree *btree)
 		 * The seg1 end and seg2 start are not same, and seg2
 		 * start is hole.
 		 */
-		struct seg seg1[] = {
+		struct block_segment seg1[] = {
 			{ .block = 10, .count =  5, },
 			{ .block = 20, .count =  3, },
 		};
@@ -822,7 +822,7 @@ static void test05(struct sb *sb, struct btree *btree)
 		ret = dleaf2_write(btree, 0, 18, leaf1, key, &hint);
 		test_assert(!ret);
 
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block =  0, .count =  5, },
 			{ .block = 40, .count =  5, },
 		};
@@ -854,7 +854,7 @@ static void test05(struct sb *sb, struct btree *btree)
 	test_end();
 	if (test_start("test05.2")) {
 		/* The seg1 end and seg2 start are same logical */
-		struct seg seg1[] = {
+		struct block_segment seg1[] = {
 			{ .block = 10, .count =  5, },
 			{ .block = 20, .count =  3, },
 		};
@@ -862,7 +862,7 @@ static void test05(struct sb *sb, struct btree *btree)
 		ret = dleaf2_write(btree, 0, 18, leaf1, key, &hint);
 		test_assert(!ret);
 
-		struct seg seg2[] = {
+		struct block_segment seg2[] = {
 			{ .block = 30, .count =  2, },
 			{ .block = 40, .count =  5, },
 		};

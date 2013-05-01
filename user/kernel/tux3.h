@@ -306,6 +306,16 @@ struct sb {
 #endif
 };
 
+/* Block segment (physical block extent) info */
+#define BLOCK_SEG_HOLE	(1 << 0)
+#define BLOCK_SEG_NEW	(1 << 1)
+
+struct block_segment {
+	block_t block;		/* Start of physical address */
+	unsigned count;		/* Number of blocks */
+	unsigned state;		/* State of this segment */
+};
+
 /* logging  */
 
 struct logblock {
