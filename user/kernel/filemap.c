@@ -196,7 +196,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			};
 			index = ex_index + count;
 			dwalk_next(walk);
- 		}
+		}
 	}
 	assert(segs);
 	unsigned below = start - seg_start, above = index - min(index, limit);
@@ -354,18 +354,15 @@ out_unlock:
 /*
  * Callback to allocate blocks to ->seg. dleaf is doing to write segs,
  * now we have to assign physical address to segs.
- *
- * FIXME: if we can't allocate contiguous region, we should fallback
- * to use separated regions.
  */
 static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 		     int write_segs, int seg_state)
 {
 	struct sb *sb = btree->sb;
-	struct block_segment *seg = rq->seg;
-	int i;
+	struct block_segment tmp, *seg = rq->seg;
+	int i, partial = 0;
 
-	assert(rq->seg_idx + write_segs <= rq->seg_cnt);
+	assert(rq->seg_idx + write_segs <= rq->seg_max);
 
 	for (i = rq->seg_idx; i < rq->seg_idx + write_segs; i++) {
 		int err;
@@ -373,7 +370,7 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 		if (seg[i].state != BLOCK_SEG_HOLE)
 			continue;
 
-		err = balloc(sb, rq->seg[i].count, &rq->seg[i], 1);
+		err = balloc_partial(sb, seg[i].count, &tmp, 1);
 		if (err) { // goal ???
 			/*
 			 * Out of space on file data allocation.  It
@@ -394,12 +391,35 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 			 */
 			return err;
 		}
+
+		/*
+		 * Partially allocated. Make space and adjust for
+		 * separated segments.
+		 */
+		if (tmp.count != seg[i].count) {
+			int size;
+
+			if (rq->seg_cnt == rq->seg_max)
+				size = (rq->seg_cnt - i - 1) * sizeof(*seg);
+			else {
+				size = (rq->seg_cnt - i) * sizeof(*seg);
+				rq->seg_cnt++;
+				write_segs++;
+			}
+			memmove(&seg[i + 1], &seg[i], size);
+			/* Update a rest of separated segment */
+			seg[i + 1].count = seg[i].count - tmp.count;
+
+			partial = 1;
+		}
+		seg[i] = tmp;
+
 		log_balloc(sb, seg[i].block, seg[i].count);
 
 		seg[i].state = seg_state;
 	}
 
-	return 0;
+	return partial;
 }
 
 static int overwrite_seg_alloc(struct btree *btree, struct dleaf_req *rq,
@@ -542,7 +562,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		segs = err;
 		goto out_release;
 	}
-	assert(segs == rq.seg_idx);
+	segs = rq.seg_cnt;
 
 out_release:
 	if (cursor)
@@ -917,8 +937,8 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	 * with ->readpage(). But we are not holding lock_lock().
 	 *
 	 *          cpu0                            cpu1
-	 *				        bufferA = blockget()
-	 *				        modify data
+	 *					bufferA = blockget()
+	 *					modify data
 	 *     blockread(bufferC)
 	 *       readpage()
 	 *         read bufferA <= lost modify

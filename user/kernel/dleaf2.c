@@ -405,9 +405,10 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	struct extent ex;
 	tuxkey_t limit;
 	block_t end_physical;
-	unsigned need, orig_need, between, write_segs, rest_segs;
+	unsigned need, between, write_segs, rest_segs;
 	int need_split, ret;
 
+recheck:
 	/* Paranoia checks */
 	assert(key->len == seg_total_count(rq->seg + rq->seg_idx,
 					   rq->seg_cnt - rq->seg_idx));
@@ -463,10 +464,8 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		end_physical = 0;
 	}
 
-recheck:
 	need_split = 0;
 	rest_segs = 0;
-	orig_need = need;
 	/* Check if we need leaf split */
 	if (need > btree->entries_per_leaf) {
 		need_split = 1;
@@ -511,11 +510,12 @@ recheck:
 		return ret;
 	} else if (ret) {
 		/*
-		 * New segs was added by ->seg_balloc().
-		 * Adjust number of segs by adding separated numbers
+		 * There was partial allocation. Total length of
+		 * segments, or size of rq->seg[] can be changed, so
+		 * recalc writable segments.
 		 */
-		write_segs = rq->seg_cnt - rq->seg_idx;
-		need = orig_need + ret;
+		key->len = seg_total_count(rq->seg + rq->seg_idx,
+					   rq->seg_cnt - rq->seg_idx);
 		goto recheck;
 	}
 
