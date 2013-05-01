@@ -263,6 +263,38 @@ static void test07(struct sb *sb, block_t blocks)
 	clean_main(sb);
 }
 
+/* Test balloc for partial allocation */
+static void test08(struct sb *sb, block_t blocks)
+{
+	struct block_segment seg;
+
+	/* Alloc blocks whole blocks */
+	test_assert(balloc(sb, sb->volblocks, &seg, 1) == 0);
+	test_assert(seg.block == 0);
+	test_assert(seg.count == sb->volblocks);
+	test_assert(bitmap_all_set(sb, seg.block, seg.count));
+
+	/* Free some blocks */
+	test_assert(bfree(sb, 10, 20) == 0);
+	test_assert(bitmap_all_clear(sb, 10, 20));
+	test_assert(bfree(sb, 100, 40) == 0);
+	test_assert(bitmap_all_clear(sb, 100, 40));
+
+	/* Allocate partial blocks */
+	test_assert(balloc_partial(sb, 50, &seg, 1) == 0);
+	test_assert(seg.block == 100);
+	test_assert(seg.count == 40);
+	test_assert(bitmap_all_set(sb, 100, 40));
+
+	/* Allocate partial blocks */
+	test_assert(balloc_partial(sb, 50, &seg, 1) == 0);
+	test_assert(seg.block == 10);
+	test_assert(seg.count == 20);
+	test_assert(bitmap_all_set(sb, 10, 20));
+
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
 #define BITMAP_BLOCKS	10
@@ -318,6 +350,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test07"))
 		test07(sb, BITMAP_BLOCKS);
+	test_end();
+
+	if (test_start("test08"))
+		test08(sb, BITMAP_BLOCKS);
 	test_end();
 
 	tux3_end_backend();
