@@ -14,6 +14,7 @@
 #include <linux/magic.h>
 #include <linux/slab.h>
 #include <linux/xattr.h>
+#include <linux/list_sort.h>
 
 #include "trace.h"
 #include "buffer.h"

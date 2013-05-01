@@ -2,8 +2,6 @@
  * Write back buffers
  */
 
-#include <linux/list_sort.h>
-
 #include "buffer_writebacklib.c"
 
 /*
