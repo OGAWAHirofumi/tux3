@@ -303,6 +303,11 @@ static int __init tux3_init_inodecache(void)
 
 static void tux3_destroy_inodecache(void)
 {
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before we
+	 * destroy cache.
+	 */
+	rcu_barrier();
 	kmem_cache_destroy(tux_inode_cachep);
 }
 
