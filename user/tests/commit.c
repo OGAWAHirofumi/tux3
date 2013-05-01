@@ -94,7 +94,6 @@ static struct replay *check_replay(struct sb *sb)
 
 	struct replay *rp = tux3_init_fs(sb);
 	assert(!IS_ERR(rp));
-	sb->vtable = NULL;
 
 	return rp;
 }

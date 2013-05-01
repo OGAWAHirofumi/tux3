@@ -142,14 +142,14 @@ int make_tux3(struct sb *sb)
 		goto error;
 
 	change_begin_atomic(sb);
-
+#if 0
 	trace("create version table");
 	sb->vtable = create_internal_inode(sb, TUX_VTABLE_INO, NULL);
 	if (IS_ERR(sb->vtable)) {
 		err = PTR_ERR(sb->vtable);
 		goto error_change_end;
 	}
-
+#endif
 	trace("create atom dictionary");
 	sb->atable = create_internal_inode(sb, TUX_ATABLE_INO, NULL);
 	if (IS_ERR(sb->atable)) {
