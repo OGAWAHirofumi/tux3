@@ -556,17 +556,26 @@ static int bnode_need_redirect(struct sb *sb, struct buffer_head *buffer)
 	return !buffer_already_dirty(buffer, sb->rollup);
 }
 
+/*
+ * Recursively redirect non-dirty buffers on path to modify leaf.
+ *
+ * Redirect order is from root to leaf. Otherwise, blocks of path will
+ * be allocated by reverse order.
+ *
+ * FIXME: We can allocate/copy blocks before change common ancestor
+ * (before changing common ancestor, changes are not visible for
+ * reader). With this, we may be able to reduce locking time.
+ */
 int cursor_redirect(struct cursor *cursor)
 {
 	struct btree *btree = cursor->btree;
-	unsigned level = btree->root.depth;
 	struct sb *sb = btree->sb;
-	block_t uninitialized_var(child);
+	int level;
 
-	while (1) {
-		struct buffer_head *buffer;
-		block_t uninitialized_var(oldblock);
-		block_t uninitialized_var(newblock);
+	for (level = 0; level <= btree->root.depth; level++) {
+		struct buffer_head *buffer, *clone;
+		block_t parent, oldblock, newblock;
+		struct index_entry *entry;
 		int redirect, is_leaf = (level == btree->root.depth);
 
 		buffer = cursor->path[level].buffer;
@@ -576,57 +585,48 @@ int cursor_redirect(struct cursor *cursor)
 		else
 			redirect = bnode_need_redirect(sb, buffer);
 
-		if (redirect) {
-			/* Redirect buffer before changing */
-			struct buffer_head *clone = new_block(btree);
-			if (IS_ERR(clone))
-				return PTR_ERR(clone);
-			oldblock = bufindex(buffer);
-			newblock = bufindex(clone);
-			trace("redirect %Lx to %Lx", oldblock, newblock);
-			level_redirect_blockput(cursor, level, clone);
-			if (is_leaf) {
-				/* This is leaf buffer */
-				mark_buffer_dirty_atomic(clone);
-				log_leaf_redirect(sb, oldblock, newblock);
-				defer_bfree(&sb->defree, oldblock, 1);
-				goto parent_level;
-			}
+		/* No need to redirect */
+		if (!redirect)
+			continue;
+
+		/* Redirect buffer before changing */
+		clone = new_block(btree);
+		if (IS_ERR(clone))
+			return PTR_ERR(clone);
+		oldblock = bufindex(buffer);
+		newblock = bufindex(clone);
+		trace("redirect %Lx to %Lx", oldblock, newblock);
+		level_redirect_blockput(cursor, level, clone);
+		if (is_leaf) {
+			/* This is leaf buffer */
+			mark_buffer_dirty_atomic(clone);
+			log_leaf_redirect(sb, oldblock, newblock);
+			defer_bfree(&sb->defree, oldblock, 1);
+		} else {
 			/* This is bnode buffer */
 			mark_buffer_rollup_atomic(clone);
 			log_bnode_redirect(sb, oldblock, newblock);
 			defer_bfree(&sb->derollup, oldblock, 1);
-		} else {
-			if (is_leaf) {
-				/* This is leaf buffer */
-				goto parent_level;
-			}
 		}
 
-		/* Update entry for the redirected child block */
 		trace("update parent");
-		block_t block = bufindex(cursor->path[level].buffer);
-		struct index_entry *entry = cursor->path[level].next - 1;
-		entry->block = cpu_to_be64(child);
-		log_bnode_update(sb, block, child, be64_to_cpu(entry->key));
-
-parent_level:
-		/* If it is already redirected, ancestor is also redirected */
-		if (!redirect) {
-			cursor_check(cursor);
-			return 0;
-		}
-
-		if (!level--) {
+		if (!level) {
+			/* Update pointer in btree->root */
 			trace("redirect root");
 			assert(oldblock == btree->root.block);
 			btree->root.block = newblock;
 			tux3_mark_btree_dirty(btree);
-			cursor_check(cursor);
-			return 0;
+			continue;
 		}
-		child = newblock;
+		/* Update entry on parent for the redirected block */
+		parent = bufindex(cursor->path[level - 1].buffer);
+		entry = cursor->path[level - 1].next - 1;
+		entry->block = cpu_to_be64(newblock);
+		log_bnode_update(sb, parent, newblock, be64_to_cpu(entry->key));
 	}
+
+	cursor_check(cursor);
+	return 0;
 }
 
 /* Deletion */
