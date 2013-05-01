@@ -13,9 +13,14 @@ struct seg {
 struct dleaf_req {
 	struct btree_key_range key;	/* index and count */
 
-	int nr_segs;			/* Number of segs used */
-	int max_segs;			/* Maximum segs */
-	struct seg *seg;
+	int nr_segs;		/* For read:  how many segs was read.
+				 * For write: how many segs was written. */
+	int max_segs;		/* For read:  how many seg[] are available
+				 * For write: how many seg[] to write */
+	struct seg *seg;	/* pointer to seg[] */
+
+	/* Callback to allocate blocks to ->seg for write */
+	int (*seg_alloc)(struct btree *, struct dleaf_req *, int);
 };
 
 static inline unsigned seg_total_count(struct seg *seg, int nr_segs)

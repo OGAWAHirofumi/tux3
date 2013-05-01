@@ -189,7 +189,7 @@ static int uleaf_write(struct btree *btree, tuxkey_t key_bottom,
 	}
 
 	*split_hint = key->start;
-	return -ENOSPC;
+	return 1;	/* need to split */
 }
 
 static struct btree_ops ops = {

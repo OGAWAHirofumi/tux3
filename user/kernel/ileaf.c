@@ -418,6 +418,9 @@ static tuxkey_t ileaf_split_hint(struct btree *btree, struct ileaf *ileaf,
 	return base + count / 2;
 }
 
+/*
+ * Write inode attributes.
+ */
 static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 		       tuxkey_t key_limit,
 		       void *leaf, struct btree_key_range *key,
@@ -438,7 +441,7 @@ static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 	if (attrs == NULL) {
 		/* There is no space to store */
 		*split_hint = ileaf_split_hint(btree, ileaf, key->start, size);
-		return -ENOSPC;
+		return 1;	/* need to split */
 	}
 
 	attr_ops->encode(btree, rq->data, attrs, size);

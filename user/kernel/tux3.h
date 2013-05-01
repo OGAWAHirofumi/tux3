@@ -538,6 +538,7 @@ struct btree_ops {
 	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, void *leaf);
 	/* return value: 1 - merged, 0 - couldn't merge */
 	int (*leaf_merge)(struct btree *btree, void *into, void *from);
+	/* return value: 1 - need to split leaf, 0 - success, < 0 - error */
 	int (*leaf_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key, tuxkey_t *split_hint);
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);

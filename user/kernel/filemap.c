@@ -346,11 +346,82 @@ out_unlock:
 	return segs;
 }
 
+/*
+ * Callback to allocate blocks to ->seg. dleaf is doing to write segs,
+ * now we have to assign physical address to segs.
+ *
+ * FIXME: if we can't allocate contiguous region, we should fallback
+ * to use separated regions.
+ */
+static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
+		     int write_segs, int seg_state)
+{
+	struct sb *sb = btree->sb;
+	struct seg *seg = rq->seg;
+	int i;
+
+	assert(rq->nr_segs + write_segs <= rq->max_segs);
+
+	for (i = rq->nr_segs; i < rq->nr_segs + write_segs; i++) {
+		block_t block;
+		int err;
+
+		if (seg[i].state != SEG_HOLE)
+			continue;
+
+		err = balloc(sb, rq->seg[i].count, &block);
+		if (err) { // goal ???
+			/*
+			 * Out of space on file data allocation.  It
+			 * happens.  Tread carefully.  We have not
+			 * stored anything in the btree yet, so we
+			 * free what we allocated so far.  We need to
+			 * leave the user with a nice ENOSPC return
+			 * and all metadata consistent on disk.  We
+			 * better have reserved everything we need for
+			 * metadata, just giving up is not an option.
+			 */
+			/*
+			 * Alternatively, we can go ahead and try to
+			 * record just what we successfully allocated,
+			 * then if the update fails on no space for
+			 * btree splits, free just the blocks for
+			 * extents we failed to store.
+			 */
+			return err;
+		}
+		log_balloc(sb, block, seg[i].count);
+
+		seg[i].block = block;
+		seg[i].state = seg_state;
+	}
+
+	return 0;
+}
+
+static int overwrite_seg_alloc(struct btree *btree, struct dleaf_req *rq,
+			       int write_segs)
+{
+	/* If overwrite mode, set SEG_NEW to allocated seg */
+	return seg_alloc(btree, rq, write_segs, SEG_NEW);
+}
+
+static int redirect_seg_alloc(struct btree *btree, struct dleaf_req *rq,
+			      int write_segs)
+{
+	/* If redirect mode, doesn't set SEG_NEW to allocated seg */
+	return seg_alloc(btree, rq, write_segs, 0);
+}
+
+static int (*seg_alloc_funs[])(struct btree *, struct dleaf_req *, int) = {
+	[MAP_WRITE]	= overwrite_seg_alloc,
+	[MAP_REDIRECT]	= redirect_seg_alloc,
+};
+
 /* map_region() by using dleaf2 */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
 		       struct seg seg[], unsigned max_segs, enum map_mode mode)
 {
-	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *btree = &tux_inode(inode)->btree;
 	struct cursor *cursor = NULL;
 	int err, segs = 0;
@@ -450,40 +521,6 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		seg[0].count = total;
 		seg[0].state = SEG_HOLE;
 	}
-	for (int i = 0; i < segs; i++) {
-		block_t block;
-
-		if (seg[i].state != SEG_HOLE)
-			continue;
-
-		err = balloc(sb, seg[i].count, &block);
-		if (err) { // goal ???
-			/*
-			 * Out of space on file data allocation.  It
-			 * happens.  Tread carefully.  We have not
-			 * stored anything in the btree yet, so we
-			 * free what we allocated so far.  We need to
-			 * leave the user with a nice ENOSPC return
-			 * and all metadata consistent on disk.  We
-			 * better have reserved everything we need for
-			 * metadata, just giving up is not an option.
-			 */
-			/*
-			 * Alternatively, we can go ahead and try to
-			 * record just what we successfully allocated,
-			 * then if the update fails on no space for
-			 * btree splits, free just the blocks for
-			 * extents we failed to store.
-			 */
-			segs = err;
-			goto out_release;
-		}
-		log_balloc(sb, block, seg[i].count);
-
-		seg[i].block = block;
-		/* if mode == MAP_REDIRECT, buffer should be dirty */
-		seg[i].state = (mode == MAP_REDIRECT) ? 0 : SEG_NEW;
-	}
 
 	/* Write extents from data btree */
 	struct dleaf_req rq = {
@@ -493,6 +530,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		},
 		.max_segs	= segs,
 		.seg		= seg,
+		.seg_alloc	= seg_alloc_funs[mode],
 	};
 	err = btree_write(cursor, &rq.key);
 	if (err) {

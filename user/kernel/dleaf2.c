@@ -390,7 +390,9 @@ static tuxkey_t dleaf2_split_at_center(struct dleaf2 *dleaf)
 	return ex.logical;
 }
 
-/* Write extents */
+/*
+ * Write extents.
+ */
 static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 			tuxkey_t key_limit,
 			void *leaf, struct btree_key_range *key,
@@ -403,8 +405,8 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	struct extent ex;
 	tuxkey_t limit;
 	block_t end_physical;
-	unsigned need, between, write_segs, rest_segs;
-	int err;
+	unsigned need, orig_need, between, write_segs, rest_segs;
+	int need_split, ret;
 
 	/* Paranoia checks */
 	assert(key->len == seg_total_count(rq->seg + rq->nr_segs,
@@ -461,17 +463,20 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		end_physical = 0;
 	}
 
-	err = 0;
+recheck:
+	need_split = 0;
 	rest_segs = 0;
+	orig_need = need;
 	/* Check if we need leaf split */
 	if (need > btree->entries_per_leaf) {
+		need_split = 1;
+
 		/*
 		 * If there is no space, we temporary merge segs as hole.
 		 * Then, we overwrite existent diskextent2 now (and it
 		 * will be overwritten by real segs after split)
 		 * to avoid re-calculate for temporary state.
 		 */
-		err = -ENOSPC;
 		rest_segs = need - btree->entries_per_leaf;
 		/* Can we write 1 seg at least? */
 		if (rest_segs >= write_segs) {
@@ -481,7 +486,8 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 				*split_hint = ex.logical;
 			} else
 				*split_hint = key->start;
-			return err;
+
+			return need_split;
 		}
 		/* We can write partially segs and temporary hole */
 		write_segs -= rest_segs;
@@ -491,6 +497,26 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 #endif
 		/* Reserve space for temporary hole */
 		rest_segs++;
+	}
+
+	/*
+	 * Allocate blocks to seg after dleaf redirect. With this, our
+	 * allocation order is, bnode => dleaf => data, and we can use
+	 * physical address of dleaf as allocation hint for data blocks.
+	 */
+	ret = rq->seg_alloc(btree, rq, write_segs);
+	if (ret < 0) {
+		assert(ret != -ENOSPC);		/* block reservation bug */
+		tux3_err(sb, "extent allocation failed: %d", ret);
+		return ret;
+	} else if (ret) {
+		/*
+		 * New segs was added by ->seg_balloc().
+		 * Adjust number of segs by adding separated numbers
+		 */
+		write_segs = rq->max_segs - rq->nr_segs;
+		need = orig_need + ret;
+		goto recheck;
 	}
 
 	/* Expand/shrink space for segs */
@@ -509,6 +535,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		dex_start++;
 	}
 	if (rest_segs) {
+		assert(need_split);
 		/* Fill as temporary hole */
 		put_extent(dex_start, sb->version, key->start, 0);
 		dex_start++;
@@ -519,7 +546,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	/* Fill sentinel */
 	put_extent(dex_start, sb->version, limit, end_physical);
 
-	return err;
+	return need_split;
 }
 
 /* Read extents */

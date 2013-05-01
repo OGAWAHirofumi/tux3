@@ -1155,24 +1155,26 @@ int btree_write(struct cursor *cursor, struct btree_key_range *key)
 		tuxkey_t bottom = cursor_this_key(cursor);
 		tuxkey_t limit = cursor_next_key(cursor);
 		void *leaf = bufdata(cursor_leafbuf(cursor));
+		int need_split;
 
 		assert(bottom <= key->start && key->start < limit);
 		assert(ops->leaf_sniff(btree, leaf));
 
-		err = ops->leaf_write(btree, bottom, limit, leaf, key,
-				      &split_hint);
-		if (!err) {
+		need_split = ops->leaf_write(btree, bottom, limit, leaf, key,
+					     &split_hint);
+		if (need_split < 0)
+			return need_split;
+		else if (!need_split) {
 			mark_buffer_dirty_non(cursor_leafbuf(cursor));
 			continue;
 		}
-		assert(err == -ENOSPC);
 
 		err = btree_leaf_split(cursor, key->start, split_hint);
 		if (err)
-			break;	/* FIXME: error handling */
+			return err;	/* FIXME: error handling */
 	}
 
-	return err;
+	return 0;
 }
 
 int btree_read(struct cursor *cursor, struct btree_key_range *key)
