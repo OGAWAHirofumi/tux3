@@ -127,11 +127,12 @@ static void test02(struct sb *sb, block_t blocks)
 	block_t start = 121;
 	unsigned count = 10;
 	for (int i = 0; i < count + 2; i++) {
-		block_t block = balloc_from_range(sb, start, count, 1);
+		struct block_segment seg;
+		int err = balloc_from_range(sb, start, count, 1, &seg, 1);
 		if (i < count)
-			test_assert(block == start + i);
+			test_assert(!err && seg.block == start + i);
 		else
-			test_assert(block == -ENOSPC);
+			test_assert(err == -ENOSPC);
 	}
 	/* Check bitmap */
 	test_assert(bitmap_all_set(sb, start, count));
@@ -153,16 +154,18 @@ static void test02(struct sb *sb, block_t blocks)
 
 static void test03(struct sb *sb, block_t blocks)
 {
-	block_t block;
+	struct block_segment seg;
 
 	/* nextalloc point last bit, but can't allocate 2 bits. So,
 	 * this should wrap around to zero */
 	sb->nextalloc = sb->volblocks - 1;
-	test_assert(balloc(sb, 2, &block) == 0);
-	test_assert(bitmap_all_set(sb, 0, 2));
-	test_assert(bitmap_all_clear(sb, 2, sb->volblocks - 2));
+	test_assert(balloc(sb, 2, &seg, 1) == 0);
+	test_assert(seg.block == 0);
+	test_assert(seg.count == 2);
+	test_assert(bitmap_all_set(sb, seg.block, seg.count));
+	test_assert(bitmap_all_clear(sb, seg.count, sb->volblocks - seg.count));
 
-	test_assert(bfree(sb, block, 2) == 0);
+	test_assert(bfree(sb, seg.block, seg.count) == 0);
 	test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
 
 	clean_main(sb);
@@ -170,19 +173,21 @@ static void test03(struct sb *sb, block_t blocks)
 
 static void test04(struct sb *sb, block_t blocks)
 {
-	block_t block, start;
+	block_t start;
 
 	/* nextalloc point last bit, this should wrap around to zero */
 	start = sb->nextalloc = sb->volblocks - 1;
 	for (int i = 0; i < 2; i++) {
-		test_assert(balloc(sb, 1, &block) == 0);
-		test_assert(block == (start + i) % sb->volblocks);
+		struct block_segment seg;
+		test_assert(balloc(sb, 1, &seg, 1) == 0);
+		test_assert(seg.block == (start + i) % sb->volblocks);
+		test_assert(seg.count == 1);
 	}
 	test_assert(bitmap_all_set(sb, 0, 1));
-	test_assert(bitmap_all_clear(sb, 1, sb->volblocks - 2));
-	test_assert(bitmap_all_set(sb, sb->volblocks - 1, 1));
+	test_assert(bitmap_all_clear(sb, 1, start - 1));
+	test_assert(bitmap_all_set(sb, start, 1));
 
-	test_assert(bfree(sb, start + 0, 1) == 0);
+	test_assert(bfree(sb, start, 1) == 0);
 	test_assert(bfree(sb, 0, 1) == 0);
 	test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
 
@@ -191,13 +196,14 @@ static void test04(struct sb *sb, block_t blocks)
 
 static void test05(struct sb *sb, block_t blocks)
 {
-	block_t block;
 	block_t bits = 1 << (3 + sb->blockbits);
 
 	for (int i = 0; i < 2; i++) {
+		struct block_segment seg;
 		/* Alloc blocks on a bitmap page */
-		test_assert(balloc(sb, bits, &block) == 0);
-		test_assert(block == i * bits);
+		test_assert(balloc(sb, bits, &seg, 1) == 0);
+		test_assert(seg.block == i * bits);
+		test_assert(seg.count == bits);
 		test_assert(bitmap_all_set(sb, i * bits, bits));
 	}
 	test_assert(bitmap_all_set(sb, 0, 2 * bits));
@@ -217,21 +223,22 @@ static void test06(struct sb *sb, block_t blocks)
 {
 #define ALLOC_UNIT	8
 	block_t total = blocks << (sb->blockbits + 3);
-	block_t *b;
-	int nr = total / ALLOC_UNIT;
+	struct block_segment *seg;
+	int err, nr = total / ALLOC_UNIT;
 
-	b = malloc(nr * sizeof(*b));
-	assert(b);
+	seg = malloc(nr * sizeof(*seg));
+	assert(seg);
 
 	for (int i = 0; i < nr; i++) {
-		b[i] = balloc_from_range(sb, 0, total, ALLOC_UNIT);
-		test_assert(b[i] >= 0);
+		err = balloc_from_range(sb, 0, total, ALLOC_UNIT, &seg[i], 1);
+		test_assert(!err);
+		test_assert(seg[i].count == ALLOC_UNIT);
 	}
 
 	for (int i = 0; i < nr; i++)
-		test_assert(bfree(sb, b[i], ALLOC_UNIT) == 0);
+		test_assert(bfree(sb, seg[i].block, seg[i].count) == 0);
 
-	free(b);
+	free(seg);
 
 	clean_main(sb);
 }
@@ -239,17 +246,18 @@ static void test06(struct sb *sb, block_t blocks)
 /* Test balloc and bfree on multiple blocks */
 static void test07(struct sb *sb, block_t blocks)
 {
-	block_t block;
-
 	for (int i = 0; i < 3; i++) {
+		struct block_segment seg;
+
 		/* Alloc blocks on multiple bitmap data pages */
-		test_assert(balloc(sb, sb->volblocks, &block) == 0);
-		test_assert(block == 0);
-		test_assert(bitmap_all_set(sb, 0, sb->volblocks));
+		test_assert(balloc(sb, sb->volblocks, &seg, 1) == 0);
+		test_assert(seg.block == 0);
+		test_assert(seg.count == sb->volblocks);
+		test_assert(bitmap_all_set(sb, seg.block, seg.count));
 
 		/* Free blocks on multiple bitmap data pages */
-		test_assert(bfree(sb, 0, sb->volblocks) == 0);
-		test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
+		test_assert(bfree(sb, seg.block, seg.count) == 0);
+		test_assert(bitmap_all_clear(sb, seg.block, seg.count));
 	}
 
 	clean_main(sb);

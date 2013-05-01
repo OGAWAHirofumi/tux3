@@ -100,17 +100,18 @@ static int reserve_superblock(struct sb *sb)
 {
 	/* Always 8K regardless of blocksize */
 	int count = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
-	block_t block;
+	struct block_segment seg;
+	int err;
 
 	trace("reserve superblock");
 
 	/* Reserve blocks from 0 to 8KB */
-	block = balloc_from_range(sb, 0, count, count);
-	if (block < 0)
-		return block;
+	err = balloc_from_range(sb, 0, count, count, &seg, 1);
+	if (err < 0)
+		return err;
 
-	log_balloc(sb, block, count);
-	trace("reserve %Lx", block);
+	log_balloc(sb, seg.block, seg.count);
+	trace("reserve %Lx", seg.block);
 
 	return 0;
 }

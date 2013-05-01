@@ -42,13 +42,14 @@ static int buffer_is_allocated(struct sb *sb, struct buffer_head *buf)
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
+	struct block_segment seg;
 	int allocated = 1;
-	block_t block = balloc_from_range(sb, bufindex(buf), 1, 1);
-	if (block >= 0) {
-		bfree(sb, block, 1);
+	int err = balloc_from_range(sb, bufindex(buf), 1, 1, &seg, 1);
+	if (!err) {
+		bfree(sb, seg.block, seg.count);
 		allocated = 0; /* buffer is free block */
 	} else {
-		test_assert(block == -ENOSPC);
+		test_assert(err == -ENOSPC);
 	}
 	tux3_end_backend();
 

@@ -165,14 +165,15 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 	struct inode *logmap = bufvec_inode(bufvec);
 	struct sb *sb = tux_sb(logmap->i_sb);
 	unsigned count = bufvec_contig_count(bufvec);
-	block_t block, last;
+	struct block_segment seg;
+	block_t last;
 	struct buffer_head *buffer;
 	int err;
 
 	assert(rw == WRITE);
 	assert(bufvec_contig_index(bufvec) == 0);
 
-	err = balloc(sb, count, &block);
+	err = balloc(sb, count, &seg, 1);
 	if (err) {
 		assert(err);
 		return err;
@@ -182,10 +183,10 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 	 * We can obsolete the log blocks after next rollup
 	 * by LOG_BFREE_RELOG.
 	 */
-	defer_bfree(&sb->derollup, block, count);
+	defer_bfree(&sb->derollup, seg.block, seg.count);
 
 	/* Link log blocks to logchain */
-	last = block;
+	last = seg.block;
 	bufvec_buffer_for_each_contig(buffer, bufvec) {
 		struct logblock *log = bufdata(buffer);
 
@@ -198,9 +199,9 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 	}
 
 	/* Add count of log on this delta to rollup logcount */
-	be32_add_cpu(&sb->super.logcount, count);
+	be32_add_cpu(&sb->super.logcount, seg.count);
 
-	return __tux3_volmap_io(rw, bufvec, block, count);
+	return __tux3_volmap_io(rw, bufvec, seg.block, seg.count);
 }
 
 static void log_intent(struct sb *sb, u8 intent)

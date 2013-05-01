@@ -1,22 +1,35 @@
-block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
-			  unsigned blocks)
+int balloc_from_range(struct sb *sb, block_t start, block_t count,
+		      unsigned blocks, struct block_segment *seg, int segs)
 {
 	block_t block = sb->nextalloc;
+
+	seg->block = block;
+	seg->count = blocks;
+	seg->state = 0;
+
 	sb->nextalloc += blocks;
 	trace("-> %Lx/%x", block, blocks);
-	return block;
+
+	return 0;
 }
 
-int balloc(struct sb *sb, unsigned blocks, block_t *block)
+int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
 {
 	block_t goal = sb->nextalloc, total = sb->volblocks;
+	int err;
 
-	if ((*block = balloc_from_range(sb, goal, total - goal, blocks)) >= 0)
-		goto found;
-	if ((*block = balloc_from_range(sb, 0, goal, blocks)) >= 0)
-		goto found;
-	return -ENOSPC;
-found:
+	err = balloc_from_range(sb, goal, total - goal, blocks, seg, segs);
+	if (goal && err == -ENOSPC)
+		err = balloc_from_range(sb, 0, goal, blocks, seg, segs);
+
+	if (err < 0) {
+		if (err == -ENOSPC) {
+			/* FIXME: This is for debugging. Remove this */
+			tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
+		}
+		return err;
+	}
+
 	return 0;
 }
 

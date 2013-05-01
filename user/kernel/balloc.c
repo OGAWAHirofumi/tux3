@@ -251,8 +251,8 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 }
 
 /* userland only */
-block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
-			  unsigned blocks)
+int balloc_from_range(struct sb *sb, block_t start, block_t count,
+		      unsigned blocks, struct block_segment *seg, int segs)
 {
 	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
@@ -339,32 +339,34 @@ found_range:
 			return err;
 	}
 
+	seg->block = found;
+	seg->count = blocks;
+	seg->state = 0;
+
 	sb->nextalloc = found + blocks;
 	//set_sb_dirty(sb);
 
 	trace("balloc extent [block %Lx, count %x]", found, blocks);
 
-	return found;
+	return 0;
 }
 
-int balloc(struct sb *sb, unsigned blocks, block_t *block)
+int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
 {
-	block_t ret, goal = sb->nextalloc, total = sb->volblocks;
+	block_t goal = sb->nextalloc, total = sb->volblocks;
+	int err;
 
-	ret = balloc_from_range(sb, goal, total - goal, blocks);
-	if (goal && ret == -ENOSPC)
-		ret = balloc_from_range(sb, 0, goal, blocks);
+	err = balloc_from_range(sb, goal, total - goal, blocks, seg, segs);
+	if (goal && err == -ENOSPC)
+		err = balloc_from_range(sb, 0, goal, blocks, seg, segs);
 
-	if (ret < 0) {
-		if (ret == -ENOSPC) {
+	if (err < 0) {
+		if (err == -ENOSPC) {
 			/* FIXME: This is for debugging. Remove this */
 			tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
 		}
-		return ret;
+		return err;
 	}
-
-	/* Set allocated block */
-	*block = ret;
 
 	return 0;
 }

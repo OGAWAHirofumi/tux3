@@ -307,8 +307,8 @@ struct sb {
 };
 
 /* Block segment (physical block extent) info */
-#define BLOCK_SEG_HOLE	(1 << 0)
-#define BLOCK_SEG_NEW	(1 << 1)
+#define BLOCK_SEG_HOLE		(1 << 0)
+#define BLOCK_SEG_NEW		(1 << 1)
 
 struct block_segment {
 	block_t block;		/* Start of physical address */
@@ -551,7 +551,7 @@ struct btree_ops {
 	/* return value: 1 - need to split leaf, 0 - success, < 0 - error */
 	int (*leaf_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key, tuxkey_t *split_hint);
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
-	int (*balloc)(struct sb *sb, unsigned blocks, block_t *block);
+	int (*balloc)(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs);
 	int (*bfree)(struct sb *sb, block_t block, unsigned blocks);
 
 	void *private_ops;
@@ -673,9 +673,9 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 
 /* balloc.c */
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
-block_t balloc_from_range(struct sb *sb, block_t start, block_t count,
-			  unsigned blocks);
-int balloc(struct sb *sb, unsigned blocks, block_t *block);
+int balloc_from_range(struct sb *sb, block_t start, block_t count,
+		      unsigned blocks, struct block_segment *seg, int segs);
+int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs);
 int bfree(struct sb *sb, block_t start, unsigned blocks);
 int replay_update_bitmap(struct replay *rp, block_t start, unsigned blocks, int set);
 

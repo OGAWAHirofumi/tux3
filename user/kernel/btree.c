@@ -52,12 +52,12 @@ static inline unsigned bcount(struct bnode *node)
 
 static struct buffer_head *new_block(struct btree *btree)
 {
-	block_t block;
+	struct block_segment seg;
 
-	int err = btree->ops->balloc(btree->sb, 1, &block);
+	int err = btree->ops->balloc(btree->sb, 1, &seg, 1);
 	if (err)
 		return ERR_PTR(err);
-	struct buffer_head *buffer = vol_getblk(btree->sb, block);
+	struct buffer_head *buffer = vol_getblk(btree->sb, seg.block);
 	if (!buffer)
 		return ERR_PTR(-ENOMEM); // ERR_PTR me!!! and bfree?
 	return buffer;

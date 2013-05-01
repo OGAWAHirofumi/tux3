@@ -230,7 +230,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			continue;
 
 		count = seg[i].count;
-		if ((err = balloc(sb, count, &block))) { // goal ???
+		if ((err = balloc(sb, count, &seg[i], 1))) { // goal ???
 			/*
 			 * Out of space on file data allocation.  It happens.  Tread
 			 * carefully.  We have not stored anything in the btree yet,
@@ -248,11 +248,9 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 			segs = err;
 			goto out_release;
 		}
-		log_balloc(sb, block, count);
-		trace("fill in %Lx/%i ", block, count);
+		log_balloc(sb, seg[i].block, seg[i].count);
+		trace("fill in %Lx/%i ", seg[i].block, seg[i].count);
 
-		seg[i].block = block;
-		seg[i].count = count;
 		/* if mode == MAP_REDIRECT, buffer should be dirty */
 		seg[i].state = (mode == MAP_REDIRECT) ? 0 : BLOCK_SEG_NEW;
 	}
@@ -370,13 +368,12 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 	assert(rq->nr_segs + write_segs <= rq->max_segs);
 
 	for (i = rq->nr_segs; i < rq->nr_segs + write_segs; i++) {
-		block_t block;
 		int err;
 
 		if (seg[i].state != BLOCK_SEG_HOLE)
 			continue;
 
-		err = balloc(sb, rq->seg[i].count, &block);
+		err = balloc(sb, rq->seg[i].count, &rq->seg[i], 1);
 		if (err) { // goal ???
 			/*
 			 * Out of space on file data allocation.  It
@@ -397,9 +394,8 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 			 */
 			return err;
 		}
-		log_balloc(sb, block, seg[i].count);
+		log_balloc(sb, seg[i].block, seg[i].count);
 
-		seg[i].block = block;
 		seg[i].state = seg_state;
 	}
 
