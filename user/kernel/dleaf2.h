@@ -4,11 +4,10 @@
 struct dleaf_req {
 	struct btree_key_range key;	/* index and count */
 
-	int nr_segs;		/* For read:  how many segs was read.
-				 * For write: how many segs was written. */
-	int max_segs;		/* For read:  how many seg[] are available
-				 * For write: how many seg[] to write */
-	struct block_segment *seg;	/* pointer to seg[] */
+	int seg_idx;			/* Current offset for seg[] */
+	int seg_cnt;			/* How many segs are available */
+	int seg_max;			/* Max size of seg[] */
+	struct block_segment *seg;	/* Pointer to seg[] */
 
 	/* Callback to allocate blocks to ->seg for write */
 	int (*seg_alloc)(struct btree *, struct dleaf_req *, int);

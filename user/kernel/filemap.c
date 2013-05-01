@@ -85,7 +85,7 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 
 /* map_region() by using dleaf1 */
 static int map_region1(struct inode *inode, block_t start, unsigned count,
-		       struct block_segment seg[], unsigned max_segs,
+		       struct block_segment seg[], unsigned seg_max,
 		       enum map_mode mode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
@@ -93,7 +93,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 	struct cursor *cursor = NULL;
 	int err, segs = 0;
 
-	assert(max_segs > 0);
+	assert(seg_max > 0);
 
 	/*
 	 * bitmap enters here recursively.
@@ -170,7 +170,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		seg_start = dwalk_index(walk);
 	else
 		seg_start = index;
-	while (index < limit && segs < max_segs) {
+	while (index < limit && segs < seg_max) {
 		block_t ex_index;
 		if (!dwalk_end(walk))
 			ex_index = dwalk_index(walk);
@@ -365,9 +365,9 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 	struct block_segment *seg = rq->seg;
 	int i;
 
-	assert(rq->nr_segs + write_segs <= rq->max_segs);
+	assert(rq->seg_idx + write_segs <= rq->seg_cnt);
 
-	for (i = rq->nr_segs; i < rq->nr_segs + write_segs; i++) {
+	for (i = rq->seg_idx; i < rq->seg_idx + write_segs; i++) {
 		int err;
 
 		if (seg[i].state != BLOCK_SEG_HOLE)
@@ -423,14 +423,14 @@ static int (*seg_alloc_funs[])(struct btree *, struct dleaf_req *, int) = {
 
 /* map_region() by using dleaf2 */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
-		       struct block_segment seg[], unsigned max_segs,
+		       struct block_segment seg[], unsigned seg_max,
 		       enum map_mode mode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
 	struct cursor *cursor = NULL;
 	int err, segs = 0;
 
-	assert(max_segs > 0);
+	assert(seg_max > 0);
 
 	/*
 	 * bitmap enters here recursively.
@@ -470,7 +470,8 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 				.start	= start,
 				.len	= count,
 			},
-			.max_segs	= max_segs,
+			.seg_cnt	= seg_max,
+			.seg_max	= seg_max,
 			.seg		= seg,
 		};
 
@@ -491,9 +492,9 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			segs = err;
 			goto out_unlock;
 		}
-		segs = rq.nr_segs;
+		segs = rq.seg_idx;
 		/*
-		 * Read might be partial. (due to max_segs, or FIXME:
+		 * Read might be partial. (due to seg_max, or FIXME:
 		 * lack of read for multiple leaves)
 		 */
 		count = seg_total_count(seg, segs);
@@ -532,7 +533,8 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			.start	= start,
 			.len	= count,
 		},
-		.max_segs	= segs,
+		.seg_cnt	= segs,
+		.seg_max	= seg_max,
 		.seg		= seg,
 		.seg_alloc	= seg_alloc_funs[mode],
 	};
@@ -541,7 +543,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		segs = err;
 		goto out_release;
 	}
-	assert(segs == rq.nr_segs);
+	assert(segs == rq.seg_idx);
 
 out_release:
 	if (cursor)
@@ -567,7 +569,7 @@ out_unlock:
  * 0 < - number of physical extents which were mapped
  */
 static int map_region(struct inode *inode, block_t start, unsigned count,
-		      struct block_segment seg[], unsigned max_segs,
+		      struct block_segment seg[], unsigned seg_max,
 		      enum map_mode mode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
@@ -581,7 +583,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 	if (mode == MAP_READ) {
 		/* If whole region was hole, don't need to call map_region */
 		if (tux3_is_hole(inode, start, count)) {
-			assert(max_segs >= 1);
+			assert(seg_max >= 1);
 			seg[0].state = BLOCK_SEG_HOLE;
 			seg[0].block = 0;
 			seg[0].count = count;
@@ -590,13 +592,13 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 	}
 
 	if (btree->ops == &dtree1_ops)
-		segs = map_region1(inode, start, count, seg, max_segs, mode);
+		segs = map_region1(inode, start, count, seg, seg_max, mode);
 	else
-		segs = map_region2(inode, start, count, seg, max_segs, mode);
+		segs = map_region2(inode, start, count, seg, seg_max, mode);
 
 	if (mode == MAP_READ) {
 		/* Update seg[] with hole information */
-		segs = tux3_map_hole(inode, start, count, seg, segs, max_segs);
+		segs = tux3_map_hole(inode, start, count, seg, segs, seg_max);
 	}
 
 	return segs;

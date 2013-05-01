@@ -34,16 +34,16 @@ static void add_maps(struct inode *inode, block_t index,
 
 /* Create segments, then save state to buffer */
 static int d_map_region(struct inode *inode, block_t start, unsigned count,
-			struct block_segment *seg, unsigned max_segs,
+			struct block_segment *seg, unsigned seg_max,
 			enum map_mode mode)
 {
-	int nr_segs;
+	int segs;
 	/* this should be called with "mode != MAP_READ" */
 	assert(mode != MAP_READ);
-	nr_segs = map_region(inode, start, count, seg, max_segs, mode);
-	if (nr_segs > 0)
-		add_maps(inode, start, seg, nr_segs);
-	return nr_segs;
+	segs = map_region(inode, start, count, seg, seg_max, mode);
+	if (segs > 0)
+		add_maps(inode, start, seg, segs);
+	return segs;
 }
 
 static void check_maps(struct inode *inode, block_t index,
@@ -68,13 +68,13 @@ static void check_maps(struct inode *inode, block_t index,
 
 /* Check returned segments are same state with buffer */
 static int check_map_region(struct inode *inode, block_t start, unsigned count,
-			    struct block_segment *seg, unsigned max_segs)
+			    struct block_segment *seg, unsigned seg_max)
 {
-	int nr_segs;
-	nr_segs = map_region(inode, start, count, seg, max_segs, MAP_READ);
-	if (nr_segs > 0)
-		check_maps(inode, start, seg, nr_segs);
-	return nr_segs;
+	int segs;
+	segs = map_region(inode, start, count, seg, seg_max, MAP_READ);
+	if (segs > 0)
+		check_maps(inode, start, seg, segs);
+	return segs;
 }
 
 struct test_data {
