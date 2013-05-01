@@ -470,7 +470,6 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 				.start	= start,
 				.len	= count,
 			},
-			.seg_cnt	= seg_max,
 			.seg_max	= seg_max,
 			.seg		= seg,
 		};
