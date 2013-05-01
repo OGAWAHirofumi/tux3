@@ -731,6 +731,32 @@ static void test06(struct sb *sb)
 	clean_main(sb);
 }
 
+/* Test for partial alloc to flush logblocks */
+static void test07(struct sb *sb)
+{
+	struct block_segment seg;
+
+	test_assert(make_tux3(sb) == 0);
+	test_assert(force_rollup(sb) == 0);
+
+	tux3_start_backend(sb);
+	/* Make non contiguous blocks */
+	for (block_t i = 0; i < sb->volblocks; i += 2) {
+		int err = balloc_from_range(sb, i, 1, 1, 0, &seg, 1);
+		if (err)
+			test_assert(err == -ENOSPC);
+	}
+	/* Make 3 logblocks, at least */
+	while (sb->lognext <= 3)
+		log_delta(sb);
+	tux3_end_backend();
+
+	/* Flush logblocks */
+	test_assert(force_delta(sb) == 0);
+
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -781,6 +807,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test06"))
 		test06(sb);
+	test_end();
+
+	if (test_start("test07"))
+		test07(sb);
 	test_end();
 
 	clean_main(sb);
