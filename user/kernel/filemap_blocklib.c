@@ -63,6 +63,7 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
 	unsigned to = from + len;
 	struct inode *inode = page->mapping->host;
+	struct sb *sb = tux_sb(inode->i_sb);
 	unsigned block_start, block_end;
 	sector_t block;
 	int err = 0;
@@ -74,12 +75,13 @@ static int __tux3_write_begin(struct page *page, loff_t pos, unsigned len,
 	BUG_ON(to > PAGE_CACHE_SIZE);
 	BUG_ON(from > to);
 
-	blocksize = 1 << inode->i_blkbits;
+	/* Use blocksize/blockbits in sb, instead of inode->i_blkbits */
+	blocksize = sb->blocksize;
+	bbits = sb->blockbits;
 	if (!page_has_buffers(page))
 		create_empty_buffers(page, blocksize, 0);
 	head = page_buffers(page);
 
-	bbits = inode->i_blkbits;
 	block = (sector_t)page->index << (PAGE_CACHE_SHIFT - bbits);
 
 	for(bh = head, block_start = 0; bh != head || !block_start;
@@ -213,11 +215,11 @@ static int __tux3_commit_write(struct inode *inode, struct page *page,
 	unsigned blocksize;
 	struct buffer_head *bh, *head;
 
-	blocksize = 1 << inode->i_blkbits;
+	bh = head = page_buffers(page);
+	blocksize = bh->b_size;
 
-	for(bh = head = page_buffers(page), block_start = 0;
-	    bh != head || !block_start;
-	    block_start=block_end, bh = bh->b_this_page) {
+	block_start = 0;
+	do {
 		block_end = block_start + blocksize;
 		if (block_end <= from || block_start >= to) {
 			if (!buffer_uptodate(bh))
@@ -227,7 +229,10 @@ static int __tux3_commit_write(struct inode *inode, struct page *page,
 			__tux3_mark_buffer_dirty(bh, tux3_get_current_delta());
 		}
 		clear_buffer_new(bh);
-	}
+
+		block_start = block_end;
+		bh = bh->b_this_page;
+	} while (bh != head);
 
 	/*
 	 * If this is a partial write which happened to make all buffers

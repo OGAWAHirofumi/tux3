@@ -44,7 +44,7 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 }
 
 /*
- * Almost copy of generic_splice_write() (added changed_begin/end,
+ * Almost copy of generic_file_splice_write() (added changed_begin/end,
  * tux3_iattrdirty()).
  */
 static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
@@ -96,17 +96,14 @@ static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
 		ret = sd.num_spliced;
 
 	if (ret > 0) {
-		unsigned long nr_pages;
 		int err;
-
-		nr_pages = (ret + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 
 		err = generic_write_sync(out, *ppos, ret);
 		if (err)
 			ret = err;
 		else
 			*ppos += ret;
-		balance_dirty_pages_ratelimited_nr(mapping, nr_pages);
+		balance_dirty_pages_ratelimited(mapping);
 	}
 	sb_end_write(inode->i_sb);
 
