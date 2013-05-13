@@ -97,11 +97,13 @@ static void test02(struct sb *sb)
 
 	/* Both is deferred allocation */
 	inode1 = tux_create_specific_inode(sb->rootdir, 0x1000, iattr, 0);
-	test_assert(inode1);
+	test_assert(!IS_ERR(inode1));
 	test_assert(is_defer_alloc_inum(inode1));
+	unlock_new_inode(inode1);
 	inode2 = tux_create_specific_inode(sb->rootdir, 0x1000, iattr, 0);
-	test_assert(inode2);
+	test_assert(!IS_ERR(inode2));
 	test_assert(is_defer_alloc_inum(inode2));
+	unlock_new_inode(inode2);
 
 	change_end_atomic(sb);
 
@@ -116,12 +118,14 @@ static void test02(struct sb *sb)
 
 	/* Try to alloc same inum after save */
 	inode3 = tux_create_specific_inode(sb->rootdir, 0x1000, iattr, 0);
-	test_assert(inode3);
+	test_assert(!IS_ERR(inode3));
 	test_assert(is_defer_alloc_inum(inode3));
+	unlock_new_inode(inode3);
 	/* Try to alloc so far inum */
 	inode4 = tux_create_specific_inode(sb->rootdir, 0x10000000, iattr, 0);
-	test_assert(inode4);
+	test_assert(!IS_ERR(inode4));
 	test_assert(is_defer_alloc_inum(inode4));
+	unlock_new_inode(inode4);
 
 	change_end_atomic(sb);
 

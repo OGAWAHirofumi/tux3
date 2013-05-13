@@ -63,12 +63,14 @@ static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
 	if (!IS_ERR(inode)) {
 		err = tux_add_dirent(dir, dentry, inode);
 		if (!err) {
+			unlock_new_inode(inode);
 			if (is_dir)
 				inode_inc_link_count(dir);
 			goto out;
 		}
 		clear_nlink(inode);
 		tux3_mark_inode_dirty(inode);
+		unlock_new_inode(inode);
 		iput(inode);
 	}
 out:
@@ -145,10 +147,13 @@ static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 		err = page_symlink(inode, symname, len);
 		if (!err) {
 			err = tux_add_dirent(dir, dentry, inode);
-			if (!err)
+			if (!err) {
+				unlock_new_inode(inode);
 				goto out;
+			}
 		}
 		inode_dec_link_count(inode);
+		unlock_new_inode(inode);
 		iput(inode);
 	}
 out:

@@ -306,6 +306,17 @@ error:
 	return err;
 }
 
+static int tux_test(struct inode *inode, void *data)
+{
+	return tux_inode(inode)->inum == *(inum_t *)data;
+}
+
+static int tux_set(struct inode *inode, void *data)
+{
+	tux_set_inum(inode, *(inum_t *)data);
+	return 0;
+}
+
 static struct inode *
 __tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev,
 		   struct ialloc_policy *policy, void *policy_data)
@@ -322,7 +333,14 @@ __tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev,
 		iput(inode);
 		return ERR_PTR(err);
 	}
-	insert_inode_hash(inode);
+	inum_t inum = tux_inode(inode)->inum;
+	if (insert_inode_locked4(inode, inum, tux_test, &inum) < 0) {
+		/* Can be nfsd race happened, or fs corruption. */
+		tux3_warn(tux_sb(dir->i_sb), "inode insert error: inum %Lx",
+			  inum);
+		iput(inode);
+		return ERR_PTR(-EIO);
+	}
 	/*
 	 * The unhashed inode ignores mark_inode_dirty(), so it should
 	 * be called after insert_inode_hash().
@@ -426,17 +444,6 @@ out:
 	free_cursor(cursor);
 
 	return err;
-}
-
-static int tux_test(struct inode *inode, void *data)
-{
-	return tux_inode(inode)->inum == *(inum_t *)data;
-}
-
-static int tux_set(struct inode *inode, void *data)
-{
-	tux_set_inum(inode, *(inum_t *)data);
-	return 0;
 }
 
 struct inode *tux3_iget(struct sb *sb, inum_t inum)
