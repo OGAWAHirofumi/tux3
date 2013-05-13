@@ -52,6 +52,11 @@ struct file {
 	loff_t		f_pos;
 };
 
+static inline struct inode *file_inode(struct file *f)
+{
+	return f->f_inode;
+}
+
 #include "kernel/tux3.h"
 
 #define INIT_DISKSB(_bits, _blocks) (struct disksuper){		\

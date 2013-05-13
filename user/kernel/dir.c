@@ -23,6 +23,7 @@
  */
 
 #include "tux3.h"
+#include "kcompat.h"
 
 #define TUX_DIR_ALIGN		sizeof(inum_t)
 #define TUX_DIR_HEAD		(offsetof(tux_dirent, name))
@@ -275,11 +276,7 @@ static unsigned char filetype[TUX_TYPES] = {
 int tux_readdir(struct file *file, void *state, filldir_t filldir)
 {
 	loff_t pos = file->f_pos;
-#ifdef __KERNEL__
-	struct inode *dir = file->f_dentry->d_inode;
-#else
-	struct inode *dir = file->f_inode;
-#endif
+	struct inode *dir = file_inode(file);
 	int revalidate = file->f_version != dir->i_version;
 	struct sb *sb = tux_sb(dir->i_sb);
 	unsigned blockbits = sb->blockbits;
