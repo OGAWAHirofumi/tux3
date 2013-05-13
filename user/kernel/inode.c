@@ -215,7 +215,7 @@ out:
 static inum_t alloc_inum_goal(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	inum_t goal = sb->nextalloc;
+	inum_t goal = sb->nextblock;
 
 	/* Don't choose reserved ino */
 	if (goal < TUX_NORMAL_INO)

@@ -150,7 +150,7 @@ struct disksuper {
 				 * change the maximum inodes without changing
 				 * usedinodes on disk.
 				 */
-	__be64 nextalloc;	/* Get rid of this when we have a real allocation policy */
+	__be64 nextblock;	/* Get rid of this when we have a real allocation policy */
 	__be64 atomdictsize;	/*
 				 * Size of the atom dictionary instead of i_size
 				 * FIXME: we are better to remove this somehow
@@ -259,7 +259,7 @@ struct sb {
 	unsigned blocksize, blockbits, blockmask;
 	u64 freeinodes;		/* Number of free inode numbers. This is
 				 * including the deferred allocated inodes */
-	block_t volblocks, freeblocks, nextalloc;
+	block_t volblocks, freeblocks, nextblock;
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
 	unsigned version;	/* Currently mounted volume version view */
 

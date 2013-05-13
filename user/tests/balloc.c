@@ -156,9 +156,9 @@ static void test03(struct sb *sb, block_t blocks)
 {
 	struct block_segment seg;
 
-	/* nextalloc point last bit, but can't allocate 2 bits. So,
+	/* nextblock point last bit, but can't allocate 2 bits. So,
 	 * this should wrap around to zero */
-	sb->nextalloc = sb->volblocks - 1;
+	sb->nextblock = sb->volblocks - 1;
 	test_assert(balloc(sb, 2, &seg, 1) == 0);
 	test_assert(seg.block == 0);
 	test_assert(seg.count == 2);
@@ -175,8 +175,8 @@ static void test04(struct sb *sb, block_t blocks)
 {
 	block_t start;
 
-	/* nextalloc point last bit, this should wrap around to zero */
-	start = sb->nextalloc = sb->volblocks - 1;
+	/* nextblock point last bit, this should wrap around to zero */
+	start = sb->nextblock = sb->volblocks - 1;
 	for (int i = 0; i < 2; i++) {
 		struct block_segment seg;
 		test_assert(balloc(sb, 1, &seg, 1) == 0);

@@ -2,13 +2,13 @@ int balloc_from_range(struct sb *sb, block_t start, block_t count,
 		      unsigned blocks, unsigned flags,
 		      struct block_segment *seg, int segs)
 {
-	block_t block = sb->nextalloc;
+	block_t block = sb->nextblock;
 
 	seg->block = block;
 	seg->count = blocks;
 	seg->state = 0;
 
-	sb->nextalloc += blocks;
+	sb->nextblock += blocks;
 	trace("-> %Lx/%x", block, blocks);
 
 	return 0;
@@ -17,7 +17,7 @@ int balloc_from_range(struct sb *sb, block_t start, block_t count,
 static int __balloc(struct sb *sb, unsigned blocks, unsigned flags,
 		    struct block_segment *seg, int segs)
 {
-	block_t goal = sb->nextalloc;
+	block_t goal = sb->nextblock;
 	int err;
 
 	err = balloc_from_range(sb, goal, sb->volblocks, blocks,

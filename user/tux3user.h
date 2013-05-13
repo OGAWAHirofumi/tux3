@@ -65,7 +65,7 @@ struct file {
 	.oroot		= cpu_to_be64(pack_root(&no_root)),	\
 	/* Set "reserved inodes" as used inode */		\
 	.usedinodes	= cpu_to_be64(TUX_NORMAL_INO),		\
-	.nextalloc	= 0,					\
+	.nextblock	= 0,					\
 	.atomdictsize	= 0,					\
 	.freeatom	= 0,					\
 	.atomgen	= cpu_to_be32(1),			\

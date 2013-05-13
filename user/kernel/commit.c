@@ -93,15 +93,15 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	/* Probably does not belong here (maybe metablock) */
 	sb->freeinodes = MAX_INODES - be64_to_cpu(super->usedinodes);
 	sb->freeblocks = sb->volblocks;
-	sb->nextalloc = be64_to_cpu(super->nextalloc);
+	sb->nextblock = be64_to_cpu(super->nextblock);
 	sb->atomdictsize = be64_to_cpu(super->atomdictsize);
 	sb->atomgen = be32_to_cpu(super->atomgen);
 	sb->freeatom = be32_to_cpu(super->freeatom);
 	/* logchain and logcount are read from super directly */
 	trace("blocksize %u, blockbits %u, blockmask %08x",
 	      sb->blocksize, sb->blockbits, sb->blockmask);
-	trace("volblocks %Lu, freeblocks %Lu, freeinodes %Lu, nextalloc %Lu",
-	      sb->volblocks, sb->freeblocks, sb->freeinodes, sb->nextalloc);
+	trace("volblocks %Lu, freeblocks %Lu, freeinodes %Lu, nextblock %Lu",
+	      sb->volblocks, sb->freeblocks, sb->freeinodes, sb->nextblock);
 	trace("atom_dictsize %Lu, freeatom %u, atomgen %u",
 	      (s64)sb->atomdictsize, sb->freeatom, sb->atomgen);
 	trace("logchain %Lu, logcount %u",
@@ -147,7 +147,7 @@ int save_sb(struct sb *sb)
 	/* Probably does not belong here (maybe metablock) */
 	super->iroot = cpu_to_be64(pack_root(&itable_btree(sb)->root));
 	super->oroot = cpu_to_be64(pack_root(&otable_btree(sb)->root));
-	super->nextalloc = cpu_to_be64(sb->nextalloc);
+	super->nextblock = cpu_to_be64(sb->nextblock);
 	super->atomdictsize = cpu_to_be64(sb->atomdictsize);
 	super->freeatom = cpu_to_be32(sb->freeatom);
 	super->atomgen = cpu_to_be32(sb->atomgen);

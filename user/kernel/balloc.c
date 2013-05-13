@@ -401,9 +401,9 @@ found_partial:
 	seg->block = found;
 	seg->count = blocks;
 
-	sb->nextalloc = found + blocks;
-	if (sb->nextalloc >= sb->volblocks)
-		sb->nextalloc = 0;
+	sb->nextblock = found + blocks;
+	if (sb->nextblock >= sb->volblocks)
+		sb->nextblock = 0;
 	//set_sb_dirty(sb);
 
 	trace("balloc extent [block %Lx, count %x]", found, blocks);
@@ -414,7 +414,7 @@ found_partial:
 static int __balloc(struct sb *sb, unsigned blocks, unsigned flags,
 		    struct block_segment *seg, int segs)
 {
-	block_t goal = sb->nextalloc;
+	block_t goal = sb->nextblock;
 	int err;
 
 	/* For now, allow partial unconditionally */
