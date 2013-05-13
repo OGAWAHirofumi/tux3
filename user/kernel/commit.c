@@ -94,6 +94,7 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	sb->freeinodes = MAX_INODES - be64_to_cpu(super->usedinodes);
 	sb->freeblocks = sb->volblocks;
 	sb->nextblock = be64_to_cpu(super->nextblock);
+	sb->nextinum = TUX_NORMAL_INO;
 	sb->atomdictsize = be64_to_cpu(super->atomdictsize);
 	sb->atomgen = be32_to_cpu(super->atomgen);
 	sb->freeatom = be32_to_cpu(super->freeatom);

@@ -260,6 +260,8 @@ struct sb {
 	u64 freeinodes;		/* Number of free inode numbers. This is
 				 * including the deferred allocated inodes */
 	block_t volblocks, freeblocks, nextblock;
+	inum_t nextinum;	/* FIXME: temporary hack to avoid to find
+				 * same area in itable for free inum. */
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
 	unsigned version;	/* Currently mounted volume version view */
 
