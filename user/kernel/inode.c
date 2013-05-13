@@ -201,33 +201,61 @@ out:
 	return ret;
 }
 
-/*
- * Choose preferable inode number
- *
- * For now the inum allocation goal is the same as the block allocation
- * goal.  This allows a maximum inum density of one per block and should
- * give pretty good spacial correlation between inode table blocks and
- * file data belonging to those inodes provided somebody sets the block
- * allocation goal based on the directory the file will be in.
- *
- * FIXME: better allocation algorithm?
- */
-static inum_t alloc_inum_goal(struct inode *inode)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	inum_t goal = sb->nextblock;
+struct ialloc_policy {
+	inum_t (*goal)(struct inode *, void *);
+	void (*update)(struct inode *, inum_t);
+};
 
-	/* Don't choose reserved ino */
-	if (goal < TUX_NORMAL_INO)
-		goal = TUX_NORMAL_INO;
-	return goal;
+/*
+ * Try to allocate specified inum for internal inode.
+ */
+static inum_t ialloc_specific_goal(struct inode *inode, void *data)
+{
+	return *(inum_t *)data;
 }
 
-static int alloc_inum(struct inode *inode, inum_t goal)
+static void ialloc_noop_update(struct inode *inode, inum_t inum)
+{
+}
+
+static struct ialloc_policy ialloc_specific = {
+	.goal	= ialloc_specific_goal,
+	.update	= ialloc_noop_update,
+};
+
+/*
+ * Try to allocate inum linearly.
+ * FIXME: we should use per-directory inum policy.
+ */
+static inum_t ialloc_linear_goal(struct inode *inode, void *data)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	return sb->nextinum;
+}
+
+static void ialloc_linear_update(struct inode *inode, inum_t inum)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	inum++;
+	if (inum >= MAX_INODES)
+		sb->nextinum = TUX_NORMAL_INO;
+	else
+		sb->nextinum = inum;
+}
+
+static struct ialloc_policy ialloc_linear = {
+	.goal	= ialloc_linear_goal,
+	.update	= ialloc_linear_update,
+};
+
+static int alloc_inum(struct inode *inode, struct ialloc_policy *policy,
+		      void *policy_data)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itable = itable_btree(sb);
 	struct cursor *cursor;
+	inum_t goal;
 	int err = 0;
 
 	cursor = alloc_cursor(itable, 1); /* +1 for now depth */
@@ -235,6 +263,7 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
+	goal = policy->goal(inode, policy_data);
 	while (1) {
 		err = find_free_inum(cursor, goal, &goal);
 		if (err)
@@ -257,6 +286,8 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 
 	add_defer_alloc_inum(inode);
 
+	policy->update(inode, goal);
+
 	/*
 	 * If inum is not reserved area, account it. If inum is
 	 * reserved area, inode might not be written into itable. So,
@@ -275,8 +306,9 @@ error:
 	return err;
 }
 
-struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
-				 struct tux_iattr *iattr, dev_t rdev)
+static struct inode *
+__tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev,
+		   struct ialloc_policy *policy, void *policy_data)
 {
 	struct inode *inode;
 
@@ -284,7 +316,7 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	int err = alloc_inum(inode, goal);
+	int err = alloc_inum(inode, policy, policy_data);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);
@@ -301,10 +333,18 @@ struct inode *__tux_create_inode(struct inode *dir, inum_t goal,
 	return inode;
 }
 
+/* Allocate inode with linear inum allocation policy */
 struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 			       dev_t rdev)
 {
-	return __tux_create_inode(dir, alloc_inum_goal(dir), iattr, rdev);
+	return __tux_create_inode(dir, iattr, rdev, &ialloc_linear, NULL);
+}
+
+/* Allocate inode with specific inum allocation policy */
+struct inode *tux_create_specific_inode(struct inode *dir, inum_t inum,
+					struct tux_iattr *iattr, dev_t rdev)
+{
+	return __tux_create_inode(dir, iattr, rdev, &ialloc_specific, &inum);
 }
 
 static int check_present(struct inode *inode)

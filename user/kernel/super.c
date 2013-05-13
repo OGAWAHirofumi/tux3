@@ -134,7 +134,7 @@ static struct inode *create_internal_inode(struct sb *sbi, inum_t inum,
 	if (iattr == NULL)
 		iattr = &null_iattr;
 
-	inode = __tux_create_inode(dir, inum, iattr, 0);
+	inode = tux_create_specific_inode(dir, inum, iattr, 0);
 	assert(IS_ERR(inode) || tux_inode(inode)->inum == inum);
 	return inode;
 }
