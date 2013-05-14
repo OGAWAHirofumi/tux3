@@ -46,6 +46,11 @@ void inode_leak_check(void)
 	assert(leaks == 0);
 }
 
+static inline int inode_unhashed(struct inode *inode)
+{
+	return hlist_unhashed(&inode->i_hash);
+}
+
 static void insert_inode_hash(struct inode *inode)
 {
 	struct hlist_head *b = inode_hashtable + hash(tux_inode(inode)->inum);
@@ -54,7 +59,7 @@ static void insert_inode_hash(struct inode *inode)
 
 void remove_inode_hash(struct inode *inode)
 {
-	if (!hlist_unhashed(&inode->i_hash))
+	if (!inode_unhashed(inode))
 		hlist_del_init(&inode->i_hash);
 }
 
@@ -108,7 +113,7 @@ static int is_bad_inode(struct inode *inode)
 	return inode->i_state & I_BAD;
 }
 
-static void unlock_new_inode(struct inode *inode)
+void unlock_new_inode(struct inode *inode)
 {
 	inode->i_state &= ~I_NEW;
 }
@@ -162,7 +167,7 @@ static struct inode *find_inode(struct sb *sb, struct hlist_head *head,
 	return NULL;
 }
 
-struct inode *iget5_locked(struct sb *sb, inum_t inum,
+static struct inode *iget5_locked(struct sb *sb, inum_t inum,
 			   int (*test)(struct inode *, void *),
 			   int (*set)(struct inode *, void *), void *data)
 {
@@ -185,6 +190,37 @@ struct inode *iget5_locked(struct sb *sb, inum_t inum,
 	hlist_add_head(&inode->i_hash, head);
 
 	return inode;
+}
+
+static int insert_inode_locked4(struct inode *inode, inum_t inum,
+			 int (*test)(struct inode *, void *), void *data)
+{
+	struct hlist_head *head = inode_hashtable + hash(inum);
+
+	while (1) {
+		struct inode *old = NULL;
+		struct hlist_node *node;
+
+		hlist_for_each_entry(old, node, head, i_hash) {
+			if (!test(old, data))
+				continue;
+			if (old->i_state & (I_FREEING /*|I_WILL_FREE*/))
+				continue;
+			break;
+		}
+		if (likely(!node)) {
+			inode->i_state |= I_NEW;
+			hlist_add_head(&inode->i_hash, head);
+			return 0;
+		}
+		__iget(old);
+		/* wait_on_inode(old); */
+		if (unlikely(!inode_unhashed(old))) {
+			iput(old);
+			return -EBUSY;
+		}
+		iput(old);
+	}
 }
 
 loff_t i_size_read(const struct inode *inode)
