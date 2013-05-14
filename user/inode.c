@@ -24,8 +24,7 @@ static struct hlist_head inode_hashtable[HASH_SIZE] = {
 
 static unsigned long hash(inum_t inum)
 {
-	u64 hash = inum * GOLDEN_RATIO_PRIME;
-	return hash >> (64 - HASH_SHIFT);
+	return hash_64(inum, HASH_SHIFT);
 }
 
 void inode_leak_check(void)
