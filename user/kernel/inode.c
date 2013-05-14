@@ -466,6 +466,16 @@ struct inode *tux3_iget(struct sb *sb, inum_t inum)
 	return inode;
 }
 
+struct inode *tux3_ilookup_nowait(struct sb *sb, inum_t inum)
+{
+	return ilookup5_nowait(vfs_sb(sb), inum, tux_test, &inum);
+}
+
+struct inode *tux3_ilookup(struct sb *sb, inum_t inum)
+{
+	return ilookup5(vfs_sb(sb), inum, tux_test, &inum);
+}
+
 static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		      unsigned delta)
 {

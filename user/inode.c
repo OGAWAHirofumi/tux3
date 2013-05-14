@@ -168,6 +168,26 @@ static struct inode *find_inode(struct sb *sb, struct hlist_head *head,
 	return NULL;
 }
 
+static struct inode *ilookup5_nowait(struct sb *sb, inum_t inum,
+		int (*test)(struct inode *, void *), void *data)
+{
+	struct hlist_head *head = inode_hashtable + hash(inum);
+	struct inode *inode;
+
+	inode = find_inode(sb, head, test, data);
+
+	return inode;
+}
+
+static struct inode *ilookup5(struct sb *sb, inum_t inum,
+		int (*test)(struct inode *, void *), void *data)
+{
+	struct inode *inode = ilookup5_nowait(sb, inum, test, data);
+	/* On userland, inode shouldn't have I_NEW */
+	assert(!(inode->i_state & I_NEW));
+	return inode;
+}
+
 static struct inode *iget5_locked(struct sb *sb, inum_t inum,
 			   int (*test)(struct inode *, void *),
 			   int (*set)(struct inode *, void *), void *data)
@@ -323,12 +343,6 @@ static void tux_setup_inode(struct inode *inode)
 			      tux_inode(inode)->inum, inode->i_mode);
 		break;
 	}
-}
-
-struct inode *tux3_ilookup(struct sb *sb, inum_t inum)
-{
-	struct hlist_head *head = inode_hashtable + hash(inum);
-	return find_inode(sb, head, tux_test, &inum);
 }
 
 /*

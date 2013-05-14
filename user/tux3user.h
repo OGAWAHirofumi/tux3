@@ -107,7 +107,6 @@ void __iget(struct inode *inode);
 void ihold(struct inode *inode);
 loff_t i_size_read(const struct inode *inode);
 void i_size_write(struct inode *inode, loff_t i_size);
-struct inode *tux3_ilookup(struct sb *sb, inum_t inum);
 void iput(struct inode *inode);
 int __tuxtruncate(struct inode *inode, loff_t size);
 int tuxtruncate(struct inode *inode, loff_t size);
