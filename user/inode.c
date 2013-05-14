@@ -115,6 +115,7 @@ static int is_bad_inode(struct inode *inode)
 
 void unlock_new_inode(struct inode *inode)
 {
+	assert(inode->i_state & I_NEW);
 	inode->i_state &= ~I_NEW;
 }
 
@@ -340,6 +341,8 @@ void iput(struct inode *inode)
 		return;
 
 	if (atomic_dec_and_test(&inode->i_count)) {
+		assert(!(inode->i_state & I_NEW));
+
 		if (!tux3_drop_inode(inode)) {
 			/* Keep the inode on dirty list */
 			return;
