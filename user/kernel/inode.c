@@ -32,8 +32,8 @@ struct inode *tux_new_volmap(struct sb *sb)
 	struct inode *inode = new_inode(vfs_sb(sb));
 	if (inode) {
 		tux_set_inum(inode, TUX_VOLMAP_INO);
-		insert_inode_hash(inode);
 		tux_setup_inode(inode);
+		insert_inode_hash(inode);
 	}
 	return inode;
 }
@@ -43,8 +43,8 @@ struct inode *tux_new_logmap(struct sb *sb)
 	struct inode *inode = new_inode(vfs_sb(sb));
 	if (inode) {
 		tux_set_inum(inode, TUX_LOGMAP_INO);
-		insert_inode_hash(inode);
 		tux_setup_inode(inode);
+		insert_inode_hash(inode);
 	}
 	return inode;
 }
