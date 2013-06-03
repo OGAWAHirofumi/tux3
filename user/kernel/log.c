@@ -144,7 +144,7 @@ static void *log_begin(struct sb *sb, unsigned bytes)
 		};
 
 		/* Dirty for write, and prevent to be reclaimed */
-		tux3_mark_buffer_dirty(sb->logbuf);
+		mark_buffer_dirty_atomic(sb->logbuf);
 	}
 	return sb->logpos;
 }
