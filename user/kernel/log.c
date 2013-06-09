@@ -559,7 +559,25 @@ int stash_walk(struct sb *sb, struct stash *stash, unstash_t actor)
 
 int defer_bfree(struct stash *defree, block_t block, unsigned count)
 {
-	return stash_value(defree, ((u64)count << 48) + block);
+	static const unsigned limit = ULLONG_MAX >> 48;
+
+	/*
+	 * count field of stash is 16bits. So, this separates to
+	 * multiple records to avoid overflow.
+	 */
+	while (count) {
+		unsigned c = min(count, limit);
+		int err;
+
+		err = stash_value(defree, ((u64)c << 48) + block);
+		if (err)
+			return err;
+
+		count -= c;
+		block += c;
+	}
+
+	return 0;
 }
 
 void destroy_defer_bfree(struct stash *defree)
