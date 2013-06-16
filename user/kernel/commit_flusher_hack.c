@@ -118,7 +118,8 @@ static long tux3_wb_writeback(struct bdi_writeback *wb,
 	unsigned delta;
 	int err;
 
-	if (!wb_has_dirty_io(wb))
+	/* If we didn't finish replay yet, don't flush. */
+	if (!(vfs_sb(sb)->s_flags & MS_ACTIVE))
 		return 0;
 
 	/* Get delta that have to write */
