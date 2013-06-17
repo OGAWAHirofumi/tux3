@@ -82,6 +82,24 @@ static int tux3_is_inode_no_flush(struct inode *inode)
 }
 
 /*
+ * Some inodes (e.g. bitmap inode) is always dirty, because it has
+ * recursive of block allocation. So, if the inode was added to
+ * wb.dirty_list, flusher always thinks there is dirty inode.
+ *
+ * So, this sets the dirty to inode to prevent to be added into
+ * wb.dirty_list. With this, we are not bothered by always dirty
+ * inodes.
+ *
+ * FIXME: hack, is there better way?
+ */
+void tux3_set_inode_always_dirty(struct inode *inode)
+{
+#ifdef __KERNEL__
+	inode->i_state |= I_DIRTY_PAGES;
+#endif
+}
+
+/*
  * Dirty flags helpers
  */
 static inline unsigned tux3_dirty_shift(unsigned delta)
@@ -167,6 +185,33 @@ void tux3_mark_btree_dirty(struct btree *btree)
 #include "writeback_iattrfork.c"
 #include "writeback_xattrfork.c"
 
+/*
+ * We don't use i_wb_list though, bdi flusher checks this via
+ * wb_has_dirty_io(). So if inode become clean, we remove inode from it.
+ */
+static inline void tux3_inode_wb_lock(struct inode *inode)
+{
+#ifdef __KERNEL__
+	struct backing_dev_info *bdi = inode->i_sb->s_bdi;
+	spin_lock(&bdi->wb.list_lock);
+#endif
+}
+
+static inline void tux3_inode_wb_unlock(struct inode *inode)
+{
+#ifdef __KERNEL__
+	struct backing_dev_info *bdi = inode->i_sb->s_bdi;
+	spin_unlock(&bdi->wb.list_lock);
+#endif
+}
+
+static inline void tux3_inode_wb_list_del(struct inode *inode)
+{
+#ifdef __KERNEL__
+	list_del_init(&inode->i_wb_list);
+#endif
+}
+
 /* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
 static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 					  int frontend)
@@ -197,31 +242,37 @@ static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 	/* Update inode state */
 	if (tuxnode->flags & ~NON_DIRTY_FLAGS)
 		inode->i_state |= I_DIRTY;
-	else
+	else {
 		inode->i_state &= ~I_DIRTY;
+		tux3_inode_wb_list_del(inode);
+	}
 }
 
 /* Clear dirty flags for delta */
 static void __tux3_clear_dirty_inode(struct inode *inode, unsigned delta)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
+	tux3_inode_wb_lock(inode);
 	spin_lock(&inode->i_lock);
 	spin_lock(&tuxnode->lock);
 	tux3_clear_dirty_inode_nolock(inode, delta, 0);
 	spin_unlock(&tuxnode->lock);
 	spin_unlock(&inode->i_lock);
+	tux3_inode_wb_unlock(inode);
 }
 
 /* Clear dirty flags for frontend delta */
 void tux3_clear_dirty_inode(struct inode *inode)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
+	tux3_inode_wb_lock(inode);
 	spin_lock(&inode->i_lock);
 	spin_lock(&tuxnode->lock);
 	tux3_iattr_clear_dirty(tuxnode);
 	tux3_clear_dirty_inode_nolock(inode, tux3_inode_delta(inode), 1);
 	spin_unlock(&tuxnode->lock);
 	spin_unlock(&inode->i_lock);
+	tux3_inode_wb_unlock(inode);
 }
 
 void __tux3_mark_inode_dirty(struct inode *inode, int flags)

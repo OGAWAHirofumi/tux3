@@ -1034,6 +1034,18 @@ static void tux_setup_inode(struct inode *inode)
 			break;
 		}
 		mapping_set_gfp_mask(inode->i_mapping, gfp_mask);
+
+		/*
+		 * FIXME: volmap inode is not always dirty. Because
+		 * tux3_mark_buffer_rollup() doesn't mark tuxnode->flags
+		 * as dirty. But, it marks inode->i_state as dirty,
+		 * so this is called to prevent to add inode into
+		 * dirty list by replay for rollup.
+		 *
+		 * See, FIXME in tux3_mark_buffer_rollup().
+		 */
+		if (inum == TUX_BITMAP_INO || inum == TUX_VOLMAP_INO)
+			tux3_set_inode_always_dirty(inode);
 		break;
 	}
 	default:

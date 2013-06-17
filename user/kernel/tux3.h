@@ -904,6 +904,7 @@ int bytebits(u8 c);
 
 /* writeback.c */
 void tux3_set_inode_no_flush(struct inode *inode);
+void tux3_set_inode_always_dirty(struct inode *inode);
 void tux3_mark_btree_dirty(struct btree *btree);
 void __tux3_mark_inode_dirty(struct inode *inode, int flags);
 static inline void tux3_mark_inode_dirty(struct inode *inode)
