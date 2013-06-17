@@ -241,6 +241,13 @@ static int rollup_log(struct sb *sb)
 	 */
 	list_splice_init(&sb->rollup_buffers,
 			 tux3_dirty_buffers(sb->volmap, TUX3_INIT_DELTA));
+	/*
+	 * tux3_mark_buffer_rollup() doesn't dirty inode, so we make
+	 * sure volmap is dirty for rollup buffers, now.
+	 *
+	 * See comment in tux3_mark_buffer_rollup().
+	 */
+	__tux3_mark_inode_dirty(sb->volmap, I_DIRTY_PAGES);
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", rollup);

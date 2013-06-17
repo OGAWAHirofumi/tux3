@@ -467,6 +467,14 @@ int tux3_flush_inode_internal(struct inode *inode, unsigned delta)
 	assert(tux3_is_inode_no_flush(inode));
 	assert(atomic_read(&inode->i_count) >= 1);
 
+	/*
+	 * Check dirty state roughly (possibly false positive. True
+	 * dirty state is in tuxnode->flags and per-delta dirty
+	 * buffers list) to avoid lock overhead.
+	 */
+	if (!(inode->i_state & I_DIRTY))
+		return 0;
+
 	err = tux3_flush_inode(inode, delta);
 	/* FIXME: error handling */
 	__tux3_clear_dirty_inode(inode, delta);
