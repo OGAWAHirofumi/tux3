@@ -278,8 +278,24 @@ static int rollup_log(struct sb *sb)
 /* Apply frontend modifications to backend buffers, and flush data buffers. */
 static int stage_delta(struct sb *sb, unsigned delta)
 {
-	/* flush inodes */
-	return tux3_flush_inodes(sb, delta);
+	int err;
+
+	/* Flush inodes */
+	err = tux3_flush_inodes(sb, delta);
+	if (err)
+		return err;
+
+	/* Flush atable after inodes. Because inode deletion may dirty atable */
+	err = tux3_flush_inode_internal(sb->atable, delta);
+	if (err)
+		return err;
+#if 0
+	/* FIXME: we have to flush vtable somewhere */
+	err = tux3_flush_inode_internal(sb->vtable, delta);
+	if (err)
+		return err;
+#endif
+	return err;
 }
 
 static int write_btree(struct sb *sb, unsigned delta)
