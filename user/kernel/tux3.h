@@ -250,7 +250,7 @@ struct sb {
 	unsigned marshal_delta;			/* marshaling delta */
 	unsigned committed_delta;		/* committed delta */
 	wait_queue_head_t delta_event_wq;	/* wait queue for delta event */
-#if TUX3_FLUSHER != TUX3_FLUSHER_SYNC
+#if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_OWN
 	struct task_struct *flush_task;		/* work to flush delta */
 #endif
 #if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_HACK

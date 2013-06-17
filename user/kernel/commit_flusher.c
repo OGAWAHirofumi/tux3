@@ -1,7 +1,15 @@
+#if TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_HACK
 #include "tux3.h"
 
-#if TUX3_FLUSHER != TUX3_FLUSHER_SYNC
+static void __tux3_init_flusher(struct sb *sb)
+{
+#ifdef __KERNEL__
+	/* Disable writeback task to control inode reclaim by dirty flags */
+	vfs_sb(sb)->s_bdi = &noop_backing_dev_info;
+#endif
+}
 
+#if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_OWN
 static int flush_delta_work(void *data)
 {
 	struct sb *sb = data;
@@ -37,6 +45,8 @@ int tux3_init_flusher(struct sb *sb)
 	struct task_struct *task;
 	char b[BDEVNAME_SIZE];
 
+	__tux3_init_flusher(sb);
+
 	bdevname(vfs_sb(sb)->s_bdev, b);
 
 	/* FIXME: we should use normal bdi-writeback by changing core */
@@ -57,46 +67,21 @@ void tux3_exit_flusher(struct sb *sb)
 	}
 }
 
-#if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_OWN
-int tux3_setup_flusher(struct sb *sb)
-{
-	/* Disable writeback task to control inode reclaim by dirty flags */
-	vfs_sb(sb)->s_bdi = &noop_backing_dev_info;
-	return 0;
-}
-
-void tux3_cleanup_flusher(struct sb *sb)
-{
-}
-#endif /* TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_OWN */
-
 static void schedule_flush_delta(struct sb *sb)
 {
 	/* Start the flusher for pending delta */
 	wake_up_process(sb->flush_task);
 }
 
-#else /* TUX3_FLUSHER == TUX3_FLUSHER_SYNC */
+#else /* TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_OWN */
 
 int tux3_init_flusher(struct sb *sb)
 {
+	__tux3_init_flusher(sb);
 	return 0;
 }
 
 void tux3_exit_flusher(struct sb *sb)
-{
-}
-
-int tux3_setup_flusher(struct sb *sb)
-{
-#ifdef __KERNEL__
-	/* Disable writeback task to control inode reclaim by dirty flags */
-	vfs_sb(sb)->s_bdi = &noop_backing_dev_info;
-#endif
-	return 0;
-}
-
-void tux3_cleanup_flusher(struct sb *sb)
 {
 }
 
@@ -118,7 +103,7 @@ static int flush_pending_delta(struct sb *sb)
 out:
 	return err;
 }
-#endif /* TUX3_FLUSHER == TUX3_FLUSHER_SYNC */
+#endif /* TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_OWN */
 
 /* Try delta transition */
 static void try_delta_transition(struct sb *sb)
@@ -212,3 +197,4 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 
 	return err;
 }
+#endif /* TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_HACK */

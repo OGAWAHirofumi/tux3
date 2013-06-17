@@ -95,8 +95,6 @@ static void __tux3_put_super(struct sb *sbi)
 {
 	cleanup_dirty_for_umount(sbi);
 
-	tux3_exit_flusher(sbi);
-
 	/* All forked buffers should be freed here */
 	free_forked_buffers(sbi, NULL, 1);
 
@@ -117,7 +115,7 @@ static void __tux3_put_super(struct sb *sbi)
 	sbi->volmap = NULL;
 
 	/* Cleanup flusher after inode was evicted */
-	tux3_cleanup_flusher(sbi);
+	tux3_exit_flusher(sbi);
 
 	/* FIXME: add more sanity check */
 	assert(list_empty(&sbi->alloc_inodes));
@@ -164,7 +162,7 @@ struct replay *tux3_init_fs(struct sb *sbi)
 	int err;
 
 	/* Initialize flusher before setup inode */
-	err = tux3_setup_flusher(sbi);
+	err = tux3_init_flusher(sbi);
 	if (err) {
 		tux3_err(sbi, "failed to initialize flusher");
 		goto error;
@@ -208,10 +206,6 @@ struct replay *tux3_init_fs(struct sb *sbi)
 	if (IS_ERR(inode))
 		goto error_inode;
 	sbi->rootdir = inode;
-
-	err = tux3_init_flusher(sbi);
-	if (err)
-		goto error;
 
 	err = replay_stage2(rp);
 	if (err) {
@@ -347,12 +341,14 @@ static void tux3_destroy_inode(struct inode *inode)
 	call_rcu(&inode->i_rcu, tux3_i_callback);
 }
 
+#if TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_HACK
 static int tux3_sync_fs(struct super_block *sb, int wait)
 {
 	/* FIXME: We should support "wait" parameter. */
 	trace_on("wait (%u) parameter is unsupported for now", wait);
 	return force_delta(tux_sb(sb));
 }
+#endif
 
 static void tux3_put_super(struct super_block *sb)
 {
@@ -393,7 +389,10 @@ static const struct super_operations tux3_super_ops = {
 	.evict_inode	= tux3_evict_inode,
 	/* FIXME: we have to handle write_inode of sync (e.g. cache pressure) */
 //	.write_inode	= tux3_write_inode,
+#if TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_HACK
+	/* If TUX3_FLUSHER_ASYNC_HACK, normal kernel flush request does all */
 	.sync_fs	= tux3_sync_fs,
+#endif
 	.put_super	= tux3_put_super,
 	.statfs		= tux3_statfs,
 };

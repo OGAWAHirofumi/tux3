@@ -18,7 +18,5 @@ static inline void tux3_start_periodical_flusher(struct sb *sb) { }
 
 int tux3_init_flusher(struct sb *sb);
 void tux3_exit_flusher(struct sb *sb);
-int tux3_setup_flusher(struct sb *sb);
-void tux3_cleanup_flusher(struct sb *sb);
 
 #endif /* !TUX3_COMMIT_FLUSHER_H */
