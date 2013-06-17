@@ -14,6 +14,7 @@
 #endif
 
 static void __delta_transition(struct sb *sb, struct delta_ref *delta_ref);
+static void schedule_flush_delta(struct sb *sb);
 
 /*
  * Need frontend modification of backend buffers. (modification
@@ -33,7 +34,7 @@ static void init_sb(struct sb *sb)
 	for (i = 0; i < ARRAY_SIZE(sb->delta_refs); i++)
 		atomic_set(&sb->delta_refs[0].refcount, 0);
 
-#ifdef DISABLE_ASYNC_BACKEND
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 	init_rwsem(&sb->delta_lock);
 #endif
 	init_waitqueue_head(&sb->delta_event_wq);
@@ -466,99 +467,6 @@ static int flush_delta(struct sb *sb)
 	return err;
 }
 
-#ifndef DISABLE_ASYNC_BACKEND
-static int flush_delta_work(void *data)
-{
-	struct sb *sb = data;
-	int err;
-
-	set_freezable();
-
-	/*
-	 * Our parent may run at a different priority, just set us to normal
-	 */
-	set_user_nice(current, 0);
-
-	while (!kthread_freezable_should_stop(NULL)) {
-		if (test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state)) {
-			clear_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state);
-
-			err = flush_delta(sb);
-			/* FIXME: error handling */
-		}
-
-		set_current_state(TASK_INTERRUPTIBLE);
-		if (!test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state) &&
-		    !kthread_should_stop())
-			schedule();
-		__set_current_state(TASK_RUNNING);
-	}
-
-	return 0;
-}
-
-static void schedule_flush_delta(struct sb *sb)
-{
-	wake_up_process(sb->flush_task);
-}
-
-int tux3_init_flusher(struct sb *sb)
-{
-	struct task_struct *task;
-	char b[BDEVNAME_SIZE];
-
-	bdevname(vfs_sb(sb)->s_bdev, b);
-
-	/* FIXME: we should use normal bdi-writeback by changing core */
-	task = kthread_run(flush_delta_work, sb, "tux3/%s", b);
-	if (IS_ERR(task))
-		return PTR_ERR(task);
-
-	sb->flush_task = task;
-
-	return 0;
-}
-
-void tux3_exit_flusher(struct sb *sb)
-{
-	if (sb->flush_task) {
-		kthread_stop(sb->flush_task);
-		sb->flush_task = NULL;
-	}
-}
-
-static int flush_pending_delta(struct sb *sb)
-{
-	return 0;
-}
-#else /* !DISABLE_ASYNC_BACKEND */
-static void schedule_flush_delta(struct sb *sb)
-{
-}
-
-int tux3_init_flusher(struct sb *sb)
-{
-	return 0;
-}
-
-void tux3_exit_flusher(struct sb *sb)
-{
-}
-
-static int flush_pending_delta(struct sb *sb)
-{
-	int err = 0;
-
-	if (!test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state))
-		goto out;
-
-	if (test_and_clear_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state))
-		err = flush_delta(sb);
-out:
-	return err;
-}
-#endif /* !DISABLE_ASYNC_BACKEND */
-
 /*
  * Provide transaction boundary for delta, and delta transition request.
  */
@@ -589,12 +497,7 @@ static void delta_put(struct sb *sb, struct delta_ref *delta_ref)
 	if (atomic_dec_and_test(&delta_ref->refcount)) {
 		trace("set TUX3_COMMIT_PENDING_BIT");
 		set_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state);
-		/* Start the flusher for pending delta */
 		schedule_flush_delta(sb);
-#ifdef DISABLE_ASYNC_BACKEND
-		/* Wake up waiters for pending marshal delta */
-		wake_up_all(&sb->delta_event_wq);
-#endif
 	}
 
 	trace("delta %u, refcount %u",
@@ -658,19 +561,10 @@ static void delta_transition(struct sb *sb)
 	/* Wake up waiters for delta transition */
 	wake_up_all(&sb->delta_event_wq);
 
-#ifdef DISABLE_ASYNC_BACKEND
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 	wait_event(sb->delta_event_wq,
 		   test_bit(TUX3_COMMIT_PENDING_BIT, &sb->backend_state));
 #endif
-}
-
-/* Try delta transition */
-static void try_delta_transition(struct sb *sb)
-{
-	trace("marshal %u, backend_state %lx",
-	      sb->marshal_delta, sb->backend_state);
-	if (!test_and_set_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state))
-		delta_transition(sb);
 }
 
 #define delta_after_eq(a, b)			\
@@ -678,87 +572,8 @@ static void try_delta_transition(struct sb *sb)
 	 typecheck(unsigned, b) &&		\
 	 ((int)(a) - (int)(b) >= 0))
 
-/* Do the delta transition until specified delta */
-static int try_delta_transition_until_delta(struct sb *sb, unsigned delta)
-{
-	trace("delta %u, marshal %u, backend_state %lx",
-	      delta, sb->marshal_delta, sb->backend_state);
-
-	/* Already delta transition was started for delta */
-	if (delta_after_eq(sb->marshal_delta, delta))
-		return 1;
-
-	if (!test_and_set_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state)) {
-		/* Recheck after grabed TUX3_COMMIT_RUNNING_BIT */
-		if (delta_after_eq(sb->marshal_delta, delta)) {
-			clear_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state);
-			return 1;
-		}
-
-		delta_transition(sb);
-	}
-
-	return delta_after_eq(sb->marshal_delta, delta);
-}
-
-/* Advance delta transition until specified delta */
-static int wait_for_transition(struct sb *sb, unsigned delta)
-{
-	return wait_event_killable(sb->delta_event_wq,
-				   try_delta_transition_until_delta(sb, delta));
-}
-
-static int try_flush_pending_until_delta(struct sb *sb, unsigned delta)
-{
-	trace("delta %u, committed %u, backend_state %lx",
-	      delta, sb->committed_delta, sb->backend_state);
-
-	if (!delta_after_eq(sb->committed_delta, delta))
-		flush_pending_delta(sb);
-
-	return delta_after_eq(sb->committed_delta, delta);
-}
-
-static int wait_for_commit(struct sb *sb, unsigned delta)
-{
-	return wait_event_killable(sb->delta_event_wq,
-				   try_flush_pending_until_delta(sb, delta));
-}
-
-static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
-{
-	struct delta_ref *delta_ref;
-	unsigned delta;
-	int err = 0;
-
-#ifdef DISABLE_ASYNC_BACKEND
-	down_write(&sb->delta_lock);
-#endif
-	/* Get delta that have to write */
-	delta_ref = delta_get(sb);
-#ifdef ROLLUP_DEBUG
-	delta_ref->rollup_flag = rollup_flag;
-#endif
-	delta = delta_ref->delta;
-	delta_put(sb, delta_ref);
-
-	trace("delta %u", delta);
-
-	/* Make sure the delta transition was done for current delta */
-	err = wait_for_transition(sb, delta);
-	if (err)
-		return err;
-	assert(delta_after_eq(sb->marshal_delta, delta));
-
-	/* Wait until committing the current delta */
-	err = wait_for_commit(sb, delta);
-	assert(err || delta_after_eq(sb->committed_delta, delta));
-#ifdef DISABLE_ASYNC_BACKEND
-	up_write(&sb->delta_lock);
-#endif
-
-	return err;
-}
+#include "commit_flusher.c"
+#include "commit_flusher_hack.c"
 
 int force_rollup(struct sb *sb)
 {
@@ -860,7 +675,7 @@ static int need_delta(struct sb *sb)
  */
 void change_begin(struct sb *sb)
 {
-#ifdef DISABLE_ASYNC_BACKEND
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 	down_read(&sb->delta_lock);
 #endif
 	change_begin_atomic(sb);
@@ -871,18 +686,16 @@ int change_end(struct sb *sb)
 	int err = 0;
 
 	change_end_atomic(sb);
-#ifdef DISABLE_ASYNC_BACKEND
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 	up_read(&sb->delta_lock);
-#endif
 
-#ifdef DISABLE_ASYNC_BACKEND
 	down_write(&sb->delta_lock);
 #endif
 	if (need_delta(sb))
 		try_delta_transition(sb);
 
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 	err = flush_pending_delta(sb);
-#ifdef DISABLE_ASYNC_BACKEND
 	up_write(&sb->delta_lock);
 #endif
 

@@ -205,6 +205,13 @@ struct cursor {
 
 struct stash { struct flink_head head; u64 *pos, *top; };
 
+/* Flush synchronously */
+#define TUX3_FLUSHER_SYNC		1
+/* Flush asynchronously by own timing */
+#define TUX3_FLUSHER_ASYNC_OWN		2
+/* Flush asynchronously by kernel normal timing (by hackish way) */
+#define TUX3_FLUSHER_ASYNC_HACK		3
+
 /* Refcount for delta */
 struct delta_ref {
 	atomic_t refcount;
@@ -226,7 +233,7 @@ struct sb {
 		char thisbig[SB_LEN];
 	};
 
-#ifdef DISABLE_ASYNC_BACKEND
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 	struct rw_semaphore delta_lock;		/* delta transition exclusive */
 #endif
 	struct delta_ref __rcu *current_delta;	/* current delta */
@@ -243,9 +250,11 @@ struct sb {
 	unsigned marshal_delta;			/* marshaling delta */
 	unsigned committed_delta;		/* committed delta */
 	wait_queue_head_t delta_event_wq;	/* wait queue for delta event */
-#ifndef DISABLE_ASYNC_BACKEND
-	/* work to flush delta */
-	struct task_struct *flush_task;
+#if TUX3_FLUSHER != TUX3_FLUSHER_SYNC
+	struct task_struct *flush_task;		/* work to flush delta */
+#endif
+#if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_HACK
+	struct backing_dev_info bdi;
 #endif
 
 	struct btree itable;	/* Inode table btree */
@@ -735,8 +744,6 @@ int apply_defered_bfree(struct sb *sb, u64 val);
 void tux3_start_backend(struct sb *sb);
 void tux3_end_backend(void);
 int tux3_under_backend(struct sb *sb);
-int tux3_init_flusher(struct sb *sb);
-void tux3_exit_flusher(struct sb *sb);
 int force_rollup(struct sb *sb);
 int force_delta(struct sb *sb);
 unsigned tux3_get_current_delta(void);
@@ -749,6 +756,9 @@ void change_begin(struct sb *sb);
 int change_end(struct sb *sb);
 void change_begin_if_needed(struct sb *sb);
 void change_end_if_needed(struct sb *sb);
+
+/* commit_flusher.c */
+#include "commit_flusher.h"
 
 /* dir.c */
 void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,

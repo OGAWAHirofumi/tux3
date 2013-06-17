@@ -116,6 +116,9 @@ static void __tux3_put_super(struct sb *sbi)
 	iput(sbi->volmap);
 	sbi->volmap = NULL;
 
+	/* Cleanup flusher after inode was evicted */
+	tux3_cleanup_flusher(sbi);
+
 	/* FIXME: add more sanity check */
 	assert(list_empty(&sbi->alloc_inodes));
 	assert(link_empty(&sbi->forked_buffers));
@@ -159,6 +162,13 @@ struct replay *tux3_init_fs(struct sb *sbi)
 	struct replay *rp = NULL;
 	struct inode *inode;
 	int err;
+
+	/* Initialize flusher before setup inode */
+	err = tux3_setup_flusher(sbi);
+	if (err) {
+		tux3_err(sbi, "failed to initialize flusher");
+		goto error;
+	}
 
 	err = -ENOMEM;
 
@@ -407,8 +417,6 @@ static int tux3_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_magic = TUX3_SUPER_MAGIC;
 	sb->s_op = &tux3_super_ops;
 	sb->s_time_gran = 1;
-	/* Disable writeback task to control inode reclaim by dirty flags */
-	sb->s_bdi = &noop_backing_dev_info;
 
 	err = -EIO;
 	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);

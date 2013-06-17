@@ -35,7 +35,7 @@
  * sb->forked_buffers (for sb->forked_buffers)
  *
  * This lock may be first lock except vfs locks (lock_super, i_mutex).
- * sb->delta_lock (change_begin, change_end) [only for DISABLE_ASYNC_BACKEND]
+ * sb->delta_lock (change_begin, change_end) [only for TUX3_FLUSHER_SYNC]
  *
  * memory allocation: (blockread, blockget, kmalloc, etc.)
  *     FIXME: fill here, what functions/locks are used via memory reclaim path

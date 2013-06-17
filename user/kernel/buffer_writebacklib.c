@@ -104,6 +104,8 @@ static void __tux3_test_set_page_writeback(struct page *page, int old_writeback)
 				     PAGECACHE_TAG_TOWRITE);
 		spin_unlock_irqrestore(&mapping->tree_lock, flags);
 	}
-	if (!old_writeback)
+	if (!old_writeback) {
 		account_page_writeback(page);
+		tux3_accout_set_writeback(page);
+	}
 }

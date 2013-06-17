@@ -31,8 +31,8 @@ endif
 CFLAGS	+= -DLOCK_DEBUG=1
 # use ROLLUP_DEBUG
 CFLAGS	+= -DROLLUP_DEBUG=1
-# userland can't use async, so DISABLE_ASYNC_BACKEND
-CFLAGS	+= -DDISABLE_ASYNC_BACKEND=1
+# userland can't use async, so use TUX3_FLUSHER_SYNC
+CFLAGS	+= -DTUX3_FLUSHER=TUX3_FLUSHER_SYNC
 # user flags
 CFLAGS	+= $(UCFLAGS)
 

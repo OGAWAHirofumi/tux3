@@ -144,7 +144,7 @@ void free_forked_buffers(struct sb *sb, struct inode *inode, int force)
 				continue;
 		}
 
-#ifdef DISABLE_ASYNC_BACKEND
+#if TUX3_FLUSHER == TUX3_FLUSHER_SYNC
 		/* The page should already be submitted if no async frontend */
 		assert(!PageDirty(page));
 #endif
