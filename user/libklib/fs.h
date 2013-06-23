@@ -81,7 +81,26 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry);
  * fs stuff
  */
 
-enum rw { READ, WRITE };
+#define REQ_WRITE	1
+#define REQ_RAHEAD	0
+#define REQ_SYNC	0
+#define REQ_NOIDLE	0
+#define REQ_FLUSH	0
+#define REQ_FUA		0
+
+#define RW_MASK		REQ_WRITE
+#define RWA_MASK	REQ_RAHEAD
+
+#define READ		0
+#define WRITE		RW_MASK
+#define READA		RWA_MASK
+
+#define READ_SYNC	(READ | REQ_SYNC)
+#define WRITE_SYNC	(WRITE | REQ_SYNC | REQ_NOIDLE)
+#define WRITE_ODIRECT	(WRITE | REQ_SYNC)
+#define WRITE_FLUSH	(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH)
+#define WRITE_FUA	(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FUA)
+#define WRITE_FLUSH_FUA	(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH | REQ_FUA)
 
 /*
  * File types

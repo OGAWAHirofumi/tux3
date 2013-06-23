@@ -119,11 +119,11 @@ static void filemap_clean_endio(struct buffer_head *buffer, int err)
 	blockput(buffer);
 }
 
-static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
+static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec)
 {
 	struct inode *inode = bufvec_inode(bufvec);
 	block_t block, index = bufvec_contig_index(bufvec);
-	int err, rw = (mode == MAP_READ) ? READ : WRITE;
+	int err;
 
 	/* FIXME: now assuming buffer is only 1 for MAP_READ */
 	assert(mode != MAP_READ || bufvec_contig_count(bufvec) == 1);
@@ -133,7 +133,7 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 
 	struct bufvec *bufvec_io, bufvec_ahead;
 	unsigned count;
-	if (rw == READ) {
+	if (!(rw & WRITE)) {
 		/* In the case of read, use new bufvec for readahead */
 		err = guess_readahead(&bufvec_ahead, inode, index);
 		if (err)
@@ -158,7 +158,7 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 		trace("extent 0x%Lx/%x => %Lx", index, count, block);
 
 		if (seg[i].state != BLOCK_SEG_HOLE) {
-			if (rw == READ)
+			if (!(rw & WRITE))
 				bufvec_io->end_io = filemap_read_endio;
 			else
 				bufvec_io->end_io = clear_buffer_dirty_for_endio;
@@ -167,7 +167,7 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 			if (err)
 				break;
 		} else {
-			assert(rw == READ);
+			assert(!(rw & WRITE));
 			bufvec_io->end_io = filemap_hole_endio;
 			bufvec_complete_without_io(bufvec_io, count);
 		}
@@ -180,7 +180,7 @@ static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
 	 * be handle buffers was not mapped (and is not written out)
 	 * this time.
 	 */
-	if (rw == READ) {
+	if (!(rw & WRITE)) {
 		/* Clean buffers was not mapped in this time */
 		count = bufvec_contig_count(bufvec_io);
 		if (count) {

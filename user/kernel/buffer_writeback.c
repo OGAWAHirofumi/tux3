@@ -140,7 +140,7 @@ static struct bio *bufvec_bio_alloc(struct sb *sb, unsigned int count,
 	return bio;
 }
 
-static void bufvec_submit_bio(struct bufvec *bufvec)
+static void bufvec_submit_bio(int rw, struct bufvec *bufvec)
 {
 	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
 	struct bio *bio = bufvec->bio;
@@ -153,7 +153,7 @@ static void bufvec_submit_bio(struct bufvec *bufvec)
 	      bio->bi_size >> sb->blockbits);
 
 	iowait_inflight_inc(sb->iowait);
-	submit_bio(WRITE, bio);
+	submit_bio(rw, bio);
 }
 
 /*
@@ -362,7 +362,7 @@ still_busy:
  * FIXME: Some buffers on the page can be contiguous, we can submit
  * those as one bio if contiguous.
  */
-static void bufvec_bio_add_multiple(struct bufvec *bufvec)
+static void bufvec_bio_add_multiple(int rw, struct bufvec *bufvec)
 {
 	/* FIXME: inode is still guaranteed to be available? */
 	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
@@ -371,7 +371,7 @@ static void bufvec_bio_add_multiple(struct bufvec *bufvec)
 
 	/* If there is bio, submit it */
 	if (bufvec->bio)
-		bufvec_submit_bio(bufvec);
+		bufvec_submit_bio(rw, bufvec);
 
 	page = bufvec->on_page[0].buffer->b_page;
 
@@ -406,7 +406,7 @@ static void bufvec_bio_add_multiple(struct bufvec *bufvec)
 
 		bufvec_bio_add_buffer(bufvec, buffer);
 
-		bufvec_submit_bio(bufvec);
+		bufvec_submit_bio(rw, bufvec);
 	}
 	bufvec_prepare_and_unlock_page(page);
 
@@ -458,7 +458,7 @@ static void bufvec_end_io(struct bio *bio, int err)
  * FIXME: We can free buffers early, and avoid to use buffers in I/O
  * completion, after prepared the page (like __mpage_writepage).
  */
-static void bufvec_bio_add_page(struct bufvec *bufvec)
+static void bufvec_bio_add_page(int rw, struct bufvec *bufvec)
 {
 	/* FIXME: inode is still guaranteed to be available? */
 	struct sb *sb = tux_sb(bufvec_inode(bufvec)->i_sb);
@@ -479,7 +479,7 @@ static void bufvec_bio_add_page(struct bufvec *bufvec)
 	if (!bufvec->bio || !bio_add_page(bufvec->bio, page, length, offset)) {
 		/* Couldn't add. So submit old bio and allocate new bio */
 		if (bufvec->bio)
-			bufvec_submit_bio(bufvec);
+			bufvec_submit_bio(rw, bufvec);
 
 		bufvec->bio =
 			bufvec_bio_alloc(sb, bufvec_contig_count(bufvec) + 1,
@@ -554,7 +554,7 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 	      bufvec_contig_index(bufvec), bufvec_contig_count(bufvec),
 	      physical, count);
 
-	assert(rw == WRITE);	/* FIXME: now only support WRITE */
+	assert(rw & WRITE);	/* FIXME: now only support WRITE */
 	assert(bufvec_contig_count(bufvec) >= count);
 
 	if (bufvec->on_page_idx) {
@@ -568,7 +568,7 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 		 * If new range is not contiguous with the pending bio,
 		 * submit the pending bio.
 		 */
-		bufvec_submit_bio(bufvec);
+		bufvec_submit_bio(rw, bufvec);
 	}
 
 	/* Add buffers to bio for each page */
@@ -593,15 +593,15 @@ int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count)
 			}
 
 			if (multiple)
-				bufvec_bio_add_multiple(bufvec);
+				bufvec_bio_add_multiple(rw, bufvec);
 			else
-				bufvec_bio_add_page(bufvec);
+				bufvec_bio_add_page(rw, bufvec);
 		}
 	}
 
 	/* If no more buffer, submit the pending bio */
 	if (bufvec->bio && !bufvec_next_buffer_page(bufvec))
-		bufvec_submit_bio(bufvec);
+		bufvec_submit_bio(rw, bufvec);
 
 	return 0;
 }
@@ -808,7 +808,7 @@ int tux3_volmap_io(int rw, struct bufvec *bufvec)
 	unsigned count = bufvec_contig_count(bufvec);
 
 	/* FIXME: For now, this is only for write */
-	assert(rw == WRITE);
+	assert(rw & WRITE);
 
 	return __tux3_volmap_io(rw, bufvec, physical, count);
 }

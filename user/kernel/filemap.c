@@ -623,28 +623,28 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 	return segs;
 }
 
-static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec);
+static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec);
 int tux3_filemap_overwrite_io(int rw, struct bufvec *bufvec)
 {
-	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_WRITE;
-	return filemap_extent_io(mode, bufvec);
+	enum map_mode mode = (rw & WRITE) ? MAP_WRITE : MAP_READ;
+	return filemap_extent_io(mode, rw, bufvec);
 }
 
 int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
 {
-	enum map_mode mode = (rw == READ) ? MAP_READ : MAP_REDIRECT;
-	return filemap_extent_io(mode, bufvec);
+	enum map_mode mode = (rw & WRITE) ? MAP_REDIRECT : MAP_READ;
+	return filemap_extent_io(mode, rw, bufvec);
 }
 
 #ifdef __KERNEL__
 #include <linux/mpage.h>
 
-static int filemap_extent_io(enum map_mode mode, struct bufvec *bufvec)
+static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec)
 {
 	struct inode *inode = bufvec_inode(bufvec);
 	block_t block, index = bufvec_contig_index(bufvec);
 	unsigned count = bufvec_contig_count(bufvec);
-	int err, rw = (mode == MAP_READ) ? READ : WRITE;
+	int err;
 	struct block_segment seg[10];
 
 	/* FIXME: For now, this is only for write */

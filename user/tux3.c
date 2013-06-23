@@ -154,15 +154,18 @@ int main(int argc, char *argv[])
 	const char *blurb = "<command> <volume>";
 
 	enum {
-		MKFS, FSCK, DELTA, ROLLUP, IMAGE, READ, WRITE,
-		GET, SET, STAT, DELETE, TRUNCATE, UNKNOWN,
+		CMD_MKFS, CMD_FSCK, CMD_DELTA, CMD_ROLLUP, CMD_IMAGE,
+		CMD_READ, CMD_WRITE, CMD_GET, CMD_SET, CMD_STAT, CMD_DELETE,
+		CMD_TRUNCATE, CMD_UNKNOWN,
 	};
 
 	static char *commands[] = {
-		[MKFS] = "mkfs", [FSCK] = "fsck", [DELTA] = "delta",
-		[ROLLUP] = "rollup", [IMAGE] = "image", [READ] = "read",
-		[WRITE] = "write", [GET] = "get", [SET] = "set",
-		[STAT] = "stat", [DELETE] = "delete", [TRUNCATE] = "truncate",
+		[CMD_MKFS] = "mkfs", [CMD_FSCK] = "fsck", [CMD_DELTA] = "delta",
+		[CMD_ROLLUP] = "rollup", [CMD_IMAGE] = "image",
+		[CMD_READ] = "read", [CMD_WRITE] = "write",
+		[CMD_GET] = "get", [CMD_SET] = "set",
+		[CMD_STAT] = "stat", [CMD_DELETE] = "delete",
+		[CMD_TRUNCATE] = "truncate",
 	};
 
 	struct options options[] = {
@@ -256,7 +259,7 @@ int main(int argc, char *argv[])
 	}
 
 	switch (cmd) {
-	case MKFS: {
+	case CMD_MKFS: {
 		struct options mkfs_options[] = {
 			{ "blocksize", "b", OPT_HASARG | OPT_NUMBER,
 			  "Set block size", },
@@ -278,7 +281,7 @@ int main(int argc, char *argv[])
 	}
 		break;
 
-	case FSCK:
+	case CMD_FSCK:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
 		err = open_sb(vars.volname, sb);
@@ -289,7 +292,7 @@ int main(int argc, char *argv[])
 			goto error;
 		break;
 
-	case IMAGE:
+	case CMD_IMAGE:
 		command_options(&argc, &args, onlyhelp, 4, progname, command,
 				"<src> <dest>", &vars);
 		filename = args[3];
@@ -301,7 +304,7 @@ int main(int argc, char *argv[])
 			goto error;
 		break;
 
-	case DELTA:
+	case CMD_DELTA:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
 		err = open_fs(vars.volname, sb);
@@ -310,7 +313,7 @@ int main(int argc, char *argv[])
 		force_delta(sb);
 		break;
 
-	case ROLLUP:
+	case CMD_ROLLUP:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
 		err = open_fs(vars.volname, sb);
@@ -319,7 +322,7 @@ int main(int argc, char *argv[])
 		force_rollup(sb);
 		break;
 
-	case WRITE:
+	case CMD_WRITE:
 		command_options(&argc, &args, onlyseek, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
@@ -365,7 +368,7 @@ int main(int argc, char *argv[])
 		//show_tree_range(&sb->itable, 0, -1);
 		break;
 
-	case READ:
+	case CMD_READ:
 		command_options(&argc, &args, onlyseek, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
@@ -394,7 +397,7 @@ int main(int argc, char *argv[])
 		hexdump(buf, got);
 		break;
 
-	case SET:
+	case CMD_SET:
 		command_options(&argc, &args, onlyhelp, 5, progname, command,
 				"<volume> <filename> <attribute>", &vars);
 		filename = args[3];
@@ -423,7 +426,7 @@ int main(int argc, char *argv[])
 			goto error;
 		break;
 
-	case GET:
+	case CMD_GET:
 		command_options(&argc, &args, onlyhelp, 5, progname, command,
 				"<volume> <filename> <attribute>", &vars);
 		filename = args[3];
@@ -457,7 +460,7 @@ int main(int argc, char *argv[])
 		iput(inode);
 		break;
 
-	case STAT:
+	case CMD_STAT:
 		command_options(&argc, &args, onlyhelp, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
@@ -473,7 +476,7 @@ int main(int argc, char *argv[])
 		iput(inode);
 		break;
 
-	case DELETE:
+	case CMD_DELETE:
 		command_options(&argc, &args, onlyhelp, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
@@ -494,7 +497,7 @@ int main(int argc, char *argv[])
 			goto error;
 		break;
 
-	case TRUNCATE:
+	case CMD_TRUNCATE:
 		command_options(&argc, &args, onlysize, 4, progname, command,
 				"<volume> <filename>", &vars);
 		filename = args[3];
