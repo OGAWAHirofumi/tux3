@@ -155,7 +155,7 @@ int save_sb(struct sb *sb)
 	super->atomgen = cpu_to_be32(sb->atomgen);
 	/* logchain and logcount are written to super directly */
 
-	return devio(WRITE, sb_dev(sb), SB_LOC, super, SB_LEN);
+	return devio(WRITE_SYNC, sb_dev(sb), SB_LOC, super, SB_LEN);
 }
 
 /* Delta transition */
@@ -427,9 +427,18 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 
 	write_btree(sb, delta);
 	write_log(sb);
+
 	/* Wait I/O was submitted */
 	tux3_iowait_wait(&iowait);
-	/* Commit last block (for now, this is sync I/O) */
+
+	/*
+	 * Commit last block (for now, this is sync I/O).
+	 *
+	 * FIXME: If this is not data integrity write, we don't have
+	 * to wait the commit block. The commit block just have to
+	 * written before next block block. (But defree must be after
+	 * commit block.)
+	 */
 	commit_delta(sb);
 	tux3_end_backend();
 	trace("<<<<<<<<< commit done %u", delta);
