@@ -184,7 +184,7 @@ static struct inode *ilookup5(struct sb *sb, inum_t inum,
 {
 	struct inode *inode = ilookup5_nowait(sb, inum, test, data);
 	/* On userland, inode shouldn't have I_NEW */
-	assert(!(inode->i_state & I_NEW));
+	assert(!inode || !(inode->i_state & I_NEW));
 	return inode;
 }
 
