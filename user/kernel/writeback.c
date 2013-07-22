@@ -178,8 +178,8 @@ void tux3_dirty_inode(struct inode *inode, int flags)
  */
 void tux3_mark_btree_dirty(struct btree *btree)
 {
-	if (btree != itable_btree(btree->sb) &&
-	    btree != otable_btree(btree->sb)) {
+	if (btree != itree_btree(btree->sb) &&
+	    btree != otree_btree(btree->sb)) {
 		struct tux3_inode *tuxnode = tux_inode(btree_inode(btree));
 
 		spin_lock(&tuxnode->lock);
@@ -473,7 +473,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 		}
 
 		/*
-		 * Remove from hash before deleting the inode from itable.
+		 * Remove from hash before deleting the inode from itree.
 		 * Otherwise, when inum is reused, this inode will be
 		 * unexpectedly grabbed via hash.
 		 */

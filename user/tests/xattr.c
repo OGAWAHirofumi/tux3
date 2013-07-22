@@ -132,7 +132,7 @@ static void test01(struct sb *sb)
 
 	change_end_atomic(sb);
 
-	/* Test xattr inode table encode */
+	/* Test xattr of itree encode */
 	int xsize1 = encode_xsize(inode);
 	test_assert(xsize1);
 	char *top1 = encode_xattrs(inode, attrs, sizeof(attrs));
@@ -142,7 +142,7 @@ static void test01(struct sb *sb)
 	/* Remove all xcache by hand */
 	tuxnode->xcache->size = 0;
 
-	/* Test xattr inode table decode */
+	/* Test xattr of itree decode */
 	char *top2 = decode_attrs(inode, attrs, xsize1);
 	test_assert(top2);
 	test_assert(top2 - attrs == xsize1);

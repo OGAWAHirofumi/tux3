@@ -695,10 +695,10 @@ static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
 			(int)entry->name_len, entry->name);
 
 		if (opt_stats && !atable) {
-			struct btree *itable = itable_btree(sb);
+			struct btree *itree = itree_btree(sb);
 			int err;
 
-			struct cursor *cursor = alloc_cursor(itable, 0);
+			struct cursor *cursor = alloc_cursor(itree, 0);
 			if (!cursor)
 				strerror_exit(1, ENOMEM, "alloc_cursor");
 
@@ -1489,7 +1489,7 @@ static void draw_ileaf(struct btree *btree, struct buffer_head *leafbuf,
 	walk_ileaf(btree, leafbuf, draw_ileaf_cb, gi);
 }
 
-static struct walk_btree_ops draw_itable_ops = {
+static struct walk_btree_ops draw_itree_ops = {
 	.pre	= draw_btree_pre,
 	.bnode	= draw_bnode,
 	.leaf	= draw_ileaf,
@@ -1515,7 +1515,7 @@ static void draw_oleaf(struct btree *btree, struct buffer_head *leafbuf,
 	__draw_ileaf(gi, btree, leafbuf, draw_oleaf_attr);
 }
 
-static struct walk_btree_ops draw_otable_ops = {
+static struct walk_btree_ops draw_otree_ops = {
 	.pre	= draw_btree_pre,
 	.bnode	= draw_bnode,
 	.leaf	= draw_oleaf,
@@ -1739,9 +1739,9 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		be64_to_cpu(txsb->birthdate),
 		be64_to_cpu(txsb->flags),
 		be64_to_cpu(txsb->iroot),
-		itable_btree(sb)->root.depth, itable_btree(sb)->root.block,
+		itree_btree(sb)->root.depth, itree_btree(sb)->root.block,
 		be64_to_cpu(txsb->oroot),
-		otable_btree(sb)->root.depth, otable_btree(sb)->root.block,
+		otree_btree(sb)->root.depth, otree_btree(sb)->root.block,
 		sb->blockbits, sb->blocksize,
 		be64_to_cpu(txsb->volblocks), be64_to_cpu(txsb->usedinodes),
 		be64_to_cpu(txsb->nextblock),
@@ -1750,12 +1750,12 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		be64_to_cpu(txsb->logchain), be64_to_cpu(txsb->logchain),
 		be32_to_cpu(txsb->logcount));
 
-	/* write link: sb -> itable root */
+	/* write link: sb -> itree root */
 	fprintf(gi->fp, "tux3_sb:iroot0:e -> volmap_%llu:n;\n\n",
-		itable_btree(sb)->root.block);
-	/* write link: sb -> otable root */
+		itree_btree(sb)->root.block);
+	/* write link: sb -> otree root */
 	fprintf(gi->fp, "tux3_sb:oroot0:e -> volmap_%llu:n;\n\n",
-		otable_btree(sb)->root.block);
+		otree_btree(sb)->root.block);
 	/* write link: sb -> logchain */
 	fprintf(gi->fp, "tux3_sb:logchain_%llu:e -> logchain_%llu:n;\n\n",
 		be64_to_cpu(txsb->logchain), be64_to_cpu(txsb->logchain));
@@ -1838,8 +1838,8 @@ int main(int argc, char *argv[])
 	if (!file)
 		strerror_exit(1, errno, "coundn't open %s\n", filename);
 
-	struct stats_fs stats_itable = init_stats_fs(itable_btree(sb));
-	struct stats_fs stats_otable = init_stats_fs(otable_btree(sb));
+	struct stats_fs stats_itree = init_stats_fs(itree_btree(sb));
+	struct stats_fs stats_otree = init_stats_fs(otree_btree(sb));
 
 	fprintf(file,
 		"digraph tux3_g {\n"
@@ -1848,23 +1848,23 @@ int main(int argc, char *argv[])
 
 	ginfo = (struct graph_info){
 		.fp = file,
-		.bname = "itable",
+		.bname = "itree",
 		.lname = "ileaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
-		.stats = &stats_itable,
+		.stats = &stats_itree,
 	};
 	draw_sb(&ginfo, sb);
 	draw_logchain(&ginfo, sb);
-	walk_btree(itable_btree(sb), &draw_itable_ops, &ginfo);
+	walk_btree(itree_btree(sb), &draw_itree_ops, &ginfo);
 
 	ginfo = (struct graph_info){
 		.fp = file,
-		.bname = "otable",
+		.bname = "otree",
 		.lname = "oleaf",
 		.link_head = LIST_HEAD_INIT(ginfo.link_head),
-		.stats = &stats_otable,
+		.stats = &stats_otree,
 	};
-	walk_btree(otable_btree(sb), &draw_otable_ops, &ginfo);
+	walk_btree(otree_btree(sb), &draw_otree_ops, &ginfo);
 
 	merge_tmpfiles(&ginfo);
 
@@ -1879,19 +1879,19 @@ int main(int argc, char *argv[])
 	tux3_exit_mem();
 
 	if (opt_stats) {
-		stats_print(sb, stats_itable.dtree_sum, 1, 1, "dtree");
-		stats_print(sb, stats_itable.own, 0, 0, "itable");
-		stats_print(sb, stats_otable.own, 0, 0, "otable");
+		stats_print(sb, stats_itree.dtree_sum, 1, 1, "dtree");
+		stats_print(sb, stats_itree.own, 0, 0, "itree");
+		stats_print(sb, stats_otree.own, 0, 0, "otree");
 
-		stats_print_log(sb, &stats_itable);
+		stats_print_log(sb, &stats_itree);
 
-		stats_btree_merge(&stats_itable.own, stats_itable.dtree_sum);
-		stats_btree_merge(&stats_itable.own, stats_otable.own);
-		stats_print(sb, stats_itable.own, 1, 1, "total");
+		stats_btree_merge(&stats_itree.own, stats_itree.dtree_sum);
+		stats_btree_merge(&stats_itree.own, stats_otree.own);
+		stats_print(sb, stats_itree.own, 1, 1, "total");
 	}
 
-	destroy_stats_fs(&stats_itable);
-	destroy_stats_fs(&stats_otable);
+	destroy_stats_fs(&stats_itree);
+	destroy_stats_fs(&stats_otree);
 
 	return 0;
 

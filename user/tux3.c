@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
 		err = mkfs(vars.volname, sb, vars.blocksize);
 		if (err)
 			goto error;
-		show_tree_range(itable_btree(sb), 0, -1);
+		show_tree_range(itree_btree(sb), 0, -1);
 	}
 		break;
 
@@ -365,7 +365,7 @@ int main(int argc, char *argv[])
 			goto error;
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		//tux_dump_entries(blockget(sb->rootdir->map, 0));
-		//show_tree_range(&sb->itable, 0, -1);
+		//show_tree_range(&sb->itree, 0, -1);
 		break;
 
 	case CMD_READ:
@@ -375,7 +375,7 @@ int main(int argc, char *argv[])
 		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
-		//show_tree_range(&sb->itable, 0, -1);
+		//show_tree_range(&sb->itree, 0, -1);
 		//tux_dump_entries(blockread(sb->rootdir->map, 0));
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {

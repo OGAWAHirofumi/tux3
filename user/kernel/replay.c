@@ -47,7 +47,7 @@ static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 	memset(rp->blocknrs, 0, logcount * sizeof(block_t));
 
 	INIT_LIST_HEAD(&rp->log_orphan_add);
-	INIT_LIST_HEAD(&rp->orphan_in_otable);
+	INIT_LIST_HEAD(&rp->orphan_in_otree);
 
 	return rp;
 }
@@ -55,7 +55,7 @@ static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 static void free_replay(struct replay *rp)
 {
 	assert(list_empty(&rp->log_orphan_add));
-	assert(list_empty(&rp->orphan_in_otable));
+	assert(list_empty(&rp->orphan_in_otree));
 	free(rp);
 }
 
@@ -566,13 +566,13 @@ error:
 int replay_stage3(struct replay *rp, int apply)
 {
 	struct sb *sb = rp->sb;
-	LIST_HEAD(orphan_in_otable);
+	LIST_HEAD(orphan_in_otree);
 
-	list_splice_init(&rp->orphan_in_otable, &orphan_in_otable);
+	list_splice_init(&rp->orphan_in_otree, &orphan_in_otree);
 	replay_done(rp);
 	/* Start logging after replay_done() */
 
-	replay_iput_orphan_inodes(sb, &orphan_in_otable, apply);
+	replay_iput_orphan_inodes(sb, &orphan_in_otree, apply);
 
 	return 0;
 }

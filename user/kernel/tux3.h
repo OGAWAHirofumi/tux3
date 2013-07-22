@@ -143,8 +143,8 @@ struct disksuper {
 	__be64 volblocks;	/* Volume size */
 
 	/* The rest should be moved to a "metablock" that is updated frequently */
-	__be64 iroot;		/* Root of the inode table btree */
-	__be64 oroot;		/* Root of the orphan table btree */
+	__be64 iroot;		/* Root of the itree */
+	__be64 oroot;		/* Root of the otree */
 	__be64 usedinodes;	/* Number of using inode numbers.  (Instead of
 				 * free inode numbers).  With this, we can
 				 * change the maximum inodes without changing
@@ -257,8 +257,8 @@ struct sb {
 	struct backing_dev_info bdi;
 #endif
 
-	struct btree itable;	/* Inode table btree */
-	struct btree otable;	/* Orphan table btree */
+	struct btree itree;	/* Inode btree */
+	struct btree otree;	/* Orphan btree */
 	struct inode *volmap;	/* Volume metadata cache (like blockdev). */
 	struct inode *bitmap;	/* allocation bitmap special file */
 	struct inode *rootdir;	/* root directory special file */
@@ -270,7 +270,7 @@ struct sb {
 				 * including the deferred allocated inodes */
 	block_t volblocks, freeblocks, nextblock;
 	inum_t nextinum;	/* FIXME: temporary hack to avoid to find
-				 * same area in itable for free inum. */
+				 * same area in itree for free inum. */
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
 	unsigned version;	/* Currently mounted volume version view */
 
@@ -414,7 +414,7 @@ struct tux3_inode {
 	/* Per-delta dirty data for inode */
 	unsigned flags;			/* flags for inode state */
 	unsigned present;		/* Attributes decoded from or
-					 * to be encoded to inode table */
+					 * to be encoded to itree */
 	struct inode_delta_dirty i_ddc[TUX3_MAX_DELTA];
 #ifdef __KERNEL__
 	int (*io)(int rw, struct bufvec *bufvec);
@@ -525,14 +525,14 @@ struct tux_iattr {
 	umode_t	mode;
 };
 
-static inline struct btree *itable_btree(struct sb *sb)
+static inline struct btree *itree_btree(struct sb *sb)
 {
-	return &sb->itable;
+	return &sb->itree;
 }
 
-static inline struct btree *otable_btree(struct sb *sb)
+static inline struct btree *otree_btree(struct sb *sb)
 {
-	return &sb->otable;
+	return &sb->otree;
 }
 
 #define TUX_LINK_MAX (1 << 15) /* arbitrary limit, increase it */
@@ -588,7 +588,7 @@ struct replay {
 
 	/* For orphan.c */
 	struct list_head log_orphan_add;   /* To remember LOG_ORPHAN_ADD */
-	struct list_head orphan_in_otable; /* Orphan inodes in sb->otable */
+	struct list_head orphan_in_otree; /* Orphan inodes in sb->otree */
 
 	/* For replay.c */
 	void *rollup_pos;	/* position of rollup log in a log block */
@@ -808,8 +808,8 @@ struct ileaf_enumrate_cb {
 int ileaf_enumerate(struct btree *btree, tuxkey_t key_bottom,
 		    tuxkey_t key_limit, void *leaf,
 		    tuxkey_t key, u64 len, void *data);
-extern struct btree_ops itable_ops;
-extern struct btree_ops otable_ops;
+extern struct btree_ops itree_ops;
+extern struct btree_ops otree_ops;
 
 /* inode.c */
 void tux3_inode_copy_attrs(struct inode *inode, unsigned delta);
@@ -879,7 +879,7 @@ int tux3_make_orphan_del(struct inode *inode);
 int replay_orphan_add(struct replay *rp, unsigned version, inum_t inum);
 int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum);
 void replay_iput_orphan_inodes(struct sb *sb,
-			       struct list_head *orphan_in_otable,
+			       struct list_head *orphan_in_otree,
 			       int destroy);
 int replay_load_orphan_inodes(struct replay *rp);
 

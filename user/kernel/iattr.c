@@ -1,5 +1,5 @@
 /*
- * Inode table attributes
+ * Inode attributes
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
  * Licensed under the GPL version 2

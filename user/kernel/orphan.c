@@ -8,10 +8,10 @@
  *
  * However, if the orphan is long life, it can make log blocks too long.
  * So, to prevent it, if orphan inodes are still living until rollup, we
- * store those inum into sb->otable. With it, we can obsolete log blocks.
+ * store those inum into sb->otree. With it, we can obsolete log blocks.
  *
  * On replay, we can know the inum of orphan inodes yet not destroyed by
- * checking sb->otable, LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL. (Note, orphan
+ * checking sb->otree, LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL. (Note, orphan
  * inum of LOG_ORPHAN_ADD can be destroyed by same inum of LOG_ORPHAN_DEL).
  */
 
@@ -64,7 +64,7 @@ void clean_orphan_list(struct list_head *head)
  *
  * And this is supporting ORPHAN_ATTR only, and assuming there is only
  * ORPHAN_ATTR. We are better to support multiple attributes in
- * otable.
+ * otree.
  */
 enum { ORPHAN_ATTR, };
 static unsigned orphan_asize[] = {
@@ -88,25 +88,25 @@ struct ileaf_attr_ops oattr_ops = {
 	.encode		= oattr_encode,
 };
 
-/* Add inum into sb->otable */
+/* Add inum into sb->otree */
 int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
 {
-	struct btree *otable = otable_btree(sb);
+	struct btree *otree = otree_btree(sb);
 	struct cursor *cursor;
 	int err = 0;
 
 	if (list_empty(orphan_add))
 		return 0;
 
-	down_write(&otable->lock);
-	if (!has_root(otable))
-		err = alloc_empty_btree(otable);
-	up_write(&otable->lock);
+	down_write(&otree->lock);
+	if (!has_root(otree))
+		err = alloc_empty_btree(otree);
+	up_write(&otree->lock);
 	if (err)
 		return err;
 
 	/* FIXME: +1 may not be enough to add multiple */
-	cursor = alloc_cursor(otable, 1); /* +1 for new depth */
+	cursor = alloc_cursor(otree, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -142,10 +142,10 @@ out:
 	return err;
 }
 
-/* Delete inum from sb->otable */
+/* Delete inum from sb->otree */
 int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 {
-	struct btree *otable = otable_btree(sb);
+	struct btree *otree = otree_btree(sb);
 	int err;
 
 	/* FIXME: we don't want to remove inum one by one */
@@ -155,7 +155,7 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 		trace("inum %Lu", orphan->inum);
 
 		/* Remove inum from orphan btree */
-		err = btree_chop(otable, orphan->inum, 1);
+		err = btree_chop(otree, orphan->inum, 1);
 		if (err)
 			return err;
 
@@ -168,7 +168,7 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 
 /*
  * Make inode as orphan, and logging it. Then if orphan is living until
- * rollup, orphan will be written to sb->otable.
+ * rollup, orphan will be written to sb->otree.
  */
 int tux3_make_orphan_add(struct inode *inode)
 {
@@ -196,7 +196,7 @@ static int add_defer_orphan_del(struct sb *sb, inum_t inum)
 	if (IS_ERR(orphan))
 		return PTR_ERR(orphan);
 
-	/* Add orphan deletion (from sb->otable) request. */
+	/* Add orphan deletion (from sb->otree) request. */
 	list_add(&orphan->list, &sb->orphan_del);
 
 	return 0;
@@ -211,10 +211,10 @@ int tux3_make_orphan_del(struct inode *inode)
 	trace("inum %Lu", tuxnode->inum);
 
 	if (!list_empty(&tuxnode->orphan_list)) {
-		/* This orphan is not applied to sb->otable yet. */
+		/* This orphan is not applied to sb->otree yet. */
 		list_del_init(&tuxnode->orphan_list);
 	} else {
-		/* This orphan was already applied to sb->otable. */
+		/* This orphan was already applied to sb->otree. */
 		int err = add_defer_orphan_del(sb, tuxnode->inum);
 		if (err) {
 			/* FIXME: what to do? */
@@ -280,18 +280,18 @@ int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum)
 		return 0;
 	}
 
-	/* Orphan inum in sb->otable became dead. Add deletion request. */
+	/* Orphan inum in sb->otree became dead. Add deletion request. */
 	return add_defer_orphan_del(sb, inum);
 }
 
 /* Destroy or clean orphan inodes of destroy candidate */
 void replay_iput_orphan_inodes(struct sb *sb,
-			       struct list_head *orphan_in_otable,
+			       struct list_head *orphan_in_otree,
 			       int destroy)
 {
 	struct tux3_inode *tuxnode, *safe;
 
-	/* orphan inodes not in sb->otable */
+	/* orphan inodes not in sb->otree */
 	list_for_each_entry_safe(tuxnode, safe, &sb->orphan_add, orphan_list) {
 		struct inode *inode = &tuxnode->vfs_inode;
 
@@ -303,11 +303,11 @@ void replay_iput_orphan_inodes(struct sb *sb,
 		iput(inode);
 	}
 
-	/* orphan inodes in sb->otable */
-	list_for_each_entry_safe(tuxnode, safe, orphan_in_otable, orphan_list) {
+	/* orphan inodes in sb->otree */
+	list_for_each_entry_safe(tuxnode, safe, orphan_in_otree, orphan_list) {
 		struct inode *inode = &tuxnode->vfs_inode;
 
-		/* list_empty(&inode->orphan_list) tells it is in otable */
+		/* list_empty(&inode->orphan_list) tells it is in otree */
 		list_del_init(&tuxnode->orphan_list);
 
 		if (!destroy) {
@@ -350,24 +350,24 @@ static int load_enum_inode(struct btree *btree, inum_t inum, void *attrs,
 	if (replay_find_orphan(&sb->orphan_del, inum))
 		return 0;
 
-	return load_orphan_inode(sb, inum, &rp->orphan_in_otable);
+	return load_orphan_inode(sb, inum, &rp->orphan_in_otree);
 }
 
-/* Load orphan inode from sb->otable */
-static int load_otable_orphan_inode(struct replay *rp)
+/* Load orphan inode from sb->otree */
+static int load_otree_orphan_inode(struct replay *rp)
 {
 	struct sb *sb = rp->sb;
-	struct btree *otable = otable_btree(sb);
+	struct btree *otree = otree_btree(sb);
 	struct ileaf_enumrate_cb cb = {
 		.callback	= load_enum_inode,
 		.data		= rp,
 	};
 	int err;
 
-	if (!has_root(&sb->otable))
+	if (!has_root(&sb->otree))
 		return 0;
 
-	struct cursor *cursor = alloc_cursor(otable, 0);
+	struct cursor *cursor = alloc_cursor(otree, 0);
 	if (!cursor)
 		return -ENOMEM;
 
@@ -406,13 +406,13 @@ int replay_load_orphan_inodes(struct replay *rp)
 		free_orphan(orphan);
 	}
 
-	err = load_otable_orphan_inode(rp);
+	err = load_otree_orphan_inode(rp);
 	if (err)
 		goto error;
 
 	return 0;
 
 error:
-	replay_iput_orphan_inodes(sb, &rp->orphan_in_otable, 0);
+	replay_iput_orphan_inodes(sb, &rp->orphan_in_otree, 0);
 	return err;
 }

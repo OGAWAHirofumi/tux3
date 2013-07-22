@@ -144,7 +144,7 @@ static void image_ileaf(struct btree *btree, struct buffer_head *leafbuf,
 	walk_ileaf(btree, leafbuf, image_ileaf_cb, data);
 }
 
-static struct walk_btree_ops image_itable_ops = {
+static struct walk_btree_ops image_itree_ops = {
 	.bnode	= image_bnode,
 	.leaf	= image_ileaf,
 };
@@ -156,7 +156,7 @@ static void image_oleaf(struct btree *btree, struct buffer_head *leafbuf,
 	image_write_buffer(context, leafbuf, bufindex(leafbuf));
 }
 
-static struct walk_btree_ops image_otable_ops = {
+static struct walk_btree_ops image_otree_ops = {
 	.bnode	= image_bnode,
 	.leaf	= image_oleaf,
 };
@@ -254,8 +254,8 @@ static int image_main(struct sb *sb, const char *name)
 
 	image_copy_superblock(sb, &context);
 	walk_logchain(sb, &image_logchain_ops, &context);
-	walk_btree(itable_btree(sb), &image_itable_ops, &context);
-	walk_btree(otable_btree(sb), &image_otable_ops, &context);
+	walk_btree(itree_btree(sb), &image_itree_ops, &context);
+	walk_btree(otree_btree(sb), &image_otree_ops, &context);
 
 	err = replay_stage3(rp, 0);
 	if (err)

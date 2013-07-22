@@ -58,8 +58,8 @@ static void setup_roots(struct sb *sb, struct disksuper *super)
 {
 	u64 iroot_val = be64_to_cpu(super->iroot);
 	u64 oroot_val = be64_to_cpu(sb->super.oroot);
-	init_btree(itable_btree(sb), sb, unpack_root(iroot_val), &itable_ops);
-	init_btree(otable_btree(sb), sb, unpack_root(oroot_val), &otable_ops);
+	init_btree(itree_btree(sb), sb, unpack_root(iroot_val), &itree_ops);
+	init_btree(otree_btree(sb), sb, unpack_root(oroot_val), &otree_ops);
 }
 
 static loff_t calc_maxbytes(loff_t blocksize)
@@ -147,8 +147,8 @@ int save_sb(struct sb *sb)
 	super->volblocks = cpu_to_be64(sb->volblocks);
 
 	/* Probably does not belong here (maybe metablock) */
-	super->iroot = cpu_to_be64(pack_root(&itable_btree(sb)->root));
-	super->oroot = cpu_to_be64(pack_root(&otable_btree(sb)->root));
+	super->iroot = cpu_to_be64(pack_root(&itree_btree(sb)->root));
+	super->oroot = cpu_to_be64(pack_root(&otree_btree(sb)->root));
 	super->nextblock = cpu_to_be64(sb->nextblock);
 	super->atomdictsize = cpu_to_be64(sb->atomdictsize);
 	super->freeatom = cpu_to_be32(sb->freeatom);
@@ -207,8 +207,8 @@ static int rollup_log(struct sb *sb)
 
 	/*
 	 * Orphan inodes are still living, or orphan inodes in
-	 * sb->otable are dead. And logs will be obsoleted, so, we
-	 * apply those to sb->otable.
+	 * sb->otree are dead. And logs will be obsoleted, so, we
+	 * apply those to sb->otree.
 	 */
 	/* FIXME: orphan_add/del has no race with frontend for now */
 	list_splice_init(&sb->orphan_add, &orphan_add);
@@ -261,7 +261,7 @@ static int rollup_log(struct sb *sb)
 		int err;
 
 		/*
-		 * This defered deletion of orphan from sb->otable.
+		 * This defered deletion of orphan from sb->otree.
 		 * It should be done before adding new orphan, because
 		 * orphan_add may have same inum in orphan_del.
 		 */
@@ -270,7 +270,7 @@ static int rollup_log(struct sb *sb)
 			return err;
 
 		/*
-		 * This apply orphan inodes to sb->otable after flushed bitmap.
+		 * This apply orphan inodes to sb->otree after flushed bitmap.
 		 */
 		err = tux3_rollup_orphan_add(sb, &orphan_add);
 		if (err)

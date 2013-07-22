@@ -375,7 +375,7 @@ static void check_orphan_inum(struct replay *rp, struct orphan_data *data,
 				break;
 			}
 		}
-		head = &rp->orphan_in_otable;
+		head = &rp->orphan_in_otree;
 		list_for_each_entry(tuxnode, head, orphan_list) {
 			if (data[i].inum == tuxnode->inum) {
 				err = 0;
@@ -404,9 +404,9 @@ static void test04(struct sb *sb)
 		char name[] = "filename";
 
 		/*
-		 * inodes[0] is into sb->otable as orphan.
-		 * inodes[1] is into, then delete from sb->otable
-		 * inodes[2] is into sb->otable, and LOG_ORPHAN_DEL
+		 * inodes[0] is into sb->otree as orphan.
+		 * inodes[1] is into, then delete from sb->otree
+		 * inodes[2] is into sb->otree, and LOG_ORPHAN_DEL
 		 * inodes[3] make LOG_ORPHAN_ADD
 		 * inodes[4] make LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL
 		 */
@@ -422,18 +422,18 @@ static void test04(struct sb *sb)
 			switch (i) {
 			case 0:
 				data[i].err = 0;
-				/* Add into sb->otable */
+				/* Add into sb->otree */
 				test_assert(force_rollup(sb) == 0);
 				list_move(&tuxnode->orphan_list, &orphans);
 				break;
 			case 1:
 			case 2:
 				data[i].err = -ENOENT;
-				/* Add into sb->otable */
+				/* Add into sb->otree */
 				test_assert(force_rollup(sb) == 0);
 				iput(inodes[i]);
 				if (i == 1) {
-					/* Delete from sb->otable */
+					/* Delete from sb->otree */
 					test_assert(force_rollup(sb) == 0);
 				}
 				break;
@@ -513,7 +513,7 @@ static void test04(struct sb *sb)
 		int err = replay_stage3(rp, 1);
 		test_assert(!err);
 
-		/* Remove orphan from sb->otable */
+		/* Remove orphan from sb->otree */
 		test_assert(force_rollup(sb) == 0);
 		clean_sb(sb);
 

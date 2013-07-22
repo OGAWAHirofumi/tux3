@@ -1,5 +1,5 @@
 /*
- * Inode table btree leaf operations
+ * Inode btree leaf operations
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
  * Licensed under the GPL version 2
@@ -114,7 +114,7 @@ static void ileaf_dump(struct btree *btree, void *vleaf)
 	__be16 *dict = ileaf_dict(btree, leaf);
 	unsigned offset = 0;
 
-	trace_on("inode table block 0x%Lx/%i (%x bytes free)",
+	trace_on("ileaf 0x%Lx/%i (%x bytes free)",
 		 ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
 
 	for (int i = 0; i < icount(leaf); i++, inum++) {
@@ -173,7 +173,7 @@ int ileaf_check(struct btree *btree, struct ileaf *leaf)
 	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
 	char *why;
 
-	why = "not an inode table leaf";
+	why = "not an ileaf";
 	if (leaf->magic != attr_ops->magic)
 		goto eek;
 	why = "dict out of order";
@@ -469,7 +469,7 @@ static int ileaf_read(struct btree *btree, tuxkey_t key_bottom,
 	return attr_ops->decode(btree, rq->data, attrs, size);
 }
 
-struct btree_ops itable_ops = {
+struct btree_ops itree_ops = {
 	.btree_init	= ileaf_btree_init,
 	.leaf_init	= ileaf_init,
 	.leaf_split	= ileaf_split,
@@ -485,7 +485,7 @@ struct btree_ops itable_ops = {
 	.leaf_dump	= ileaf_dump,
 };
 
-struct btree_ops otable_ops = {
+struct btree_ops otree_ops = {
 	.btree_init	= ileaf_btree_init,
 	.leaf_init	= ileaf_init,
 	.leaf_split	= ileaf_split,

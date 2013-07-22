@@ -1,5 +1,5 @@
 /*
- * Inode table btree leaf operations
+ * Inode btree leaf operations
  *
  * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
  * Licensed under the GPL version 3
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 	setup_sb(sb, &sb->super);
 
 	struct btree btree;
-	init_btree(&btree, sb, no_root, &itable_ops);
+	init_btree(&btree, sb, no_root, &itree_ops);
 
 	test_init(argv[0]);
 

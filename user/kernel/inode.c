@@ -90,13 +90,13 @@ static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 /*
  * Deferred ileaf update for inode number allocation
  */
-/* must hold itable->btree.lock */
+/* must hold itree->btree.lock */
 static int is_defer_alloc_inum(struct inode *inode)
 {
 	return !list_empty(&tux_inode(inode)->alloc_list);
 }
 
-/* must hold itable->btree.lock */
+/* must hold itree->btree.lock */
 static int find_defer_alloc_inum(struct sb *sb, inum_t inum)
 {
 	/*
@@ -120,7 +120,7 @@ static int find_defer_alloc_inum(struct sb *sb, inum_t inum)
 	return 0;
 }
 
-/* must hold itable->btree.lock */
+/* must hold itree->btree.lock */
 static void add_defer_alloc_inum(struct inode *inode)
 {
 	/* FIXME: need to reserve space (ileaf/bnodes) for this inode? */
@@ -128,14 +128,14 @@ static void add_defer_alloc_inum(struct inode *inode)
 	list_add_tail(&tux_inode(inode)->alloc_list, &sb->alloc_inodes);
 }
 
-/* must hold itable->btree.lock. FIXME: spinlock is enough? */
+/* must hold itree->btree.lock. FIXME: spinlock is enough? */
 void del_defer_alloc_inum(struct inode *inode)
 {
 	list_del_init(&tux_inode(inode)->alloc_list);
 }
 
 /*
- * Inode table expansion algorithm
+ * Inode btree expansion algorithm
  *
  * First probe for the inode goal.  This retreives the rightmost leaf that
  * contains an inode less than or equal to the goal.  (We could in theory avoid
@@ -151,9 +151,9 @@ void del_defer_alloc_inum(struct inode *inode)
  *
  * Otherwise, expand the inum goal that came back.  If ibase was too low to
  * create the inode in that block then the low level split will fail and expand
- * will create a new inode table block with ibase at the goal.  We round the
+ * will create a new ileaf block with ibase at the goal.  We round the
  * goal down to some binary multiple in ileaf_split to reduce the chance of
- * creating inode table blocks with only a small number of inodes.  (Actually
+ * creating ileaf blocks with only a small number of inodes.  (Actually
  * we should only round down the split point, not the returned goal.)
  */
 
@@ -162,7 +162,7 @@ static int find_free_inum(struct cursor *cursor, inum_t goal, inum_t *allocated)
 	int ret;
 
 #ifndef __KERNEL__ /* FIXME: kill this, only mkfs path needs this */
-	/* If this is not mkfs path, it should have itable root */
+	/* If this is not mkfs path, it should have itree root */
 	if (!has_root(cursor->btree)) {
 		*allocated = goal;
 		return 0;
@@ -276,12 +276,12 @@ static int alloc_inum(struct inode *inode, struct ialloc_policy *policy,
 		      void *policy_data)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct btree *itable = itable_btree(sb);
+	struct btree *itree = itree_btree(sb);
 	struct cursor *cursor;
 	inum_t goal;
 	int err = 0;
 
-	cursor = alloc_cursor(itable, 1); /* +1 for now depth */
+	cursor = alloc_cursor(itree, 1); /* +1 for now depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -324,7 +324,7 @@ static int alloc_inum(struct inode *inode, struct ialloc_policy *policy,
 
 	/*
 	 * If inum is not reserved area, account it. If inum is
-	 * reserved area, inode might not be written into itable. So,
+	 * reserved area, inode might not be written into itree. So,
 	 * we don't include the reserved area into dynamic accounting.
 	 * FIXME: what happen if snapshot was introduced?
 	 */
@@ -440,10 +440,10 @@ static int check_present(struct inode *inode)
 static int open_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct btree *itable = itable_btree(sb);
+	struct btree *itree = itree_btree(sb);
 	int err;
 
-	struct cursor *cursor = alloc_cursor(itable, 0);
+	struct cursor *cursor = alloc_cursor(itree, 0);
 	if (!cursor)
 		return -ENOMEM;
 
@@ -509,7 +509,7 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		      unsigned delta)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct btree *itable = itable_btree(sb);
+	struct btree *itree = itree_btree(sb);
 	inum_t inum = tux_inode(inode)->inum;
 	int err = 0;
 
@@ -518,15 +518,15 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 #ifndef __KERNEL__
 	/* FIXME: kill this, only mkfs path needs this */
 	/* FIXME: this should be merged to btree_expand()? */
-	down_write(&itable->lock);
-	if (!has_root(itable))
-		err = alloc_empty_btree(itable);
-	up_write(&itable->lock);
+	down_write(&itree->lock);
+	if (!has_root(itree))
+		err = alloc_empty_btree(itree);
+	up_write(&itree->lock);
 	if (err)
 		return err;
 #endif
 
-	struct cursor *cursor = alloc_cursor(itable, 1); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(itree, 1); /* +1 for new depth */
 	if (!cursor)
 		return -ENOMEM;
 
@@ -536,7 +536,7 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	/* paranoia check */
 	if (!is_defer_alloc_inum(inode)) {
 		unsigned size;
-		assert(ileaf_lookup(itable, inum, bufdata(cursor_leafbuf(cursor)), &size));
+		assert(ileaf_lookup(itree, inum, bufdata(cursor_leafbuf(cursor)), &size));
 	}
 
 	/* Write inode attributes to inode btree */
@@ -557,7 +557,7 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		goto error_release;
 
 	/*
-	 * If inode is newly added into itable, account to on-disk usedinodes.
+	 * If inode is newly added into itree, account to on-disk usedinodes.
 	 * ->usedinodes is used only by backend, no need lock.
 	 * FIXME: what happen if snapshot was introduced?
 	 */
@@ -643,14 +643,14 @@ error:
 	return err;
 }
 
-/* Remove inode from itable */
+/* Remove inode from itree */
 static int purge_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct btree *itable = itable_btree(sb);
+	struct btree *itree = itree_btree(sb);
 	int reserved_inum = tux_inode(inode)->inum < TUX_NORMAL_INO;
 
-	down_write(&itable->lock);	/* FIXME: spinlock is enough? */
+	down_write(&itree->lock);	/* FIXME: spinlock is enough? */
 
 	/*
 	 * If inum is not reserved area, account it.
@@ -663,13 +663,13 @@ static int purge_inode(struct inode *inode)
 
 	if (is_defer_alloc_inum(inode)) {
 		del_defer_alloc_inum(inode);
-		up_write(&itable->lock);
+		up_write(&itree->lock);
 		return 0;
 	}
-	up_write(&itable->lock);
+	up_write(&itree->lock);
 
 	/*
-	 * If inode is deleted from itable, account to on-disk usedinodes.
+	 * If inode is deleted from itree, account to on-disk usedinodes.
 	 * ->usedinodes is used only by backend, no need lock.
 	 * FIXME: what happen if snapshot was introduced?
 	 */
@@ -679,7 +679,7 @@ static int purge_inode(struct inode *inode)
 	}
 
 	/* Remove inum from inode btree */
-	return btree_chop(itable, tux_inode(inode)->inum, 1);
+	return btree_chop(itree, tux_inode(inode)->inum, 1);
 }
 
 static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)

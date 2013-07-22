@@ -11,12 +11,12 @@
 /*
  * Locking order: Take care about memory allocation. (It may call our fs.)
  *
- * down_write(itable: btree->lock) (alloc_inum, save_inode, purge_inode)
- * down_read(itable: btree->lock) (open_inode)
+ * down_write(itree: btree->lock) (alloc_inum, save_inode, purge_inode)
+ * down_read(itree: btree->lock) (open_inode)
  *
- * down_write(otable: btree->lock) (tux3_rollup_orphan_add,
+ * down_write(otree: btree->lock) (tux3_rollup_orphan_add,
  *				    tux3_rollup_orphan_del,
- *				    load_otable_orphan)
+ *				    load_otree_orphan)
  *
  * down_write(inode: btree->lock) (btree_chop, map_region for write)
  * down_read(inode: btree->lock) (map_region for read)
