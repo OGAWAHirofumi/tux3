@@ -190,7 +190,7 @@ int tux3_make_orphan_add(struct inode *inode)
  * may be able to be used for deferred inode deletion too with some
  * tweaks.
  */
-static int add_defer_oprhan_del(struct sb *sb, inum_t inum)
+static int add_defer_orphan_del(struct sb *sb, inum_t inum)
 {
 	struct orphan *orphan = alloc_orphan(inum);
 	if (IS_ERR(orphan))
@@ -215,7 +215,7 @@ int tux3_make_orphan_del(struct inode *inode)
 		list_del_init(&tuxnode->orphan_list);
 	} else {
 		/* This orphan was already applied to sb->otable. */
-		int err = add_defer_oprhan_del(sb, tuxnode->inum);
+		int err = add_defer_orphan_del(sb, tuxnode->inum);
 		if (err) {
 			/* FIXME: what to do? */
 			tux3_warn(sb,
@@ -281,7 +281,7 @@ int replay_orphan_del(struct replay *rp, unsigned version, inum_t inum)
 	}
 
 	/* Orphan inum in sb->otable became dead. Add deletion request. */
-	return add_defer_oprhan_del(sb, inum);
+	return add_defer_orphan_del(sb, inum);
 }
 
 /* Destroy or clean orphan inodes of destroy candidate */
