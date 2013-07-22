@@ -343,12 +343,12 @@ void tux3_mark_buffer_dirty(struct buffer_head *buffer)
 }
 
 /*
- * Mark buffer as dirty to flush at rollup flush
+ * Mark buffer as dirty to flush at unify flush
  *
  * Specified buffer must be for volmap (i.e. no buffer fork, and
  * page->mapping is valid). Otherwise this will race with buffer fork.
  */
-void tux3_mark_buffer_rollup(struct buffer_head *buffer)
+void tux3_mark_buffer_unify(struct buffer_head *buffer)
 {
 	struct sb *sb;
 	struct inode *inode;
@@ -369,8 +369,8 @@ void tux3_mark_buffer_rollup(struct buffer_head *buffer)
 	sb = tux_sb(inode->i_sb);
 	assert(inode == sb->volmap); /* must be volmap */
 
-	tux3_set_buffer_dirty_list(mapping(inode), buffer, sb->rollup,
-				   &sb->rollup_buffers);
+	tux3_set_buffer_dirty_list(mapping(inode), buffer, sb->unify,
+				   &sb->unify_buffers);
 	/*
 	 * FIXME: we don't call __tux3_mark_buffer_dirty() here, but
 	 * mark_buffer_dirty() marks inode as I_DIRTY_PAGES. This

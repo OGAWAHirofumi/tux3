@@ -216,8 +216,8 @@ struct stash { struct flink_head head; u64 *pos, *top; };
 struct delta_ref {
 	atomic_t refcount;
 	unsigned delta;
-#ifdef ROLLUP_DEBUG
-	int rollup_flag;	/* FIXME: is there better way? */
+#ifdef UNIFY_DEBUG
+	int unify_flag;	/* FIXME: is there better way? */
 #endif
 };
 
@@ -239,12 +239,12 @@ struct sb {
 	struct delta_ref __rcu *current_delta;	/* current delta */
 	struct delta_ref delta_refs[TUX3_MAX_DELTA];
 	unsigned next_delta;			/* delta commit cycle */
-	unsigned rollup;			/* log rollup cycle */
+	unsigned unify;				/* log unify cycle */
 
 #define TUX3_COMMIT_RUNNING_BIT		0
 #define TUX3_COMMIT_PENDING_BIT		1
 	unsigned long backend_state;		/* delta state */
-#ifdef ROLLUP_DEBUG
+#ifdef UNIFY_DEBUG
 	struct delta_ref *pending_delta;	/* pending delta for commit */
 #endif
 	unsigned marshal_delta;			/* marshaling delta */
@@ -292,9 +292,9 @@ struct sb {
 	struct list_head orphan_del; /* defered orphan inode del list */
 
 	struct stash defree;	/* defer extent frees until after delta */
-	struct stash derollup;	/* defer extent frees until after rollup */
+	struct stash deunify;	/* defer extent frees until after unify */
 
-	struct list_head rollup_buffers; /* dirty metadata flushed at rollup */
+	struct list_head unify_buffers; /* dirty metadata flushed at unify */
 
 	struct iowait *iowait;		/* helper for waiting I/O */
 
@@ -346,8 +346,8 @@ struct logblock {
 enum {
 	LOG_BALLOC = 0x33,	/* Log of block allocation */
 	LOG_BFREE,		/* Log of freeing block after delta */
-	LOG_BFREE_ON_ROLLUP,	/* Log of freeing block after rollup */
-	LOG_BFREE_RELOG,	/* LOG_BFREE, but re-log of free after rollup */
+	LOG_BFREE_ON_UNIFY,	/* Log of freeing block after unify */
+	LOG_BFREE_RELOG,	/* LOG_BFREE, but re-log of free after unify */
 	LOG_LEAF_REDIRECT,	/* Log of leaf redirect */
 	LOG_LEAF_FREE,		/* Log of freeing leaf */
 	LOG_BNODE_REDIRECT,	/* Log of bnode redirect */
@@ -361,8 +361,8 @@ enum {
 	LOG_BNODE_FREE,		/* Log of freeing bnode */
 	LOG_ORPHAN_ADD,		/* Log of adding orphan inode */
 	LOG_ORPHAN_DEL,		/* Log of deleting orphan inode */
-	LOG_FREEBLOCKS,		/* Log of freeblocks in bitmap on rollup */
-	LOG_ROLLUP,		/* Log of marking rollup */
+	LOG_FREEBLOCKS,		/* Log of freeblocks in bitmap on unify */
+	LOG_UNIFY,		/* Log of marking unify */
 	LOG_DELTA,		/* just for debugging */
 	LOG_TYPES
 };
@@ -591,8 +591,8 @@ struct replay {
 	struct list_head orphan_in_otree; /* Orphan inodes in sb->otree */
 
 	/* For replay.c */
-	void *rollup_pos;	/* position of rollup log in a log block */
-	block_t rollup_index;	/* index of a log block including rollup log */
+	void *unify_pos;	/* position of unify log in a log block */
+	block_t unify_index;	/* index of a log block including unify log */
 	block_t blocknrs[];	/* block address of log blocks */
 };
 
@@ -744,7 +744,7 @@ int apply_defered_bfree(struct sb *sb, u64 val);
 void tux3_start_backend(struct sb *sb);
 void tux3_end_backend(void);
 int tux3_under_backend(struct sb *sb);
-int force_rollup(struct sb *sb);
+int force_unify(struct sb *sb);
 int force_delta(struct sb *sb);
 unsigned tux3_get_current_delta(void);
 unsigned tux3_inode_delta(struct inode *inode);
@@ -840,7 +840,7 @@ void log_finish_cycle(struct sb *sb, int discard);
 int tux3_logmap_io(int rw, struct bufvec *bufvec);
 void log_balloc(struct sb *sb, block_t block, unsigned count);
 void log_bfree(struct sb *sb, block_t block, unsigned count);
-void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count);
+void log_bfree_on_unify(struct sb *sb, block_t block, unsigned count);
 void log_bfree_relog(struct sb *sb, block_t block, unsigned count);
 void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock);
 void log_leaf_free(struct sb *sb, block_t leaf);
@@ -859,7 +859,7 @@ void log_orphan_add(struct sb *sb, unsigned version, tuxkey_t inum);
 void log_orphan_del(struct sb *sb, unsigned version, tuxkey_t inum);
 void log_freeblocks(struct sb *sb, block_t freeblocks);
 void log_delta(struct sb *sb);
-void log_rollup(struct sb *sb);
+void log_unify(struct sb *sb);
 
 typedef int (*unstash_t)(struct sb *sb, u64 val);
 void stash_init(struct stash *stash);
@@ -872,8 +872,8 @@ void destroy_defer_bfree(struct stash *defree);
 /* orphan.c */
 void clean_orphan_list(struct list_head *head);
 extern struct ileaf_attr_ops oattr_ops;
-int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add);
-int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del);
+int tux3_unify_orphan_add(struct sb *sb, struct list_head *orphan_add);
+int tux3_unify_orphan_del(struct sb *sb, struct list_head *orphan_del);
 int tux3_make_orphan_add(struct inode *inode);
 int tux3_make_orphan_del(struct inode *inode);
 int replay_orphan_add(struct replay *rp, unsigned version, inum_t inum);
@@ -934,7 +934,7 @@ void tux3_xattr_read_and_clear(struct inode *inode);
 void tux3_clear_dirty_inode(struct inode *inode);
 void __tux3_mark_buffer_dirty(struct buffer_head *buffer, unsigned delta);
 void tux3_mark_buffer_dirty(struct buffer_head *buffer);
-void tux3_mark_buffer_rollup(struct buffer_head *buffer);
+void tux3_mark_buffer_unify(struct buffer_head *buffer);
 void tux3_mark_inode_orphan(struct tux3_inode *tuxnode);
 int tux3_inode_is_orphan(struct tux3_inode *tuxnode);
 int tux3_flush_inode_internal(struct inode *inode, unsigned delta);

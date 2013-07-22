@@ -18,10 +18,10 @@ static void schedule_flush_delta(struct sb *sb);
 
 /*
  * Need frontend modification of backend buffers. (modification
- * after latest delta commit and before rollup).
+ * after latest delta commit and before unify).
  *
  * E.g. frontend modified backend buffers, stage_delta() of when
- * rollup is called.
+ * unify is called.
  */
 #define ALLOW_FRONTEND_MODIFY
 
@@ -41,8 +41,8 @@ static void init_sb(struct sb *sb)
 	INIT_LIST_HEAD(&sb->orphan_add);
 	INIT_LIST_HEAD(&sb->orphan_del);
 	stash_init(&sb->defree);
-	stash_init(&sb->derollup);
-	INIT_LIST_HEAD(&sb->rollup_buffers);
+	stash_init(&sb->deunify);
+	INIT_LIST_HEAD(&sb->unify_buffers);
 
 	INIT_LIST_HEAD(&sb->alloc_inodes);
 	spin_lock_init(&sb->forked_buffers_lock);
@@ -71,7 +71,7 @@ static loff_t calc_maxbytes(loff_t blocksize)
 static void __setup_sb(struct sb *sb, struct disksuper *super)
 {
 	sb->next_delta		= TUX3_INIT_DELTA;
-	sb->rollup		= TUX3_INIT_DELTA;
+	sb->unify		= TUX3_INIT_DELTA;
 	sb->marshal_delta	= TUX3_INIT_DELTA - 1;
 	sb->committed_delta	= TUX3_INIT_DELTA - 1;
 
@@ -172,7 +172,7 @@ static int relog_as_bfree(struct sb *sb, u64 val)
 	return stash_value(&sb->defree, val);
 }
 
-/* Obsolete the old rollup, then start the log of new rollup */
+/* Obsolete the old unify, then start the log of new unify */
 static void new_cycle_log(struct sb *sb)
 {
 #if 0 /* ALLOW_FRONTEND_MODIFY */
@@ -186,24 +186,24 @@ static void new_cycle_log(struct sb *sb)
 	log_finish(sb);
 	log_finish_cycle(sb, 1);
 #endif
-	/* Initialize logcount to count log blocks on new rollup cycle. */
+	/* Initialize logcount to count log blocks on new unify cycle. */
 	sb->super.logcount = 0;
 }
 
 /*
  * Flush a snapshot of the allocation map to disk.  Physical blocks for
  * the bitmaps and new or redirected bitmap btree nodes may be allocated
- * during the rollup.  Any bitmap blocks that are (re)dirtied by these
- * allocations will be written out in the next rollup cycle.
+ * during the unify.  Any bitmap blocks that are (re)dirtied by these
+ * allocations will be written out in the next unify cycle.
  */
-static int rollup_log(struct sb *sb)
+static int unify_log(struct sb *sb)
 {
 	/* further block allocations belong to the next cycle */
-	unsigned rollup = sb->rollup++;
+	unsigned unify = sb->unify++;
 	LIST_HEAD(orphan_add);
 	LIST_HEAD(orphan_del);
 
-	trace(">>>>>>>>> commit rollup %u", rollup);
+	trace(">>>>>>>>> commit unify %u", unify);
 
 	/*
 	 * Orphan inodes are still living, or orphan inodes in
@@ -214,10 +214,10 @@ static int rollup_log(struct sb *sb)
 	list_splice_init(&sb->orphan_add, &orphan_add);
 	list_splice_init(&sb->orphan_del, &orphan_del);
 
-	/* This is starting the new rollup cycle of the log */
+	/* This is starting the new unify cycle of the log */
 	new_cycle_log(sb);
-	/* Add rollup log as mark of new rollup cycle. */
-	log_rollup(sb);
+	/* Add unify log as mark of new unify cycle. */
+	log_unify(sb);
 	/* Log to store freeblocks for flushing bitmap data */
 	log_freeblocks(sb, sb->freeblocks);
 #ifdef ALLOW_FRONTEND_MODIFY
@@ -229,34 +229,34 @@ static int rollup_log(struct sb *sb)
 	stash_walk(sb, &sb->defree, relog_frontend_defer_as_bfree);
 #endif
 	/*
-	 * Re-logging defered bfree blocks after rollup as defered
+	 * Re-logging defered bfree blocks after unify as defered
 	 * bfree (LOG_BFREE_RELOG) after delta.  With this, we can
-	 * obsolete log records on previous rollup.
+	 * obsolete log records on previous unify.
 	 */
-	unstash(sb, &sb->derollup, relog_as_bfree);
+	unstash(sb, &sb->deunify, relog_as_bfree);
 
 	/*
 	 * Merge the dirty bnode buffers to volmap dirty list, and
-	 * clean ->rollup_buffers up before dirtying bnode buffers on
-	 * this rollup.  Later, bnode blocks will be flushed via
+	 * clean ->unify_buffers up before dirtying bnode buffers on
+	 * this unify.  Later, bnode blocks will be flushed via
 	 * volmap with leaves.
 	 */
-	list_splice_init(&sb->rollup_buffers,
+	list_splice_init(&sb->unify_buffers,
 			 tux3_dirty_buffers(sb->volmap, TUX3_INIT_DELTA));
 	/*
-	 * tux3_mark_buffer_rollup() doesn't dirty inode, so we make
-	 * sure volmap is dirty for rollup buffers, now.
+	 * tux3_mark_buffer_unify() doesn't dirty inode, so we make
+	 * sure volmap is dirty for unify buffers, now.
 	 *
-	 * See comment in tux3_mark_buffer_rollup().
+	 * See comment in tux3_mark_buffer_unify().
 	 */
 	__tux3_mark_inode_dirty(sb->volmap, I_DIRTY_PAGES);
 
 	/* Flush bitmap */
-	trace("> flush bitmap %u", rollup);
-	tux3_flush_inode_internal(sb->bitmap, rollup);
-	trace("< done bitmap %u", rollup);
+	trace("> flush bitmap %u", unify);
+	tux3_flush_inode_internal(sb->bitmap, unify);
+	trace("< done bitmap %u", unify);
 
-	trace("> apply orphan inodes %u", rollup);
+	trace("> apply orphan inodes %u", unify);
 	{
 		int err;
 
@@ -265,21 +265,21 @@ static int rollup_log(struct sb *sb)
 		 * It should be done before adding new orphan, because
 		 * orphan_add may have same inum in orphan_del.
 		 */
-		err = tux3_rollup_orphan_del(sb, &orphan_del);
+		err = tux3_unify_orphan_del(sb, &orphan_del);
 		if (err)
 			return err;
 
 		/*
 		 * This apply orphan inodes to sb->otree after flushed bitmap.
 		 */
-		err = tux3_rollup_orphan_add(sb, &orphan_add);
+		err = tux3_unify_orphan_add(sb, &orphan_add);
 		if (err)
 			return err;
 	}
-	trace("< apply orphan inodes %u", rollup);
+	trace("< apply orphan inodes %u", unify);
 	assert(list_empty(&orphan_add));
 	assert(list_empty(&orphan_del));
-	trace("<<<<<<<<< commit rollup done %u", rollup);
+	trace("<<<<<<<<< commit unify done %u", unify);
 
 	return 0;
 }
@@ -310,7 +310,7 @@ static int stage_delta(struct sb *sb, unsigned delta)
 static int write_btree(struct sb *sb, unsigned delta)
 {
 	/*
-	 * Flush leaves (and if there is rollup, bnodes too) blocks.
+	 * Flush leaves (and if there is unify, bnodes too) blocks.
 	 * FIXME: Now we are using TUX3_INIT_DELTA for leaves. Do
 	 * we need to per delta dirty buffers?
 	 */
@@ -355,13 +355,13 @@ static void post_commit(struct sb *sb, unsigned delta)
 	tux3_clear_dirty_inodes(sb, delta);
 }
 
-static int need_rollup(struct sb *sb)
+static int need_unify(struct sb *sb)
 {
 	static unsigned crudehack;
 	return !(++crudehack % 3);
 }
 
-enum rollup_flags { NO_ROLLUP, ALLOW_ROLLUP, FORCE_ROLLUP, };
+enum unify_flags { NO_UNIFY, ALLOW_UNIFY, FORCE_UNIFY, };
 
 /* For debugging */
 void tux3_start_backend(struct sb *sb)
@@ -382,7 +382,7 @@ int tux3_under_backend(struct sb *sb)
 	return current->journal_info == sb;
 }
 
-static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
+static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 {
 	unsigned delta = sb->marshal_delta;
 	struct iowait iowait;
@@ -401,23 +401,23 @@ static int do_commit(struct sb *sb, enum rollup_flags rollup_flag)
 
 	/*
 	 * NOTE: This works like modification from frontend. (i.e. this
-	 * may generate defree log which is not committed yet at rollup.)
+	 * may generate defree log which is not committed yet at unify.)
 	 *
-	 * - this is before rollup to merge modifications to this
-	 *   rollup, and flush at once for optimization.
+	 * - this is before unify to merge modifications to this
+	 *   unify, and flush at once for optimization.
 	 *
 	 * - this is required to prevent unexpected buffer state for
 	 *   cursor_redirect(). If we applied modification after
-	 *   rollup_log, it made unexpected dirty state (i.e. leaf is
+	 *   unify_log, it made unexpected dirty state (i.e. leaf is
 	 *   still dirty, but parent was already cleaned.)
 	 */
 	err = stage_delta(sb, delta);
 	if (err)
 		return err;
 
-	if ((rollup_flag == ALLOW_ROLLUP && need_rollup(sb)) ||
-	    rollup_flag == FORCE_ROLLUP) {
-		err = rollup_log(sb);
+	if ((unify_flag == ALLOW_UNIFY && need_unify(sb)) ||
+	    unify_flag == FORCE_UNIFY) {
+		err = unify_log(sb);
 		if (err)
 			return err;
 
@@ -457,15 +457,15 @@ static int flush_delta(struct sb *sb)
 {
 	unsigned delta = sb->marshal_delta;
 	int err;
-#ifndef ROLLUP_DEBUG
-	enum rollup_flags rollup_flag = ALLOW_ROLLUP;
+#ifndef UNIFY_DEBUG
+	enum unify_flags unify_flag = ALLOW_UNIFY;
 #else
 	struct delta_ref *delta_ref = sb->pending_delta;
-	enum rollup_flags rollup_flag = delta_ref->rollup_flag;
+	enum unify_flags unify_flag = delta_ref->unify_flag;
 	sb->pending_delta = NULL;
 #endif
 
-	err = do_commit(sb, rollup_flag);
+	err = do_commit(sb, unify_flag);
 
 	sb->committed_delta = delta;
 	clear_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state);
@@ -521,8 +521,8 @@ static void __delta_transition(struct sb *sb, struct delta_ref *delta_ref)
 	atomic_set(&delta_ref->refcount, 1);
 	/* Assign the delta number */
 	delta_ref->delta = sb->next_delta++;
-#ifdef ROLLUP_DEBUG
-	delta_ref->rollup_flag = ALLOW_ROLLUP;
+#ifdef UNIFY_DEBUG
+	delta_ref->unify_flag = ALLOW_UNIFY;
 #endif
 
 	/*
@@ -558,7 +558,7 @@ static void delta_transition(struct sb *sb)
 
 	/* Set delta for marshal */
 	sb->marshal_delta = prev->delta;
-#ifdef ROLLUP_DEBUG
+#ifdef UNIFY_DEBUG
 	sb->pending_delta = prev;
 #endif
 
@@ -584,14 +584,14 @@ static void delta_transition(struct sb *sb)
 #include "commit_flusher.c"
 #include "commit_flusher_hack.c"
 
-int force_rollup(struct sb *sb)
+int force_unify(struct sb *sb)
 {
-	return sync_current_delta(sb, FORCE_ROLLUP);
+	return sync_current_delta(sb, FORCE_UNIFY);
 }
 
 int force_delta(struct sb *sb)
 {
-	return sync_current_delta(sb, NO_ROLLUP);
+	return sync_current_delta(sb, NO_UNIFY);
 }
 
 unsigned tux3_get_current_delta(void)
@@ -601,7 +601,7 @@ unsigned tux3_get_current_delta(void)
 	return delta_ref->delta;
 }
 
-/* Choice sb->delta or sb->rollup from inode */
+/* Choice sb->delta or sb->unify from inode */
 unsigned tux3_inode_delta(struct inode *inode)
 {
 	unsigned delta;
@@ -611,15 +611,15 @@ unsigned tux3_inode_delta(struct inode *inode)
 	case TUX_LOGMAP_INO:
 		/*
 		 * Note: volmap are special, and has both of
-		 * TUX3_INIT_DELTA and sb->rollup. So TUX3_INIT_DELTA
+		 * TUX3_INIT_DELTA and sb->unify. So TUX3_INIT_DELTA
 		 * can be incorrect if delta was used for buffer.
 		 * Note: logmap is similar to volmap, but it doesn't
-		 * have sb->rollup buffers.
+		 * have sb->unify buffers.
 		 */
 		delta = TUX3_INIT_DELTA;
 		break;
 	case TUX_BITMAP_INO:
-		delta = tux_sb(inode->i_sb)->rollup;
+		delta = tux_sb(inode->i_sb)->unify;
 		break;
 	default:
 		delta = tux3_get_current_delta();

@@ -127,7 +127,7 @@ static int bitmap_modify_bits(struct sb *sb, struct buffer_head *buffer,
 	 * The bitmap is modified only by backend.
 	 * blockdirty() should never return -EAGAIN.
 	 */
-	clone = blockdirty(buffer, sb->rollup);
+	clone = blockdirty(buffer, sb->unify);
 	if (IS_ERR(clone)) {
 		int err = PTR_ERR(clone);
 		assert(err != -EAGAIN);

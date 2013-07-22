@@ -318,9 +318,9 @@ void blockput_free(struct sb *sb, struct buffer_head *buffer)
 	__blockput_free(buffer, BUFFER_INIT_DELTA);
 }
 
-void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer)
+void blockput_free_unify(struct sb *sb, struct buffer_head *buffer)
 {
-	__blockput_free(buffer, sb->rollup);
+	__blockput_free(buffer, sb->unify);
 }
 
 unsigned buffer_hash(block_t block)

@@ -29,8 +29,8 @@ CFLAGS	+= --coverage
 endif
 # use LOCK_DEBUG
 CFLAGS	+= -DLOCK_DEBUG=1
-# use ROLLUP_DEBUG
-CFLAGS	+= -DROLLUP_DEBUG=1
+# use UNIFY_DEBUG
+CFLAGS	+= -DUNIFY_DEBUG=1
 # userland can't use async, so use TUX3_FLUSHER_SYNC
 CFLAGS	+= -DTUX3_FLUSHER=TUX3_FLUSHER_SYNC
 # user flags

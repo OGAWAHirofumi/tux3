@@ -40,8 +40,8 @@ static void test01(struct sb *sb)
 	log_bfree(sb, 1, 2);
 	check(sb, LOG_BFREE);
 
-	log_bfree_on_rollup(sb, 1, 2);
-	check(sb, LOG_BFREE_ON_ROLLUP);
+	log_bfree_on_unify(sb, 1, 2);
+	check(sb, LOG_BFREE_ON_UNIFY);
 
 	log_bfree_relog(sb, 1, 2);
 	check(sb, LOG_BFREE_RELOG);
@@ -82,8 +82,8 @@ static void test01(struct sb *sb)
 	log_freeblocks(sb, 1);
 	check(sb, LOG_FREEBLOCKS);
 
-	log_rollup(sb);
-	check(sb, LOG_ROLLUP);
+	log_unify(sb);
+	check(sb, LOG_UNIFY);
 
 	log_delta(sb);
 	check(sb, LOG_DELTA);

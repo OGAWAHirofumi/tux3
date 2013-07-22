@@ -160,9 +160,9 @@ static void bufvec_submit_bio(int rw, struct bufvec *bufvec)
  * We flush all buffers on this page?
  *
  * The page may have the dirty buffer for both of "delta" and
- * "rollup", and we may flush only dirty buffers for "delta". So, if
+ * "unify", and we may flush only dirty buffers for "delta". So, if
  * the page still has the dirty buffer, we should still keep the page
- * dirty for "rollup".
+ * dirty for "unify".
  */
 static int keep_page_dirty(struct bufvec *bufvec, struct page *page)
 {

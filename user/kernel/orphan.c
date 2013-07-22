@@ -7,7 +7,7 @@
  * by this.
  *
  * However, if the orphan is long life, it can make log blocks too long.
- * So, to prevent it, if orphan inodes are still living until rollup, we
+ * So, to prevent it, if orphan inodes are still living until unify, we
  * store those inum into sb->otree. With it, we can obsolete log blocks.
  *
  * On replay, we can know the inum of orphan inodes yet not destroyed by
@@ -89,7 +89,7 @@ struct ileaf_attr_ops oattr_ops = {
 };
 
 /* Add inum into sb->otree */
-int tux3_rollup_orphan_add(struct sb *sb, struct list_head *orphan_add)
+int tux3_unify_orphan_add(struct sb *sb, struct list_head *orphan_add)
 {
 	struct btree *otree = otree_btree(sb);
 	struct cursor *cursor;
@@ -143,7 +143,7 @@ out:
 }
 
 /* Delete inum from sb->otree */
-int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
+int tux3_unify_orphan_del(struct sb *sb, struct list_head *orphan_del)
 {
 	struct btree *otree = otree_btree(sb);
 	int err;
@@ -168,7 +168,7 @@ int tux3_rollup_orphan_del(struct sb *sb, struct list_head *orphan_del)
 
 /*
  * Make inode as orphan, and logging it. Then if orphan is living until
- * rollup, orphan will be written to sb->otree.
+ * unify, orphan will be written to sb->otree.
  */
 int tux3_make_orphan_add(struct inode *inode)
 {

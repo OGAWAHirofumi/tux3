@@ -93,7 +93,7 @@ static struct buffer_head *new_node(struct btree *btree)
 
 	if (!IS_ERR(buffer)) {
 		bnode_buffer_init(buffer);
-		mark_buffer_rollup_atomic(buffer);
+		mark_buffer_unify_atomic(buffer);
 	}
 	return buffer;
 }
@@ -552,8 +552,8 @@ static int leaf_need_redirect(struct sb *sb, struct buffer_head *buffer)
 
 static int bnode_need_redirect(struct sb *sb, struct buffer_head *buffer)
 {
-	/* If this is not re-dirty for sb->rollup, we need to redirect */
-	return !buffer_already_dirty(buffer, sb->rollup);
+	/* If this is not re-dirty for sb->unify, we need to redirect */
+	return !buffer_already_dirty(buffer, sb->unify);
 }
 
 /*
@@ -604,9 +604,9 @@ int cursor_redirect(struct cursor *cursor)
 			defer_bfree(&sb->defree, oldblock, 1);
 		} else {
 			/* This is bnode buffer */
-			mark_buffer_rollup_atomic(clone);
+			mark_buffer_unify_atomic(clone);
 			log_bnode_redirect(sb, oldblock, newblock);
-			defer_bfree(&sb->derollup, oldblock, 1);
+			defer_bfree(&sb->deunify, oldblock, 1);
 		}
 
 		trace("update parent");
@@ -668,7 +668,7 @@ static void adjust_parent_sep(struct cursor *cursor, int level, __be64 newsep)
 				 be64_to_cpu(parent->key),
 				 be64_to_cpu(newsep));
 		parent->key = newsep;
-		mark_buffer_rollup_non(parent_at->buffer);
+		mark_buffer_unify_non(parent_at->buffer);
 
 		if (parent != level_node(cursor, level)->entries)
 			break;
@@ -697,7 +697,7 @@ static void remove_index(struct cursor *cursor, struct chopped_index_info *cii)
 	/* Remove an index */
 	bnode_remove_index(node, cursor->path[level].next - 1, 1);
 	--(cursor->path[level].next);
-	mark_buffer_rollup_non(cursor->path[level].buffer);
+	mark_buffer_unify_non(cursor->path[level].buffer);
 
 	/*
 	 * Climb up to common parent and update separating key.
@@ -903,8 +903,8 @@ keep_prev_leaf:
 				if (try_bnode_merge(sb, prev[level], buf)) {
 					trace(">>> can merge node %p into node %p", buf, prev[level]);
 					remove_index(cursor, cii);
-					mark_buffer_rollup_non(prev[level]);
-					blockput_free_rollup(sb, buf);
+					mark_buffer_unify_non(prev[level]);
+					blockput_free_unify(sb, buf);
 					goto keep_prev_node;
 				}
 				blockput(prev[level]);
@@ -941,7 +941,7 @@ chop_root:
 		 */
 		bfree(sb, bufindex(prev[0]), 1);
 		log_bnode_free(sb, bufindex(prev[0]));
-		blockput_free_rollup(sb, prev[0]);
+		blockput_free_unify(sb, prev[0]);
 
 		vecmove(prev, prev + 1, btree->root.depth);
 	}
@@ -1027,7 +1027,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 			if (!keep)
 				at->next++;
 			log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
-			mark_buffer_rollup_non(parentbuf);
+			mark_buffer_unify_non(parentbuf);
 			cursor_check(cursor);
 			return 0;
 		}
@@ -1048,20 +1048,20 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 		int child_is_left = at->next <= parent->entries + half;
 		if (!child_is_left) {
 			struct index_entry *newnext;
-			mark_buffer_rollup_non(parentbuf);
+			mark_buffer_unify_non(parentbuf);
 			newnext = newnode->entries + (at->next - &parent->entries[half]);
 			get_bh(newbuf);
 			level_replace_blockput(cursor, level, newbuf, newnext);
 			parentbuf = newbuf;
 			parent = newnode;
 		} else
-			mark_buffer_rollup_non(newbuf);
+			mark_buffer_unify_non(newbuf);
 
 		bnode_add_index(parent, at->next, childblock, childkey);
 		if (!keep)
 			at->next++;
 		log_bnode_add(sb, bufindex(parentbuf), childblock, childkey);
-		mark_buffer_rollup_non(parentbuf);
+		mark_buffer_unify_non(parentbuf);
 
 		childkey = newkey;
 		childblock = bufindex(newbuf);
@@ -1093,7 +1093,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 	btree->root.block = newrootblock;
 	btree->root.depth++;
 
-	mark_buffer_rollup_non(newbuf);
+	mark_buffer_unify_non(newbuf);
 	tux3_mark_btree_dirty(btree);
 	cursor_check(cursor);
 
@@ -1222,7 +1222,7 @@ int alloc_empty_btree(struct btree *btree)
 	log_bnode_root(sb, rootblock, 1, leafblock, 0, 0);
 	log_balloc(sb, leafblock, 1);
 
-	mark_buffer_rollup_non(rootbuf);
+	mark_buffer_unify_non(rootbuf);
 	blockput(rootbuf);
 	mark_buffer_dirty_non(leafbuf);
 	blockput(leafbuf);
@@ -1290,10 +1290,10 @@ int free_empty_btree(struct btree *btree)
 		 */
 		bfree(sb, bufindex(rootbuf), 1);
 		log_bnode_free(sb, bufindex(rootbuf));
-		blockput_free_rollup(sb, rootbuf);
+		blockput_free_unify(sb, rootbuf);
 	} else {
-		defer_bfree(&sb->derollup, bufindex(rootbuf), 1);
-		log_bfree_on_rollup(sb, bufindex(rootbuf), 1);
+		defer_bfree(&sb->deunify, bufindex(rootbuf), 1);
+		log_bfree_on_unify(sb, bufindex(rootbuf), 1);
 		blockput(rootbuf);
 	}
 
@@ -1319,7 +1319,7 @@ int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock)
 	assert(bnode_sniff(bufdata(oldbuf)));
 
 	memcpy(bufdata(newbuf), bufdata(oldbuf), bufsize(newbuf));
-	mark_buffer_rollup_atomic(newbuf);
+	mark_buffer_unify_atomic(newbuf);
 
 	blockput(oldbuf);
 error_put_newbuf:
@@ -1341,7 +1341,7 @@ int replay_bnode_root(struct replay *rp, block_t root, unsigned count,
 
 	bnode_init_root(bufdata(rootbuf), count, left, right, rkey);
 
-	mark_buffer_rollup_atomic(rootbuf);
+	mark_buffer_unify_atomic(rootbuf);
 	blockput(rootbuf);
 
 	return 0;
@@ -1373,8 +1373,8 @@ int replay_bnode_split(struct replay *rp, block_t src, unsigned pos,
 
 	bnode_split(bufdata(srcbuf), pos, bufdata(dstbuf));
 
-	mark_buffer_rollup_non(srcbuf);
-	mark_buffer_rollup_atomic(dstbuf);
+	mark_buffer_unify_non(srcbuf);
+	mark_buffer_unify_atomic(dstbuf);
 
 	blockput(dstbuf);
 error_put_srcbuf:
@@ -1400,7 +1400,7 @@ static int replay_bnode_change(struct sb *sb, block_t bnodeblock,
 	struct bnode *bnode = bufdata(bnodebuf);
 	change(bnode, val1, val2);
 
-	mark_buffer_rollup_non(bnodebuf);
+	mark_buffer_unify_non(bnodebuf);
 	blockput(bnodebuf);
 
 	return 0;
@@ -1452,8 +1452,8 @@ int replay_bnode_merge(struct replay *rp, block_t src, block_t dst)
 	ret = bnode_merge_nodes(sb, bufdata(dstbuf), bufdata(srcbuf));
 	assert(ret == 1);
 
-	mark_buffer_rollup_non(dstbuf);
-	mark_buffer_rollup_non(srcbuf);
+	mark_buffer_unify_non(dstbuf);
+	mark_buffer_unify_non(srcbuf);
 
 	blockput(dstbuf);
 error_put_srcbuf:

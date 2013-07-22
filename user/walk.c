@@ -192,7 +192,7 @@ static const char *log_name[] = {
 #define X(x)	[x] = #x
 	X(LOG_BALLOC),
 	X(LOG_BFREE),
-	X(LOG_BFREE_ON_ROLLUP),
+	X(LOG_BFREE_ON_UNIFY),
 	X(LOG_BFREE_RELOG),
 	X(LOG_LEAF_REDIRECT),
 	X(LOG_LEAF_FREE),
@@ -208,7 +208,7 @@ static const char *log_name[] = {
 	X(LOG_ORPHAN_ADD),
 	X(LOG_ORPHAN_DEL),
 	X(LOG_FREEBLOCKS),
-	X(LOG_ROLLUP),
+	X(LOG_UNIFY),
 	X(LOG_DELTA),
 #undef X
 };
@@ -228,7 +228,7 @@ static void walk_logchain(struct sb *sb, struct walk_logchain_ops *cb,
 	logcount = be32_to_cpu(sb->super.logcount);
 	while (logcount > 0) {
 		struct logblock *log;
-		u8 *rollup_pos = NULL;
+		u8 *unify_pos = NULL;
 		int obsolete_block = obsolete;
 
 		buffer = vol_bread(sb, nextchain);
@@ -236,14 +236,14 @@ static void walk_logchain(struct sb *sb, struct walk_logchain_ops *cb,
 
 		log = bufdata(buffer);
 
-		/* Find LOG_ROLLUP */
+		/* Find LOG_UNIFY */
 		if (!obsolete_block) {
 			u8 *p = log->data;
 			while (p < log->data + be16_to_cpu(log->bytes)) {
 				u8 code = *p;
 
-				if (code == LOG_ROLLUP) {
-					rollup_pos = p;
+				if (code == LOG_UNIFY) {
+					unify_pos = p;
 					obsolete = 1;
 					break;
 				}
@@ -262,8 +262,8 @@ static void walk_logchain(struct sb *sb, struct walk_logchain_ops *cb,
 				u8 code = *p;
 				unsigned len = log_size[code];
 
-				if (rollup_pos) {
-					if (p < rollup_pos)
+				if (unify_pos) {
+					if (p < unify_pos)
 						obsolete_log = 1;
 					else
 						obsolete_log = 0;

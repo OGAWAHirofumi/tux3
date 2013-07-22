@@ -12,7 +12,7 @@
 
 /*
  * 0 - minimum
- * 1 - include derollup blocks
+ * 1 - include deunify blocks
  * 2 - include freed blocks, bug still pointed by log (may including data)
  */
 static int opt_verbose;
@@ -182,7 +182,7 @@ static void image_log(struct sb *sb, struct buffer_head *buffer,
 		if (opt_verbose < 2)
 			break;
 		/* FALLTHRU */
-	case LOG_BFREE_ON_ROLLUP: {
+	case LOG_BFREE_ON_UNIFY: {
 		u32 count;
 		u64 block;
 		p = decode32(p, &count);

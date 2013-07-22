@@ -37,8 +37,8 @@ static int buffer_is_allocated(struct sb *sb, struct buffer_head *buf)
 	check_block = bufindex(buf);
 	if (stash_walk(sb, &sb->defree, check_defree_block) < 0)
 		return 0; /* buffer is defree block */
-	if (stash_walk(sb, &sb->derollup, check_defree_block) < 0)
-		return 0; /* buffer is derollup block */
+	if (stash_walk(sb, &sb->deunify, check_defree_block) < 0)
+		return 0; /* buffer is deunify block */
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
@@ -71,7 +71,7 @@ static void check_dirty(struct sb *sb)
 {
 	/* volmap only, because data buffers doesn't have block address yet */
 	check_dirty_list(sb, tux3_dirty_buffers(sb->volmap, TUX3_INIT_DELTA));
-	check_dirty_list(sb, &sb->rollup_buffers);
+	check_dirty_list(sb, &sb->unify_buffers);
 }
 
 struct open_result {
@@ -148,11 +148,11 @@ static void test01(struct sb *sb)
 
 	/*
 	 * This should make at least:
-	 * LOG_ROLLUP, LOG_BNODE_REDIRECT, LOG_FREEBLOCKS, LOG_BFREE_RELOG,
-	 * LOG_BFREE_ON_ROLLUP
+	 * LOG_UNIFY, LOG_BNODE_REDIRECT, LOG_FREEBLOCKS, LOG_BFREE_RELOG,
+	 * LOG_BFREE_ON_UNIFY
 	 */
-	test_assert(force_rollup(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	/*
 	 * This should make at least:
@@ -213,7 +213,7 @@ static void test01(struct sb *sb)
 	test_end();
 
 	if (test_start("test01.2")) {
-		test_assert(force_rollup(sb) == 0);
+		test_assert(force_unify(sb) == 0);
 		clean_sb(sb);
 
 		fsck(sb);
@@ -236,7 +236,7 @@ static void test02(struct sb *sb)
 	struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 
 	test_assert(make_tux3(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	r.namelen = snprintf(r.name, sizeof(r.name), "file%03d", 1);
 	r.err = -ENOENT;
@@ -275,7 +275,7 @@ static void test03(struct sb *sb)
 	struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
 
 	test_assert(make_tux3(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	r.namelen = snprintf(r.name, sizeof(r.name), "file%03d", 1);
 	r.err = -ENOENT;
@@ -311,14 +311,14 @@ static void test03(struct sb *sb)
 	test_end();
 
 	if (test_start("test03.2")) {
-		test_assert(force_rollup(sb) == 0);
+		test_assert(force_unify(sb) == 0);
 
 		/* unlink created inode */
 		test_assert(tuxunlink(sb->rootdir, r.name, r.namelen) == 0);
 		check_dirty(sb);
 
 		/* Flush */
-		test_assert(force_rollup(sb) == 0);
+		test_assert(force_unify(sb) == 0);
 		clean_sb(sb);
 
 		fsck(sb);
@@ -393,7 +393,7 @@ static void test04(struct sb *sb)
 	struct orphan_data *data = test_alloc_shm(sizeof(*data) * NR_ORPHAN);
 
 	test_assert(make_tux3(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	/* Create on disk image to test lived orphan */
 	pid_t pid = fork();
@@ -423,18 +423,18 @@ static void test04(struct sb *sb)
 			case 0:
 				data[i].err = 0;
 				/* Add into sb->otree */
-				test_assert(force_rollup(sb) == 0);
+				test_assert(force_unify(sb) == 0);
 				list_move(&tuxnode->orphan_list, &orphans);
 				break;
 			case 1:
 			case 2:
 				data[i].err = -ENOENT;
 				/* Add into sb->otree */
-				test_assert(force_rollup(sb) == 0);
+				test_assert(force_unify(sb) == 0);
 				iput(inodes[i]);
 				if (i == 1) {
 					/* Delete from sb->otree */
-					test_assert(force_rollup(sb) == 0);
+					test_assert(force_unify(sb) == 0);
 				}
 				break;
 			case 3:
@@ -514,7 +514,7 @@ static void test04(struct sb *sb)
 		test_assert(!err);
 
 		/* Remove orphan from sb->otree */
-		test_assert(force_rollup(sb) == 0);
+		test_assert(force_unify(sb) == 0);
 		clean_sb(sb);
 
 		fsck(sb);
@@ -553,7 +553,7 @@ static void test05(struct sb *sb)
 	struct tux_iattr iattr = { .mode = S_IFDIR | 0755 };
 
 	test_assert(make_tux3(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	r.namelen = snprintf(r.name, sizeof(r.name), "dir%03d", 1);
 	r.err = -ENOENT;
@@ -641,7 +641,7 @@ static void test06(struct sb *sb)
 	struct tux_iattr iattr = { .mode = S_IFDIR | 0755 };
 
 	test_assert(make_tux3(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	/* Test mkdir("before"), then rename("before", "after"). */
 	struct inode *subdir;
@@ -737,7 +737,7 @@ static void test07(struct sb *sb)
 	struct block_segment seg;
 
 	test_assert(make_tux3(sb) == 0);
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	tux3_start_backend(sb);
 	/* Make non contiguous blocks */

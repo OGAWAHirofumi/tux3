@@ -313,7 +313,7 @@ static struct walk_btree_ops fsck_otree_ops = {
 	.leaf	= fsck_oleaf,
 };
 
-/* Mark dfree_rollup to shadow bitmap */
+/* Mark dfree_unify to shadow bitmap */
 static struct fsck_context *fsck_unstash_context;
 static int fsck_unstash_mark(struct sb *sb, u64 val)
 {
@@ -351,7 +351,7 @@ static int fsck_main(struct sb *sb)
 	fsck_mark_superblock(sb, &context);
 
 	fsck_unstash_context = &context;
-	stash_walk(sb, &sb->derollup, fsck_unstash_mark);
+	stash_walk(sb, &sb->deunify, fsck_unstash_mark);
 
 	walk_btree(itree_btree(sb), &fsck_itree_ops, &context);
 	walk_btree(otree_btree(sb), &fsck_otree_ops, &context);

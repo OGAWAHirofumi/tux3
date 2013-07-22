@@ -23,7 +23,7 @@
  *    instead there is a reverse chain starting from sb->logchain.  Log blocks
  *    are read only at replay on mount and written only at delta transition.
  *
- *  - sb->super.logcount: count of log blocks in rollup cycle
+ *  - sb->super.logcount: count of log blocks in unify cycle
  *  - sb->lognext: Logmap index of next log block in delta cycle
  *  - sb->logpos/logtop: Pointer/limit to write next log entry
  *  - sb->logbuf: Cached log block referenced by logpos/logtop
@@ -34,14 +34,14 @@
  *
  *  - At delta commit, count of log blocks is recorded in superblock
  *    (later, metablock) which are the log blocks for the current
- *    rollup cycle.
+ *    unify cycle.
  *
- *  - On delta completion, if log was rolluped in current delta then log blocks
- *    are freed for reuse.  Log blocks to be freed are recorded in sb->derollup,
+ *  - On delta completion, if log was unified in current delta then log blocks
+ *    are freed for reuse.  Log blocks to be freed are recorded in sb->deunify,
  *    which is appended to sb->defree, the per-delta deferred free list at log
  *    flush time.
  *
- *  - On replay, sb.super->logcount log blocks for current rollup cycle are
+ *  - On replay, sb.super->logcount log blocks for current unify cycle are
  *    loaded in reverse order into logmap, using the log block reverse chain
  *    pointers.
  *
@@ -66,7 +66,7 @@
 unsigned log_size[] = {
 	[LOG_BALLOC]		= 11,
 	[LOG_BFREE]		= 11,
-	[LOG_BFREE_ON_ROLLUP]	= 11,
+	[LOG_BFREE_ON_UNIFY]	= 11,
 	[LOG_BFREE_RELOG]	= 11,
 	[LOG_LEAF_REDIRECT]	= 13,
 	[LOG_LEAF_FREE]		= 7,
@@ -82,7 +82,7 @@ unsigned log_size[] = {
 	[LOG_ORPHAN_ADD]	= 9,
 	[LOG_ORPHAN_DEL]	= 9,
 	[LOG_FREEBLOCKS]	= 7,
-	[LOG_ROLLUP]		= 1,
+	[LOG_UNIFY]		= 1,
 	[LOG_DELTA]		= 1,
 };
 
@@ -211,12 +211,12 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 		}
 
 		/*
-		 * We can obsolete the log blocks after next rollup
+		 * We can obsolete the log blocks after next unify
 		 * by LOG_BFREE_RELOG.
 		 */
-		defer_bfree(&sb->derollup, seg.block, seg.count);
+		defer_bfree(&sb->deunify, seg.block, seg.count);
 
-		/* Add count of log on this delta to rollup logcount */
+		/* Add count of log on this delta to unify logcount */
 		be32_add_cpu(&sb->super.logcount, seg.count);
 
 		count -= seg.count;
@@ -284,7 +284,7 @@ static void log_u48_u48_u48(struct sb *sb, u8 intent, u64 v1, u64 v2, u64 v3)
 	log_end(sb, encode48(data, v3));
 }
 
-/* balloc() until next rollup */
+/* balloc() until next unify */
 void log_balloc(struct sb *sb, block_t block, unsigned count)
 {
 	/* FIXME: 32bits count is too big? */
@@ -298,14 +298,14 @@ void log_bfree(struct sb *sb, block_t block, unsigned count)
 	log_u32_u48(sb, LOG_BFREE, count, block);
 }
 
-/* Defered bfree() until after next rollup */
-void log_bfree_on_rollup(struct sb *sb, block_t block, unsigned count)
+/* Defered bfree() until after next unify */
+void log_bfree_on_unify(struct sb *sb, block_t block, unsigned count)
 {
 	/* FIXME: 32bits count is too big? */
-	log_u32_u48(sb, LOG_BFREE_ON_ROLLUP, count, block);
+	log_u32_u48(sb, LOG_BFREE_ON_UNIFY, count, block);
 }
 
-/* Same with log_bfree() (re-logged log_bfree_on_rollup() on rollup) */
+/* Same with log_bfree() (re-logged log_bfree_on_unify() on unify) */
 void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
 {
 	/* FIXME: 32bits count is too big? */
@@ -313,7 +313,7 @@ void log_bfree_relog(struct sb *sb, block_t block, unsigned count)
 }
 
 /*
- * 1. balloc(newblock) until next rollup
+ * 1. balloc(newblock) until next unify
  * 2. bfree(oldblock)
  */
 void log_leaf_redirect(struct sb *sb, block_t oldblock, block_t newblock)
@@ -329,8 +329,8 @@ void log_leaf_free(struct sb *sb, block_t leaf)
 
 /*
  * 1. Redirect from oldblock to newblock
- * 2. balloc(newblock) until next rollup
- * 2. Defered bfree(oldblock) until after next rollup
+ * 2. balloc(newblock) until next unify
+ * 2. Defered bfree(oldblock) until after next unify
  */
 void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 {
@@ -338,8 +338,8 @@ void log_bnode_redirect(struct sb *sb, block_t oldblock, block_t newblock)
 }
 
 /*
- * 1. Construct root buffer until next rollup
- * 2. balloc(root) until next rollup
+ * 1. Construct root buffer until next unify
+ * 2. balloc(root) until next unify
  */
 /* The left key should always be 0 on new root */
 void log_bnode_root(struct sb *sb, block_t root, unsigned count,
@@ -356,8 +356,8 @@ void log_bnode_root(struct sb *sb, block_t root, unsigned count,
 }
 
 /*
- * 1. Split bnode from src to dst until next rollup
- * 2. balloc(dst) until next rollup
+ * 1. Split bnode from src to dst until next unify
+ * 2. balloc(dst) until next unify
  * (src buffer must be dirty already)
  */
 void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
@@ -366,7 +366,7 @@ void log_bnode_split(struct sb *sb, block_t src, unsigned pos, block_t dst)
 }
 
 /*
- * Insert new index (child, key) to parent until next rollup
+ * Insert new index (child, key) to parent until next unify
  * (parent buffer must be dirty already)
  */
 void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
@@ -375,7 +375,7 @@ void log_bnode_add(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
 }
 
 /*
- * Update ->block of "key" index by child on parent until next rollup
+ * Update ->block of "key" index by child on parent until next unify
  * (parent buffer must be dirty already)
  */
 void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key)
@@ -384,7 +384,7 @@ void log_bnode_update(struct sb *sb, block_t parent, block_t child, tuxkey_t key
 }
 
 /*
- * 1. Merge btree nodes from src to dst until next rollup
+ * 1. Merge btree nodes from src to dst until next unify
  * 2. bfree(src) (but this is for canceling log_bnode_redirect())
  * 3. Clear dirty of src buffer
  * (src and dst buffers must be dirty already)
@@ -395,7 +395,7 @@ void log_bnode_merge(struct sb *sb, block_t src, block_t dst)
 }
 
 /*
- * Delete indexes specified by (key, count) in bnode until next rollup
+ * Delete indexes specified by (key, count) in bnode until next unify
  * (bnode buffer must be dirty already)
  */
 void log_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
@@ -404,7 +404,7 @@ void log_bnode_del(struct sb *sb, block_t bnode, tuxkey_t key, unsigned count)
 }
 
 /*
- * Adjust ->key of index specified by "from" to "to" until next rollup
+ * Adjust ->key of index specified by "from" to "to" until next unify
  * (bnode buffer must be dirty already)
  */
 void log_bnode_adjust(struct sb *sb, block_t bnode, tuxkey_t from, tuxkey_t to)
@@ -440,16 +440,16 @@ void log_orphan_del(struct sb *sb, unsigned version, tuxkey_t inum)
 	log_u16_u48(sb, LOG_ORPHAN_DEL, version, inum);
 }
 
-/* Current freeblocks on rollup */
+/* Current freeblocks on unify */
 void log_freeblocks(struct sb *sb, block_t freeblocks)
 {
 	log_u48(sb, LOG_FREEBLOCKS, freeblocks);
 }
 
-/* Log to know where is new rollup cycle  */
-void log_rollup(struct sb *sb)
+/* Log to know where is new unify cycle  */
+void log_unify(struct sb *sb)
 {
-	log_intent(sb, LOG_ROLLUP);
+	log_intent(sb, LOG_UNIFY);
 }
 
 /* Just add log record as delta mark (for debugging) */

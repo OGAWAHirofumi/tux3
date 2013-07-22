@@ -59,21 +59,21 @@ static void cleanup_dirty_inode(struct inode *inode)
  */
 static void cleanup_dirty_for_umount(struct sb *sb)
 {
-	unsigned rollup = sb->rollup;
+	unsigned unify = sb->unify;
 
 	/*
 	 * Pinned buffer and bitmap are not flushing always, it is
 	 * normal. So, this clean those for unmount.
 	 */
 	if (sb->bitmap) {
-		struct list_head *head = tux3_dirty_buffers(sb->bitmap, rollup);
-		cleanup_dirty_buffers(sb->bitmap, head, rollup);
+		struct list_head *head = tux3_dirty_buffers(sb->bitmap, unify);
+		cleanup_dirty_buffers(sb->bitmap, head, unify);
 		cleanup_dirty_inode(sb->bitmap);
 	}
 	if (sb->volmap) {
-		cleanup_dirty_buffers(sb->volmap, &sb->rollup_buffers, rollup);
+		cleanup_dirty_buffers(sb->volmap, &sb->unify_buffers, unify);
 		/*
-		 * FIXME: mark_buffer_dirty() for rollup buffers marks
+		 * FIXME: mark_buffer_dirty() for unify buffers marks
 		 * volmap as I_DIRTY_PAGES (we don't need I_DIRTY_PAGES
 		 * actually) without changing tuxnode->flags.
 		 *
@@ -98,7 +98,7 @@ static void __tux3_put_super(struct sb *sbi)
 	/* All forked buffers should be freed here */
 	free_forked_buffers(sbi, NULL, 1);
 
-	destroy_defer_bfree(&sbi->derollup);
+	destroy_defer_bfree(&sbi->deunify);
 	destroy_defer_bfree(&sbi->defree);
 
 	iput(sbi->rootdir);

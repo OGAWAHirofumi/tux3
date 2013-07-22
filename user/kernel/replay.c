@@ -12,7 +12,7 @@ static const char *log_name[] = {
 #define X(x)	[x] = #x
 	X(LOG_BALLOC),
 	X(LOG_BFREE),
-	X(LOG_BFREE_ON_ROLLUP),
+	X(LOG_BFREE_ON_UNIFY),
 	X(LOG_BFREE_RELOG),
 	X(LOG_LEAF_REDIRECT),
 	X(LOG_LEAF_FREE),
@@ -28,7 +28,7 @@ static const char *log_name[] = {
 	X(LOG_ORPHAN_ADD),
 	X(LOG_ORPHAN_DEL),
 	X(LOG_FREEBLOCKS),
-	X(LOG_ROLLUP),
+	X(LOG_UNIFY),
 	X(LOG_DELTA),
 #undef X
 };
@@ -42,8 +42,8 @@ static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 		return ERR_PTR(-ENOMEM);
 
 	rp->sb = sb;
-	rp->rollup_pos = NULL;
-	rp->rollup_index = -1;
+	rp->unify_pos = NULL;
+	rp->unify_index = -1;
 	memset(rp->blocknrs, 0, logcount * sizeof(block_t));
 
 	INIT_LIST_HEAD(&rp->log_orphan_add);
@@ -77,13 +77,13 @@ static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)
 	while (data < log->data + be16_to_cpu(log->bytes)) {
 		u8 code = *data;
 
-		/* Find latest rollup. */
-		if (code == LOG_ROLLUP && rp->rollup_index == -1) {
-			rp->rollup_pos = data;
+		/* Find latest unify. */
+		if (code == LOG_UNIFY && rp->unify_index == -1) {
+			rp->unify_pos = data;
 			/* FIXME: index is unnecessary to use. We just
-			 * want to know whether before or after rollup
+			 * want to know whether before or after unify
 			 * mark. */
-			rp->rollup_index = bufindex(logbuf);
+			rp->unify_index = bufindex(logbuf);
 		}
 
 		if (log_size[code] == 0) {
@@ -188,13 +188,13 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 	/* Check whether array is uptodate */
 	BUILD_BUG_ON(ARRAY_SIZE(log_name) != LOG_TYPES);
 
-	/* If log is before latest rollup, those were already applied to FS. */
-	if (bufindex(logbuf) < rp->rollup_index) {
+	/* If log is before latest unify, those were already applied to FS. */
+	if (bufindex(logbuf) < rp->unify_index) {
 //		assert(0);	/* older logs should already be freed */
 		return 0;
 	}
-	if (bufindex(logbuf) == rp->rollup_index)
-		data = rp->rollup_pos;
+	if (bufindex(logbuf) == rp->unify_index)
+		data = rp->unify_pos;
 
 	while (data < log->data + be16_to_cpu(log->bytes)) {
 		u8 code = *data++;
@@ -309,14 +309,14 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 		}
 		case LOG_BALLOC:
 		case LOG_BFREE:
-		case LOG_BFREE_ON_ROLLUP:
+		case LOG_BFREE_ON_UNIFY:
 		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
 		case LOG_LEAF_FREE:
 		case LOG_BNODE_FREE:
 		case LOG_ORPHAN_ADD:
 		case LOG_ORPHAN_DEL:
-		case LOG_ROLLUP:
+		case LOG_UNIFY:
 		case LOG_DELTA:
 			data += log_size[code] - sizeof(code);
 			break;
@@ -339,31 +339,31 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 
 	/*
 	 * Log block address itself works as balloc log, and adjust
-	 * bitmap and derollup even if logblocks is before latest
-	 * rollup, to prevent to be overwritten. (This must be after
+	 * bitmap and deunify even if logblocks is before latest
+	 * unify, to prevent to be overwritten. (This must be after
 	 * LOG_FREEBLOCKS replay if there is it.)
 	 */
 	trace("LOG BLOCK: logblock %Lx", blocknr);
 	err = replay_update_bitmap(rp, blocknr, 1, 1);
 	if (err)
 		return err;
-	/* Mark log block as derollup block */
-	defer_bfree(&sb->derollup, blocknr, 1);
+	/* Mark log block as deunify block */
+	defer_bfree(&sb->deunify, blocknr, 1);
 
-	/* If log is before latest rollup, those were already applied to FS. */
-	if (bufindex(logbuf) < rp->rollup_index) {
+	/* If log is before latest unify, those were already applied to FS. */
+	if (bufindex(logbuf) < rp->unify_index) {
 //		assert(0);	/* older logs should already be freed */
 		return 0;
 	}
-	if (bufindex(logbuf) == rp->rollup_index)
-		data = rp->rollup_pos;
+	if (bufindex(logbuf) == rp->unify_index)
+		data = rp->unify_pos;
 
 	while (data < log->data + be16_to_cpu(log->bytes)) {
 		u8 code = *data++;
 		switch (code) {
 		case LOG_BALLOC:
 		case LOG_BFREE:
-		case LOG_BFREE_ON_ROLLUP:
+		case LOG_BFREE_ON_UNIFY:
 		case LOG_BFREE_RELOG:
 		{
 			u64 block;
@@ -376,8 +376,8 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			err = 0;
 			if (code == LOG_BALLOC)
 				err = replay_update_bitmap(rp, block, count, 1);
-			else if (code == LOG_BFREE_ON_ROLLUP)
-				defer_bfree(&sb->derollup, block, count);
+			else if (code == LOG_BFREE_ON_UNIFY)
+				defer_bfree(&sb->deunify, block, count);
 			else
 				err = replay_update_bitmap(rp, block, count, 0);
 			if (err)
@@ -401,7 +401,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 					return err;
 			} else {
 				/* newblock is not flushing yet */
-				defer_bfree(&sb->derollup, oldblock, 1);
+				defer_bfree(&sb->deunify, oldblock, 1);
 			}
 			break;
 		}
@@ -418,7 +418,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			if (code == LOG_BNODE_FREE) {
 				struct buffer_head *buffer =
 					vol_find_get_block(sb, block);
-				blockput_free_rollup(sb, buffer);
+				blockput_free_unify(sb, buffer);
 			}
 			break;
 		}
@@ -464,7 +464,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			if (err)
 				return err;
 
-			blockput_free_rollup(sb, vol_find_get_block(sb, src));
+			blockput_free_unify(sb, vol_find_get_block(sb, src));
 			break;
 		}
 		case LOG_ORPHAN_ADD:
@@ -489,7 +489,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 		case LOG_BNODE_UPDATE:
 		case LOG_BNODE_DEL:
 		case LOG_BNODE_ADJUST:
-		case LOG_ROLLUP:
+		case LOG_UNIFY:
 		case LOG_DELTA:
 			data += log_size[code] - sizeof(code);
 			break;
@@ -510,7 +510,7 @@ static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 
 	sb->lognext = 0;
 	while (sb->lognext < logcount) {
-		trace("log block %i, blocknr %Lx, rollup %Lx", sb->lognext, rp->blocknrs[sb->lognext], rp->rollup_index);
+		trace("log block %i, blocknr %Lx, unify %Lx", sb->lognext, rp->blocknrs[sb->lognext], rp->unify_index);
 		log_next(sb);
 		err = replay_log_func(rp, sb->logbuf);
 		log_drop(sb);

@@ -24,7 +24,7 @@ static void clean_main(struct sb *sb, struct inode *inode)
 	log_finish(sb);
 	log_finish_cycle(sb, 1);
 	free_map(inode->map);
-	destroy_defer_bfree(&sb->derollup);
+	destroy_defer_bfree(&sb->deunify);
 	destroy_defer_bfree(&sb->defree);
 	tux3_clear_dirty_inode(sb->logmap);
 	invalidate_buffers(sb->volmap->map);
@@ -622,7 +622,7 @@ static void test06(struct sb *sb, struct inode *inode)
 		blockput(leaf[i]);
 	}
 	for(int i = 0; i < ARRAY_SIZE(node); i++) {
-		mark_buffer_rollup_non(node[i]);
+		mark_buffer_unify_non(node[i]);
 		blockput(node[i]);
 	}
 

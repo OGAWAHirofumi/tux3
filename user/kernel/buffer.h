@@ -71,7 +71,7 @@ void tux3_set_buffer_dirty(struct address_space *mapping,
 			   struct buffer_head *buffer, int delta);
 void tux3_clear_buffer_dirty(struct buffer_head *buffer, unsigned delta);
 void blockput_free(struct sb *sb, struct buffer_head *buffer);
-void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer);
+void blockput_free_unify(struct sb *sb, struct buffer_head *buffer);
 void tux3_invalidate_buffer(struct buffer_head *buffer);
 
 /* buffer_writeback.c */

@@ -405,7 +405,7 @@ int main(int argc, char *argv[])
 	struct tux_iattr iattr = { .mode = S_IFREG | 0644, };
 	struct inode *inode = tuxcreate(sb->rootdir, "foo", 3, &iattr);
 
-	test_assert(force_rollup(sb) == 0);
+	test_assert(force_unify(sb) == 0);
 
 	test_init(argv[0]);
 

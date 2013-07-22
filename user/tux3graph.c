@@ -1557,7 +1557,7 @@ static void draw_log(struct sb *sb, struct buffer_head *buffer,
 	switch (code) {
 	case LOG_BALLOC:
 	case LOG_BFREE:
-	case LOG_BFREE_ON_ROLLUP:
+	case LOG_BFREE_ON_UNIFY:
 	case LOG_BFREE_RELOG: {
 		u32 count;
 		u64 block;
@@ -1661,7 +1661,7 @@ static void draw_log(struct sb *sb, struct buffer_head *buffer,
 		fprintf(gi->fp, "freeblocks %llu ", freeblocks);
 		break;
 	}
-	case LOG_ROLLUP:
+	case LOG_UNIFY:
 	case LOG_DELTA:
 		break;
 	default:

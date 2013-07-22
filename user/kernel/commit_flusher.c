@@ -163,7 +163,7 @@ static int wait_for_commit(struct sb *sb, unsigned delta)
 				   try_flush_pending_until_delta(sb, delta));
 }
 
-static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
+static int sync_current_delta(struct sb *sb, enum unify_flags unify_flag)
 {
 	struct delta_ref *delta_ref;
 	unsigned delta;
@@ -174,8 +174,8 @@ static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
 #endif
 	/* Get delta that have to write */
 	delta_ref = delta_get(sb);
-#ifdef ROLLUP_DEBUG
-	delta_ref->rollup_flag = rollup_flag;
+#ifdef UNIFY_DEBUG
+	delta_ref->unify_flag = unify_flag;
 #endif
 	delta = delta_ref->delta;
 	delta_put(sb, delta_ref);

@@ -185,9 +185,9 @@ void blockput_free(struct sb *sb, struct buffer_head *buffer)
 	__blockput_free(sb, buffer, TUX3_INIT_DELTA);
 }
 
-void blockput_free_rollup(struct sb *sb, struct buffer_head *buffer)
+void blockput_free_unify(struct sb *sb, struct buffer_head *buffer)
 {
-	__blockput_free(sb, buffer, sb->rollup);
+	__blockput_free(sb, buffer, sb->unify);
 }
 
 /* Copied from fs/buffer.c */

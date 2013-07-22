@@ -153,7 +153,7 @@ static void test02(struct sb *sb)
 	iput(inode4);
 	test_assert(!err);
 
-	force_rollup(sb);
+	force_unify(sb);
 
 	clean_main(sb);
 }

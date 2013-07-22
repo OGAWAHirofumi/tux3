@@ -154,14 +154,14 @@ int main(int argc, char *argv[])
 	const char *blurb = "<command> <volume>";
 
 	enum {
-		CMD_MKFS, CMD_FSCK, CMD_DELTA, CMD_ROLLUP, CMD_IMAGE,
+		CMD_MKFS, CMD_FSCK, CMD_DELTA, CMD_UNIFY, CMD_IMAGE,
 		CMD_READ, CMD_WRITE, CMD_GET, CMD_SET, CMD_STAT, CMD_DELETE,
 		CMD_TRUNCATE, CMD_UNKNOWN,
 	};
 
 	static char *commands[] = {
 		[CMD_MKFS] = "mkfs", [CMD_FSCK] = "fsck", [CMD_DELTA] = "delta",
-		[CMD_ROLLUP] = "rollup", [CMD_IMAGE] = "image",
+		[CMD_UNIFY] = "unify", [CMD_IMAGE] = "image",
 		[CMD_READ] = "read", [CMD_WRITE] = "write",
 		[CMD_GET] = "get", [CMD_SET] = "set",
 		[CMD_STAT] = "stat", [CMD_DELETE] = "delete",
@@ -313,13 +313,13 @@ int main(int argc, char *argv[])
 		force_delta(sb);
 		break;
 
-	case CMD_ROLLUP:
+	case CMD_UNIFY:
 		command_options(&argc, &args, onlyhelp, 3, progname, command,
 				"<volume>", &vars);
 		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
-		force_rollup(sb);
+		force_unify(sb);
 		break;
 
 	case CMD_WRITE:

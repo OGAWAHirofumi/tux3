@@ -124,9 +124,9 @@ static long tux3_wb_writeback(struct bdi_writeback *wb,
 
 	/* Get delta that have to write */
 	delta_ref = delta_get(sb);
-#ifdef ROLLUP_DEBUG
-	/* NO_ROLLUP and FORCE_ROLLUP are not supported for now */
-	delta_ref->rollup_flag = ALLOW_ROLLUP;
+#ifdef UNIFY_DEBUG
+	/* NO_UNIFY and FORCE_UNIFY are not supported for now */
+	delta_ref->unify_flag = ALLOW_UNIFY;
 #endif
 	delta = delta_ref->delta;
 	delta_put(sb, delta_ref);
@@ -467,10 +467,10 @@ static void try_delta_transition(struct sb *sb)
 #endif
 }
 
-static int sync_current_delta(struct sb *sb, enum rollup_flags rollup_flag)
+static int sync_current_delta(struct sb *sb, enum unify_flags unify_flag)
 {
-	/* FORCE_ROLLUP is not supported */
-	WARN_ON(rollup_flag == FORCE_ROLLUP);
+	/* FORCE_UNIFY is not supported */
+	WARN_ON(unify_flag == FORCE_UNIFY);
 	/* This is called only for fsync, so we can take ->s_umount here */
 	down_read(&vfs_sb(sb)->s_umount);
 	sync_inodes_sb(vfs_sb(sb));

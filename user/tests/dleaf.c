@@ -25,7 +25,7 @@ static void clean_main(struct sb *sb)
 {
 	log_finish(sb);
 	log_finish_cycle(sb, 1);
-	destroy_defer_bfree(&sb->derollup);
+	destroy_defer_bfree(&sb->deunify);
 	destroy_defer_bfree(&sb->defree);
 	tux3_clear_dirty_inode(sb->logmap);
 	put_super(sb);

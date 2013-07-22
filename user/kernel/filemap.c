@@ -14,9 +14,9 @@
  * down_write(itree: btree->lock) (alloc_inum, save_inode, purge_inode)
  * down_read(itree: btree->lock) (open_inode)
  *
- * down_write(otree: btree->lock) (tux3_rollup_orphan_add,
- *				    tux3_rollup_orphan_del,
- *				    load_otree_orphan)
+ * down_write(otree: btree->lock) (tux3_unify_orphan_add,
+ *				   tux3_unify_orphan_del,
+ *				   load_otree_orphan)
  *
  * down_write(inode: btree->lock) (btree_chop, map_region for write)
  * down_read(inode: btree->lock) (map_region for read)
@@ -74,8 +74,8 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	if (inode == sb->bitmap) {
-		log_bfree_on_rollup(sb, block, count);
-		defer_bfree(&sb->derollup, block, count);
+		log_bfree_on_unify(sb, block, count);
+		defer_bfree(&sb->deunify, block, count);
 	} else {
 		log_bfree(sb, block, count);
 		defer_bfree(&sb->defree, block, count);
