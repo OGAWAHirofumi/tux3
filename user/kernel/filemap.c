@@ -638,6 +638,7 @@ int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
 
 #ifdef __KERNEL__
 #include <linux/mpage.h>
+#include <linux/swap.h>		/* for mark_page_accessed() */
 
 static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec)
 {
@@ -865,7 +866,7 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 
 	bh = find_get_buffer(mapping, index, offset);
 	if (bh)
-		return bh;
+		goto out;
 
 	err = -ENOMEM;
 	/* FIXME: don't need to find again. Just try to allocate and insert */
@@ -891,6 +892,9 @@ struct buffer_head *blockread(struct address_space *mapping, block_t iblock)
 	}
 	page_cache_release(page);
 	assert(buffer_uptodate(bh));
+
+out:
+	touch_buffer(bh);
 
 	return bh;
 
@@ -954,6 +958,8 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 
 	unlock_page(page);
 	page_cache_release(page);
+
+	touch_buffer(bh);
 
 	return bh;
 }
