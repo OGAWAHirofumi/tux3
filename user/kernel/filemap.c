@@ -938,7 +938,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	 * FIXME: now all read is using ->readpage(), this means it
 	 * reads whole page with lock_page(), i.e. read non-target
 	 * block.  So, we have to hold to modify data to prevent race
-	 * with ->readpage(). But we are not holding lock_lock().
+	 * with ->readpage(). But we are not holding lock_page().
 	 *
 	 *          cpu0                            cpu1
 	 *					bufferA = blockget()
@@ -953,6 +953,16 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock)
 	 *
 	 * So, this set uptodate before unlock_page. But, we should
 	 * use submit_bh() or similar to read block, instead.
+	 *
+	 * FIXME: another issue of blockread/blockget(). If those
+	 * functions was used for volmap, we might read blocks nearby
+	 * the target block. But nearby blocks can be allocated for
+	 * data pages, furthermore nearby blocks can be in-flight I/O.
+	 *
+	 * So, nearby blocks on volmap can be non-volmap blocks, and
+	 * it would just increase amount of I/O size, and seeks.
+	 *
+	 * Like above said, we should use submit_bh() or similar.
 	 */
 	set_buffer_uptodate(bh);
 
