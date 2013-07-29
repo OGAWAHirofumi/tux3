@@ -57,7 +57,6 @@ void show_buffer(struct buffer_head *buffer)
 void show_buffers_(map_t *map, int all)
 {
 	struct buffer_head *buffer;
-	struct hlist_node *node;
 	unsigned i;
 
 	for (i = 0; i < BUFFER_BUCKETS; i++) {
@@ -66,7 +65,7 @@ void show_buffers_(map_t *map, int all)
 			continue;
 
 		printf("[%i] ", i);
-		hlist_for_each_entry(buffer, node, bucket, hashlink) {
+		hlist_for_each_entry(buffer, bucket, hashlink) {
 			if (all || buffer->count >= !hlist_unhashed(&buffer->hashlink) + 1)
 				show_buffer(buffer);
 		}
@@ -420,8 +419,8 @@ struct buffer_head *peekblk(map_t *map, block_t block)
 {
 	struct hlist_head *bucket = map->hash + buffer_hash(block);
 	struct buffer_head *buffer;
-	struct hlist_node *node;
-	hlist_for_each_entry(buffer, node, bucket, hashlink) {
+
+	hlist_for_each_entry(buffer, bucket, hashlink) {
 		if (buffer->index == block) {
 			get_bh(buffer);
 			return buffer;
@@ -434,8 +433,8 @@ struct buffer_head *blockget(map_t *map, block_t block)
 {
 	struct hlist_head *bucket = map->hash + buffer_hash(block);
 	struct buffer_head *buffer;
-	struct hlist_node *node;
-	hlist_for_each_entry(buffer, node, bucket, hashlink) {
+
+	hlist_for_each_entry(buffer, bucket, hashlink) {
 		if (buffer->index == block) {
 			list_move_tail(&buffer->lru, &lru_buffers);
 			get_bh(buffer);
@@ -488,8 +487,9 @@ void truncate_buffers_range(map_t *map, loff_t lstart, loff_t lend)
 	for (i = 0; i < BUFFER_BUCKETS; i++) {
 		struct hlist_head *bucket = &map->hash[i];
 		struct buffer_head *buffer;
-		struct hlist_node *node, *n;
-		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
+		struct hlist_node *n;
+
+		hlist_for_each_entry_safe(buffer, n, bucket, hashlink) {
 			/* Clear partial truncated buffer */
 			if (partial && buffer->index == start - 1)
 				memset(buffer->data + partial, 0, partial_size);
@@ -517,8 +517,9 @@ void invalidate_buffers(map_t *map)
 	for (i = 0; i < BUFFER_BUCKETS; i++) {
 		struct hlist_head *bucket = &map->hash[i];
 		struct buffer_head *buffer;
-		struct hlist_node *node, *n;
-		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink) {
+		struct hlist_node *n;
+
+		hlist_for_each_entry_safe(buffer, n, bucket, hashlink) {
 			if (buffer->count == 1) {
 				if (!buffer_empty(buffer))
 					set_buffer_empty(buffer);
@@ -691,8 +692,9 @@ void free_map(map_t *map)
 	for (int i = 0; i < BUFFER_BUCKETS; i++) {
 		struct hlist_head *bucket = &map->hash[i];
 		struct buffer_head *buffer;
-		struct hlist_node *node, *n;
-		hlist_for_each_entry_safe(buffer, node, n, bucket, hashlink)
+		struct hlist_node *n;
+
+		hlist_for_each_entry_safe(buffer, n, bucket, hashlink)
 			evict_buffer(buffer);
 	}
 	free(map);

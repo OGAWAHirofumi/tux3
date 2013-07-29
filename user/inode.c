@@ -33,9 +33,8 @@ void inode_leak_check(void)
 
 	for (int i = 0; i < HASH_SIZE; i++) {
 		struct hlist_head *head = inode_hashtable + i;
-		struct hlist_node *node;
 		struct inode *inode;
-		hlist_for_each_entry(inode, node, head, i_hash) {
+		hlist_for_each_entry(inode, head, i_hash) {
 			trace_on("possible leak inode inum %Lu, i_count %d",
 				 tux_inode(inode)->inum,
 				 atomic_read(&inode->i_count));
@@ -156,10 +155,9 @@ static struct inode *find_inode(struct sb *sb, struct hlist_head *head,
 				int (*test)(struct inode *, void *),
 				void *data)
 {
-	struct hlist_node *node;
 	struct inode *inode;
 
-	hlist_for_each_entry(inode, node, head, i_hash) {
+	hlist_for_each_entry(inode, head, i_hash) {
 		if (test(inode, data)) {
 			__iget(inode);
 			return inode;
@@ -220,16 +218,15 @@ static int insert_inode_locked4(struct inode *inode, inum_t inum,
 
 	while (1) {
 		struct inode *old = NULL;
-		struct hlist_node *node;
 
-		hlist_for_each_entry(old, node, head, i_hash) {
+		hlist_for_each_entry(old, head, i_hash) {
 			if (!test(old, data))
 				continue;
 			if (old->i_state & (I_FREEING /*|I_WILL_FREE*/))
 				continue;
 			break;
 		}
-		if (likely(!node)) {
+		if (likely(!old)) {
 			inode->i_state |= I_NEW;
 			hlist_add_head(&inode->i_hash, head);
 			return 0;
