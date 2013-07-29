@@ -82,11 +82,15 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry);
  */
 
 #define REQ_WRITE	1
-#define REQ_RAHEAD	0
 #define REQ_SYNC	0
+#define REQ_META	0
+#define REQ_PRIO	0
 #define REQ_NOIDLE	0
-#define REQ_FLUSH	0
+
+#define REQ_RAHEAD	0
+
 #define REQ_FUA		0
+#define REQ_FLUSH	0
 
 #define RW_MASK		REQ_WRITE
 #define RWA_MASK	REQ_RAHEAD
