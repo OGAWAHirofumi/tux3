@@ -4,61 +4,17 @@
 #include <linux/freezer.h>
 
 /*
- * HACK: We set BDI_CAP_NO_WRITEBACK to bdi to disable flusher task
- * management to overwrite flusher task.
- *
- * But, BDI_CAP_NO_WRITEBACK disables also some functionality. So, we
- * replace some check by own check.
- *
- * FIXME: Remove this file after implement of flusher interface
+ * FIXME: this is hack to override writeback without patch kernel.
+ * We should add proper interfaces to do this, instead. Then, remove
+ * this stuff.
  */
-
-void tux3_accout_set_writeback(struct page *page)
-{
-	/*
-	 * Hack: BDI_CAP_NO_WRITEBACK disables this accouting, so we
-	 * do ourself instead.
-	 */
-	struct address_space *mapping = page->mapping;
-	if (mapping)
-		inc_bdi_stat(mapping->backing_dev_info, BDI_WRITEBACK);
-}
-
-void tux3_accout_clear_writeback(struct page *page)
-{
-	/*
-	 * Hack: BDI_CAP_NO_WRITEBACK disables this accouting, so we
-	 * do ourself instead.
-	 */
-	struct address_space *mapping = page->mapping;
-	if (mapping) {
-		dec_bdi_stat(mapping->backing_dev_info, BDI_WRITEBACK);
-		bdi_writeout_inc(mapping->backing_dev_info);
-	}
-}
 
 void tux3_set_mapping_bdi(struct inode *inode)
 {
 	/*
-	 * Hack: set backing_dev_info to overwrite flusher task.
+	 * Hack: set backing_dev_info to use our bdi.
 	 */
 	inode->i_mapping->backing_dev_info = inode->i_sb->s_bdi;
-}
-
-/*
- * If dirty inode list was empty, we start the timer for periodical
- * flush.  (based on bdi_wakeup_thread_delayed())
- *
- * Hack: BDI_CAP_NO_WRITEBACK disables to wakeup flusher. So, we do
- * ourself instead.
- */
-void tux3_start_periodical_flusher(struct sb *sb)
-{
-	struct backing_dev_info *bdi = vfs_sb(sb)->s_bdi;
-	unsigned long timeout;
-
-	timeout = msecs_to_jiffies(dirty_writeback_interval * 10);
-	mod_timer(&bdi->wb.wakeup_timer, jiffies + timeout);
 }
 
 /*
@@ -325,6 +281,59 @@ static long tux3_do_writeback(struct bdi_writeback *wb, int force_wait)
 	return wrote;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
+#define TUX3_BDI_CAP	(BDI_CAP_NO_WRITEBACK | BDI_CAP_MAP_COPY)
+
+/*
+ * HACK: We set BDI_CAP_NO_WRITEBACK to bdi to disable flusher task
+ * management to overwrite flusher task.
+ *
+ * But, BDI_CAP_NO_WRITEBACK disables also some functionality. So, we
+ * replace some check by own check.
+ *
+ * FIXME: Remove this file after implement of flusher interface
+ */
+
+void tux3_accout_set_writeback(struct page *page)
+{
+	/*
+	 * Hack: BDI_CAP_NO_WRITEBACK disables this accouting, so we
+	 * do ourself instead.
+	 */
+	struct address_space *mapping = page->mapping;
+	if (mapping)
+		inc_bdi_stat(mapping->backing_dev_info, BDI_WRITEBACK);
+}
+
+void tux3_accout_clear_writeback(struct page *page)
+{
+	/*
+	 * Hack: BDI_CAP_NO_WRITEBACK disables this accouting, so we
+	 * do ourself instead.
+	 */
+	struct address_space *mapping = page->mapping;
+	if (mapping) {
+		dec_bdi_stat(mapping->backing_dev_info, BDI_WRITEBACK);
+		bdi_writeout_inc(mapping->backing_dev_info);
+	}
+}
+
+/*
+ * If dirty inode list was empty, we start the timer for periodical
+ * flush.  (based on bdi_wakeup_thread_delayed())
+ *
+ * Hack: BDI_CAP_NO_WRITEBACK disables to wakeup flusher. So, we do
+ * ourself instead.
+ */
+void tux3_start_periodical_flusher(struct sb *sb)
+{
+	struct backing_dev_info *bdi = vfs_sb(sb)->s_bdi;
+	unsigned long timeout;
+
+	timeout = msecs_to_jiffies(dirty_writeback_interval * 10);
+	mod_timer(&bdi->wb.wakeup_timer, jiffies + timeout);
+}
+
 /*
  * Handle writeback of dirty data for the device backed by this bdi. Also
  * wakes up periodically and does kupdated style flushing.
@@ -390,6 +399,147 @@ static int tux3_writeback_thread(void *data)
 	return 0;
 }
 
+static int tux3_setup_writeback(struct sb *sb, struct backing_dev_info *bdi)
+{
+	dev_t dev = vfs_sb(sb)->s_bdev->bd_dev;
+	struct task_struct *task;
+
+	task = kthread_create(tux3_writeback_thread, &bdi->wb,
+			      "flush-%s-%u:%u",
+			      bdi->name, MAJOR(dev), MINOR(dev));
+	if (IS_ERR(task))
+		return PTR_ERR(task);
+
+	/*
+	 * The spinlock makes sure we do not lose wake-ups when racing
+	 * with 'bdi_queue_work()'.  And as soon as the bdi thread is
+	 * visible, we can start it.
+	 */
+	spin_lock_bh(&bdi->wb_lock);
+	bdi->wb.task = task;
+	spin_unlock_bh(&bdi->wb_lock);
+
+	return 0;
+}
+
+static void tux3_wakeup_writeback(struct backing_dev_info *bdi)
+{
+	wake_up_process(bdi->wb.task);
+}
+
+static void tux3_destroy_writeback(struct backing_dev_info *bdi)
+{
+	/*
+	 * If bdi has BDI_CAP_NO_WRITEBACK, bdi_destory() doesn't
+	 * cleanup bdi. So, this remove it from capabilities.
+	 */
+	bdi->capabilities &= ~BDI_CAP_NO_WRITEBACK;
+	bdi_destroy(bdi);
+}
+#else /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0) */
+#define TUX3_BDI_CAP	BDI_CAP_MAP_COPY
+
+void tux3_accout_set_writeback(struct page *page)
+{
+}
+
+void tux3_accout_clear_writeback(struct page *page)
+{
+}
+
+void tux3_start_periodical_flusher(struct sb *sb)
+{
+}
+
+/* Dirty hack to get bdi_wq address from module */
+static struct workqueue_struct *kernel_bdi_wq;
+
+/*
+ * Handle writeback of dirty data for the device backed by this bdi. Also
+ * reschedules periodically and does kupdated style flushing.
+ */
+static void tux3_writeback_workfn(struct work_struct *work)
+{
+	struct bdi_writeback *wb = container_of(to_delayed_work(work),
+						struct bdi_writeback, dwork);
+	struct backing_dev_info *bdi = wb->bdi;
+	long pages_written;
+
+#if 0
+	/* set_worker_desc() is not exported to module */
+	set_worker_desc("flush-tux3-%s", dev_name(bdi->dev));
+#endif
+	current->flags |= PF_SWAPWRITE;
+
+#if 0
+	/* current_is_workqueue_rescuer() is not exported to module */
+	if (likely(!current_is_workqueue_rescuer() ||
+		   list_empty(&bdi->bdi_list)))
+#endif
+	{
+		/*
+		 * The normal path.  Keep writing back @bdi until its
+		 * work_list is empty.  Note that this path is also taken
+		 * if @bdi is shutting down even when we're running off the
+		 * rescuer as work_list needs to be drained.
+		 */
+		do {
+			pages_written = tux3_do_writeback(wb, 0);
+//			trace_writeback_pages_written(pages_written);
+		} while (!list_empty(&bdi->work_list));
+	}
+#if 0
+	else {
+		/*
+		 * bdi_wq can't get enough workers and we're running off
+		 * the emergency worker.  Don't hog it.  Hopefully, 1024 is
+		 * enough for efficient IO.
+		 */
+		pages_written = writeback_inodes_wb(&bdi->wb, 1024,
+						    WB_REASON_FORKER_THREAD);
+		trace_writeback_pages_written(pages_written);
+	}
+#endif
+	if (!list_empty(&bdi->work_list) ||
+	    (wb_has_dirty_io(wb) && dirty_writeback_interval))
+		queue_delayed_work(kernel_bdi_wq, &wb->dwork,
+			msecs_to_jiffies(dirty_writeback_interval * 10));
+
+	current->flags &= ~PF_SWAPWRITE;
+}
+
+#include <linux/kallsyms.h>
+static int tux3_setup_writeback(struct sb *sb, struct backing_dev_info *bdi)
+{
+	/* Dirty hack to get bdi_wq address from module */
+	if (kernel_bdi_wq == NULL) {
+		unsigned long wq_addr;
+
+		wq_addr = kallsyms_lookup_name("bdi_wq");
+		if (!wq_addr) {
+			tux3_err(sb, "couldn't find bdi_wq address\n");
+			return -EINVAL;
+		}
+		kernel_bdi_wq = *(struct workqueue_struct **)wq_addr;
+		tux3_msg(sb, "use bdi_wq %p", kernel_bdi_wq);
+	}
+
+	/* Overwrite callback by ourself handler */
+	INIT_DELAYED_WORK(&bdi->wb.dwork, tux3_writeback_workfn);
+
+	return 0;
+}
+
+static void tux3_wakeup_writeback(struct backing_dev_info *bdi)
+{
+}
+
+static void tux3_destroy_writeback(struct backing_dev_info *bdi)
+{
+	bdi_destroy(bdi);
+}
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0) */
+
 static int tux3_congested_fn(void *congested_data, int bdi_bits)
 {
 	return bdi_congested(congested_data, bdi_bits);
@@ -403,39 +553,25 @@ static int tux3_congested_fn(void *congested_data, int bdi_bits)
 int tux3_init_flusher(struct sb *sb)
 {
 	struct backing_dev_info *bdi = &sb->bdi;
-	dev_t dev = vfs_sb(sb)->s_bdev->bd_dev;
-	struct task_struct *task;
 	int err;
 
 	bdi->ra_pages		= vfs_sb(sb)->s_bdi->ra_pages;
 	bdi->congested_fn	= tux3_congested_fn;
 	bdi->congested_data	= vfs_sb(sb)->s_bdi;
 
-	err = bdi_setup_and_register(bdi, "tux3",
-				     BDI_CAP_NO_WRITEBACK | BDI_CAP_MAP_COPY);
+	err = bdi_setup_and_register(bdi, "tux3", TUX3_BDI_CAP);
 	if (err)
 		return err;
 
-	task = kthread_create(tux3_writeback_thread, &bdi->wb,
-			      "flush-%s-%u:%u",
-			      bdi->name, MAJOR(dev), MINOR(dev));
-	if (IS_ERR(task)) {
+	err = tux3_setup_writeback(sb, bdi);
+	if (err) {
 		bdi_destroy(bdi);
-		return PTR_ERR(task);
+		return err;
 	}
-
-	/*
-	 * The spinlock makes sure we do not lose wake-ups when racing
-	 * with 'bdi_queue_work()'.  And as soon as the bdi thread is
-	 * visible, we can start it.
-	 */
-	spin_lock_bh(&bdi->wb_lock);
-	bdi->wb.task = task;
-	spin_unlock_bh(&bdi->wb_lock);
 
 	vfs_sb(sb)->s_bdi = bdi;
 
-	wake_up_process(task);
+	tux3_wakeup_writeback(bdi);
 
 	return 0;
 }
@@ -443,13 +579,7 @@ int tux3_init_flusher(struct sb *sb)
 void tux3_exit_flusher(struct sb *sb)
 {
 	struct backing_dev_info *bdi = vfs_sb(sb)->s_bdi;
-
-	/*
-	 * If bdi has BDI_CAP_NO_WRITEBACK, bdi_destory() doesn't
-	 * cleanup bdi. So, this remove it from capabilities.
-	 */
-	bdi->capabilities &= ~BDI_CAP_NO_WRITEBACK;
-	bdi_destroy(bdi);
+	tux3_destroy_writeback(bdi);
 }
 
 static void schedule_flush_delta(struct sb *sb)
