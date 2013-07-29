@@ -6,6 +6,7 @@
  */
 
 #include <linux/splice.h>
+#include <linux/aio.h>		/* for kiocb */
 
 /*
  * Almost copy of generic_file_aio_write() (added changed_begin/end,

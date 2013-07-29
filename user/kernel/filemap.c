@@ -639,6 +639,7 @@ int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec)
 #ifdef __KERNEL__
 #include <linux/mpage.h>
 #include <linux/swap.h>		/* for mark_page_accessed() */
+#include <linux/aio.h>		/* for kiocb */
 
 static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec)
 {
