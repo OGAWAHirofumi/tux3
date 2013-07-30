@@ -751,10 +751,26 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 	buf_a = list_entry(a, struct buffer_head, b_assoc_buffers);
 	buf_b = list_entry(b, struct buffer_head, b_assoc_buffers);
 
-	if (bufindex(buf_a) < bufindex(buf_b))
+	/*
+	 * Optimized version of the following:
+	 *
+	 * if (bufindex(buf_a) < bufindex(buf_b))
+	 *	return -1;
+	 * else if (bufindex(buf_a) > bufindex(buf_b))
+	 *	return 1;
+	 */
+	if (buf_a->b_page->index < buf_b->b_page->index)
 		return -1;
-	else if (bufindex(buf_a) > bufindex(buf_b))
+	else if (buf_a->b_page->index > buf_b->b_page->index)
 		return 1;
+	else {
+		/* page_offset() is same, compare offset within page */
+		if (buf_a->b_data < buf_b->b_data)
+			return -1;
+		if (buf_a->b_data > buf_b->b_data)
+			return 1;
+	}
+
 	return 0;
 }
 
