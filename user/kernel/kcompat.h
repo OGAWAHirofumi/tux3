@@ -14,6 +14,8 @@ static inline struct inode *file_inode(struct file *file)
 {
 	return file->f_dentry->d_inode;
 }
+
+#define MODULE_ALIAS_FS(x)
 #endif
 
 #endif /* !__KERNEL__ */

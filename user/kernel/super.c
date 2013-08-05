@@ -9,6 +9,7 @@
 #ifdef __KERNEL__
 #include <linux/module.h>
 #include <linux/statfs.h>
+#include "kcompat.h"
 
 /* This will go to include/linux/magic.h */
 #ifndef TUX3_SUPER_MAGIC
@@ -537,4 +538,5 @@ static void __exit exit_tux3(void)
 module_init(init_tux3);
 module_exit(exit_tux3);
 MODULE_LICENSE("GPL");
+MODULE_ALIAS_FS("tux3");
 #endif /* !__KERNEL__ */
