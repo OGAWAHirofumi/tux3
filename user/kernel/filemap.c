@@ -215,7 +215,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		/* Change the seg[] to redirect this region as one extent */
 		count = 0;
 		for (int i = 0; i < segs; i++) {
-			/* Logging overwrited extents as free */
+			/* Logging overwritten extents as free */
 			if (seg[i].state != BLOCK_SEG_HOLE)
 				map_bfree(inode, seg[i].block, seg[i].count);
 			count += seg[i].count;
@@ -534,7 +534,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		/* Change the seg[] to redirect this region as one extent */
 		unsigned total = 0;
 		for (int i = 0; i < segs; i++) {
-			/* Logging overwrited extents as free */
+			/* Logging overwritten extents as free */
 			if (seg[i].state != BLOCK_SEG_HOLE)
 				map_bfree(inode, seg[i].block, seg[i].count);
 			total += seg[i].count;
