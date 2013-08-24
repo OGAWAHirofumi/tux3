@@ -323,8 +323,12 @@ static int load_orphan_inode(struct sb *sb, inum_t inum, struct list_head *head)
 	struct inode *inode;
 
 	inode = tux3_iget(sb, inum);
-	if (IS_ERR(inode))
-		return PTR_ERR(inode);
+	if (IS_ERR(inode)) {
+		int err = PTR_ERR(inode);
+		tux3_err(sb, "%s: orphan inum %Lu not found (err %d)",
+			  __func__, inum, err);
+		return err;
+	}
 	assert(inode->i_nlink == 0);
 
 	tux3_mark_inode_orphan(tux_inode(inode));

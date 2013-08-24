@@ -9,6 +9,7 @@
 static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 				  unsigned int flags)
 {
+	struct sb *sb = tux_sb(dir->i_sb);
 	struct buffer_head *buffer;
 	struct inode *inode;
 	tux_dirent *entry;
@@ -24,7 +25,9 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 	inum = be64_to_cpu(entry->inum);
 	blockput(buffer);
 
-	inode = tux3_iget(tux_sb(dir->i_sb), inum);
+	inode = tux3_iget(sb, inum);
+	if (IS_ERR(inode) && PTR_ERR(inode) == -ENOENT)
+		tux3_warn(sb, "%s: inum %Lu not found", __func__, inum);
 out:
 	return d_splice_alias(inode, dentry);
 }

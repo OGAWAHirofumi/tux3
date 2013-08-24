@@ -460,8 +460,6 @@ static int open_inode(struct inode *inode)
 		.data	= inode,
 	};
 	err = btree_read(cursor, &rq.key);
-	if (err == -ENOENT)
-		tux3_warn(sb, "inum %Lu not found", tux_inode(inode)->inum);
 	if (!err) {
 		check_present(inode);
 		tux_setup_inode(inode);

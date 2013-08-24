@@ -159,6 +159,7 @@ struct replay *tux3_init_fs(struct sb *sbi)
 {
 	struct replay *rp = NULL;
 	struct inode *inode;
+	char *name;
 	int err;
 
 	/* Initialize flusher before setup inode */
@@ -188,23 +189,31 @@ struct replay *tux3_init_fs(struct sb *sbi)
 
 	/* Load internal inodes */
 	inode = iget_or_create_inode(sbi, TUX_BITMAP_INO);
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		name = "bitmap";
 		goto error_inode;
+	}
 	sbi->bitmap = inode;
 #if 0
 	inode = tux3_iget(sbi, TUX_VTABLE_INO);
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		name = "vtable";
 		goto error_inode;
+	}
 	sbi->vtable = inode;
 #endif
 	inode = tux3_iget(sbi, TUX_ATABLE_INO);
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		name = "atable";
 		goto error_inode;
+	}
 	sbi->atable = inode;
 
 	inode = tux3_iget(sbi, TUX_ROOTDIR_INO);
-	if (IS_ERR(inode))
+	if (IS_ERR(inode)) {
+		name = "rootdir";
 		goto error_inode;
+	}
 	sbi->rootdir = inode;
 
 	err = replay_stage2(rp);
@@ -217,6 +226,7 @@ struct replay *tux3_init_fs(struct sb *sbi)
 
 error_inode:
 	err = PTR_ERR(inode);
+	tux3_err(sbi, "failed to load %s inode (err %d)", name, err);
 error:
 	if (!IS_ERR_OR_NULL(rp))
 		replay_stage3(rp, 0);
