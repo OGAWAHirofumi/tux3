@@ -371,24 +371,8 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 			continue;
 
 		err = balloc_partial(sb, seg[i].count, &tmp, 1);
-		if (err) { // goal ???
-			/*
-			 * Out of space on file data allocation.  It
-			 * happens.  Tread carefully.  We have not
-			 * stored anything in the btree yet, so we
-			 * free what we allocated so far.  We need to
-			 * leave the user with a nice ENOSPC return
-			 * and all metadata consistent on disk.  We
-			 * better have reserved everything we need for
-			 * metadata, just giving up is not an option.
-			 */
-			/*
-			 * Alternatively, we can go ahead and try to
-			 * record just what we successfully allocated,
-			 * then if the update fails on no space for
-			 * btree splits, free just the blocks for
-			 * extents we failed to store.
-			 */
+		if (err) {
+			assert(err != -ENOSPC);	/* frontend reservation bug */
 			return err;
 		}
 
