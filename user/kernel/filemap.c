@@ -473,17 +473,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			goto out_unlock;
 		}
 	}
-
 	if (has_root(btree)) {
-		struct dleaf_req rq = {
-			.key = {
-				.start	= start,
-				.len	= count,
-			},
-			.seg_max	= seg_max,
-			.seg		= seg,
-		};
-
 		cursor = alloc_cursor(btree, 1); /* allows for depth increase */
 		if (!cursor) {
 			segs = -ENOMEM;
@@ -495,68 +485,59 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			segs = err;
 			goto out_unlock;
 		}
-		/* Read extents from data btree */
-		err = btree_read(cursor, &rq.key);
-		if (err) {
-			segs = err;
-			goto out_unlock;
+	}
+
+	if (mode == MAP_READ) {
+		if (has_root(btree)) {
+			struct dleaf_req rq = {
+				.key = {
+					.start	= start,
+					.len	= count,
+				},
+				.seg_max	= seg_max,
+				.seg		= seg,
+			};
+
+			/* Read extents from data btree */
+			err = btree_read(cursor, &rq.key);
+			if (err) {
+				segs = err;
+				goto out_unlock;
+			}
+			segs = rq.seg_cnt;
+			/*
+			 * Read might be partial. (due to seg_max, or FIXME:
+			 * lack of read for multiple leaves)
+			 */
+		} else {
+			/* btree doesn't have root yet */
+			segs = 1;
+			seg[0].block = 0;
+			seg[0].count = count;
+			seg[0].state = BLOCK_SEG_HOLE;
 		}
-		segs = rq.seg_cnt;
-		/*
-		 * Read might be partial. (due to seg_max, or FIXME:
-		 * lack of read for multiple leaves)
-		 */
-		count = seg_total_count(seg, segs);
+		assert(segs);
 	} else {
-		assert(mode == MAP_READ);
-		/* btree doesn't have root yet */
-		segs = 1;
-		seg[0].block = 0;
-		seg[0].count = count;
-		seg[0].state = BLOCK_SEG_HOLE;
-	}
-	assert(segs);
-
-	if (mode == MAP_READ)
-		goto out_release;
-
-	if (mode == MAP_REDIRECT) {
-		/* Change the seg[] to redirect this region as one extent */
-		unsigned total = 0;
-		for (int i = 0; i < segs; i++) {
-			/* Logging overwritten extents as free */
-			if (seg[i].state != BLOCK_SEG_HOLE)
-				map_bfree(inode, seg[i].block, seg[i].count);
-			total += seg[i].count;
-		}
-		assert(total == count);
-		segs = 1;
-		seg[0].block = 0;
-		seg[0].count = total;
-		seg[0].state = BLOCK_SEG_HOLE;
+		/* Write extents from data btree */
+		struct dleaf_req rq = {
+			.key = {
+				.start	= start,
+				.len	= count,
+			},
+			.seg_max	= seg_max,
+			.seg		= seg,
+			.overwrite	= mode != MAP_REDIRECT,
+			.seg_find	= seg_find,
+			.seg_alloc	= seg_alloc,
+			.seg_free	= seg_free,
+		};
+		err = btree_write(cursor, &rq.key);
+		if (err)
+			segs = err;
+		else
+			segs = rq.seg_cnt;
 	}
 
-	/* Write extents from data btree */
-	struct dleaf_req rq = {
-		.key = {
-			.start	= start,
-			.len	= count,
-		},
-		.seg_cnt	= segs,
-		.seg_max	= seg_max,
-		.seg		= seg,
-		.seg_find	= seg_find,
-		.seg_alloc	= seg_alloc,
-		.seg_free	= seg_free,
-	};
-	err = btree_write(cursor, &rq.key);
-	if (err) {
-		segs = err;
-		goto out_release;
-	}
-	segs = rq.seg_cnt;
-
-out_release:
 	if (cursor)
 		release_cursor(cursor);
 out_unlock:
