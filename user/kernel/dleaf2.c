@@ -166,7 +166,14 @@ dleaf2_lookup_index(struct btree *btree, struct dleaf2 *dleaf, tuxkey_t index)
 {
 	struct diskextent2 *dex = dleaf->table;
 	struct diskextent2 *limit = dex + be16_to_cpu(dleaf->count);
-
+#if 1
+	/* Paranoia check: last should be sentinel (hole) */
+	if (dleaf->count) {
+		struct extent ex;
+		get_extent(limit - 1, &ex);
+		assert(ex.physical == 0);
+	}
+#endif
 	/* FIXME: binsearch here */
 	while (dex < limit) {
 		if (index == get_logical(dex))
@@ -177,13 +184,6 @@ dleaf2_lookup_index(struct btree *btree, struct dleaf2 *dleaf, tuxkey_t index)
 			return dex - 1;
 		}
 		dex++;
-	}
-
-	/* Not found - last should be sentinel (hole) */
-	if (dleaf->count) {
-		struct extent ex;
-		get_extent(dex - 1, &ex);
-		assert(ex.physical == 0);
 	}
 
 	return dex;
@@ -587,11 +587,6 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 	/* Lookup the extent is including index */
 	dex = dleaf2_lookup_index(btree, dleaf, key->start);
 	if (dex >= dex_limit - 1) {
-		/* paranoia check */
-		if (dex < dex_limit) {
-			get_extent(dex_limit - 1, &next);
-			assert(next.physical == 0);
-		}
 		/* If sentinel, fill by bottom key */
 		goto fill_seg;
 	}
