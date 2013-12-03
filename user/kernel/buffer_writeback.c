@@ -778,7 +778,7 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
  * Flush buffers in head
  */
 int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
-	       struct list_head *head)
+	       struct list_head *head, int req_flag)
 {
 	struct inode *inode = mapping->host;
 	struct bufvec bufvec;
@@ -798,7 +798,7 @@ int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
 		/* Collect contiguous buffer range */
 		if (bufvec_contig_collect(&bufvec)) {
 			/* Start I/O */
-			err = tux_inode(inode)->io(WRITE, &bufvec);
+			err = tux_inode(inode)->io(WRITE | req_flag, &bufvec);
 			if (err)
 				break;
 		}

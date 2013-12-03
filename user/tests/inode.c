@@ -27,7 +27,7 @@ static int tux3_flush_inode_hack(struct inode *inode)
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
-	err = tux3_flush_inode(inode, delta);
+	err = tux3_flush_inode(inode, delta, 0);
 	tux3_end_backend();
 
 	return err;

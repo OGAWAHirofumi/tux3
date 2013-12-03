@@ -265,7 +265,7 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
  * Flush buffers in head
  */
 int flush_list(map_t *map, struct tux3_iattr_data *idata,
-	       struct list_head *head)
+	       struct list_head *head, int req_flag)
 {
 	struct bufvec bufvec;
 	int err = 0;
@@ -284,7 +284,7 @@ int flush_list(map_t *map, struct tux3_iattr_data *idata,
 		/* Collect contiguous buffer range */
 		if (bufvec_contig_collect(&bufvec)) {
 			/* Start I/O */
-			err = map->io(WRITE, &bufvec);
+			err = map->io(WRITE | req_flag, &bufvec);
 			if (err)
 				break;
 		}

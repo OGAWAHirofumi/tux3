@@ -417,7 +417,7 @@ static void tux3_state_read_and_clear(struct inode *inode,
 
 static inline int tux3_flush_buffers(struct inode *inode,
 				     struct tux3_iattr_data *idata,
-				     unsigned delta)
+				     unsigned delta, int req_flag)
 {
 	struct list_head *dirty_buffers = tux3_dirty_buffers(inode, delta);
 	int err;
@@ -430,7 +430,7 @@ static inline int tux3_flush_buffers(struct inode *inode,
 		return err;
 
 	/* Apply page caches */
-	return flush_list(mapping(inode), idata, dirty_buffers);
+	return flush_list(mapping(inode), idata, dirty_buffers, req_flag);
 }
 
 /*
@@ -440,7 +440,7 @@ static inline int tux3_flush_buffers(struct inode *inode,
  * reclaim. Because we don't wait writeback on evict_inode(), and
  * instead we keeps the inode while writeback is running.
  */
-int tux3_flush_inode(struct inode *inode, unsigned delta)
+int tux3_flush_inode(struct inode *inode, unsigned delta, int req_flag)
 {
 	/* FIXME: linux writeback doesn't allow to control writeback
 	 * timing. */
@@ -485,7 +485,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
 			ret = err;
 	}
 
-	err = tux3_flush_buffers(inode, &idata, delta);
+	err = tux3_flush_buffers(inode, &idata, delta, req_flag);
 	if (err && !ret)
 		ret = err;
 
@@ -520,7 +520,7 @@ int tux3_flush_inode(struct inode *inode, unsigned delta)
  * If inode is TUX3_INODE_NO_FLUSH, those can clear inode dirty flags
  * immediately. Because those inodes is pinned until umount.
 */
-int tux3_flush_inode_internal(struct inode *inode, unsigned delta)
+int tux3_flush_inode_internal(struct inode *inode, unsigned delta, int req_flag)
 {
 	int err;
 
@@ -535,7 +535,7 @@ int tux3_flush_inode_internal(struct inode *inode, unsigned delta)
 	if (!(inode->i_state & I_DIRTY))
 		return 0;
 
-	err = tux3_flush_inode(inode, delta);
+	err = tux3_flush_inode(inode, delta, req_flag);
 	/* FIXME: error handling */
 	__tux3_clear_dirty_inode(inode, delta);
 
@@ -578,7 +578,7 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 
 		assert(!tux3_is_inode_no_flush(inode));
 
-		err = tux3_flush_inode(inode, delta);
+		err = tux3_flush_inode(inode, delta, 0);
 		if (err)
 			goto error;
 	}

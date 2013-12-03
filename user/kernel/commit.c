@@ -155,7 +155,7 @@ int save_sb(struct sb *sb)
 	super->atomgen = cpu_to_be32(sb->atomgen);
 	/* logchain and logcount are written to super directly */
 
-	return devio(WRITE_SYNC, sb_dev(sb), SB_LOC, super, SB_LEN);
+	return devio(WRITE_SYNC | REQ_META, sb_dev(sb), SB_LOC, super, SB_LEN);
 }
 
 /* Delta transition */
@@ -253,7 +253,7 @@ static int unify_log(struct sb *sb)
 
 	/* Flush bitmap */
 	trace("> flush bitmap %u", unify);
-	tux3_flush_inode_internal(sb->bitmap, unify);
+	tux3_flush_inode_internal(sb->bitmap, unify, REQ_META);
 	trace("< done bitmap %u", unify);
 
 	trace("> apply orphan inodes %u", unify);
@@ -295,12 +295,12 @@ static int stage_delta(struct sb *sb, unsigned delta)
 		return err;
 
 	/* Flush atable after inodes. Because inode deletion may dirty atable */
-	err = tux3_flush_inode_internal(sb->atable, delta);
+	err = tux3_flush_inode_internal(sb->atable, delta, 0);
 	if (err)
 		return err;
 #if 0
 	/* FIXME: we have to flush vtable somewhere */
-	err = tux3_flush_inode_internal(sb->vtable, delta);
+	err = tux3_flush_inode_internal(sb->vtable, delta, 0);
 	if (err)
 		return err;
 #endif
@@ -314,7 +314,7 @@ static int write_btree(struct sb *sb, unsigned delta)
 	 * FIXME: Now we are using TUX3_INIT_DELTA for leaves. Do
 	 * we need to per delta dirty buffers?
 	 */
-	return tux3_flush_inode_internal(sb->volmap, TUX3_INIT_DELTA);
+	return tux3_flush_inode_internal(sb->volmap, TUX3_INIT_DELTA, REQ_META);
 }
 
 /* allocate and write log blocks */
@@ -324,7 +324,7 @@ static int write_log(struct sb *sb)
 	log_finish(sb);
 	log_finish_cycle(sb, 0);
 
-	return tux3_flush_inode_internal(sb->logmap, TUX3_INIT_DELTA);
+	return tux3_flush_inode_internal(sb->logmap, TUX3_INIT_DELTA, REQ_META);
 }
 
 static int apply_defered_bfree(struct sb *sb, u64 val)
