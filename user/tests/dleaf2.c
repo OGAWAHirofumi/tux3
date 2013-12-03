@@ -184,6 +184,8 @@ static void test01(struct sb *sb, struct btree *btree)
 	 *           0 2
 	 * test01.c:  +---------------------------------------+
 	 *            1                                      30
+	 * test01.d:          +-------------+
+	 *                   10            18
 	 */
 	struct block_segment seg1[] = {
 		{ .block = 10, .count = 7, },
@@ -563,6 +565,33 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .logical =  0, .physical =   0, .count =  1, },
 			{ .logical =  1, .physical = 110, .count = 29, },
 			{ .logical = 30, .physical =   0, .count = 70, },
+		};
+		key = dleaf2_set_r_req(&rq, 0, 100, seg, ARRAY_SIZE(seg));
+		err = dleaf2_read(btree, 0, TUXKEY_LIMIT, leaf, key);
+		test_assert(!err);
+		check_seg(res2, 0, seg, rq.seg_cnt);
+
+		dleaf2_destroy(btree, leaf);
+		clean_main(sb, btree);
+	}
+	test_end();
+	if (test_start("test01.d")) {
+		/* Overwrite some address, and shrink total count */
+		struct block_segment seg2[] = {
+			{ .block = 120, .count = 8, },
+		};
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 10, 8, seg, ARRAY_SIZE(seg));
+		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
+		test_assert(!ret);
+
+		struct test_extent res2[] = {
+			{ .logical =  0, .physical =   0, .count =  3, },
+			{ .logical =  3, .physical =  10, .count =  7, },
+			{ .logical = 10, .physical = 120, .count =  8, },
+			{ .logical = 18, .physical =  40, .count =  2, },
+			{ .logical = 20, .physical =  50, .count =  5, },
+			{ .logical = 25, .physical =   0, .count = 75, },
 		};
 		key = dleaf2_set_r_req(&rq, 0, 100, seg, ARRAY_SIZE(seg));
 		err = dleaf2_read(btree, 0, TUXKEY_LIMIT, leaf, key);
