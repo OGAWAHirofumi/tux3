@@ -791,7 +791,7 @@ int main(int argc, char *argv[])
 	assert(!err);
 
 	struct sb *sb = rapid_sb(dev);
-	sb->super = INIT_DISKSB(dev->bits, 1024);
+	sb->super = INIT_DISKSB(dev->bits, 2048);
 	setup_sb(sb, &sb->super);
 
 	sb->volmap = tux_new_volmap(sb);

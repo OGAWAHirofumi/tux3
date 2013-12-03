@@ -601,12 +601,12 @@ int cursor_redirect(struct cursor *cursor)
 			/* This is leaf buffer */
 			mark_buffer_dirty_atomic(clone);
 			log_leaf_redirect(sb, oldblock, newblock);
-			defer_bfree(&sb->defree, oldblock, 1);
+			defer_bfree(sb, &sb->defree, oldblock, 1);
 		} else {
 			/* This is bnode buffer */
 			mark_buffer_unify_atomic(clone);
 			log_bnode_redirect(sb, oldblock, newblock);
-			defer_bfree(&sb->deunify, oldblock, 1);
+			defer_bfree(sb, &sb->deunify, oldblock, 1);
 		}
 
 		trace("update parent");
@@ -1274,7 +1274,7 @@ int free_empty_btree(struct btree *btree)
 		assert(ops->leaf_can_free(btree, bufdata(leafbuf)));
 		blockput_free(sb, leafbuf);
 	} else {
-		defer_bfree(&sb->defree, leaf, 1);
+		defer_bfree(sb, &sb->defree, leaf, 1);
 		log_bfree(sb, leaf, 1);
 		if (leafbuf) {
 			assert(ops->leaf_can_free(btree, bufdata(leafbuf)));
@@ -1292,7 +1292,7 @@ int free_empty_btree(struct btree *btree)
 		log_bnode_free(sb, bufindex(rootbuf));
 		blockput_free_unify(sb, rootbuf);
 	} else {
-		defer_bfree(&sb->deunify, bufindex(rootbuf), 1);
+		defer_bfree(sb, &sb->deunify, bufindex(rootbuf), 1);
 		log_bfree_on_unify(sb, bufindex(rootbuf), 1);
 		blockput(rootbuf);
 	}

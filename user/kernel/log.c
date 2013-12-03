@@ -214,7 +214,7 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 		 * We can obsolete the log blocks after next unify
 		 * by LOG_BFREE_RELOG.
 		 */
-		defer_bfree(&sb->deunify, seg.block, seg.count);
+		defer_bfree(sb, &sb->deunify, seg.block, seg.count);
 
 		/* Add count of log on this delta to unify logcount */
 		be32_add_cpu(&sb->super.logcount, seg.count);
@@ -579,9 +579,13 @@ int stash_walk(struct sb *sb, struct stash *stash, unstash_t actor)
 
 /* Deferred free blocks list */
 
-int defer_bfree(struct stash *defree, block_t block, unsigned count)
+int defer_bfree(struct sb *sb, struct stash *defree,
+		block_t block, unsigned count)
 {
 	static const unsigned limit = ULLONG_MAX >> 48;
+
+	assert(count > 0);
+	assert(block + count <= sb->volblocks);
 
 	/*
 	 * count field of stash is 16bits. So, this separates to

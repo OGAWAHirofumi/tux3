@@ -339,7 +339,7 @@ static int dleaf2_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 		get_extent(dex, &ex);
 		count = ex.logical - start;
 		if (block && count) {
-			defer_bfree(&sb->defree, block, count);
+			defer_bfree(sb, &sb->defree, block, count);
 			log_bfree(sb, block, count);
 		}
 

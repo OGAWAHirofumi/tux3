@@ -348,7 +348,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 	if (err)
 		return err;
 	/* Mark log block as deunify block */
-	defer_bfree(&sb->deunify, blocknr, 1);
+	defer_bfree(sb, &sb->deunify, blocknr, 1);
 
 	/* If log is before latest unify, those were already applied to FS. */
 	if (bufindex(logbuf) < rp->unify_index) {
@@ -377,7 +377,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			if (code == LOG_BALLOC)
 				err = replay_update_bitmap(rp, block, count, 1);
 			else if (code == LOG_BFREE_ON_UNIFY)
-				defer_bfree(&sb->deunify, block, count);
+				defer_bfree(sb, &sb->deunify, block, count);
 			else
 				err = replay_update_bitmap(rp, block, count, 0);
 			if (err)
@@ -401,7 +401,7 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 					return err;
 			} else {
 				/* newblock is not flushing yet */
-				defer_bfree(&sb->deunify, oldblock, 1);
+				defer_bfree(sb, &sb->deunify, oldblock, 1);
 			}
 			break;
 		}

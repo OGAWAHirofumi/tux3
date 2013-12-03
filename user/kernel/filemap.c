@@ -75,10 +75,10 @@ static int map_bfree(struct inode *inode, block_t block, unsigned count)
 	struct sb *sb = tux_sb(inode->i_sb);
 	if (inode == sb->bitmap) {
 		log_bfree_on_unify(sb, block, count);
-		defer_bfree(&sb->deunify, block, count);
+		defer_bfree(sb, &sb->deunify, block, count);
 	} else {
 		log_bfree(sb, block, count);
-		defer_bfree(&sb->defree, block, count);
+		defer_bfree(sb, &sb->defree, block, count);
 	}
 	return 0;
 }
