@@ -412,13 +412,13 @@ static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 	 */
 	err = stage_delta(sb, delta);
 	if (err)
-		return err;
+		goto error; /* FIXME: error handling */
 
 	if ((unify_flag == ALLOW_UNIFY && need_unify(sb)) ||
 	    unify_flag == FORCE_UNIFY) {
 		err = unify_log(sb);
 		if (err)
-			return err;
+			goto error; /* FIXME: error handling */
 
 		/* Add delta log for debugging. */
 		log_delta(sb);
@@ -439,13 +439,15 @@ static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 	 * commit block.)
 	 */
 	commit_delta(sb);
+error:
+	/* FIXME: what to do if error? */
 	tux3_end_backend();
-	trace("<<<<<<<<< commit done %u", delta);
+	trace("<<<<<<<<< commit done %u: err %d", delta, err);
 
 	post_commit(sb, delta);
 	trace("<<<<<<<<< post commit done %u", delta);
 
-	return err; /* FIXME: error handling */
+	return err;
 }
 
 /*
