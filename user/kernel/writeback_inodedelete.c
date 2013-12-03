@@ -49,6 +49,7 @@ static void __tux3_mark_inode_to_delete(struct inode *inode, unsigned delta)
 	 */
 	tux3_dirty_inode(inode, I_DIRTY_SYNC);
 	inode->i_state |= I_DIRTY_SYNC;
+	/* FIXME: we should wake up flusher if inode was clean */
 }
 
 void tux3_mark_inode_to_delete(struct inode *inode)
