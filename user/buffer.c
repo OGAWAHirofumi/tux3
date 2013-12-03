@@ -153,12 +153,16 @@ static inline int is_reclaim_buffer_early(void)
 	return 0;
 }
 
-void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
+int set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list)
 {
-	list_move_tail(&buffer->link, list);
-	buffer->state = state;
-	/* state was changed, try to reclaim */
-	reclaim_buffer_early(buffer);
+	if (buffer->state != state) {
+		list_move_tail(&buffer->link, list);
+		buffer->state = state;
+		/* state was changed, try to reclaim */
+		reclaim_buffer_early(buffer);
+		return 1;
+	}
+	return 0;
 }
 
 static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
@@ -166,16 +170,16 @@ static inline void set_buffer_state(struct buffer_head *buffer, unsigned state)
 	set_buffer_state_list(buffer, state, buffers + state);
 }
 
-void tux3_set_buffer_dirty_list(map_t *map, struct buffer_head *buffer,
+int tux3_set_buffer_dirty_list(map_t *map, struct buffer_head *buffer,
 				int delta, struct list_head *head)
 {
-	set_buffer_state_list(buffer, tux3_bufsta_delta(delta), head);
+	return set_buffer_state_list(buffer, tux3_bufsta_delta(delta), head);
 }
 
-void tux3_set_buffer_dirty(map_t *map, struct buffer_head *buffer, int delta)
+int tux3_set_buffer_dirty(map_t *map, struct buffer_head *buffer, int delta)
 {
 	struct list_head *head = tux3_dirty_buffers(map->inode, delta);
-	tux3_set_buffer_dirty_list(map, buffer, delta, head);
+	return tux3_set_buffer_dirty_list(map, buffer, delta, head);
 }
 
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer)

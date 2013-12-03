@@ -88,18 +88,27 @@ int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 }
 
 /*
- * Caller must hold lock_page() or backend (otherwise, you may race
- * with buffer fork or clear dirty)
+ * Copy of __set_page_dirty() without __mark_inode_dirty(). Caller
+ * decides whether mark inode dirty or not.
  */
-void tux3_set_buffer_dirty_list(struct address_space *mapping,
-				struct buffer_head *buffer, int delta,
-				struct list_head *head)
+static void __tux3_set_page_dirty(struct page *page,
+				  struct address_space *mapping, int warn)
 {
-	/* FIXME: we better to set this by caller? */
-	if (!buffer_uptodate(buffer))
-		set_buffer_uptodate(buffer);
-	mark_buffer_dirty(buffer);
+	spin_lock_irq(&mapping->tree_lock);
+	if (page->mapping) {	/* Race with truncate? */
+		WARN_ON_ONCE(warn && !PageUptodate(page));
+		account_page_dirtied(page, mapping);
+		radix_tree_tag_set(&mapping->page_tree,
+				page_index(page), PAGECACHE_TAG_DIRTY);
+	}
+	spin_unlock_irq(&mapping->tree_lock);
+}
 
+/* Set our delta dirty bits, then add to our dirty buffers list */
+static inline void __tux3_set_buffer_dirty_list(struct address_space *mapping,
+			     struct buffer_head *buffer, int delta,
+			     struct list_head *head)
+{
 	if (!buffer->b_assoc_map) {
 		spin_lock(&mapping->private_lock);
 		BUG_ON(!list_empty(&buffer->b_assoc_buffers));
@@ -111,11 +120,43 @@ void tux3_set_buffer_dirty_list(struct address_space *mapping,
 	}
 }
 
-void tux3_set_buffer_dirty(struct address_space *mapping,
-			   struct buffer_head *buffer, int delta)
+/*
+ * Caller must hold lock_page() or backend (otherwise, you may race
+ * with buffer fork or clear dirty)
+ */
+int tux3_set_buffer_dirty_list(struct address_space *mapping,
+			       struct buffer_head *buffer, int delta,
+			       struct list_head *head)
+{
+	/* FIXME: we better to set this by caller? */
+	if (!buffer_uptodate(buffer))
+		set_buffer_uptodate(buffer);
+
+	/*
+	 * Basically, open code of mark_buffer_dirty() without mark
+	 * inode dirty.  Caller decides whether dirty inode or not.
+	 */
+	if (!test_set_buffer_dirty(buffer)) {
+		struct page *page = buffer->b_page;
+
+		/* Mark dirty for delta, then add buffer to our dirty list */
+		__tux3_set_buffer_dirty_list(mapping, buffer, delta, head);
+
+		if (!TestSetPageDirty(page)) {
+			struct address_space *mapping = page->mapping;
+			if (mapping)
+				__tux3_set_page_dirty(page, mapping, 0);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int tux3_set_buffer_dirty(struct address_space *mapping,
+			  struct buffer_head *buffer, int delta)
 {
 	struct list_head *head = tux3_dirty_buffers(mapping->host, delta);
-	tux3_set_buffer_dirty_list(mapping, buffer, delta, head);
+	return tux3_set_buffer_dirty_list(mapping, buffer, delta, head);
 }
 
 /*

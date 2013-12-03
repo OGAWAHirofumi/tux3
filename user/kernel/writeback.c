@@ -373,10 +373,8 @@ void __tux3_mark_buffer_dirty(struct buffer_head *buffer, unsigned delta)
 	       PageLocked(buffer->b_page));
 #endif
 
-	tux3_set_buffer_dirty(mapping(inode), buffer, delta);
-	/* FIXME: we need to dirty inode only if buffer became
-	 * dirty. However, tux3_set_buffer_dirty doesn't provide it */
-	__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
+	if (tux3_set_buffer_dirty(mapping(inode), buffer, delta))
+		__tux3_mark_inode_dirty(inode, I_DIRTY_PAGES);
 }
 
 /*
@@ -423,9 +421,12 @@ void tux3_mark_buffer_unify(struct buffer_head *buffer)
 	tux3_set_buffer_dirty_list(mapping(inode), buffer, sb->unify,
 				   &sb->unify_buffers);
 	/*
-	 * FIXME: we don't call __tux3_mark_buffer_dirty() here, but
-	 * mark_buffer_dirty() marks inode as I_DIRTY_PAGES. This
-	 * makes inconsistent state on inode->i_state and tuxnode->flags.
+	 * We don't call __tux3_mark_inode_dirty() here, because unify
+	 * is not flushed per-delta. So, marking volmap as dirty just
+	 * bothers us.
+	 *
+	 * Instead, we call __tux3_mark_inode_dirty() when process
+	 * unify buffers in unify_log().
 	 */
 }
 

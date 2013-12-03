@@ -140,10 +140,10 @@ void show_buffers(map_t *map);
 void show_active_buffers(map_t *map);
 void show_dirty_buffers(map_t *map);
 void show_buffers_state(unsigned state);
-void set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list);
-void tux3_set_buffer_dirty_list(map_t *map, struct buffer_head *buffer,
+int set_buffer_state_list(struct buffer_head *buffer, unsigned state, struct list_head *list);
+int tux3_set_buffer_dirty_list(map_t *map, struct buffer_head *buffer,
 				int delta, struct list_head *head);
-void tux3_set_buffer_dirty(map_t *map, struct buffer_head *buffer, int delta);
+int tux3_set_buffer_dirty(map_t *map, struct buffer_head *buffer, int delta);
 struct buffer_head *set_buffer_dirty(struct buffer_head *buffer);
 struct buffer_head *set_buffer_clean(struct buffer_head *buffer);
 struct buffer_head *__set_buffer_empty(struct buffer_head *buffer);
