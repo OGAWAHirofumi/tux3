@@ -221,7 +221,23 @@ static inline void tux3_inode_wb_list_del(struct inode *inode)
 #endif
 }
 
-/* Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock) */
+/*
+ * Clear dirty flags for delta (caller must hold inode->i_lock/tuxnode->lock).
+ *
+ * Note: This can race with *_mark_inode_dirty().
+ *
+ *        cpu0                                 cpu1
+ * __tux3_mark_inode_dirty()
+ *     tux3_dirty_inode()
+ *         mark delta dirty
+ *                                      tux3_clear_dirty_inode_nolock()
+ *                                           clear core dirty and delta
+ *     __mark_inode_dirty()
+ *         mark core dirty
+ *
+ * For this race, we can't use this to clear dirty for frontend delta
+ * (exception is the points which has no race like umount).
+ */
 static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 					  int frontend)
 {
@@ -248,10 +264,8 @@ static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 			spin_unlock(&sb->dirty_inodes_lock);
 	}
 
-	/* Update inode state */
-	if (tuxnode->flags & ~NON_DIRTY_FLAGS)
-		inode->i_state |= I_DIRTY;
-	else {
+	/* Update state if inode isn't dirty anymore */
+	if (!(tuxnode->flags & ~NON_DIRTY_FLAGS)) {
 		inode->i_state &= ~I_DIRTY;
 		tux3_inode_wb_list_del(inode);
 	}
@@ -270,7 +284,10 @@ static void __tux3_clear_dirty_inode(struct inode *inode, unsigned delta)
 	tux3_inode_wb_unlock(inode);
 }
 
-/* Clear dirty flags for frontend delta */
+/*
+ * Clear dirty flags for frontend delta.
+ * Note: see comment of tux3_clear_dirty_inode_nolock)
+ */
 void tux3_clear_dirty_inode(struct inode *inode)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);
