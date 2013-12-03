@@ -114,17 +114,17 @@ static void ileaf_dump(struct btree *btree, void *vleaf)
 	__be16 *dict = ileaf_dict(btree, leaf);
 	unsigned offset = 0;
 
-	trace_on("ileaf 0x%Lx/%i (%x bytes free)",
-		 ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
+	__tux3_dbg("ileaf 0x%Lx/%i (%x bytes free)",
+		   ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
 
 	for (int i = 0; i < icount(leaf); i++, inum++) {
 		int limit = __atdict(dict, i + 1), size = limit - offset;
 		if (!size)
 			continue;
 		if (size < 0)
-			trace_on("  0x%Lx: <corrupt>\n", inum);
+			__tux3_dbg("  0x%Lx: <corrupt>\n", inum);
 		else if (!size)
-			trace_on("  0x%Lx: <empty>\n", inum);
+			__tux3_dbg("  0x%Lx: <empty>\n", inum);
 		else if (attr_ops == &iattr_ops) {
 			/* FIXME: this doesn't work in kernel */
 			struct tux3_inode tuxnode = {};
