@@ -137,8 +137,24 @@ static int dleaf2_can_free(struct btree *btree, void *leaf)
 	return 1;
 }
 
+static void __dleaf2_dump(struct btree *btree, struct dleaf2 *dleaf,
+			  const char *prefix)
+{
+	unsigned i;
+	trace_on("%sdleaf %p, magic %x, count %u", prefix,
+		 dleaf, be16_to_cpu(dleaf->magic), be16_to_cpu(dleaf->count));
+	for (i = 0; i < be16_to_cpu(dleaf->count); i++) {
+		struct extent ex;
+		get_extent(dleaf->table + i, &ex);
+		trace_on("  logical %Lu, physical %Lu, version %u",
+			 ex.logical, ex.physical, ex.version);
+	}
+}
+
 static void dleaf2_dump(struct btree *btree, void *leaf)
 {
+	struct dleaf2 *dleaf = leaf;
+	__dleaf2_dump(btree, dleaf, "");
 }
 
 /* Lookup logical address in diskextent2 <= index */
