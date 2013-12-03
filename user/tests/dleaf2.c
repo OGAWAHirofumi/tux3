@@ -15,17 +15,20 @@
 #define trace trace_on
 #endif
 
+#define NO_BALLOC_PARTIAL
 #include "balloc-dummy.c"
 
+#include "../filemap.c"		/* for seg_alloc() */
 #include "kernel/dleaf2.c"
 
-static void clean_main(struct sb *sb)
+static void clean_main(struct sb *sb, struct btree *btree)
 {
 	log_finish(sb);
 	log_finish_cycle(sb, 1);
 	destroy_defer_bfree(&sb->deunify);
 	destroy_defer_bfree(&sb->defree);
 	tux3_clear_dirty_inode(sb->logmap);
+	free_map(btree_inode(btree)->map);
 	put_super(sb);
 	tux3_exit_mem();
 }
@@ -66,9 +69,40 @@ static void __check_seg(struct test_extent *res, block_t index,
 	__check_seg(_res, _index, _seg, _seg_cnt);	\
 } while (0)
 
-static int dummy_seg_alloc(struct btree *btree, struct dleaf_req *rq,
-			   unsigned write_segs)
+static struct {
+	struct block_segment *seg;
+	int seg_idx;
+	int seg_cnt;
+} alloc_seg_info;
+
+static void dleaf2_set_alloc_seg(struct block_segment *seg, int seg_cnt)
 {
+	alloc_seg_info.seg = seg;
+	alloc_seg_info.seg_idx = 0;
+	alloc_seg_info.seg_cnt = seg_cnt;
+}
+
+/*
+ * Hack: to control allocation details in seg_alloc(), this overwrites
+ * balloc_partial.
+ */
+int balloc_partial(struct sb *sb, unsigned blocks,
+		   struct block_segment *seg, int segs)
+{
+	struct block_segment *alloc_seg =
+		alloc_seg_info.seg + alloc_seg_info.seg_idx;
+	block_t block = sb->nextblock;
+
+	assert(segs == 1);	/* for now, only support segs == 1 */
+	assert(alloc_seg_info.seg_idx < alloc_seg_info.seg_cnt);
+
+	*seg = *alloc_seg;
+
+	sb->nextblock += blocks;
+	trace("-> %Lx/%x", block, blocks);
+
+	alloc_seg_info.seg_idx++;
+
 	return 0;
 }
 
@@ -76,22 +110,29 @@ static struct btree_key_range *
 dleaf2_set_req(struct dleaf_req *rq, block_t index, unsigned count,
 	       struct block_segment *seg, int seg_cnt, int seg_max)
 {
-	rq->key.start = index;
-	rq->key.len = count;
-	rq->seg_idx = 0;
-	rq->seg_cnt = seg_cnt;
-	rq->seg_max = seg_max;
-	rq->seg = seg;
-	rq->seg_alloc = dummy_seg_alloc;
+	*rq = (struct dleaf_req){
+		.key	= {
+			.start	= index,
+			.len	= count,
+		},
+		.seg_idx	= 0,
+		.seg_cnt	= seg_cnt,
+		.seg_max	= seg_max,
+		.seg		= seg,
+		.overwrite	= 0,
+		.seg_find	= seg_find,
+		.seg_alloc	= seg_alloc,
+		.seg_free	= seg_free,
+	};
 
 	return &rq->key;
 }
 
 static struct btree_key_range *
 dleaf2_set_w_req(struct dleaf_req *rq, block_t index, unsigned count,
-		     struct block_segment *seg, int seg_cnt)
+		     struct block_segment *seg, int seg_max)
 {
-	return dleaf2_set_req(rq, index, count, seg, seg_cnt, seg_cnt);
+	return dleaf2_set_req(rq, index, count, seg, 0, seg_max);
 }
 
 static struct btree_key_range *
@@ -151,7 +192,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		{ .block = 40, .count = 2, },
 		{ .block = 50, .count = 5, },
 	};
-	key = dleaf2_set_w_req(&rq, 3, 22, seg1, ARRAY_SIZE(seg1));
+	dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
+	key = dleaf2_set_w_req(&rq, 3, 22, seg, ARRAY_SIZE(seg));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 	test_assert(!ret);
 
@@ -188,7 +230,8 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .block = 110, .count = 5, },
 			{ .block = 120, .count = 5, },
 		};
-		key = dleaf2_set_w_req(&rq, 3, 10, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 3, 10, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -208,7 +251,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.2")) {
@@ -217,7 +260,8 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .block = 120, .count = 5, },
 			{ .block = 130, .count = 3, },
 		};
-		key = dleaf2_set_w_req(&rq, 10, 8, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 10, 8, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -236,7 +280,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.3")) {
@@ -247,7 +291,8 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .block = 140, .count = 2, },
 			{ .block = 150, .count = 3, },
 		};
-		key = dleaf2_set_w_req(&rq, 8, 14, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 8, 14, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -267,7 +312,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.4")) {
@@ -276,7 +321,8 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .block = 130, .count = 3, },
 			{ .block = 140, .count = 5, },
 		};
-		key = dleaf2_set_w_req(&rq, 17, 8, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 17, 8, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -295,7 +341,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.5")) {
@@ -304,7 +350,8 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .block = 140, .count = 4, },
 			{ .block = 150, .count = 7, },
 		};
-		key = dleaf2_set_w_req(&rq, 19, 11, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 19, 11, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -324,7 +371,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.6")) {
@@ -332,7 +379,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		struct block_segment seg2[] = {
 			{ .block = 160, .count = 7, },
 		};
-		key = dleaf2_set_w_req(&rq, 25, 7, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 25, 7, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -352,7 +400,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.7")) {
@@ -360,7 +408,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		struct block_segment seg2[] = {
 			{ .block = 160, .count = 7, },
 		};
-		key = dleaf2_set_w_req(&rq, 33, 7, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 33, 7, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -381,7 +430,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.8")) {
@@ -389,7 +438,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		struct block_segment seg2[] = {
 			{ .block = 110, .count = 1, },
 		};
-		key = dleaf2_set_w_req(&rq, 5, 1, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 5, 1, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -410,7 +460,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.9")) {
@@ -419,7 +469,8 @@ static void test01(struct sb *sb, struct btree *btree)
 			{ .block = 110, .count = 8, },
 			{ .block = 120, .count = 5, },
 		};
-		key = dleaf2_set_w_req(&rq, 0, 13, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 0, 13, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -438,7 +489,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.a")) {
@@ -446,7 +497,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		struct block_segment seg2[] = {
 			{ .block = 110, .count = 3, },
 		};
-		key = dleaf2_set_w_req(&rq, 0, 3, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 0, 3, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -465,7 +517,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.b")) {
@@ -473,7 +525,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		struct block_segment seg2[] = {
 			{ .block = 110, .count = 2, },
 		};
-		key = dleaf2_set_w_req(&rq, 0, 2, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 0, 2, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -493,7 +546,7 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test01.c")) {
@@ -501,7 +554,8 @@ static void test01(struct sb *sb, struct btree *btree)
 		struct block_segment seg2[] = {
 			{ .block = 110, .count = 29, },
 		};
-		key = dleaf2_set_w_req(&rq, 1, 29, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 1, 29, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
 
@@ -516,18 +570,19 @@ static void test01(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 
 	dleaf2_destroy(btree, leaf);
-	clean_main(sb);
+	clean_main(sb, btree);
 }
 
 /* Test dleaf2_write in the case of no space in leaf */
 static void test02(struct sb *sb, struct btree *btree)
 {
 #define BASE	0x1000
+	struct block_segment seg[10];
 	struct dleaf2 *leaf;
 	struct dleaf_req rq;
 	struct btree_key_range *key;
@@ -539,9 +594,10 @@ static void test02(struct sb *sb, struct btree *btree)
 
 	/* Make full dleaf (-2 is for hole from 0 and sentinel) */
 	for (int i = 0; i < btree->entries_per_leaf - 2; i++) {
-		struct block_segment seg[] = {
+		struct block_segment seg1[] = {
 			{ .block = 0x100 + i, .count = 1, },
 		};
+		dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
 		key = dleaf2_set_w_req(&rq, BASE + i, 1, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 		test_assert(!ret);
@@ -551,7 +607,8 @@ static void test02(struct sb *sb, struct btree *btree)
 	struct block_segment seg1[] = {
 		{ .block = 0x200, .count = 1, },
 	};
-	key = dleaf2_set_w_req(&rq, 0x100000, 1, seg1, ARRAY_SIZE(seg1));
+	dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
+	key = dleaf2_set_w_req(&rq, 0x100000, 1, seg, ARRAY_SIZE(seg));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 0);
@@ -560,7 +617,8 @@ static void test02(struct sb *sb, struct btree *btree)
 	struct block_segment seg2[] = {
 		{ .block = 0x200, .count = 1, },
 	};
-	key = dleaf2_set_w_req(&rq, BASE / 2, 1, seg2, ARRAY_SIZE(seg2));
+	dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+	key = dleaf2_set_w_req(&rq, BASE / 2, 1, seg, ARRAY_SIZE(seg));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 0);
@@ -572,17 +630,17 @@ static void test02(struct sb *sb, struct btree *btree)
 		{ .block = 0x301, .count = 1, },
 	};
 	tuxkey_t index = BASE + (btree->entries_per_leaf - 2 - seg3[0].count);
-	key = dleaf2_set_w_req(&rq, index, 4, seg3, ARRAY_SIZE(seg3));
+	dleaf2_set_alloc_seg(seg3, ARRAY_SIZE(seg3));
+	key = dleaf2_set_w_req(&rq, index, 4, seg, ARRAY_SIZE(seg));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 1);
 
-	/* Check temporary hole by made in seg3[] */
+	/* Check made in seg3[] */
 	struct block_segment seg4[10];
 	unsigned written = seg3[0].count;
 	struct test_extent res1[] = {
 		{ .logical = index, .physical = 0x200, .count = written, },
-		/* temporary hole */
 		{ .logical = index + written, .physical = 0, .count = 2, },
 	};
 	key = dleaf2_set_r_req(&rq, index, 4, seg4, ARRAY_SIZE(seg4));
@@ -591,7 +649,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	check_seg(res1, index, seg4, rq.seg_cnt);
 
 	dleaf2_destroy(btree, leaf);
-	clean_main(sb);
+	clean_main(sb, btree);
 }
 
 /* Test dleaf2_chop operation */
@@ -627,7 +685,8 @@ static void test03(struct sb *sb, struct btree *btree)
 		{ .block = 40, .count =  2, },
 		{ .block = 50, .count =  5, },
 	};
-	key = dleaf2_set_w_req(&rq, 10, 15, seg1, ARRAY_SIZE(seg1));
+	dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
+	key = dleaf2_set_w_req(&rq, 10, 15, seg, ARRAY_SIZE(seg));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
 	test_assert(!ret);
 
@@ -660,7 +719,7 @@ static void test03(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test03.2")) {
@@ -679,7 +738,7 @@ static void test03(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test03.3")) {
@@ -698,7 +757,7 @@ static void test03(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test03.4")) {
@@ -715,7 +774,7 @@ static void test03(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test03.5")) {
@@ -737,12 +796,12 @@ static void test03(struct sb *sb, struct btree *btree)
 		check_seg(res2, 0, seg, rq.seg_cnt);
 
 		dleaf2_destroy(btree, leaf);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 
 	dleaf2_destroy(btree, leaf);
-	clean_main(sb);
+	clean_main(sb, btree);
 }
 
 /* Test dleaf2_split operations */
@@ -770,7 +829,8 @@ static void test04(struct sb *sb, struct btree *btree)
 		{ .block = 30, .count =  2, },
 		{ .block = 40, .count =  5, },
 	};
-	key = dleaf2_set_w_req(&rq, 10, 15, seg1, ARRAY_SIZE(seg1));
+	dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
+	key = dleaf2_set_w_req(&rq, 10, 15, seg, ARRAY_SIZE(seg));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf1, key, &hint);
 	test_assert(!ret);
 
@@ -800,7 +860,7 @@ static void test04(struct sb *sb, struct btree *btree)
 
 	dleaf2_destroy(btree, leaf1);
 	dleaf2_destroy(btree, leaf2);
-	clean_main(sb);
+	clean_main(sb, btree);
 }
 
 /* Test dleaf2_merge operations */
@@ -833,7 +893,8 @@ static void test05(struct sb *sb, struct btree *btree)
 			{ .block = 10, .count =  5, },
 			{ .block = 20, .count =  3, },
 		};
-		key = dleaf2_set_w_req(&rq, 10, 8, seg1, ARRAY_SIZE(seg1));
+		dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
+		key = dleaf2_set_w_req(&rq, 10, 8, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, 18, leaf1, key, &hint);
 		test_assert(!ret);
 
@@ -841,7 +902,8 @@ static void test05(struct sb *sb, struct btree *btree)
 			{ .block =  0, .count =  5, },
 			{ .block = 40, .count =  5, },
 		};
-		key = dleaf2_set_w_req(&rq, 20, 10, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 20, 10, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 20, TUXKEY_LIMIT, leaf2, key, &hint);
 		test_assert(!ret);
 
@@ -864,7 +926,7 @@ static void test05(struct sb *sb, struct btree *btree)
 
 		dleaf2_destroy(btree, leaf1);
 		dleaf2_destroy(btree, leaf2);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 	if (test_start("test05.2")) {
@@ -873,7 +935,8 @@ static void test05(struct sb *sb, struct btree *btree)
 			{ .block = 10, .count =  5, },
 			{ .block = 20, .count =  3, },
 		};
-		key = dleaf2_set_w_req(&rq, 10, 8, seg1, ARRAY_SIZE(seg1));
+		dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
+		key = dleaf2_set_w_req(&rq, 10, 8, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 0, 18, leaf1, key, &hint);
 		test_assert(!ret);
 
@@ -881,7 +944,8 @@ static void test05(struct sb *sb, struct btree *btree)
 			{ .block = 30, .count =  2, },
 			{ .block = 40, .count =  5, },
 		};
-		key = dleaf2_set_w_req(&rq, 18, 7, seg2, ARRAY_SIZE(seg2));
+		dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
+		key = dleaf2_set_w_req(&rq, 18, 7, seg, ARRAY_SIZE(seg));
 		ret = dleaf2_write(btree, 18, TUXKEY_LIMIT, leaf2, key, &hint);
 		test_assert(!ret);
 
@@ -904,13 +968,13 @@ static void test05(struct sb *sb, struct btree *btree)
 
 		dleaf2_destroy(btree, leaf1);
 		dleaf2_destroy(btree, leaf2);
-		clean_main(sb);
+		clean_main(sb, btree);
 	}
 	test_end();
 
 	dleaf2_destroy(btree, leaf1);
 	dleaf2_destroy(btree, leaf2);
-	clean_main(sb);
+	clean_main(sb, btree);
 }
 
 int main(int argc, char *argv[])
@@ -930,34 +994,35 @@ int main(int argc, char *argv[])
 
 	test_init(argv[0]);
 
-	struct btree btree;
-	init_btree(&btree, sb, no_root, &dtree2_ops);
+	struct inode *inode = rapid_open_inode(sb, NULL, S_IFREG);
+	struct btree *btree = &tux_inode(inode)->btree;
+	init_btree(&tux_inode(inode)->btree, sb, no_root, dtree_ops());
 
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
 
 	if (test_start("test01"))
-		test01(sb, &btree);
+		test01(sb, btree);
 	test_end();
 
 	if (test_start("test02"))
-		test02(sb, &btree);
+		test02(sb, btree);
 	test_end();
 
 	if (test_start("test03"))
-		test03(sb, &btree);
+		test03(sb, btree);
 	test_end();
 
 	if (test_start("test04"))
-		test04(sb, &btree);
+		test04(sb, btree);
 	test_end();
 
 	if (test_start("test05"))
-		test05(sb, &btree);
+		test05(sb, btree);
 	test_end();
 
 	tux3_end_backend();
 
-	clean_main(sb);
+	clean_main(sb, btree);
 	return test_failures();
 }

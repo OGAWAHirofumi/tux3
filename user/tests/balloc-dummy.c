@@ -35,11 +35,13 @@ int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
 	return __balloc(sb, blocks, 0, seg, segs);
 }
 
+#ifndef NO_BALLOC_PARTIAL
 int balloc_partial(struct sb *sb, unsigned blocks,
 		   struct block_segment *seg, int segs)
 {
 	return __balloc(sb, blocks, BALLOC_PARTIAL, seg, segs);
 }
+#endif
 
 int bfree(struct sb *sb, block_t block, unsigned blocks)
 {
