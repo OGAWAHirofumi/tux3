@@ -1138,6 +1138,29 @@ static int btree_leaf_split(struct cursor *cursor, tuxkey_t key, tuxkey_t hint)
 	return insert_leaf(cursor, newkey, newbuf, key < newkey);
 }
 
+static int btree_advance(struct cursor *cursor, struct btree_key_range *key)
+{
+	tuxkey_t limit = cursor_next_key(cursor);
+	int skip = 0;
+
+	while (key->start >= limit) {
+		int ret = cursor_advance(cursor);
+		assert(ret != 0);	/* wrong key range? */
+		if (ret < 0)
+			return ret;
+
+		limit = cursor_next_key(cursor);
+		skip++;
+	}
+	if (skip > 1) {
+		/* key should on next leaf */
+		tux3_dbg("skipped more than 1 leaf: why, and probe is better");
+		assert(0);
+	}
+
+	return 0;
+}
+
 int btree_write(struct cursor *cursor, struct btree_key_range *key)
 {
 	struct btree *btree = cursor->btree;
@@ -1145,18 +1168,22 @@ int btree_write(struct cursor *cursor, struct btree_key_range *key)
 	tuxkey_t split_hint;
 	int err;
 
-	/* FIXME: we might be better to support multiple leaves */
-
-	err = cursor_redirect(cursor);
-	if (err)
-		return err;
-
 	while (key->len > 0) {
-		tuxkey_t bottom = cursor_this_key(cursor);
-		tuxkey_t limit = cursor_next_key(cursor);
-		void *leaf = bufdata(cursor_leafbuf(cursor));
+		tuxkey_t bottom, limit;
+		void *leaf;
 		int need_split;
 
+		err = btree_advance(cursor, key);
+		if (err)
+			return err;	/* FIXME: error handling */
+
+		err = cursor_redirect(cursor);
+		if (err)
+			return err;	/* FIXME: error handling */
+
+		bottom = cursor_this_key(cursor);
+		limit = cursor_next_key(cursor);
+		leaf = bufdata(cursor_leafbuf(cursor));
 		assert(bottom <= key->start && key->start < limit);
 		assert(ops->leaf_sniff(btree, leaf));
 
