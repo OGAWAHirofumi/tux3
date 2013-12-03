@@ -357,78 +357,79 @@ static void seg_free(struct btree *btree, block_t block, unsigned count)
 }
 
 /*
+ * FIXME: Use balloc_find() and balloc_modify(). Use multiple segment
+ * allocation
+ */
+static int seg_find(struct btree *btree, struct dleaf_req *rq,
+		    int space, unsigned seg_len, unsigned *alloc_len)
+{
+	struct sb *sb = btree->sb;
+	struct block_segment *seg, *limit;
+	int seg_state, len = seg_len;
+	int err = 0;
+
+	assert(rq->seg_idx == rq->seg_cnt);
+
+	/* If overwrite mode, set SEG_NEW to allocated seg */
+	seg_state = rq->overwrite ? BLOCK_SEG_NEW : 0;
+
+	limit = min(rq->seg + rq->seg_idx + space, rq->seg + rq->seg_max);
+	for (seg = rq->seg + rq->seg_idx; seg < limit && len; seg++) {
+		struct block_segment tmp;
+
+		err = balloc_partial(sb, len, &tmp, 1);
+		if (err) {
+			assert(err != -ENOSPC);	/* frontend reservation bug */
+			rq->seg_cnt = rq->seg_idx;
+			break;
+		}
+
+		seg->block = tmp.block;
+		seg->count = tmp.count;
+		seg->state = seg_state;
+
+		len -= tmp.count;
+	}
+	if (err) {
+		struct block_segment *p;
+		for (p = rq->seg + rq->seg_idx; p < seg; p++)
+			bfree(sb, p->block, p->count);
+		return err;
+	}
+
+	rq->seg_cnt = seg - rq->seg;
+	*alloc_len = seg_len - len;
+
+	return 0;
+}
+
+/*
  * Callback to allocate blocks to ->seg. dleaf is doing to write segs,
  * now we have to assign physical address to segs.
  */
 static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
-		     int write_segs, int seg_state)
+		     unsigned seg_len)
 {
 	struct sb *sb = btree->sb;
-	struct block_segment tmp, *seg = rq->seg;
-	int i, partial = 0;
+	struct block_segment *seg = rq->seg + rq->seg_idx;
+	struct block_segment *limit = rq->seg + rq->seg_cnt;
 
-	assert(rq->seg_idx + write_segs <= rq->seg_max);
-
-	for (i = rq->seg_idx; i < rq->seg_idx + write_segs; i++) {
-		int err;
-
-		if (seg[i].state != BLOCK_SEG_HOLE)
-			continue;
-
-		err = balloc_partial(sb, seg[i].count, &tmp, 1);
-		if (err) {
-			assert(err != -ENOSPC);	/* frontend reservation bug */
-			return err;
+	while (seg < limit) {
+		if (seg_len) {
+			log_balloc(sb, seg->block, seg->count);
+			assert(seg_len >= seg->count);
+			seg_len -= seg->count;
+		} else {
+			/* FIXME: replace with balloc_modify() */
+			bfree(sb, seg->block, seg->count);
+			sb->nextblock = seg->block;
+			rq->seg_cnt--;
 		}
-
-		/*
-		 * Partially allocated. Make space and adjust for
-		 * separated segments.
-		 */
-		if (tmp.count != seg[i].count) {
-			int size;
-
-			if (rq->seg_cnt == rq->seg_max)
-				size = (rq->seg_cnt - i - 1) * sizeof(*seg);
-			else {
-				size = (rq->seg_cnt - i) * sizeof(*seg);
-				rq->seg_cnt++;
-				write_segs++;
-			}
-			memmove(&seg[i + 1], &seg[i], size);
-			/* Update a rest of separated segment */
-			seg[i + 1].count = seg[i].count - tmp.count;
-
-			partial = 1;
-		}
-		seg[i] = tmp;
-
-		log_balloc(sb, seg[i].block, seg[i].count);
-
-		seg[i].state = seg_state;
+		seg++;
 	}
 
-	return partial;
+	return 0;
 }
-
-static int overwrite_seg_alloc(struct btree *btree, struct dleaf_req *rq,
-			       unsigned write_segs)
-{
-	/* If overwrite mode, set SEG_NEW to allocated seg */
-	return seg_alloc(btree, rq, write_segs, BLOCK_SEG_NEW);
-}
-
-static int redirect_seg_alloc(struct btree *btree, struct dleaf_req *rq,
-			      unsigned write_segs)
-{
-	/* If redirect mode, doesn't set SEG_NEW to allocated seg */
-	return seg_alloc(btree, rq, write_segs, 0);
-}
-
-static int (*seg_alloc_funs[])(struct btree *, struct dleaf_req *, unsigned) = {
-	[MAP_WRITE]	= overwrite_seg_alloc,
-	[MAP_REDIRECT]	= redirect_seg_alloc,
-};
 
 /* map_region() by using dleaf2 */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
