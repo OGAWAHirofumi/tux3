@@ -422,7 +422,8 @@ static int __balloc(struct sb *sb, unsigned blocks, unsigned flags,
 				seg, segs);
 	if (err == -ENOSPC) {
 		/* FIXME: This is for debugging. Remove this */
-		tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
+		tux3_warn(sb, "couldn't balloc: blocks %u, freeblocks %Lu",
+			  blocks, sb->freeblocks);
 	}
 
 	return err;
