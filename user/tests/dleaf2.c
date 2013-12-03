@@ -612,14 +612,16 @@ static void test02(struct sb *sb, struct btree *btree)
 {
 #define BASE	0x1000
 	struct block_segment seg[10];
-	struct dleaf2 *leaf;
+	struct dleaf2 *leaf1, *leaf2;
 	struct dleaf_req rq;
 	struct btree_key_range *key;
-	tuxkey_t hint;
+	tuxkey_t hint, newkey;
 	int err, ret;
 
-	leaf = dleaf2_create(btree);
-	assert(leaf);
+	leaf1 = dleaf2_create(btree);
+	assert(leaf1);
+	leaf2 = dleaf2_create(btree);
+	assert(leaf2);
 
 	/* Make full dleaf (-2 is for hole from 0 and sentinel) */
 	for (int i = 0; i < btree->entries_per_leaf - 2; i++) {
@@ -628,7 +630,7 @@ static void test02(struct sb *sb, struct btree *btree)
 		};
 		dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
 		key = dleaf2_set_w_req(&rq, BASE + i, 1, seg, ARRAY_SIZE(seg));
-		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
+		ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf1, key, &hint);
 		test_assert(!ret);
 	}
 
@@ -638,7 +640,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	};
 	dleaf2_set_alloc_seg(seg1, ARRAY_SIZE(seg1));
 	key = dleaf2_set_w_req(&rq, 0x100000, 1, seg, ARRAY_SIZE(seg));
-	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
+	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf1, key, &hint);
 	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 0);
 
@@ -648,7 +650,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	};
 	dleaf2_set_alloc_seg(seg2, ARRAY_SIZE(seg2));
 	key = dleaf2_set_w_req(&rq, BASE / 2, 1, seg, ARRAY_SIZE(seg));
-	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
+	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf1, key, &hint);
 	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 0);
 
@@ -661,23 +663,41 @@ static void test02(struct sb *sb, struct btree *btree)
 	tuxkey_t index = BASE + (btree->entries_per_leaf - 2 - seg3[0].count);
 	dleaf2_set_alloc_seg(seg3, ARRAY_SIZE(seg3));
 	key = dleaf2_set_w_req(&rq, index, 4, seg, ARRAY_SIZE(seg));
-	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
+	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf1, key, &hint);
 	test_assert(ret == BTREE_DO_SPLIT);
-	test_assert(rq.seg_idx == 1);
+	test_assert(rq.seg_idx == 2);
 
 	/* Check made in seg3[] */
 	struct block_segment seg4[10];
-	unsigned written = seg3[0].count;
+	struct dleaf_req read_rq;
+	struct btree_key_range *read_key;
 	struct test_extent res1[] = {
-		{ .logical = index, .physical = 0x200, .count = written, },
-		{ .logical = index + written, .physical = 0, .count = 2, },
+		{ .logical = index,     .physical = 0x200, .count = 2, },
+		{ .logical = index + 2, .physical = 0x300, .count = 1, },
+		{ .logical = index + 3, .physical = 0,     .count = 1, },
 	};
-	key = dleaf2_set_r_req(&rq, index, 4, seg4, ARRAY_SIZE(seg4));
-	err = dleaf2_read(btree, 0, TUXKEY_LIMIT, leaf, key);
+	read_key = dleaf2_set_r_req(&read_rq, index, 4, seg4, ARRAY_SIZE(seg4));
+	err = dleaf2_read(btree, 0, TUXKEY_LIMIT, leaf1, read_key);
 	test_assert(!err);
-	check_seg(res1, index, seg4, rq.seg_cnt);
+	check_seg(res1, index, seg4, read_rq.seg_cnt);
 
-	dleaf2_destroy(btree, leaf);
+	/* Split, then continue remaining write */
+	newkey = dleaf2_split(btree, hint, leaf1, leaf2);
+	test_assert(newkey == hint);
+
+	ret = dleaf2_write(btree, newkey, TUXKEY_LIMIT, leaf2, key, &hint);
+	test_assert(!ret);
+	test_assert(rq.seg_idx == 3);
+
+	struct test_extent res2[] = {
+		{ .logical = index + 0, .physical = 0x200, .count = 2, },
+		{ .logical = index + 2, .physical = 0x300, .count = 1, },
+		{ .logical = index + 3, .physical = 0x301, .count = 1, },
+	};
+	check_seg(res2, index, seg, rq.seg_cnt);
+
+	dleaf2_destroy(btree, leaf1);
+	dleaf2_destroy(btree, leaf2);
 	clean_main(sb, btree);
 }
 
