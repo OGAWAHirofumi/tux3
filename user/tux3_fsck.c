@@ -116,7 +116,7 @@ static void shadow_bitmap_modify(struct sb *sb, struct fsck_context *context,
 
 	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
 		void *p = shadow_bitmap_read(sb, context, mapblock);
-		unsigned len = min(mapsize, count);
+		unsigned len = min(mapsize - mapoffset, count);
 
 		if (!test(p, mapoffset, len)) {
 			error_exit("%s: start 0x%Lx, count %x",
