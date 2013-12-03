@@ -495,7 +495,7 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			segs = err;
 			goto out_unlock;
 		}
-		segs = rq.seg_idx;
+		segs = rq.seg_cnt;
 		/*
 		 * Read might be partial. (due to seg_max, or FIXME:
 		 * lack of read for multiple leaves)

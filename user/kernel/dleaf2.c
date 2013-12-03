@@ -579,7 +579,7 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 	struct extent next;
 	block_t physical;
 
-	if (rq->seg_idx >= rq->seg_max)
+	if (rq->seg_cnt >= rq->seg_max)
 		return 0;
 
 	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
@@ -599,7 +599,7 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 	dex++;
 
 	do {
-		struct block_segment *seg = rq->seg + rq->seg_idx;
+		struct block_segment *seg = rq->seg + rq->seg_cnt;
 
 		get_extent(dex, &next);
 
@@ -616,14 +616,14 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 		physical = next.physical;
 		key->start += seg->count;
 		key->len -= seg->count;
-		rq->seg_idx++;
+		rq->seg_cnt++;
 		dex++;
-	} while (key->len && rq->seg_idx < rq->seg_max && dex < dex_limit);
+	} while (key->len && rq->seg_cnt < rq->seg_max && dex < dex_limit);
 
 fill_seg:
 	/* Between sentinel and key_limit is hole */
-	if (key->start < key_limit && key->len && rq->seg_idx < rq->seg_max) {
-		struct block_segment *seg = rq->seg + rq->seg_idx;
+	if (key->start < key_limit && key->len && rq->seg_cnt < rq->seg_max) {
+		struct block_segment *seg = rq->seg + rq->seg_cnt;
 
 		seg->count = min_t(tuxkey_t, key->len, key_limit - key->start);
 		seg->block = 0;
@@ -631,7 +631,7 @@ fill_seg:
 
 		key->start += seg->count;
 		key->len -= seg->count;
-		rq->seg_idx++;
+		rq->seg_cnt++;
 	}
 
 	return 0;
