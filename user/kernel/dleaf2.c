@@ -384,10 +384,7 @@ static void dleaf2_resize(struct dleaf2 *dleaf, struct diskextent2 *head,
 	if (diff == 0)
 		return;
 
-	if (diff > 0)
-		memmove(head + diff, head, limit - (void *)head);
-	else
-		memmove(head, head - diff, limit - (void *)(head - diff));
+	memmove(head + diff, head, limit - (void *)head);
 	be16_add_cpu(&dleaf->count, diff);
 }
 
@@ -409,6 +406,99 @@ static tuxkey_t dleaf2_split_at_center(struct dleaf2 *dleaf)
 	return ex.logical;
 }
 
+/* dex information to modify */
+struct dex_info {
+	/* start extent */
+	struct diskextent2 *start_dex;
+	/* physical range of partial start */
+	block_t start_block;
+	unsigned start_count;
+
+	/* end extent */
+	struct diskextent2 *end_dex;
+	/* remaining physical range of partial end */
+	block_t end_block;
+
+	int dleaf_count;	/* count of dex except overwritten */
+	int overwrite_cnt;	/* count of dex overwritten */
+	int need_sentinel;	/* segments needs new sentinel? */
+};
+
+static void find_start_dex(struct btree *btree, struct dleaf2 *dleaf,
+			   block_t key_start, struct dex_info *info)
+{
+	struct diskextent2 *dex_limit;
+
+	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
+
+	info->start_block = 0;
+	info->start_count = 0;
+
+	/* Lookup the dex for start of seg[]. */
+	info->start_dex = dleaf2_lookup_index(btree, dleaf, key_start);
+	if (info->start_dex < dex_limit - 1) {
+		struct extent ex;
+
+		get_extent(info->start_dex, &ex);
+		/* Start is at middle of dex: can't overwrite this dex */
+		if (key_start > ex.logical) {
+			block_t prev = ex.logical, physical = ex.physical;
+
+			info->start_dex++;
+			get_extent(info->start_dex, &ex);
+
+			if (physical)
+				info->start_block = physical + key_start - prev;
+			info->start_count = ex.logical - key_start;
+		}
+	}
+}
+
+static void find_end_dex(struct btree *btree, struct dleaf2 *dleaf,
+			 block_t key_end, struct dex_info *info)
+{
+	struct diskextent2 *dex_limit;
+	u16 dleaf_count = be16_to_cpu(dleaf->count);
+
+	dex_limit = dleaf->table + dleaf_count;
+
+	info->need_sentinel = 0;
+	info->end_block = 0;
+	info->dleaf_count = dleaf_count;
+
+	/* Lookup the dex for end of seg[]. */
+	info->end_dex = dleaf2_lookup_index(btree, dleaf, key_end);
+	if (info->end_dex < dex_limit - 1) {
+		struct extent ex;
+
+		get_extent(info->end_dex, &ex);
+		if (key_end > ex.logical) {
+			block_t offset = key_end - ex.logical;
+
+			/* End is at middle of dex: can overwrite this dex */
+			info->end_dex++;
+
+			/* Need new end of segment */
+			info->need_sentinel = 1;
+			/* Save new physical for end of seg[] */
+			if (ex.physical)
+				info->end_block = ex.physical + offset;
+		}
+	}
+
+	/*
+	 * Calculate dleaf2 space informations
+	 */
+	/* Number of dex can be overwritten */
+	info->overwrite_cnt = info->end_dex - info->start_dex;
+	/* Need new dex sentinel? */
+	info->need_sentinel |= info->end_dex == dex_limit;
+
+	/* Calculate new dleaf->count except dex is overwritten by segments. */
+	info->dleaf_count -= info->overwrite_cnt;
+	info->dleaf_count += info->need_sentinel;
+}
+
 /*
  * Write extents.
  */
@@ -420,152 +510,158 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	struct dleaf_req *rq = container_of(key, struct dleaf_req, key);
 	struct sb *sb = btree->sb;
 	struct dleaf2 *dleaf = leaf;
-	struct diskextent2 *dex_start, *dex_end, *dex_limit;
+	struct diskextent2 *dex;
 	struct extent ex;
-	tuxkey_t limit;
-	block_t end_physical;
-	unsigned need, between, write_segs, rest_segs;
-	int need_split, ret;
-
-recheck:
-	/* Paranoia checks */
-	assert(key->len == seg_total_count(rq->seg + rq->seg_idx,
-					   rq->seg_cnt - rq->seg_idx));
+	struct dex_info info;
+	unsigned free_len, seg_len, alloc_len;
+	int err, diff, seg_cnt, space;
 
 	/*
-	 * Overwrite existent diskextent2 by specified segs. To do
-	 * it, check existent diskextent2 and resize number of
-	 * dleaf->count, then overwrite.
+	 * Strategy: check free space in dleaf2, then allocate
+	 * segments, and write segments to dleaf2. If there is no
+	 * space in dleaf2, shrink segments to fit space of dleaf2,
+	 * and split.
 	 *
-	 * FIXME: should try to merge at start and last index position.
+	 * FIXME: should try to merge at start and new last extents.
 	 */
 
 	dleaf2_init_sentinel(sb, dleaf, key_bottom);
 
-	limit = key->start + key->len;
-	write_segs = rq->seg_cnt - rq->seg_idx;
-	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
+	/* Get the info of dex for start of seg[]. */
+	find_start_dex(btree, dleaf, key->start, &info);
 
-	need = write_segs + 1;	/* +1 is for sentinel */
-
-	/* Find start of diskextent2 to overwrite */
-	dex_start = dleaf2_lookup_index(btree, dleaf, key->start);
-	if (dex_start < dex_limit) {
-		/* Overwrite only if logical is same with index. */
-		get_extent(dex_start, &ex);
-		assert(ex.logical <= key->start); /* should have key_bottom */
-		if (ex.logical < key->start)
-			dex_start++;
-	}
-	/* How many diskextent2 is needed for head? */
-	need += dex_start - dleaf->table;
-
-	/* Find end of diskextent2 to overwrite */
-	dex_end = dleaf2_lookup_index(btree, dleaf, limit);
-	if (dex_end < dex_limit) {
-		if (dex_end < dex_start) {
-			/* This is splitting one extent */
-			between = 0;
-		} else
-			between = (dex_end - dex_start) + 1;
-
-		/* Prepare to overwrite end */
-		get_extent(dex_end, &ex);
-		end_physical = ex.physical;
-		if (end_physical)
-			end_physical += limit - ex.logical;
-
-		/* How many diskextent2 is needed for tail? */
-		need += (dex_limit - dex_end) - 1;
-	} else {
-		between = dex_end - dex_start;
-		/* Write new sentinel */
-		end_physical = 0;
-	}
-
-	need_split = 0;
-	rest_segs = 0;
-	/* Check if we need leaf split */
-	if (need > btree->entries_per_leaf) {
-		need_split = 1;
-
-		/*
-		 * If there is no space, we temporary merge segs as hole.
-		 * Then, we overwrite existent diskextent2 now (and it
-		 * will be overwritten by real segs after split)
-		 * to avoid re-calculate for temporary state.
-		 */
-		rest_segs = need - btree->entries_per_leaf;
-		/* Can we write 1 seg at least? */
-		if (rest_segs >= write_segs) {
-			/* FIXME: use better split position */
-			if (dex_start + 1 < dex_limit - 1) {
-				get_extent(dex_start + 1, &ex);
-				*split_hint = ex.logical;
-			} else
-				*split_hint = key->start;
-
-			return need_split;
-		}
-		/* We can write partially segs and temporary hole */
-		write_segs -= rest_segs;
-#if 1
-		/* Just for debugging below assert() */
-		need -= rest_segs;
-#endif
-		/* Reserve space for temporary hole */
-		rest_segs++;
-	}
+	seg_len = min_t(tuxkey_t, key_limit - key->start, key->len);
+	/* Get the info of dex for end of seg[]. */
+	find_end_dex(btree, dleaf, key->start + seg_len, &info);
 
 	/*
 	 * Allocate blocks to seg after dleaf redirect. With this, our
 	 * allocation order is, bnode => dleaf => data, and we can use
-	 * physical address of dleaf as allocation hint for data blocks.
+	 * physical address of dleaf as allocation hint for data
+	 * blocks.
 	 */
-	ret = rq->seg_alloc(btree, rq, write_segs);
-	if (ret < 0) {
-		assert(ret != -ENOSPC);		/* block reservation bug */
-		tux3_err(sb, "extent allocation failed: %d", ret);
-		return ret;
-	} else if (ret) {
-		/*
-		 * There was partial allocation. Total length of
-		 * segments, or size of rq->seg[] can be changed, so
-		 * recalc writable segments.
-		 */
-		key->len = seg_total_count(rq->seg + rq->seg_idx,
-					   rq->seg_cnt - rq->seg_idx);
-		goto recheck;
+	space = btree->entries_per_leaf - info.dleaf_count;
+#if 0
+	/* If there is no space to store 1 dex (start and end), split */
+	if (space <= 2)
+		goto need_split;
+#else
+	/* If there is no space, split */
+	if (space <= 0)
+		goto need_split;
+#endif
+
+	err = rq->seg_find(btree, rq, space, seg_len, &alloc_len);
+	if (err < 0) {
+		assert(err != -ENOSPC);	/* block reservation bug */
+		tux3_err(sb, "extent allocation failed: %d", err);
+		return err;
+	}
+	seg_cnt = rq->seg_cnt - rq->seg_idx;
+	assert(seg_cnt > 0);
+
+	/* Ugh, there was not space enough to store, adjust number of seg[]. */
+	while (seg_len != alloc_len) {
+		seg_len = alloc_len;
+		/* Re-calculate end of seg[] can be allocated */
+		find_end_dex(btree, dleaf, key->start + alloc_len, &info);
+
+		/* Shrink segments to fit to space of dleaf2 */
+		while (info.dleaf_count + seg_cnt > btree->entries_per_leaf) {
+			seg_cnt--;
+			alloc_len -= rq->seg[rq->seg_idx + seg_cnt].count;
+			if (!seg_cnt) {
+				/* Didn't fit at all, cancel allocation */
+				rq->seg_alloc(btree, rq, 0);
+				goto need_split;
+			}
+		}
 	}
 
-	/* Expand/shrink space for segs */
-	dleaf2_resize(dleaf, dex_start, (write_segs + 1) - between);
-	assert(need == be16_to_cpu(dleaf->count));
+	/* Commit allocation of writable segments */
+	err = rq->seg_alloc(btree, rq, seg_len);
+	assert(key->start + seg_len <= key_limit);
+#if 0
+	tux3_dbg("start %lu, end %lu",
+		 info.start_dex - dleaf->table, info.end_dex - dleaf->table);
+	tux3_dbg("dleaf_count %u (%u) (seg_cnt %u, overwrite %lu, sentinel %u)",
+		 info.dleaf_count, info.dleaf_count + seg_cnt,
+		 seg_cnt, info.end_dex - info.start_dex, info.need_sentinel);
+#endif
 
-	/* Fill extents */
-	while (rq->seg_idx < rq->seg_cnt - rest_segs) {
+	/*
+	 * Free segments which is overwritten.
+	 */
+	free_len = seg_len;
+	if (info.start_count) {
+		unsigned count = min_t(block_t, free_len, info.start_count);
+		if (info.start_block)
+			rq->seg_free(btree, info.start_block, count);
+		free_len -= count;
+	}
+	if (info.start_dex < info.end_dex) {
+		struct diskextent2 *limit = info.end_dex;
+
+		if (limit != dleaf->table + be16_to_cpu(dleaf->count))
+			limit++;
+
+		get_extent(info.start_dex, &ex);
+		for (dex = info.start_dex + 1; free_len && dex < limit; dex++) {
+			block_t prev = ex.logical, physical = ex.physical;
+			unsigned count;
+
+			get_extent(dex, &ex);
+			count = min_t(block_t, free_len, ex.logical - prev);
+			if (physical)
+				rq->seg_free(btree, physical, count);
+			free_len -= count;
+		}
+	}
+
+	/* Calculate difference of dleaf->count on old and new. */
+	diff = seg_cnt - info.overwrite_cnt + info.need_sentinel;
+	/*
+	 * Expand/shrink space for segs
+	 */
+	dleaf2_resize(dleaf, info.end_dex,  diff);
+	assert(info.dleaf_count + seg_cnt == be16_to_cpu(dleaf->count));
+	assert(info.dleaf_count + seg_cnt <= btree->entries_per_leaf);
+
+	/*
+	 * Fill extents
+	 */
+	while (seg_len) {
 		struct block_segment *seg = rq->seg + rq->seg_idx;
 
-		put_extent(dex_start, sb->version, key->start, seg->block);
+		put_extent(info.start_dex, sb->version, key->start, seg->block);
 
 		key->start += seg->count;
 		key->len -= seg->count;
+
+		seg_len -= seg->count;
 		rq->seg_idx++;
-		dex_start++;
+		info.start_dex++;
 	}
-	if (rest_segs) {
-		assert(need_split);
-		/* Fill as temporary hole */
-		put_extent(dex_start, sb->version, key->start, 0);
-		dex_start++;
-
-		/* Split at half. FIXME: better split position? */
-		*split_hint = dleaf2_split_at_center(dleaf);
+	if (info.need_sentinel) {
+		/* Fill sentinel */
+		put_extent(info.start_dex, sb->version, key->start,
+			   info.end_block);
 	}
-	/* Fill sentinel */
-	put_extent(dex_start, sb->version, limit, end_physical);
 
-	return need_split;
+	if (rq->seg_cnt == rq->seg_max) {
+		/* Stop if there is no space in seg[] */
+		key->len = 0;
+	} else if (key->start < key_limit && key->len) {
+		/* If there are remaining range, split */
+		goto need_split;
+	}
+
+	return 0;
+
+need_split:
+	/* FIXME: use better split position */
+	*split_hint = dleaf2_split_at_center(dleaf);
+	return 1;	/* try to split dleaf2 */
 }
 
 /* Read extents */

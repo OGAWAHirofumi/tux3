@@ -351,6 +351,11 @@ out_unlock:
 	return segs;
 }
 
+static void seg_free(struct btree *btree, block_t block, unsigned count)
+{
+	map_bfree(btree_inode(btree), block, count);
+}
+
 /*
  * Callback to allocate blocks to ->seg. dleaf is doing to write segs,
  * now we have to assign physical address to segs.
@@ -407,20 +412,20 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 }
 
 static int overwrite_seg_alloc(struct btree *btree, struct dleaf_req *rq,
-			       int write_segs)
+			       unsigned write_segs)
 {
 	/* If overwrite mode, set SEG_NEW to allocated seg */
 	return seg_alloc(btree, rq, write_segs, BLOCK_SEG_NEW);
 }
 
 static int redirect_seg_alloc(struct btree *btree, struct dleaf_req *rq,
-			      int write_segs)
+			      unsigned write_segs)
 {
 	/* If redirect mode, doesn't set SEG_NEW to allocated seg */
 	return seg_alloc(btree, rq, write_segs, 0);
 }
 
-static int (*seg_alloc_funs[])(struct btree *, struct dleaf_req *, int) = {
+static int (*seg_alloc_funs[])(struct btree *, struct dleaf_req *, unsigned) = {
 	[MAP_WRITE]	= overwrite_seg_alloc,
 	[MAP_REDIRECT]	= redirect_seg_alloc,
 };
@@ -539,7 +544,9 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 		.seg_cnt	= segs,
 		.seg_max	= seg_max,
 		.seg		= seg,
-		.seg_alloc	= seg_alloc_funs[mode],
+		.seg_find	= seg_find,
+		.seg_alloc	= seg_alloc,
+		.seg_free	= seg_free,
 	};
 	err = btree_write(cursor, &rq.key);
 	if (err) {

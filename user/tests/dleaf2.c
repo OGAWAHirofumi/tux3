@@ -67,7 +67,7 @@ static void __check_seg(struct test_extent *res, block_t index,
 } while (0)
 
 static int dummy_seg_alloc(struct btree *btree, struct dleaf_req *rq,
-			   int write_segs)
+			   unsigned write_segs)
 {
 	return 0;
 }
