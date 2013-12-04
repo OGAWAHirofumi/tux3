@@ -384,6 +384,90 @@ static int dleaf2_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 	return 1;
 }
 
+/* Read extents */
+static unsigned __dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
+			      tuxkey_t key_limit,
+			      struct dleaf2 *dleaf, struct btree_key_range *key)
+{
+	struct dleaf_req *rq = container_of(key, struct dleaf_req, key);
+	tuxkey_t key_start = key->start;
+	unsigned key_len = key->len;
+	struct diskextent2 *dex, *dex_limit;
+	struct extent next;
+	block_t physical;
+
+	if (rq->seg_cnt >= rq->seg_max)
+		return 0;
+
+	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
+
+	/* Lookup the extent is including index */
+	dex = dleaf2_lookup_index(btree, dleaf, key_start);
+	if (dex >= dex_limit - 1) {
+		/* If sentinel, fill by bottom key */
+		goto fill_seg;
+	}
+
+	/* Get start position of logical and physical */
+	get_extent(dex, &next);
+	physical = next.physical;
+	if (physical)
+		physical += key_start - next.logical;	/* add offset */
+
+	do {
+		struct block_segment *seg = rq->seg + rq->seg_cnt;
+
+		dex++;
+		get_extent(dex, &next);
+
+		/* Check of logical addr range of current and next. */
+		seg->count = min_t(u64, key_len, next.logical - key_start);
+		if (physical) {
+			seg->block = physical;
+			seg->state = 0;
+		} else {
+			seg->block = 0;
+			seg->state = BLOCK_SEG_HOLE;
+		}
+
+		physical = next.physical;
+		key_start += seg->count;
+		key_len -= seg->count;
+		rq->seg_cnt++;
+	} while (key_len && rq->seg_cnt < rq->seg_max && dex + 1 < dex_limit);
+
+fill_seg:
+	/* Between sentinel and key_limit is hole */
+	if (key_start < key_limit && key_len && rq->seg_cnt < rq->seg_max) {
+		struct block_segment *seg = rq->seg + rq->seg_cnt;
+
+		seg->count = min_t(tuxkey_t, key_len, key_limit - key_start);
+		seg->block = 0;
+		seg->state = BLOCK_SEG_HOLE;
+
+		key_start += seg->count;
+		key_len -= seg->count;
+		rq->seg_cnt++;
+	}
+
+	return key->len - key_len;
+}
+
+/* Read extents */
+static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
+		       tuxkey_t key_limit,
+		       void *leaf, struct btree_key_range *key)
+{
+	struct dleaf2 *dleaf = leaf;
+	unsigned len;
+
+	len = __dleaf2_read(btree, key_bottom, key_limit, dleaf, key);
+	key->start += len;
+	key->len -= len;
+
+	return 0;
+}
+
 /* Resize dleaf2 from head */
 static void dleaf2_resize(struct dleaf2 *dleaf, struct diskextent2 *head,
 			  int diff)
@@ -697,75 +781,6 @@ need_split:
 	/* FIXME: use better split position */
 	*split_hint = dleaf2_split_at_center(dleaf);
 	return BTREE_DO_SPLIT;
-}
-
-/* Read extents */
-static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
-		       tuxkey_t key_limit,
-		       void *leaf, struct btree_key_range *key)
-{
-	struct dleaf_req *rq = container_of(key, struct dleaf_req, key);
-	struct dleaf2 *dleaf = leaf;
-	struct diskextent2 *dex, *dex_limit;
-	struct extent next;
-	block_t physical;
-
-	if (rq->seg_cnt >= rq->seg_max)
-		return 0;
-
-	dex_limit = dleaf->table + be16_to_cpu(dleaf->count);
-
-	/* Lookup the extent is including index */
-	dex = dleaf2_lookup_index(btree, dleaf, key->start);
-	if (dex >= dex_limit - 1) {
-		/* If sentinel, fill by bottom key */
-		goto fill_seg;
-	}
-
-	/* Get start position of logical and physical */
-	get_extent(dex, &next);
-	physical = next.physical;
-	if (physical)
-		physical += key->start - next.logical;	/* add offset */
-	dex++;
-
-	do {
-		struct block_segment *seg = rq->seg + rq->seg_cnt;
-
-		get_extent(dex, &next);
-
-		/* Check of logical addr range of current and next. */
-		seg->count = min_t(u64, key->len, next.logical - key->start);
-		if (physical) {
-			seg->block = physical;
-			seg->state = 0;
-		} else {
-			seg->block = 0;
-			seg->state = BLOCK_SEG_HOLE;
-		}
-
-		physical = next.physical;
-		key->start += seg->count;
-		key->len -= seg->count;
-		rq->seg_cnt++;
-		dex++;
-	} while (key->len && rq->seg_cnt < rq->seg_max && dex < dex_limit);
-
-fill_seg:
-	/* Between sentinel and key_limit is hole */
-	if (key->start < key_limit && key->len && rq->seg_cnt < rq->seg_max) {
-		struct block_segment *seg = rq->seg + rq->seg_cnt;
-
-		seg->count = min_t(tuxkey_t, key->len, key_limit - key->start);
-		seg->block = 0;
-		seg->state = BLOCK_SEG_HOLE;
-
-		key->start += seg->count;
-		key->len -= seg->count;
-		rq->seg_cnt++;
-	}
-
-	return 0;
 }
 
 struct btree_ops dtree2_ops = {
