@@ -679,6 +679,21 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	return 0;
 
 need_split:
+	/* FIXME: do we should split at sentinel when filling hole? */
+	if (key_limit == TUXKEY_LIMIT) {
+		struct diskextent2 *sentinel =
+			dleaf->table + be16_to_cpu(dleaf->count) - 1;
+
+		/* If append write, split at sentinel */
+		*split_hint = get_logical(sentinel);
+		if (key->start >= *split_hint) {
+			tux3_dbg("key %Lu bottom %Lu, limit %Lu, hint %Lu",
+				 key->start, key_bottom, key_limit,
+				 *split_hint);
+			return 1;
+		}
+	}
+
 	/* FIXME: use better split position */
 	*split_hint = dleaf2_split_at_center(dleaf);
 	return 1;	/* try to split dleaf2 */
