@@ -553,7 +553,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	};
 	key = dleaf2_set_w_req(&rq, 0x100000, 1, seg1, ARRAY_SIZE(seg1));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
-	test_assert(ret == 1);	/* need to split */
+	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 0);
 
 	/* Can't overwrite at all */
@@ -562,7 +562,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	};
 	key = dleaf2_set_w_req(&rq, BASE / 2, 1, seg2, ARRAY_SIZE(seg2));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
-	test_assert(ret == 1);	/* need to split */
+	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 0);
 
 	/* Can write partially */
@@ -574,7 +574,7 @@ static void test02(struct sb *sb, struct btree *btree)
 	tuxkey_t index = BASE + (btree->entries_per_leaf - 2 - seg3[0].count);
 	key = dleaf2_set_w_req(&rq, index, 4, seg3, ARRAY_SIZE(seg3));
 	ret = dleaf2_write(btree, 0, TUXKEY_LIMIT, leaf, key, &hint);
-	test_assert(ret == 1);	/* need to split */
+	test_assert(ret == BTREE_DO_SPLIT);
 	test_assert(rq.seg_idx == 1);
 
 	/* Check temporary hole by made in seg3[] */

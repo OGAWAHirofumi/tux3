@@ -676,7 +676,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 		goto need_split;
 	}
 
-	return 0;
+	return BTREE_DO_RETRY;
 
 need_split:
 	/* FIXME: do we should split at sentinel when filling hole? */
@@ -690,13 +690,13 @@ need_split:
 			tux3_dbg("key %Lu bottom %Lu, limit %Lu, hint %Lu",
 				 key->start, key_bottom, key_limit,
 				 *split_hint);
-			return 1;
+			return BTREE_DO_SPLIT;
 		}
 	}
 
 	/* FIXME: use better split position */
 	*split_hint = dleaf2_split_at_center(dleaf);
-	return 1;	/* try to split dleaf2 */
+	return BTREE_DO_SPLIT;
 }
 
 /* Read extents */
@@ -774,6 +774,7 @@ struct btree_ops dtree2_ops = {
 	.leaf_split	= dleaf2_split,
 	.leaf_merge	= dleaf2_merge,
 	.leaf_chop	= dleaf2_chop,
+	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= dleaf2_write,
 	.leaf_read	= dleaf2_read,
 	.balloc		= balloc,

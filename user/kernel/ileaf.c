@@ -441,7 +441,7 @@ static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 	if (attrs == NULL) {
 		/* There is no space to store */
 		*split_hint = ileaf_split_hint(btree, ileaf, key->start, size);
-		return 1;	/* need to split */
+		return BTREE_DO_SPLIT;
 	}
 
 	attr_ops->encode(btree, rq->data, attrs, size);
@@ -449,7 +449,7 @@ static int ileaf_write(struct btree *btree, tuxkey_t key_bottom,
 	key->start++;
 	key->len--;
 
-	return 0;
+	return BTREE_DO_RETRY;
 }
 
 static int ileaf_read(struct btree *btree, tuxkey_t key_bottom,
@@ -475,6 +475,7 @@ struct btree_ops itree_ops = {
 	.leaf_split	= ileaf_split,
 	.leaf_merge	= ileaf_merge,
 	.leaf_chop	= ileaf_chop,
+	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= ileaf_write,
 	.leaf_read	= ileaf_read,
 	.balloc		= balloc,
@@ -491,6 +492,7 @@ struct btree_ops otree_ops = {
 	.leaf_split	= ileaf_split,
 	.leaf_merge	= ileaf_merge,
 	.leaf_chop	= ileaf_chop,
+	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= ileaf_write,
 	.leaf_read	= ileaf_read,
 	.balloc		= balloc,

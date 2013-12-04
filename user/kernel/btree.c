@@ -1161,6 +1161,12 @@ static int btree_advance(struct cursor *cursor, struct btree_key_range *key)
 	return 0;
 }
 
+int noop_pre_write(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit,
+		   void *leaf, struct btree_key_range *key)
+{
+	return BTREE_DO_DIRTY;
+}
+
 int btree_write(struct cursor *cursor, struct btree_key_range *key)
 {
 	struct btree *btree = cursor->btree;
@@ -1171,34 +1177,46 @@ int btree_write(struct cursor *cursor, struct btree_key_range *key)
 	while (key->len > 0) {
 		tuxkey_t bottom, limit;
 		void *leaf;
-		int need_split;
+		int ret;
 
 		err = btree_advance(cursor, key);
 		if (err)
 			return err;	/* FIXME: error handling */
 
-		err = cursor_redirect(cursor);
-		if (err)
-			return err;	/* FIXME: error handling */
-
 		bottom = cursor_this_key(cursor);
 		limit = cursor_next_key(cursor);
-		leaf = bufdata(cursor_leafbuf(cursor));
 		assert(bottom <= key->start && key->start < limit);
-		assert(ops->leaf_sniff(btree, leaf));
 
-		need_split = ops->leaf_write(btree, bottom, limit, leaf, key,
-					     &split_hint);
-		if (need_split < 0)
-			return need_split;
-		else if (!need_split) {
-			mark_buffer_dirty_non(cursor_leafbuf(cursor));
+		leaf = bufdata(cursor_leafbuf(cursor));
+		ret = ops->leaf_pre_write(btree, bottom, limit, leaf, key);
+		assert(ret >= 0);
+		if (ret == BTREE_DO_RETRY)
 			continue;
+
+		if (ret == BTREE_DO_DIRTY) {
+			err = cursor_redirect(cursor);
+			if (err)
+				return err;	/* FIXME: error handling */
+
+			/* Reread leaf after redirect */
+			leaf = bufdata(cursor_leafbuf(cursor));
+			assert(ops->leaf_sniff(btree, leaf));
+
+			ret = ops->leaf_write(btree, bottom, limit, leaf, key,
+					      &split_hint);
+			if (ret < 0)
+				return ret;
+			if (ret == BTREE_DO_RETRY) {
+				mark_buffer_dirty_non(cursor_leafbuf(cursor));
+				continue;
+			}
 		}
 
-		err = btree_leaf_split(cursor, key->start, split_hint);
-		if (err)
-			return err;	/* FIXME: error handling */
+		if (ret == BTREE_DO_SPLIT) {
+			err = btree_leaf_split(cursor, key->start, split_hint);
+			if (err)
+				return err;	/* FIXME: error handling */
+		}
 	}
 
 	return 0;

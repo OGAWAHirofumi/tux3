@@ -557,6 +557,12 @@ struct btree_key_range {
 	unsigned len;
 };
 
+enum btree_result {
+	BTREE_DO_RETRY = 0,
+	BTREE_DO_DIRTY,
+	BTREE_DO_SPLIT,
+};
+
 struct btree_ops {
 	void (*btree_init)(struct btree *btree);
 	int (*leaf_init)(struct btree *btree, void *leaf);
@@ -565,7 +571,9 @@ struct btree_ops {
 	int (*leaf_chop)(struct btree *btree, tuxkey_t start, u64 len, void *leaf);
 	/* return value: 1 - merged, 0 - couldn't merge */
 	int (*leaf_merge)(struct btree *btree, void *into, void *from);
-	/* return value: 1 - need to split leaf, 0 - success, < 0 - error */
+	/* return value: < 0 - error, 0 >= - btree_result */
+	int (*leaf_pre_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
+	/* return value: < 0 - error, 0 >= - btree_result */
 	int (*leaf_write)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key, tuxkey_t *split_hint);
 	int (*leaf_read)(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit, void *leaf, struct btree_key_range *key);
 	int (*balloc)(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs);
@@ -721,6 +729,8 @@ int btree_traverse(struct cursor *cursor, tuxkey_t key, u64 len,
 int btree_chop(struct btree *btree, tuxkey_t start, u64 len);
 int btree_insert_leaf(struct cursor *cursor, tuxkey_t key, struct buffer_head *leafbuf);
 void *btree_expand(struct cursor *cursor, tuxkey_t key, unsigned newsize);
+int noop_pre_write(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit,
+		   void *leaf, struct btree_key_range *key);
 int btree_write(struct cursor *cursor, struct btree_key_range *key);
 int btree_read(struct cursor *cursor, struct btree_key_range *key);
 void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);

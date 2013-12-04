@@ -185,11 +185,11 @@ static int uleaf_write(struct btree *btree, tuxkey_t key_bottom,
 	if (!uleaf_insert(btree, uleaf, key->start, rq->val)) {
 		key->start++;
 		key->len--;
-		return 0;
+		return BTREE_DO_RETRY;
 	}
 
 	*split_hint = key->start;
-	return 1;	/* need to split */
+	return BTREE_DO_SPLIT;
 }
 
 static struct btree_ops ops = {
@@ -198,6 +198,7 @@ static struct btree_ops ops = {
 	.leaf_split	= uleaf_split,
 	.leaf_merge	= uleaf_merge,
 	.leaf_chop	= uleaf_chop,
+	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= uleaf_write,
 	.balloc		= balloc,
 	.bfree		= bfree,
