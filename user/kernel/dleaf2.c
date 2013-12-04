@@ -387,7 +387,8 @@ static int dleaf2_chop(struct btree *btree, tuxkey_t start, u64 len, void *leaf)
 /* Read extents */
 static unsigned __dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 			      tuxkey_t key_limit,
-			      struct dleaf2 *dleaf, struct btree_key_range *key)
+			      struct dleaf2 *dleaf, struct btree_key_range *key,
+			      int stop_at_hole)
 {
 	struct dleaf_req *rq = container_of(key, struct dleaf_req, key);
 	tuxkey_t key_start = key->start;
@@ -434,6 +435,12 @@ static unsigned __dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 		key_start += seg->count;
 		key_len -= seg->count;
 		rq->seg_cnt++;
+
+		/* Stop if current is hole and next is segment */
+		if (stop_at_hole) {
+			if (!seg->block && physical)
+				break;
+		}
 	} while (key_len && rq->seg_cnt < rq->seg_max && dex + 1 < dex_limit);
 
 fill_seg:
@@ -461,12 +468,51 @@ static int dleaf2_read(struct btree *btree, tuxkey_t key_bottom,
 	struct dleaf2 *dleaf = leaf;
 	unsigned len;
 
-	len = __dleaf2_read(btree, key_bottom, key_limit, dleaf, key);
+	len = __dleaf2_read(btree, key_bottom, key_limit, dleaf, key, 0);
 	key->start += len;
 	key->len -= len;
 
 	return 0;
 }
+
+static int dleaf2_pre_write(struct btree *btree, tuxkey_t key_bottom,
+			    tuxkey_t key_limit, void *leaf,
+			    struct btree_key_range *key)
+{
+	struct dleaf_req *rq = container_of(key, struct dleaf_req, key);
+	struct dleaf2 *dleaf = leaf;
+
+	/*
+	 * If overwrite mode, read exists segments. Then, if there are
+	 * hole, allocate segment.
+	 */
+	if (rq->overwrite) {
+		unsigned len;
+		int last, hole_len;
+
+		len = __dleaf2_read(btree, key_bottom, key_limit, dleaf, key,1);
+		last = rq->seg_cnt;
+
+		/* Remove hole from seg[] */
+		hole_len = 0;
+		while (last > rq->seg_idx && !rq->seg[last - 1].block) {
+			len -= rq->seg[last - 1].count;
+			hole_len += rq->seg[last - 1].count;
+			last--;
+		}
+		key->start += len;
+		key->len = hole_len;
+		rq->seg_idx = last;
+		rq->seg_cnt = last;
+
+		/* If there is no hole, return exists segments */
+		if (!hole_len)
+			return BTREE_DO_RETRY;
+	}
+
+	return BTREE_DO_DIRTY;
+}
+
 
 /* Resize dleaf2 from head */
 static void dleaf2_resize(struct dleaf2 *dleaf, struct diskextent2 *head,
@@ -789,7 +835,7 @@ struct btree_ops dtree2_ops = {
 	.leaf_split	= dleaf2_split,
 	.leaf_merge	= dleaf2_merge,
 	.leaf_chop	= dleaf2_chop,
-	.leaf_pre_write	= noop_pre_write,
+	.leaf_pre_write	= dleaf2_pre_write,
 	.leaf_write	= dleaf2_write,
 	.leaf_read	= dleaf2_read,
 	.balloc		= balloc,
