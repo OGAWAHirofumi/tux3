@@ -327,8 +327,7 @@ static int write_log(struct sb *sb)
 	return tux3_flush_inode_internal(sb->logmap, TUX3_INIT_DELTA);
 }
 
-/* userland only */
-int apply_defered_bfree(struct sb *sb, u64 val)
+static int apply_defered_bfree(struct sb *sb, u64 val)
 {
 	return bfree(sb, val & ~(-1ULL << 48), val >> 48);
 }
