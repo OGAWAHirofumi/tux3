@@ -13,6 +13,7 @@
 
 #include "tux3_fsck.c"
 #include "tux3_image.c"
+#include "tux3_dump.c"
 
 #define VERSION 0.0
 #define STRINGIFY2(text) #text
@@ -154,14 +155,18 @@ int main(int argc, char *argv[])
 	const char *blurb = "<command> <volume>";
 
 	enum {
-		CMD_MKFS, CMD_FSCK, CMD_DELTA, CMD_UNIFY, CMD_IMAGE,
+		CMD_MKFS, CMD_FSCK, CMD_DUMP, CMD_IMAGE,
+		CMD_DELTA, CMD_UNIFY,
+
 		CMD_READ, CMD_WRITE, CMD_GET, CMD_SET, CMD_STAT, CMD_DELETE,
 		CMD_TRUNCATE, CMD_UNKNOWN,
 	};
 
 	static char *commands[] = {
-		[CMD_MKFS] = "mkfs", [CMD_FSCK] = "fsck", [CMD_DELTA] = "delta",
-		[CMD_UNIFY] = "unify", [CMD_IMAGE] = "image",
+		[CMD_MKFS] = "mkfs", [CMD_FSCK] = "fsck", [CMD_DUMP] = "dump",
+		[CMD_IMAGE] = "image",
+
+		[CMD_DELTA] = "delta", [CMD_UNIFY] = "unify",
 		[CMD_READ] = "read", [CMD_WRITE] = "write",
 		[CMD_GET] = "get", [CMD_SET] = "set",
 		[CMD_STAT] = "stat", [CMD_DELETE] = "delete",
@@ -288,6 +293,17 @@ int main(int argc, char *argv[])
 		if (err)
 			goto error;
 		err = fsck_main(sb);
+		if (err)
+			goto error;
+		break;
+
+	case CMD_DUMP:
+		command_options(&argc, &args, onlyhelp, 3, progname, command,
+				"<volume>", &vars);
+		err = open_sb(vars.volname, sb);
+		if (err)
+			goto error;
+		err = dump_main(sb, vars.verbose);
 		if (err)
 			goto error;
 		break;
