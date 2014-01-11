@@ -252,16 +252,14 @@ static void test03(struct sb *sb, struct inode *inode)
 	test_assert(segs1 > 0);
 	segs2 = check_map_region(inode, 4, 1, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 == segs2);
+	test_assert(seg1[0].block == seg2[0].block + 2);
 
+	/* Read 1st range again (overwrite should not add new segments) */
 	segs1 = check_map_region(inode, 2, 5, seg1, ARRAY_SIZE(seg1));
-	test_assert(segs1 > segs2);
+	test_assert(segs1 == segs2);
 	test_assert(seg1[0].block == seg2[0].block);
-	test_assert(seg1[0].count < seg2[0].count);
-	test_assert(seg1[0].count == 2);
-	test_assert(seg1[1].block != seg1[0].block);
-	test_assert(seg1[1].count == 1);
-	test_assert(seg1[2].block != seg1[1].block);
-	test_assert(seg1[2].count == 2);
+	test_assert(seg1[0].count == seg2[0].count);
+	test_assert(seg1[0].count == 5);
 
 	/* Check whole rage from 0 */
 	segs2 = check_map_region(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
