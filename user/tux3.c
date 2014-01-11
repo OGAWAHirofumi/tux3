@@ -14,6 +14,7 @@
 #include "tux3_fsck.c"
 #include "tux3_image.c"
 #include "tux3_dump.c"
+#include "tux3_graph.c"
 
 #define VERSION 0.0
 #define STRINGIFY2(text) #text
@@ -155,16 +156,16 @@ int main(int argc, char *argv[])
 	const char *blurb = "<command> <volume>";
 
 	enum {
-		CMD_MKFS, CMD_FSCK, CMD_DUMP, CMD_IMAGE,
-		CMD_DELTA, CMD_UNIFY,
+		CMD_MKFS, CMD_FSCK, CMD_DUMP, CMD_IMAGE, CMD_GRAPH,
 
+		CMD_DELTA, CMD_UNIFY,
 		CMD_READ, CMD_WRITE, CMD_GET, CMD_SET, CMD_STAT, CMD_DELETE,
 		CMD_TRUNCATE, CMD_UNKNOWN,
 	};
 
 	static char *commands[] = {
 		[CMD_MKFS] = "mkfs", [CMD_FSCK] = "fsck", [CMD_DUMP] = "dump",
-		[CMD_IMAGE] = "image",
+		[CMD_IMAGE] = "image", [CMD_GRAPH] = "graph",
 
 		[CMD_DELTA] = "delta", [CMD_UNIFY] = "unify",
 		[CMD_READ] = "read", [CMD_WRITE] = "write",
@@ -316,6 +317,17 @@ int main(int argc, char *argv[])
 		if (err)
 			goto error;
 		err = image_main(sb, filename);
+		if (err)
+			goto error;
+		break;
+
+	case CMD_GRAPH:
+		command_options(&argc, &args, onlyhelp, 3, progname, command,
+				"<volume>", &vars);
+		err = open_sb(vars.volname, sb);
+		if (err)
+			goto error;
+		err = graph_main(sb, vars.volname, vars.verbose);
 		if (err)
 			goto error;
 		break;

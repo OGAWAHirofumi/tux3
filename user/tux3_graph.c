@@ -5,7 +5,7 @@
  * By contributing changes to this file you grant the original copyright holder
  * the right to distribute those changes under any license.
  *
- * $ tux3graph [-v] volname
+ * $ tux3 graph [-v] volname
  * $ dot -Tpng -O volname.dot
  * $ viewer volname.dot.png
  */
@@ -515,7 +515,7 @@ static void draw_symlink_start(struct graph_info *gi, struct btree *btree)
 	fprintf(gi->fp, "label = \"symlink data\"\n");
 }
 
-struct draw_data_ops draw_symlink = {
+static struct draw_data_ops draw_symlink = {
 	.draw_start	= draw_symlink_start,
 	.draw_data	= draw_data,
 	.draw_end	= draw_data_end,
@@ -806,7 +806,7 @@ static struct {
 };
 
 #define S_SHIFT 12
-struct draw_data_ops *dtree_funcs[S_IFMT >> S_SHIFT] = {
+static struct draw_data_ops *dtree_funcs[S_IFMT >> S_SHIFT] = {
 	[S_IFREG >> S_SHIFT]	= &draw_file,
 	[S_IFDIR >> S_SHIFT]	= &draw_dir,
 #if 0
@@ -1216,7 +1216,7 @@ static void draw_log_post(struct sb *sb, struct buffer_head *buffer,
 	}
 }
 
-struct walk_logchain_ops draw_logchain_ops = {
+static struct walk_logchain_ops draw_logchain_ops = {
 	.pre	= draw_log_pre,
 	.log	= draw_log,
 	.post	= draw_log_post,
@@ -1284,65 +1284,15 @@ static void draw_sb(struct graph_info *gi, struct sb *sb)
 		be64_to_cpu(txsb->logchain), be64_to_cpu(txsb->logchain));
 }
 
-static void usage(void)
+static int graph_main(struct sb *sb, const char *volname, int verbose)
 {
-	printf("tux3  [-h|--help] [-v|--verbose] [-b|--blocksize=<size>] <volume>\n");
-	exit(1);
-}
-
-int main(int argc, char *argv[])
-{
-	static struct option long_options[] = {
-		{ "verbose", no_argument, NULL, 'v' },
-		{ "help", no_argument, NULL, 'h' },
-		{ NULL, 0, NULL, 0 }
-	};
-	const char *volname = NULL;
 	int err;
 
-	while (1) {
-		int c, optindex = 0;
-		c = getopt_long(argc, argv, "vh", long_options, &optindex);
-		if (c == -1)
-			break;
-		switch (c) {
-		case 'v':
-			opt_verbose++;
-			break;
-		case 'h':
-		default:
-			goto usage;
-		}
-	}
-
-	if (argc - optind < 1)
-		goto usage;
-
-	err = tux3_init_mem();
-	if (err)
-		goto error;
-
-	/* open volume, create superblock */
-	volname = argv[optind++];
-	int fd = open(volname, O_RDONLY);
-	if (fd < 0)
-		strerror_exit(1, errno, "couldn't open %s", volname);
-
-	/* dev->bits is still unknown. Note, some structure can't use yet. */
-	struct dev *dev = &(struct dev){ .fd = fd };
-	struct sb *sb = rapid_sb(dev);
-	err = load_sb(sb);
-	if (err)
-		goto error;
-
-	dev->bits = sb->blockbits;
-	init_buffers(dev, 1 << 20, 2);
+	opt_verbose = verbose;
 
 	struct replay *rp = tux3_init_fs(sb);
-	if (IS_ERR(rp)) {
-		err = PTR_ERR(rp);
-		goto error;
-	}
+	if (IS_ERR(rp))
+		return PTR_ERR(rp);
 
 	struct graph_info ginfo;
 	char filename[256];
@@ -1382,18 +1332,7 @@ int main(int argc, char *argv[])
 
 	err = replay_stage3(rp, 0);
 	if (err)
-		goto error;
-
-	put_super(sb);
-	tux3_exit_mem();
+		return err;
 
 	return 0;
-
-error:
-	strerror_exit(1, -err, "eek!");
-	return 1;
-
-usage:
-	usage();
-	return 1;
 }

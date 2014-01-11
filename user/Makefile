@@ -72,7 +72,7 @@ SBINDIR	= $(PREFIX)/sbin
 LIBEXECDIR = $(PREFIX)/libexec/tux3
 
 # binaries
-TUX3_BIN	= tux3 tux3graph
+TUX3_BIN	= tux3
 ifeq ($(shell pkg-config fuse && echo found), found)
 	FUSE_BIN = tux3fuse
 endif
@@ -99,7 +99,7 @@ LIBKLIB_OBJS	= libklib/find_next_bit.o libklib/fs.o libklib/list_sort.o \
 	libklib/slab.o libklib/uidgid.o
 
 # binary objects
-OBJS		= tux3.o tux3graph.o
+OBJS		= tux3.o
 FUSE_OBJS	= tux3fuse.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
 	tests/dir.o tests/dleaf.o tests/dleaf2.o tests/filemap.o \
@@ -122,7 +122,6 @@ all: $(ALL_BIN)
 $(LIBTUX3): $(USER_OBJS) $(KERN_OBJS) $(TEST_LIB_OBJS)
 $(LIBKLIB): $(LIBKLIB_OBJS)
 tux3: tux3.o $(ALL_LIBS)
-tux3graph: tux3graph.o $(ALL_LIBS)
 tests/balloc: tests/balloc.o $(ALL_LIBS)
 tests/btree: tests/btree.o $(ALL_LIBS)
 tests/buffer: tests/buffer.o $(ALL_LIBS)
