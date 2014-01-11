@@ -17,6 +17,30 @@
 #include "kernel/dleaf2.c"
 #include "kernel/ileaf.c"
 
+
+typedef void (*walk_data_cb)(struct btree *, struct buffer_head *,
+			     struct buffer_head *, block_t,
+			     void *, void *);
+
+static void walk_extent(struct btree *btree, struct buffer_head *leafbuf,
+			block_t index, block_t block, unsigned count,
+			walk_data_cb walk_data,
+			void *callback, void *data)
+{
+	struct buffer_head *buffer;
+
+	for (unsigned i = 0; i < count; i++) {
+		buffer = blockread(mapping(btree_inode(btree)), index + i);
+		assert(buffer);
+
+		walk_data(btree, leafbuf, buffer, block + i, callback, data);
+
+		blockput(buffer);
+	}
+}
+
+#include "walk_dir.c"
+
 struct walk_btree_ops {
 	void (*pre)(struct btree *, void *);
 	void (*bnode)(struct btree *, struct buffer_head *, int, void *);

@@ -388,56 +388,32 @@ static void dump_bnode(struct btree *btree, struct buffer_head *buffer,
 	}
 }
 
-static void __dump_dir_data(struct dump_info *di, struct btree *btree,
-			    struct buffer_head *leafbuf,
-			    struct buffer_head *buffer, block_t block,
-			    int atable)
+static void dump_data_dir(struct btree *btree, struct buffer_head *leafbuf,
+			  block_t block, tux_dirent *entry, void *data)
 {
-	struct sb *sb = btree->sb;
-	tux_dirent *entry = bufdata(buffer);
-	tux_dirent *limit = (void *)entry + sb->blocksize;
+	if (opt_stats) {
+		struct sb *sb = btree->sb;
+		struct btree *itree = itree_btree(sb);
+		struct dump_info *di = data;
+		int err;
 
-	while (entry < limit) {
-		if (opt_stats && !atable) {
-			struct btree *itree = itree_btree(sb);
-			int err;
+		struct cursor *cursor = alloc_cursor(itree, 0);
+		if (!cursor)
+			strerror_exit(1, ENOMEM, "alloc_cursor");
 
-			struct cursor *cursor = alloc_cursor(itree, 0);
-			if (!cursor)
-				strerror_exit(1, ENOMEM, "alloc_cursor");
-
-			down_read(&cursor->btree->lock);
-			err = btree_probe(cursor, be64_to_cpu(entry->inum));
-			if (err)
-				strerror_exit(1, -err,
+		down_read(&cursor->btree->lock);
+		err = btree_probe(cursor, be64_to_cpu(entry->inum));
+		if (err)
+			strerror_exit(1, -err,
 				      "btree_probe error for inum in dir");
 
-			stats_dir_seek_add(di->stats->own, block,
-					   bufindex(cursor_leafbuf(cursor)));
+		stats_dir_seek_add(di->stats->own, block,
+				   bufindex(cursor_leafbuf(cursor)));
 
-			release_cursor(cursor);
+		release_cursor(cursor);
 
-			up_read(&cursor->btree->lock);
-			free_cursor(cursor);
-		}
-
-		entry = (void *)entry + be16_to_cpu(entry->rec_len);
-	}
-}
-
-static void dump_dir_data(struct dump_info *di, struct btree *btree,
-			  struct buffer_head *leafbuf,
-			  block_t index, block_t block, unsigned count)
-{
-	struct buffer_head *buffer;
-
-	for (unsigned i = 0; i < count; i++) {
-		buffer = blockread(mapping(btree_inode(btree)), index + i);
-		assert(buffer);
-
-		__dump_dir_data(di, btree, leafbuf, buffer, block + i, 0);
-
-		blockput(buffer);
+		up_read(&cursor->btree->lock);
+		free_cursor(cursor);
 	}
 }
 
@@ -448,8 +424,9 @@ static void dump_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
 	struct dump_info *di = data;
 	struct inode *inode = btree_inode(btree);
 
-	if (S_ISDIR(inode->i_mode))
-		dump_dir_data(data, btree, leafbuf, index, block, count);
+	if (S_ISDIR(inode->i_mode) && opt_stats)
+		walk_extent_dir(btree, leafbuf, index, block, count,
+				dump_data_dir, data);
 
 	if (opt_stats) {
 		int depth = btree->root.depth;
