@@ -935,6 +935,27 @@ static void draw_dleaf_end(struct graph_info *gi, struct buffer_head *leafbuf)
 		buffer_dirty(leafbuf) ? "color = red\n" : "");
 }
 
+static void draw_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+			      block_t index, block_t block, unsigned count,
+			      void *data)
+{
+	struct graph_info *dtree_gi = data;
+	struct graph_info *data_gi = dtree_gi->private;
+	struct draw_data_ops *draw_data_ops = data_gi->private;
+
+	draw_data_ops->draw_data(data_gi, btree, leafbuf,
+				 index, block, count);
+
+	if (opt_stats) {
+		int depth = btree->root.depth;
+
+		stats_data_seek_add(dtree_gi->stats->own, block, count);
+		stats_child_seek_add(dtree_gi->stats->own, depth,
+				     bufindex(leafbuf), block);
+		stats_data_add(dtree_gi->stats->own, block, count);
+	}
+}
+
 static inline struct group *dleaf1_groups_ptr(struct btree *btree,
 					      struct dleaf *dleaf)
 {
@@ -993,6 +1014,10 @@ static inline struct diskextent *dleaf1_extent(struct diskextent *extents,
 {
 	return extents + ex;
 }
+
+static struct walk_dleaf_ops draw_dleaf1_ops = {
+	.extent = draw_dleaf_extent,
+};
 
 static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 			struct buffer_head *leafbuf, void *data)
@@ -1088,39 +1113,41 @@ static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
 	}
 
 	/* Walk again for file data */
-	struct graph_info *gi_data = data;
-	struct draw_data_ops *draw_data_ops = gi_data->private;
-	struct dwalk walk;
-	if (dwalk_probe(dleaf, btree->sb->blocksize, &walk, 0)) {
-		do {
-			block_t index = dwalk_index(&walk);
-			block_t block = dwalk_block(&walk);
-			unsigned count = dwalk_count(&walk);
-			draw_data_ops->draw_data(gi_data, btree, leafbuf,
-						 index, block, count);
-
-			if (opt_stats) {
-				stats_data_seek_add(gi->stats->own, block,
-						    count);
-				stats_child_seek_add(gi->stats->own, depth,
-						     bufindex(leafbuf), block);
-				stats_data_add(gi->stats->own, block, count);
-			}
-		} while (dwalk_next(&walk));
-	}
+	walk_dleaf(btree, leafbuf, &draw_dleaf1_ops, gi);
 }
+
+static void draw_dleaf2_entry(struct btree *btree, struct buffer_head *leafbuf,
+			      unsigned prev_count,
+			      unsigned version, block_t index, block_t block,
+			      int is_sentinel, void *data)
+{
+	struct graph_info *dtree_gi = data;
+
+	if (prev_count)
+		fprintf(dtree_gi->fp, " (count %u)", prev_count);
+
+	fprintf(dtree_gi->fp,
+		" | verhi 0x%04x, logical %llu,"
+		" verlo 0x%04x, physical %llu",
+		version >> VER_BITS, index,
+		version & VER_MASK, block);
+
+	if (is_sentinel)
+		fprintf(dtree_gi->fp, " (sentinel)");
+}
+
+static struct walk_dleaf_ops draw_dleaf2_ops = {
+	.extent = draw_dleaf_extent,
+	.entry = draw_dleaf2_entry,
+};
 
 static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 			struct buffer_head *leafbuf, void *data)
 {
-	struct graph_info *gi_data = data;
-	struct draw_data_ops *draw_data_ops = gi_data->private;
 	struct dleaf2 *dleaf = bufdata(leafbuf);
-	struct diskextent2 *dex, *dex_limit;
-	struct extent prev = { .logical = TUXKEY_LIMIT, };
-	int depth = btree->root.depth;
 
 	if (opt_stats) {
+		int depth = btree->root.depth;
 		unsigned bytes = sizeof(*dleaf)
 			+ sizeof(*dleaf->table) * be16_to_cpu(dleaf->count);
 		int empty = dleaf2_can_free(btree, dleaf);
@@ -1135,47 +1162,7 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 		" | magic 0x%04x, count %u",
 		be16_to_cpu(dleaf->magic), be16_to_cpu(dleaf->count));
 
-	dex = dleaf->table;
-	dex_limit = dex + be16_to_cpu(dleaf->count);
-	while (dex < dex_limit) {
-		struct extent ex;
-		get_extent(dex, &ex);
-
-		if (prev.logical != TUXKEY_LIMIT) {
-			block_t logical = prev.logical;
-			block_t physical = prev.physical;
-			unsigned count = ex.logical - prev.logical;
-			fprintf(gi->fp, " (count %u)", count);
-
-			if (!physical)
-				goto skip;
-
-			/* Draw file data */
-			draw_data_ops->draw_data(gi_data, btree, leafbuf,
-						 logical, physical, count);
-
-			if (opt_stats) {
-				stats_data_seek_add(gi->stats->own, physical,
-						    count);
-				stats_child_seek_add(gi->stats->own, depth,
-						   bufindex(leafbuf), physical);
-				stats_data_add(gi->stats->own, physical, count);
-			}
-		}
-
-skip:
-		fprintf(gi->fp,
-			" | verhi 0x%04x, logical %llu,"
-			" verlo 0x%04x, physical %llu",
-			ex.version >> VER_BITS, ex.logical,
-			ex.version & VER_MASK, ex.physical);
-
-		if (dex == dex_limit - 1)
-			fprintf(gi->fp, " (sentinel)");
-
-		prev = ex;
-		dex++;
-	}
+	walk_dleaf(btree, leafbuf, &draw_dleaf2_ops, gi);
 
 	draw_dleaf_end(gi, leafbuf);
 }
