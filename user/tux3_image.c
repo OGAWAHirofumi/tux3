@@ -77,19 +77,23 @@ static void image_write_buffer(struct image_context *context,
  * Walk filesystem
  */
 
+static void image_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+			       block_t index, block_t block, unsigned count,
+			       void *data)
+{
+	struct image_context *context = data;
+	image_write(context, block, count);
+}
+
+static struct walk_dleaf_ops image_dleaf_ops = {
+	.extent = image_dleaf_extent,
+};
+
 static void image_bnode(struct btree *btree, struct buffer_head *buffer,
 			int level, void *data)
 {
 	struct image_context *context = data;
 	image_write_buffer(context, buffer, bufindex(buffer));
-}
-
-static void image_dleaf_cb(struct btree *btree, struct buffer_head *leafbuf,
-			   block_t index, block_t block, unsigned count,
-			   void *data)
-{
-	struct image_context *context = data;
-	image_write(context, block, count);
 }
 
 static void __image_dleaf(struct btree *btree, struct buffer_head *leafbuf,
@@ -99,7 +103,7 @@ static void __image_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 	image_write_buffer(context, leafbuf, bufindex(leafbuf));
 
 	if (write_data)
-		walk_dleaf(btree, leafbuf, image_dleaf_cb, data);
+		walk_dleaf(btree, leafbuf, &image_dleaf_ops, data);
 }
 
 static void image_dleaf(struct btree *btree, struct buffer_head *leafbuf,

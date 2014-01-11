@@ -33,11 +33,18 @@ struct walk_logchain_ops {
 
 typedef void (*walk_ileaf_cb)(struct buffer_head *, int, struct inode *,
 			      void *);
-typedef void (*walk_dleaf_cb)(struct btree *, struct buffer_head *,
-			      block_t, block_t, unsigned, void *);
+
+struct walk_dleaf_ops {
+	/* callback for data extent */
+	void (*extent)(struct btree *, struct buffer_head *,
+		       block_t, block_t, unsigned, void *);
+	/* callback for dleaf2 entry */
+	void (*entry)(struct btree *, struct buffer_head *, unsigned,
+		      unsigned, block_t, block_t, int, void *);
+};
 
 static void walk_dleaf1(struct btree *btree, struct buffer_head *leafbuf,
-			walk_dleaf_cb callback, void *data)
+			struct walk_dleaf_ops *cb, void *data)
 {
 	struct sb *sb = btree->sb;
 	struct dleaf *dleaf = bufdata(leafbuf);
@@ -49,17 +56,18 @@ static void walk_dleaf1(struct btree *btree, struct buffer_head *leafbuf,
 			block_t block = dwalk_block(&walk);
 			unsigned count = dwalk_count(&walk);
 
-			callback(btree, leafbuf, index, block, count, data);
+			cb->extent(btree, leafbuf, index, block, count, data);
 		} while (dwalk_next(&walk));
 	}
 }
 
 static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
-			walk_dleaf_cb callback, void *data)
+			struct walk_dleaf_ops *cb, void *data)
 {
 	struct dleaf2 *dleaf = bufdata(leafbuf);
 	struct diskextent2 *dex, *dex_limit;
 	struct extent prev = { .logical = TUXKEY_LIMIT, };
+	unsigned count = 0;
 
 	dex = dleaf->table;
 	dex_limit = dex + be16_to_cpu(dleaf->count);
@@ -68,11 +76,20 @@ static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 		get_extent(dex, &ex);
 
 		if (prev.logical != TUXKEY_LIMIT) {
-			unsigned count = ex.logical - prev.logical;
+			count = ex.logical - prev.logical;
 			if (prev.physical) {
-				callback(btree, leafbuf, prev.logical,
-					 prev.physical, count, data);
+				if (cb->extent)
+					cb->extent(btree, leafbuf, prev.logical,
+						   prev.physical, count, data);
 			}
+		}
+
+		if (cb->entry) {
+			int is_sentinel = dex == dex_limit - 1;
+			cb->entry(btree, leafbuf, count,
+				  ex.version, ex.logical, ex.physical,
+				  is_sentinel,
+				  data);
 		}
 
 		prev = ex;
@@ -81,14 +98,14 @@ static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 }
 
 static void walk_dleaf(struct btree *btree, struct buffer_head *leafbuf,
-		       walk_dleaf_cb callback, void *data)
+		       struct walk_dleaf_ops *cb, void *data)
 {
 	struct dleaf *dleaf = bufdata(leafbuf);
 
 	if (dleaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF))
-		walk_dleaf1(btree, leafbuf, callback, data);
+		walk_dleaf1(btree, leafbuf, cb, data);
 	else
-		walk_dleaf2(btree, leafbuf, callback, data);
+		walk_dleaf2(btree, leafbuf, cb, data);
 }
 
 static inline u16 ileaf_attr_size(__be16 *dict, int at)

@@ -154,9 +154,9 @@ static inline unsigned long le_long_to_cpu(const unsigned long y)
 
 /* Compare bitmap with shadow bitmap */
 static void
-fsck_cmp_bitmap_dleaf_cb(struct btree *btree, struct buffer_head *parent,
-			 block_t index, block_t block, unsigned count,
-			 void *data)
+fsck_cmp_bitmap_extent(struct btree *btree, struct buffer_head *parent,
+		       block_t index, block_t block, unsigned count,
+		       void *data)
 {
 	struct fsck_context *context = data;
 	struct sb *sb = btree->sb;
@@ -209,10 +209,14 @@ fsck_cmp_bitmap_dleaf_cb(struct btree *btree, struct buffer_head *parent,
 	}
 }
 
+static struct walk_dleaf_ops fsck_cmp_bitmap_dleaf_ops = {
+	.extent = fsck_cmp_bitmap_extent,
+};
+
 static void fsck_cmp_bitmap_dleaf(struct btree *btree,
 				  struct buffer_head *buffer, void *data)
 {
-	walk_dleaf(btree, buffer, fsck_cmp_bitmap_dleaf_cb, data);
+	walk_dleaf(btree, buffer, &fsck_cmp_bitmap_dleaf_ops, data);
 }
 
 static struct walk_btree_ops walk_cmp_bitmap_dtree_ops = {
@@ -246,19 +250,23 @@ static void fsck_check_inodes(struct sb *sb, struct fsck_context *context)
  * Walk filesystem
  */
 
+static void fsck_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+			      block_t index, block_t block, unsigned count,
+			      void *data)
+{
+	struct fsck_context *context = data;
+	shadow_bitmap_modify(btree->sb, context, block, count, 1);
+}
+
+static struct walk_dleaf_ops fsck_dleaf_ops = {
+	.extent = fsck_dleaf_extent,
+};
+
 static void fsck_bnode(struct btree *btree, struct buffer_head *buffer,
 		       int level, void *data)
 {
 	struct fsck_context *context = data;
 	shadow_bitmap_modify(btree->sb, context, bufindex(buffer), 1, 1);
-}
-
-static void fsck_dleaf_cb(struct btree *btree, struct buffer_head *leafbuf,
-			  block_t index, block_t block, unsigned count,
-			  void *data)
-{
-	struct fsck_context *context = data;
-	shadow_bitmap_modify(btree->sb, context, block, count, 1);
 }
 
 static void fsck_dleaf(struct btree *btree, struct buffer_head *leafbuf,
@@ -267,7 +275,7 @@ static void fsck_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 	struct fsck_context *context = data;
 	shadow_bitmap_modify(btree->sb, context, bufindex(leafbuf), 1, 1);
 
-	walk_dleaf(btree, leafbuf, fsck_dleaf_cb, data);
+	walk_dleaf(btree, leafbuf, &fsck_dleaf_ops, data);
 }
 
 static struct walk_btree_ops fsck_dtree_ops = {
