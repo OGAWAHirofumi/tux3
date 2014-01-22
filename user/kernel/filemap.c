@@ -397,9 +397,8 @@ static int seg_find(struct btree *btree, struct dleaf_req *rq,
 		seg->state = seg_state;
 	}
 	if (err) {
-		struct block_segment *p;
-		for (p = rq->seg + rq->seg_idx; p < seg; p++)
-			bfree(sb, p->block, p->count);
+		struct block_segment *p = rq->seg + rq->seg_idx;
+		bfree_segs(sb, p, seg - p);
 		return err;
 	}
 
@@ -427,9 +426,11 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
 			seg_len -= seg->count;
 		} else {
 			/* FIXME: replace with balloc_modify() */
-			bfree(sb, seg->block, seg->count);
+			int segs = limit - seg;
+			bfree_segs(sb, seg, segs); /* FIXME: error handling */
 			sb->nextblock = seg->block;
-			rq->seg_cnt--;
+			rq->seg_cnt -= segs;
+			break;
 		}
 		seg++;
 	}

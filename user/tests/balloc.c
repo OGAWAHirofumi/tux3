@@ -174,8 +174,7 @@ static void test03(struct sb *sb, block_t blocks)
 	test_assert(bitmap_all_set(sb, seg[1].block, seg[1].count));
 	test_assert(bitmap_all_clear(sb, BLOCKS - 1, sb->volblocks - BLOCKS));
 
-	test_assert(bfree(sb, seg[0].block, seg[0].count) == 0);
-	test_assert(bfree(sb, seg[1].block, seg[1].count) == 0);
+	test_assert(bfree_segs(sb, seg, 2) == 0);
 	test_assert(bitmap_all_clear(sb, 0, sb->volblocks));
 
 	clean_main(sb);
@@ -252,8 +251,7 @@ static void test06(struct sb *sb, block_t blocks)
 		test_assert(!balloc_use(sb, &seg[i], 1));
 	}
 
-	for (int i = 0; i < nr; i++)
-		test_assert(bfree(sb, seg[i].block, seg[i].count) == 0);
+	test_assert(bfree_segs(sb, seg, nr) == 0);
 
 	free(seg);
 
