@@ -171,53 +171,56 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 
 	while (count > 0) {
 		struct buffer_head *buffer;
-		struct block_segment seg;
-		block_t block, limit;
+		struct block_segment *p, seg[10];
 		int err, segs;
 
-		err = balloc_segs(sb, &seg, 1, &segs, &count);
+		err = balloc_segs(sb, seg, ARRAY_SIZE(seg), &segs, &count);
 		if (err) {
 			assert(err);
 			return err;
 		}
 
-		/*
-		 * Link log blocks to logchain.
-		 *
-		 * FIXME: making the link for each block is
-		 * inefficient to read on replay. Instead, we would be
-		 * able to use the link of extent. With it, we can
-		 * read multiple blocks at once.
-		 */
-		block = seg.block;
-		limit = seg.block + seg.count;
-		bufvec_buffer_for_each_contig(buffer, bufvec) {
-			struct logblock *log = bufdata(buffer);
+		for (p = seg; p < seg + segs; p++) {
+			block_t block, limit;
 
-			assert(log->magic == cpu_to_be16(TUX3_MAGIC_LOG));
-			log->logchain = sb->super.logchain;
+			/*
+			 * Link log blocks to logchain.
+			 *
+			 * FIXME: making the link for each block is
+			 * inefficient to read on replay. Instead, we would be
+			 * able to use the link of extent. With it, we can
+			 * read multiple blocks at once.
+			 */
+			block = p->block;
+			limit = p->block + p->count;
+			bufvec_buffer_for_each_contig(buffer, bufvec) {
+				struct logblock *log = bufdata(buffer);
 
-			trace("logchain %lld", block);
-			sb->super.logchain = cpu_to_be64(block);
-			block++;
-			if (block == limit)
-				break;
+				assert(log->magic==cpu_to_be16(TUX3_MAGIC_LOG));
+				log->logchain = sb->super.logchain;
+
+				trace("logchain %lld", block);
+				sb->super.logchain = cpu_to_be64(block);
+				block++;
+				if (block == limit)
+					break;
+			}
+
+			err = __tux3_volmap_io(rw, bufvec, p->block, p->count);
+			if (err) {
+				tux3_err(sb, "logblock write error (%d)", err);
+				return err;	/* FIXME: error handling */
+			}
+
+			/*
+			 * We can obsolete the log blocks after next unify
+			 * by LOG_BFREE_RELOG.
+			 */
+			defer_bfree(sb, &sb->deunify, p->block, p->count);
+
+			/* Add count of log on this delta to unify logcount */
+			be32_add_cpu(&sb->super.logcount, p->count);
 		}
-
-		err = __tux3_volmap_io(rw, bufvec, seg.block, seg.count);
-		if (err) {
-			tux3_err(sb, "logblock write error (%d)", err);
-			return err;	/* FIXME: error handling */
-		}
-
-		/*
-		 * We can obsolete the log blocks after next unify
-		 * by LOG_BFREE_RELOG.
-		 */
-		defer_bfree(sb, &sb->deunify, seg.block, seg.count);
-
-		/* Add count of log on this delta to unify logcount */
-		be32_add_cpu(&sb->super.logcount, seg.count);
 	}
 
 	return 0;
