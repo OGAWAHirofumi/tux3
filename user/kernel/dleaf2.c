@@ -729,7 +729,7 @@ static int dleaf2_write(struct btree *btree, tuxkey_t key_bottom,
 	}
 
 	/* Commit allocation of writable segments */
-	err = rq->seg_alloc(btree, rq, seg_len);
+	err = rq->seg_alloc(btree, rq, seg_cnt);
 	assert(key->start + seg_len <= key_limit);
 #if 0
 	tux3_dbg("start %lu, end %lu",

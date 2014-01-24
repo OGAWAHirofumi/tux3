@@ -370,39 +370,24 @@ static int seg_find(struct btree *btree, struct dleaf_req *rq,
 		    int space, unsigned seg_len, unsigned *alloc_len)
 {
 	struct sb *sb = btree->sb;
-	struct block_segment *seg, *limit;
+	struct block_segment *seg = rq->seg + rq->seg_idx;
+	int maxsegs = min(space, rq->seg_max - rq->seg_idx);
 	unsigned len = seg_len;
-	int seg_state;
-	int err = 0;
+	/* If overwrite mode, set SEG_NEW to allocated seg */
+	const int seg_state = rq->overwrite ? BLOCK_SEG_NEW : 0;
+	int err, i, segs;
 
 	assert(rq->seg_idx == rq->seg_cnt);
 
-	/* If overwrite mode, set SEG_NEW to allocated seg */
-	seg_state = rq->overwrite ? BLOCK_SEG_NEW : 0;
-
-	limit = min(rq->seg + rq->seg_idx + space, rq->seg + rq->seg_max);
-	for (seg = rq->seg + rq->seg_idx; seg < limit && len; seg++) {
-		struct block_segment tmp;
-		int segs;
-
-		err = balloc_segs(sb, &tmp, 1, &segs, &len);
-		if (err) {
-			assert(err != -ENOSPC);	/* frontend reservation bug */
-			rq->seg_cnt = rq->seg_idx;
-			break;
-		}
-
-		seg->block = tmp.block;
-		seg->count = tmp.count;
-		seg->state = seg_state;
-	}
+	err = balloc_find(sb, seg, maxsegs, &segs, &len);
 	if (err) {
-		struct block_segment *p = rq->seg + rq->seg_idx;
-		bfree_segs(sb, p, seg - p);
+		assert(err != -ENOSPC);	/* frontend reservation bug */
 		return err;
 	}
+	for (i = 0; i < segs; i++)
+		seg[i].state = seg_state;
 
-	rq->seg_cnt = seg - rq->seg;
+	rq->seg_cnt = rq->seg_idx + segs;
 	*alloc_len = seg_len - len;
 
 	return 0;
@@ -412,28 +397,28 @@ static int seg_find(struct btree *btree, struct dleaf_req *rq,
  * Callback to allocate blocks to ->seg. dleaf is doing to write segs,
  * now we have to assign physical address to segs.
  */
-static int seg_alloc(struct btree *btree, struct dleaf_req *rq,
-		     unsigned seg_len)
+static int seg_alloc(struct btree *btree, struct dleaf_req *rq, int new_cnt)
 {
 	struct sb *sb = btree->sb;
 	struct block_segment *seg = rq->seg + rq->seg_idx;
 	struct block_segment *limit = rq->seg + rq->seg_cnt;
+	int err;
 
-	while (seg < limit) {
-		if (seg_len) {
+	if (new_cnt) {
+		err = balloc_use(sb, seg, new_cnt);
+		if (err)
+			return err;	/* FIXME: error handling */
+
+		while (new_cnt) {
 			log_balloc(sb, seg->block, seg->count);
-			assert(seg_len >= seg->count);
-			seg_len -= seg->count;
-		} else {
-			/* FIXME: replace with balloc_modify() */
-			int segs = limit - seg;
-			bfree_segs(sb, seg, segs); /* FIXME: error handling */
-			sb->nextblock = seg->block;
-			rq->seg_cnt -= segs;
-			break;
+			new_cnt--;
+			seg++;
 		}
-		seg++;
 	}
+	rq->seg_cnt -= limit - seg;
+
+	/* FIXME: tell unused seg[] to balloc for reusing seg[] later */
+	/* balloc_cache(sb, seg, limit - seg); */
 
 	return 0;
 }

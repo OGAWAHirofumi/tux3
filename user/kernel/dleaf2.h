@@ -14,7 +14,7 @@ struct dleaf_req {
 	/* Callback to allocate blocks to ->seg for write */
 	int (*seg_find)(struct btree *, struct dleaf_req *, int, unsigned,
 			unsigned *);
-	int (*seg_alloc)(struct btree *, struct dleaf_req *, unsigned);
+	int (*seg_alloc)(struct btree *, struct dleaf_req *, int);
 	void (*seg_free)(struct btree *, block_t, unsigned);
 };
 

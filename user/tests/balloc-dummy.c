@@ -18,6 +18,7 @@ int balloc_find_range(struct sb *sb,
 	return 0;
 }
 
+#ifndef NO_BALLOC_FIND
 int balloc_find(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,
 	unsigned *blocks)
@@ -26,6 +27,7 @@ int balloc_find(struct sb *sb,
 	return balloc_find_range(sb, seg, maxsegs, segs, 0, sb->volblocks,
 				 blocks);
 }
+#endif
 
 int balloc_use(struct sb *sb, struct block_segment *seg, int segs)
 {
@@ -34,7 +36,6 @@ int balloc_use(struct sb *sb, struct block_segment *seg, int segs)
 	return 0;
 }
 
-#ifndef NO_BALLOC_SEGS
 int balloc_segs(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,
 	unsigned *blocks)
@@ -44,7 +45,6 @@ int balloc_segs(struct sb *sb,
 		err = balloc_use(sb, seg, *segs);
 	return err;
 }
-#endif
 
 block_t balloc_one(struct sb *sb)
 {
