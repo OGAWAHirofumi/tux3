@@ -838,8 +838,6 @@ struct btree_ops dtree2_ops = {
 	.leaf_pre_write	= dleaf2_pre_write,
 	.leaf_write	= dleaf2_write,
 	.leaf_read	= dleaf2_read,
-	.balloc		= balloc,
-	.bfree		= bfree,
 
 	.leaf_sniff	= dleaf2_sniff,
 	.leaf_can_free	= dleaf2_can_free,

@@ -39,21 +39,17 @@ static int buffer_is_allocated(struct sb *sb, struct buffer_head *buf)
 		return 0; /* buffer is defree block */
 	if (stash_walk(sb, &sb->deunify, check_defree_block) < 0)
 		return 0; /* buffer is deunify block */
-
 	/* Set fake backend mark to modify backend objects. */
 	tux3_start_backend(sb);
 	struct block_segment seg;
-	int allocated = 1;
-	int err = balloc_from_range(sb, bufindex(buf), 1, 1, 0, &seg, 1);
-	if (!err) {
-		bfree(sb, seg.block, seg.count);
-		allocated = 0; /* buffer is free block */
-	} else {
-		test_assert(err == -ENOSPC);
-	}
+	unsigned blocks = 1;
+	int segs = 0;
+	int err = balloc_find_range(sb, &seg, 1, &segs, bufindex(buf), 1,
+				    &blocks);
+	test_assert(!err);
 	tux3_end_backend();
 
-	return allocated;
+	return blocks;	/* if blocks == 0, that block is free */
 }
 
 static void check_dirty_list(struct sb *sb, struct list_head *head)
@@ -734,17 +730,20 @@ static void test06(struct sb *sb)
 /* Test for partial alloc to flush logblocks */
 static void test07(struct sb *sb)
 {
-	struct block_segment seg;
-
 	test_assert(make_tux3(sb) == 0);
 	test_assert(force_unify(sb) == 0);
 
 	tux3_start_backend(sb);
 	/* Make non contiguous blocks */
 	for (block_t i = 0; i < sb->volblocks; i += 2) {
-		int err = balloc_from_range(sb, i, 1, 1, 0, &seg, 1);
-		if (err)
-			test_assert(err == -ENOSPC);
+		struct block_segment seg;
+		unsigned blocks = 1;
+		int err, segs = 0;
+
+		err = balloc_find_range(sb, &seg, 1, &segs, i, 1, &blocks);
+		test_assert(!err);
+		if (blocks == 0)
+			test_assert(!balloc_use(sb, &seg, 1));
 	}
 	/* Make 3 logblocks, at least */
 	while (sb->lognext <= 3)

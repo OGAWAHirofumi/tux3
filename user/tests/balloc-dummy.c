@@ -1,51 +1,75 @@
-int balloc_from_range(struct sb *sb, block_t start, block_t count,
-		      unsigned blocks, unsigned flags,
-		      struct block_segment *seg, int segs)
+/*
+ * Note: balloc-dummy.c must define all exported functions in balloc.c,
+ * otherwise balloc.o will be linked
+ */
+
+int balloc_find_range(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	block_t start, block_t range, unsigned *blocks)
 {
-	block_t block = sb->nextblock;
+	assert(*segs < maxsegs);
 
-	seg->block = block;
-	seg->count = blocks;
-	seg->state = 0;
-
-	sb->nextblock += blocks;
-	trace("-> %Lx/%x", block, blocks);
-
+	seg[*segs].block = sb->nextblock;
+	seg[*segs].count = *blocks;
+	seg[*segs].state = 0;
+	trace("-> %Lx/%x", seg[*segs].block, seg[*segs].count);
+	(*segs)++;
+	*blocks = 0;
 	return 0;
 }
 
-static int __balloc(struct sb *sb, unsigned blocks, unsigned flags,
-		    struct block_segment *seg, int segs)
+int balloc_find(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	unsigned *blocks)
 {
-	block_t goal = sb->nextblock;
-	int err;
+	*segs = 0;
+	return balloc_find_range(sb, seg, maxsegs, segs, 0, sb->volblocks,
+				 blocks);
+}
 
-	err = balloc_from_range(sb, goal, sb->volblocks, blocks,
-				BALLOC_PARTIAL, seg, segs);
-	if (err == -ENOSPC) {
-		/* FIXME: This is for debugging. Remove this */
-		tux3_warn(sb, "couldn't balloc: blocks %u", blocks);
-	}
+int balloc_use(struct sb *sb, struct block_segment *seg, int segs)
+{
+	block_t goal = seg[segs - 1].block + seg[segs - 1].count;
+	sb->nextblock = goal == sb->volblocks ? 0 : goal;
+	return 0;
+}
 
+#ifndef NO_BALLOC_SEGS
+int balloc_segs(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	unsigned *blocks)
+{
+	int err = balloc_find(sb, seg, maxsegs, segs, blocks);
+	if (!err)
+		err = balloc_use(sb, seg, *segs);
 	return err;
 }
-
-int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
-{
-	return __balloc(sb, blocks, 0, seg, segs);
-}
-
-#ifndef NO_BALLOC_PARTIAL
-int balloc_partial(struct sb *sb, unsigned blocks,
-		   struct block_segment *seg, int segs)
-{
-	return __balloc(sb, blocks, BALLOC_PARTIAL, seg, segs);
-}
 #endif
+
+block_t balloc_one(struct sb *sb)
+{
+	struct block_segment seg;
+	unsigned blocks = 1;
+	int err, segs;
+
+	err = balloc_segs(sb, &seg, 1, &segs, &blocks);
+	if (err)
+		return err;
+	assert(segs == 1 && blocks == 0 && seg.count == 1);
+	return seg.block;
+}
 
 int bfree(struct sb *sb, block_t block, unsigned blocks)
 {
 	trace("<- %Lx/%x", block, blocks);
+	return 0;
+}
+
+int bfree_segs(struct sb *sb, struct block_segment *seg, int segs)
+{
+	int i;
+	for (i = 0; i < segs; i++)
+		bfree(sb, seg[i].block, seg[i].count);
 	return 0;
 }
 

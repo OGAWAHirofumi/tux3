@@ -226,11 +226,17 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 		seg[0].state = BLOCK_SEG_HOLE;
 	}
 	for (int i = 0; i < segs; i++) {
+		int newsegs;
 		if (seg[i].state != BLOCK_SEG_HOLE)
 			continue;
 
 		count = seg[i].count;
-		if ((err = balloc(sb, count, &seg[i], 1))) { // goal ???
+		err = balloc_segs(sb, &seg[i], 1, &newsegs, &count);
+		if (!err && count != 0) {
+			/* FIXME: should handle partial allocation */
+			err = -ENOSPC;
+		}
+		if (err) {
 			/*
 			 * Out of space on file data allocation.  It happens.  Tread
 			 * carefully.  We have not stored anything in the btree yet,
@@ -365,7 +371,8 @@ static int seg_find(struct btree *btree, struct dleaf_req *rq,
 {
 	struct sb *sb = btree->sb;
 	struct block_segment *seg, *limit;
-	int seg_state, len = seg_len;
+	unsigned len = seg_len;
+	int seg_state;
 	int err = 0;
 
 	assert(rq->seg_idx == rq->seg_cnt);
@@ -376,8 +383,9 @@ static int seg_find(struct btree *btree, struct dleaf_req *rq,
 	limit = min(rq->seg + rq->seg_idx + space, rq->seg + rq->seg_max);
 	for (seg = rq->seg + rq->seg_idx; seg < limit && len; seg++) {
 		struct block_segment tmp;
+		int segs;
 
-		err = balloc_partial(sb, len, &tmp, 1);
+		err = balloc_segs(sb, &tmp, 1, &segs, &len);
 		if (err) {
 			assert(err != -ENOSPC);	/* frontend reservation bug */
 			rq->seg_cnt = rq->seg_idx;
@@ -387,8 +395,6 @@ static int seg_find(struct btree *btree, struct dleaf_req *rq,
 		seg->block = tmp.block;
 		seg->count = tmp.count;
 		seg->state = seg_state;
-
-		len -= tmp.count;
 	}
 	if (err) {
 		struct block_segment *p;

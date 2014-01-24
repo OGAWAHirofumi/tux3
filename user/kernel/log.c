@@ -173,9 +173,9 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 		struct buffer_head *buffer;
 		struct block_segment seg;
 		block_t block, limit;
-		int err;
+		int err, segs;
 
-		err = balloc_partial(sb, count, &seg, 1);
+		err = balloc_segs(sb, &seg, 1, &segs, &count);
 		if (err) {
 			assert(err);
 			return err;
@@ -218,8 +218,6 @@ int tux3_logmap_io(int rw, struct bufvec *bufvec)
 
 		/* Add count of log on this delta to unify logcount */
 		be32_add_cpu(&sb->super.logcount, seg.count);
-
-		count -= seg.count;
 	}
 
 	return 0;

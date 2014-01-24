@@ -15,7 +15,7 @@
 #define trace trace_on
 #endif
 
-#define NO_BALLOC_PARTIAL
+#define NO_BALLOC_SEGS
 #include "balloc-dummy.c"
 
 #include "../filemap.c"		/* for seg_alloc() */
@@ -93,20 +93,23 @@ static void dleaf2_set_free_seg(struct block_segment *seg, int seg_cnt)
  * Hack: to control allocation details in seg_alloc(), this overwrites
  * balloc_partial.
  */
-int balloc_partial(struct sb *sb, unsigned blocks,
-		   struct block_segment *seg, int segs)
+int balloc_segs(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	unsigned *blocks)
 {
 	struct block_segment *alloc_seg =
 		alloc_seg_info.seg + alloc_seg_info.seg_idx;
 	block_t block = sb->nextblock;
 
-	assert(segs == 1);	/* for now, only support segs == 1 */
+	assert(maxsegs == 1);	/* for now, only support maxsegs == 1 */
 	assert(alloc_seg_info.seg_idx < alloc_seg_info.seg_cnt);
 
 	*seg = *alloc_seg;
+	*segs = 1;
+	*blocks -= seg->count;
 
-	sb->nextblock += blocks;
-	trace("-> %Lx/%x", block, blocks);
+	sb->nextblock += seg->count;
+	trace("-> %Lx/%x", block, *blocks);
 
 	alloc_seg_info.seg_idx++;
 

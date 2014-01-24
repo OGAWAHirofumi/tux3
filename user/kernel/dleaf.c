@@ -878,8 +878,6 @@ struct btree_ops dtree1_ops = {
 //	.leaf_resize	= dleaf_resize,
 	.leaf_chop	= dleaf_chop,
 	.leaf_merge	= dleaf_merge,
-	.balloc		= balloc,
-	.bfree		= bfree,
 
 	.leaf_sniff	= dleaf_sniff,
 	.leaf_can_free	= dleaf_can_free,

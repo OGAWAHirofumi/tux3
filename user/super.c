@@ -99,14 +99,16 @@ static int clear_other_magic(struct sb *sb)
 static int reserve_superblock(struct sb *sb)
 {
 	/* Always 8K regardless of blocksize */
-	int count = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits);
-	struct block_segment seg;
+	struct block_segment seg = {
+		.block = 0,
+		.count = 1 << (sb->blockbits > 13 ? 0 : 13 - sb->blockbits),
+	};
 	int err;
 
 	trace("reserve superblock");
 
 	/* Reserve blocks from 0 to 8KB */
-	err = balloc_from_range(sb, 0, count, count, 0, &seg, 1);
+	err = balloc_use(sb, &seg, 1);
 	if (err < 0)
 		return err;
 

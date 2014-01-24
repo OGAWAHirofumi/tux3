@@ -200,8 +200,6 @@ static struct btree_ops ops = {
 	.leaf_chop	= uleaf_chop,
 	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= uleaf_write,
-	.balloc		= balloc,
-	.bfree		= bfree,
 
 	.leaf_sniff	= uleaf_sniff,
 	.leaf_can_free	= uleaf_can_free,

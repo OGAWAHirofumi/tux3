@@ -250,201 +250,202 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 	return 0;
 }
 
-static void save_seg(struct block_segment *seg, int segs, block_t start,
-		     unsigned count)
+static inline int mergable(struct block_segment *seg, block_t block)
 {
-	if (seg[0].count < count) {
-		seg[0].block = start;
-		seg[0].count = count;
-	}
+	return seg->block + seg->count == block;
 }
 
 /*
- * Allocate block segments from specified range.
+ * Find blocks available in the specified range.
  *
- * The specified range is cyclic. I.e. if start + len bigger than
- * volblocks, search wrapped to 0.
+ * NOTE: Caller must check "*block" to know how many blocks were
+ * found. This returns 0 even if no blocks found.
  *
- * userland only
+ * return value:
+ * < 0 - error
+ *   0 - succeed to check
  */
-int balloc_from_range(struct sb *sb, block_t start, block_t len,
-		      unsigned blocks, unsigned flags,
-		      struct block_segment *seg, int segs)
+int balloc_find_range(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	block_t start, block_t range, unsigned *blocks)
 {
 	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
 	unsigned mapsize = 1 << mapshift;
 	unsigned mapmask = mapsize - 1;
 	struct buffer_head *buffer;
-	block_t need, found, mapblock;
 
-	trace("balloc find %i blocks, range [%Lx, %Lx]", blocks, start, len);
-	assert(blocks > 0);
-	assert(len <= sb->volblocks);
+	trace("find %u blocks in [%Lu+%Lu], segs = %d",
+	      *blocks, start, range, *segs);
+
+	assert(*blocks > 0);
+	assert(start < sb->volblocks);
+	assert(start + range <= sb->volblocks);
+	assert(*segs < maxsegs);
 	assert(tux3_under_backend(sb));
 
-	/* Initialize seg[] */
-	memset(seg, 0, sizeof(*seg) * segs);
-
-	need = blocks;
-	while (len > 0) {
-		block_t mapstart;
-		unsigned mapoffset, maplimit, maplen;
-		void *p;
-
-		if (unlikely(start >= sb->volblocks)) {
-			if (need < blocks) {
-				/* Found partial free segment */
-				unsigned blks = blocks - need;
-				found = sb->volblocks - blks;
-				save_seg(seg, segs, found, blks);
-			}
-
-			start = 0;
-			/*
-			 * Wrapped at end of volblocks, this is not
-			 * contiguous. So resets "need".
-			 */
-			need = blocks;
-		}
-
-		mapblock = start >> mapshift;
-		mapstart = mapblock << mapshift;
-		mapoffset = start & mapmask;
-		maplimit = min_t(block_t, mapsize, mapoffset + len);
-		/* If out of range, apply limit */
-		if (unlikely(mapstart + maplimit > sb->volblocks))
-			maplimit = sb->volblocks & mapmask;
-		maplen = maplimit - mapoffset;
+	/* Search across blocks */
+	while (range > 0) {
+		block_t mapblock = start >> mapshift;
+		block_t mapbase = mapblock << mapshift;
+		unsigned offset = start & mapmask;
+		unsigned maplimit = min_t(block_t, mapsize, offset + range);
+		unsigned chunk = maplimit - offset;
+		char *data;
 
 		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
 			tux3_err(sb, "block read failed");
-			// !!! error return sucks here
 			return -EIO;
-		}
-
-		p = bufdata(buffer);
-		while (1) {
-			unsigned idx, mapnext;
-
-			mapnext = min_t(block_t, mapoffset + need, maplimit);
-
-			/* Check if there is no non-zero bits */
-			idx = find_next_bit_le(p, mapnext, mapoffset);
-			if (idx == mapnext) {
-				need -= idx - mapoffset;
-				if (need)
-					break;	/* Need more blocks */
-
-				/* Found requested free blocks */
-				found = mapstart + idx - blocks;
-				save_seg(seg, segs, found, blocks);
-				goto found_range;
-			}
-
-			need -= idx - mapoffset;
-			if (need < blocks) {
-				/* Found partial free segment */
-				unsigned blks = blocks - need;
-				found = mapstart + idx - blks;
-				save_seg(seg, segs, found, blks);
-			}
-
-			/* Reset needed blocks */
-			need = blocks;
-
-			/* Skip non-zero bit */
-			mapoffset = find_next_zero_bit_le(p, maplimit, idx + 1);
-			if (mapoffset == maplimit)
-				break;	/* Search next blocks */
-		}
-
-		start += maplen;
-		len -= maplen;
-
-		blockput(buffer);
-	}
-
-	if ((flags & BALLOC_PARTIAL) && seg[0].count) {
-		tux3_dbg("partial blocks %u, block %llu, count %u",
-			 blocks, seg[0].block, seg[0].count);
-		found = seg[0].block;
-		blocks = seg[0].count;
-		goto found_partial;
-	}
-
-	return -ENOSPC;
-
-found_range:
-	/* Found free blocks within one block? */
-	if ((found >> mapshift) == mapblock) {
-		unsigned foundoffset = found & mapmask;
-		int err;
-
-		err = bitmap_modify_bits(sb, buffer, foundoffset, blocks, 1);
-		if (err) {
-			blockput(buffer);
 			/* FIXME: error handling */
-			return err;
 		}
-	} else {
-		int err;
+		data = bufdata(buffer);
+		/* Search within block */
+		do {
+			block_t end = (block_t)offset + *blocks;
+			unsigned limit, next;
 
+			limit = min_t(block_t, end, maplimit);
+			next = find_next_bit_le(data, limit, offset);
+
+			if (next != offset) {
+				unsigned count = next - offset;
+				block_t found = mapbase + offset;
+
+				if (*segs && mergable(&seg[*segs - 1], found)) {
+					trace("append seg [%Lu+%u]", found, count);
+					seg[*segs - 1].count += count;
+				} else {
+					trace("balloc seg [%Lu+%u]", found, count);
+					seg[(*segs)++] = (struct block_segment){
+						.block = found,
+						.count = count,
+					};
+				}
+				*blocks -= count;
+
+				if (!*blocks || *segs == maxsegs) {
+					blockput(buffer);
+					return 0;
+				}
+			}
+
+			offset = find_next_zero_bit_le(data, maplimit, next + 1);
+			/* Remove after tested on arm. (next + 1 can
+			 * be greater than maplimit) */
+			assert(offset <= maplimit);
+		} while (offset != maplimit);
+
+		assert(start + chunk == mapbase + maplimit);
+		start += chunk;
+		range -= chunk;
 		blockput(buffer);
-found_partial:
-		err = bitmap_modify(sb, found, blocks, 1);
-		if (err)
-			return err;
 	}
-
-	seg->block = found;
-	seg->count = blocks;
-
-	sb->nextblock = found + blocks;
-	if (sb->nextblock >= sb->volblocks)
-		sb->nextblock = 0;
-	//set_sb_dirty(sb);
-
-	trace("balloc extent [block %Lx, count %x]", found, blocks);
 
 	return 0;
 }
 
-static int __balloc(struct sb *sb, unsigned blocks, unsigned flags,
-		    struct block_segment *seg, int segs)
+/*
+ * Allocate block segments from entire volume.  Wrap to bottom of
+ * volume if needed.
+ *
+ * return value:
+ * < 0 - error
+ *   0 - succeed to allocate blocks, at least >= 1
+ */
+int balloc_find(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	unsigned *blocks)
 {
-	block_t goal = sb->nextblock;
-	int err;
+	block_t goal = sb->nextblock, volsize = sb->volblocks;
+	int err, newsegs = 0;
 
-	/* For now, allow partial unconditionally */
-	err = balloc_from_range(sb, goal, sb->volblocks, blocks, flags,
-				seg, segs);
-	if (err == -ENOSPC) {
-		/* FIXME: This is for debugging. Remove this */
-		tux3_warn(sb, "couldn't balloc: blocks %u, freeblocks %Lu",
-			  blocks, sb->freeblocks);
+	err = balloc_find_range(sb, seg, maxsegs, &newsegs, goal,
+				volsize - goal, blocks);
+	trace("=> try0: segs = %d, blocks = %u", newsegs, *blocks);
+	if (err)
+		return err;
+
+	if (*blocks && newsegs < maxsegs) {
+		err = balloc_find_range(sb, seg, maxsegs, &newsegs, 0, goal,
+					blocks);
+		trace("=> try1: segs = %d, blocks = %u", newsegs, *blocks);
+		if (err < 0)
+			return err;
 	}
 
+	if (!newsegs) {
+		/* FIXME: This is for debugging. Remove this */
+		tux3_warn(sb, "couldn't balloc: blocks %u, freeblocks %Lu",
+			  *blocks, sb->freeblocks);
+		return -ENOSPC;
+	}
+
+	*segs = newsegs;
+
+	return 0;
+}
+
+int balloc_use(struct sb *sb, struct block_segment *seg, int segs)
+{
+	block_t goal;
+	int i;
+
+	assert(segs > 0);
+
+	for (i = 0; i < segs; i++) {
+		/* FIXME: error handling */
+		int err = bitmap_modify(sb, seg[i].block, seg[i].count, 1);
+		if (err)
+			return err;
+	}
+
+	goal = seg[segs - 1].block + seg[segs - 1].count;
+	sb->nextblock = goal == sb->volblocks ? 0 : goal;
+
+	return 0;
+}
+
+int balloc_segs(struct sb *sb,
+	struct block_segment *seg, int maxsegs, int *segs,
+	unsigned *blocks)
+{
+	int err = balloc_find(sb, seg, maxsegs, segs, blocks);
+	if (!err)
+		err = balloc_use(sb, seg, *segs);
 	return err;
 }
 
-int balloc(struct sb *sb, unsigned blocks, struct block_segment *seg, int segs)
+block_t balloc_one(struct sb *sb)
 {
-	return __balloc(sb, blocks, 0, seg, segs);
-}
+	struct block_segment seg;
+	unsigned blocks = 1;
+	int err, segs;
 
-int balloc_partial(struct sb *sb, unsigned blocks,
-		   struct block_segment *seg, int segs)
-{
-	return __balloc(sb, blocks, BALLOC_PARTIAL, seg, segs);
+	err = balloc_segs(sb, &seg, 1, &segs, &blocks);
+	if (err)
+		return err;
+	assert(segs == 1 && blocks == 0 && seg.count == 1);
+	return seg.block;
 }
 
 int bfree(struct sb *sb, block_t start, unsigned blocks)
 {
 	assert(tux3_under_backend(sb));
-	trace("bfree extent [block %Lx, count %x], ", start, blocks);
+	trace("bfree extent [%Lu+%u], ", start, blocks);
 	return bitmap_test_and_modify(sb, start, blocks, 0);
+}
+
+int bfree_segs(struct sb *sb, struct block_segment *seg, int segs)
+{
+	int i;
+	for (i = 0; i < segs; i++) {
+		/* FIXME: error handling */
+		int err = bfree(sb, seg[i].block, seg[i].count);
+		if (err)
+			return err;
+	}
+	return 0;
 }
 
 int replay_update_bitmap(struct replay *rp, block_t start, unsigned blocks,

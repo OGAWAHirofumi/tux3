@@ -478,7 +478,6 @@ struct btree_ops itree_ops = {
 	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= ileaf_write,
 	.leaf_read	= ileaf_read,
-	.balloc		= balloc,
 	.private_ops	= &iattr_ops,
 
 	.leaf_sniff	= ileaf_sniff,
@@ -495,7 +494,6 @@ struct btree_ops otree_ops = {
 	.leaf_pre_write	= noop_pre_write,
 	.leaf_write	= ileaf_write,
 	.leaf_read	= ileaf_read,
-	.balloc		= balloc,
 	.private_ops	= &oattr_ops,
 
 	.leaf_sniff	= ileaf_sniff,
