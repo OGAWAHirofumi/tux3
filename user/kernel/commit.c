@@ -310,6 +310,15 @@ static int stage_delta(struct sb *sb, unsigned delta)
 static int write_btree(struct sb *sb, unsigned delta)
 {
 	/*
+	 * If page is still dirtied by unify buffer,
+	 * tux3_mark_buffer_atomic() doesn't dirty inode for delta, so
+	 * we make sure volmap is dirty for delta buffers here.
+	 *
+	 * FIXME: better way to do?
+	 */
+	__tux3_mark_inode_dirty(sb->volmap, I_DIRTY_PAGES);
+
+	/*
 	 * Flush leaves (and if there is unify, bnodes too) blocks.
 	 * FIXME: Now we are using TUX3_INIT_DELTA for leaves. Do
 	 * we need to per delta dirty buffers?
