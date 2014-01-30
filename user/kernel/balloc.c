@@ -148,59 +148,13 @@ static int bitmap_modify_bits(struct sb *sb, struct buffer_head *buffer,
 }
 
 /*
- * Modify bits on multiple blocks.  Caller may want to check range is
- * excepted state.
- *
- * FIXME: If error happened on middle of blocks, modified bits and
- * ->freeblocks are not restored to original. What to do?
- */
-static int bitmap_modify(struct sb *sb, block_t start, unsigned blocks, int set)
-{
-	struct inode *bitmap = sb->bitmap;
-	unsigned mapshift = sb->blockbits + 3;
-	unsigned mapsize = 1 << mapshift;
-	unsigned mapmask = mapsize - 1;
-	unsigned mapoffset = start & mapmask;
-	block_t mapblock, mapblocks = (start + blocks + mapmask) >> mapshift;
-
-	assert(blocks > 0);
-	assert(start + blocks <= sb->volblocks);
-
-	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
-		struct buffer_head *buffer;
-		unsigned len;
-		int err;
-
-		buffer = blockread(mapping(bitmap), mapblock);
-		if (!buffer) {
-			tux3_err(sb, "block read failed");
-			// !!! error return sucks here
-			return -EIO;
-		}
-
-		len = min(mapsize - mapoffset, blocks);
-		err = bitmap_modify_bits(sb, buffer, mapoffset, len, set);
-		if (err) {
-			blockput(buffer);
-			/* FIXME: error handling */
-			return err;
-		}
-
-		mapoffset = 0;
-		blocks -= len;
-	}
-
-	return 0;
-}
-
-/*
  * If bits on multiple blocks is excepted state, modify bits.
  *
  * FIXME: If error happened on middle of blocks, modified bits and
  * ->freeblocks are not restored to original. What to do?
  */
-static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
-				  int set)
+static int __bitmap_modify(struct sb *sb, block_t start, unsigned blocks,
+			   int set, int (*test)(u8 *, unsigned, unsigned))
 {
 	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
@@ -208,7 +162,6 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 	unsigned mapmask = mapsize - 1;
 	unsigned mapoffset = start & mapmask;
 	block_t mapblock, mapblocks = (start + blocks + mapmask) >> mapshift;
-	int (*test)(u8 *, unsigned, unsigned) = set ? all_clear : all_set;
 
 	assert(blocks > 0);
 	assert(start + blocks <= sb->volblocks);
@@ -226,7 +179,7 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 		}
 
 		len = min(mapsize - mapoffset, blocks);
-		if (!test(bufdata(buffer), mapoffset, len)) {
+		if (test && !test(bufdata(buffer), mapoffset, len)) {
 			blockput(buffer);
 
 			tux3_fs_error(sb, "%s: start 0x%Lx, count %x",
@@ -248,6 +201,18 @@ static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
 	}
 
 	return 0;
+}
+
+static int bitmap_modify(struct sb *sb, block_t start, unsigned blocks, int set)
+{
+	return __bitmap_modify(sb, start, blocks, set, NULL);
+}
+
+static int bitmap_test_and_modify(struct sb *sb, block_t start, unsigned blocks,
+				  int set)
+{
+	int (*test)(u8 *, unsigned, unsigned) = set ? all_clear : all_set;
+	return __bitmap_modify(sb, start, blocks, set, test);
 }
 
 static inline int mergable(struct block_segment *seg, block_t block)
