@@ -340,17 +340,18 @@ error:
 	return err;
 }
 
-static struct inode *
-__tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev,
-		   struct ialloc_policy *policy, void *policy_data)
+/* Allocate inode with linear inum allocation policy */
+struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
+			       dev_t rdev)
 {
 	struct inode *inode;
+	int err;
 
 	inode = tux_new_inode(dir, iattr, rdev);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	int err = alloc_inum(inode, policy, policy_data);
+	err = alloc_inum(inode, &ialloc_linear, NULL);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);
@@ -380,18 +381,45 @@ __tux_create_inode(struct inode *dir, struct tux_iattr *iattr, dev_t rdev,
 	return inode;
 }
 
-/* Allocate inode with linear inum allocation policy */
-struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
-			       dev_t rdev)
-{
-	return __tux_create_inode(dir, iattr, rdev, &ialloc_linear, NULL);
-}
-
 /* Allocate inode with specific inum allocation policy */
 struct inode *tux_create_specific_inode(struct inode *dir, inum_t inum,
 					struct tux_iattr *iattr, dev_t rdev)
 {
-	return __tux_create_inode(dir, iattr, rdev, &ialloc_specific, &inum);
+	struct inode *inode;
+	int err;
+
+	inode = tux_new_inode(dir, iattr, rdev);
+	if (!inode)
+		return ERR_PTR(-ENOMEM);
+
+	err = alloc_inum(inode, &ialloc_specific, &inum);
+	if (err) {
+		make_bad_inode(inode);
+		iput(inode);
+		return ERR_PTR(err);
+	}
+#if 0
+	/*
+	 * FIXME: temporary hack. We shouldn't insert inode to hash
+	 * in alloc_inum before initializing completely.
+	 */
+	inum_t inum = tux_inode(inode)->inum;
+	if (insert_inode_locked4(inode, inum, tux_test, &inum) < 0) {
+		/* Can be nfsd race happened, or fs corruption. */
+		tux3_warn(tux_sb(dir->i_sb), "inode insert error: inum %Lx",
+			  inum);
+		iput(inode);
+		return ERR_PTR(-EIO);
+	}
+#endif
+	/*
+	 * The unhashed inode ignores mark_inode_dirty(), so it should
+	 * be called after insert_inode_hash().
+	 */
+	tux3_iattrdirty(inode);
+	tux3_mark_inode_dirty(inode);
+
+	return inode;
 }
 
 static int check_present(struct inode *inode)
