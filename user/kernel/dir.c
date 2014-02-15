@@ -96,13 +96,11 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 		      "zero length entry at inum %Lu, block %Lu",	\
 		      tux_inode(dir)->inum, block)
 
-static void tux_update_entry(struct buffer_head *buffer, tux_dirent *entry,
-			     inum_t inum, umode_t mode)
+static void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
+			  inum_t inum, umode_t mode)
 {
 	entry->inum = cpu_to_be64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
-	mark_buffer_dirty_non(buffer);
-	blockput(buffer);
 }
 
 /*
@@ -110,11 +108,11 @@ static void tux_update_entry(struct buffer_head *buffer, tux_dirent *entry,
  * "..". rename() shouldn't update ->mtime for ".." usually.
  */
 void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
-		       tux_dirent *entry, struct inode *new_inode)
+		       tux_dirent *entry, struct inode *inode)
 {
-	inum_t new_inum = tux_inode(new_inode)->inum;
-
-	tux_update_entry(buffer, entry, new_inum, new_inode->i_mode);
+	tux_set_entry(buffer, entry, tux_inode(inode)->inum, inode->i_mode);
+	mark_buffer_dirty_non(buffer);
+	blockput(buffer);
 
 	tux3_iattrdirty(dir);
 	dir->i_mtime = dir->i_ctime = gettime();
@@ -195,8 +193,10 @@ create:
 	entry->name_len = len;
 	memcpy(entry->name, name, len);
 	offset = (void *)entry - bufdata(clone);
-	/* this releases buffer */
-	tux_update_entry(clone, entry, inum, mode);
+
+	tux_set_entry(clone, entry, inum, mode);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
 
 	return (block << sb->blockbits) + offset; /* only for xattr create */
 }
