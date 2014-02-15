@@ -210,7 +210,7 @@ static int get_freeatom(struct inode *atable, atom_t *atom)
 
 // bug waiting to happen...
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len, struct buffer_head **result, loff_t size);
-loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len, inum_t inum, umode_t mode, loff_t *size);
+loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len, inum_t inum, umode_t mode, loff_t *size, struct buffer_head **hold);
 
 /* Find atom of name */
 static int find_atom(struct inode *atable, const char *name, unsigned len,
@@ -238,6 +238,7 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 		     atom_t *atom)
 {
 	struct sb *sb = tux_sb(atable->i_sb);
+	struct buffer_head *buffer;
 	int err;
 
 	err = find_atom(atable, name, len, atom);
@@ -251,7 +252,7 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 		return err;
 
 	loff_t where = tux_create_entry(atable, name, len, *atom, 0,
-					&sb->atomdictsize);
+					&sb->atomdictsize, &buffer);
 	if (where < 0) {
 		/* FIXME: better set a flag that unatom broke or something!!! */
 		return where;

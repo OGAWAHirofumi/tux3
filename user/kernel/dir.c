@@ -120,7 +120,8 @@ void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
 }
 
 loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
-			inum_t inum, umode_t mode, loff_t *size)
+			inum_t inum, umode_t mode, loff_t *size,
+			struct buffer_head **hold)
 {
 	unsigned delta = tux3_get_current_delta();
 	struct sb *sb = tux_sb(dir->i_sb);
@@ -198,18 +199,20 @@ create:
 	mark_buffer_dirty_non(clone);
 	blockput(clone);
 
+	*hold = clone;
 	return (block << sb->blockbits) + offset; /* only for xattr create */
 }
 
 int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
 		      umode_t mode)
 {
+	struct buffer_head *buffer;
 	loff_t where;
 
 	tux3_iattrdirty(dir);
 
 	where = tux_create_entry(dir, (const char *)qstr->name, qstr->len, inum,
-				 mode, &dir->i_size);
+				 mode, &dir->i_size, &buffer);
 	if (where < 0)
 		return where;
 
