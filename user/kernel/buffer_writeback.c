@@ -780,10 +780,9 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 /*
  * Flush buffers in head
  */
-int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
+int flush_list(struct inode *inode, struct tux3_iattr_data *idata,
 	       struct list_head *head, int req_flag)
 {
-	struct inode *inode = mapping->host;
 	struct bufvec bufvec;
 	int err = 0;
 
@@ -792,7 +791,7 @@ int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
 	if (list_empty(head))
 		return 0;
 
-	bufvec_init(&bufvec, mapping, head, idata);
+	bufvec_init(&bufvec, mapping(inode), head, idata);
 
 	/* Sort by bufindex() */
 	list_sort(NULL, head, buffer_index_cmp);

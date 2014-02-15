@@ -229,8 +229,8 @@ void bufvec_free(struct bufvec *bufvec);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
 void bufvec_complete_without_io(struct bufvec *bufvec, unsigned count);
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
-int flush_list(map_t *map, struct tux3_iattr_data *idata,
-	       struct list_head *head, int req_flag);
+int flush_list(struct inode *inode, struct tux3_iattr_data *idata,
+	struct list_head *head, int req_flag);
 
 /* block_fork.c */
 static inline int buffer_forked(struct buffer_head *buffer)

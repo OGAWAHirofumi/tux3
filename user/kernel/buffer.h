@@ -135,8 +135,8 @@ void tux3_iowait_init(struct iowait *iowait);
 void tux3_iowait_wait(struct iowait *iowait);
 int bufvec_io(int rw, struct bufvec *bufvec, block_t physical, unsigned count);
 int bufvec_contig_add(struct bufvec *bufvec, struct buffer_head *buffer);
-int flush_list(struct address_space *mapping, struct tux3_iattr_data *idata,
-	       struct list_head *head, int req_flag);
+int flush_list(struct inode *inode, struct tux3_iattr_data *idata,
+	struct list_head *head, int req_flag);
 int __tux3_volmap_io(int rw, struct bufvec *bufvec, block_t physical,
 		     unsigned count);
 int tux3_volmap_io(int rw, struct bufvec *bufvec);

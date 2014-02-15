@@ -482,7 +482,7 @@ static inline int tux3_flush_buffers(struct inode *inode,
 		return err;
 
 	/* Apply page caches */
-	return flush_list(mapping(inode), idata, dirty_buffers, req_flag);
+	return flush_list(inode, idata, dirty_buffers, req_flag);
 }
 
 /*
