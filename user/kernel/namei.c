@@ -48,6 +48,8 @@ static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
 	return err;
 }
 
+int tux_assign_inum(struct inode *inode);
+
 static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
 			struct tux_iattr *iattr, dev_t rdev)
 {
@@ -64,6 +66,7 @@ static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
 	inode = tux_create_inode(dir, iattr, rdev);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
+		tux_assign_inum(inode); // !!! error handling
 		err = tux_add_dirent(dir, dentry, inode);
 		if (!err) {
 			unlock_new_inode(inode);
@@ -149,6 +152,7 @@ static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 	if (!IS_ERR(inode)) {
 		err = page_symlink(inode, symname, len);
 		if (!err) {
+			tux_assign_inum(inode); // !!! error handling
 			err = tux_add_dirent(dir, dentry, inode);
 			if (!err) {
 				unlock_new_inode(inode);

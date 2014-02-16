@@ -345,17 +345,23 @@ struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 			       dev_t rdev)
 {
 	struct inode *inode;
-	int err;
 
 	inode = tux_new_inode(dir, iattr, rdev);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
+	return inode;
+}
+
+int tux_assign_inum(struct inode *inode)
+{
+	int err;
+
 	err = alloc_inum(inode, &ialloc_linear, NULL);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);
-		return ERR_PTR(err);
+		return err;
 	}
 #if 0
 	/*
@@ -368,7 +374,7 @@ struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 		tux3_warn(tux_sb(dir->i_sb), "inode insert error: inum %Lx",
 			  inum);
 		iput(inode);
-		return ERR_PTR(-EIO);
+		return -EIO;
 	}
 #endif
 	/*
@@ -378,7 +384,7 @@ struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 	tux3_iattrdirty(inode);
 	tux3_mark_inode_dirty(inode);
 
-	return inode;
+	return 0;
 }
 
 /* Allocate inode with specific inum allocation policy */
