@@ -32,17 +32,11 @@ out:
 	return d_splice_alias(inode, dentry);
 }
 
-static int __tux_add_dirent(struct inode *dir, struct dentry *dentry,
-			    struct inode *inode)
-{
-	return tux_create_dirent(dir, &dentry->d_name, tux_inode(inode)->inum,
-				 inode->i_mode);
-}
-
 static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
 			  struct inode *inode)
 {
-	int err = __tux_add_dirent(dir, dentry, inode);
+	int err = tux_create_dirent(dir, &dentry->d_name,
+				    tux_inode(inode)->inum, inode->i_mode);
 	if (!err)
 		d_instantiate(dentry, inode);
 	return err;
@@ -305,7 +299,8 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 				goto error;
 			}
 		}
-		err = __tux_add_dirent(new_dir, new_dentry, old_inode);
+		err = tux_create_dirent(new_dir, &new_dentry->d_name,
+				tux_inode(old_inode)->inum, old_inode->i_mode);
 		if (err)
 			goto error;
 		if (new_subdir)
