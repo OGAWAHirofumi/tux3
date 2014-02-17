@@ -147,8 +147,10 @@ static struct inode *create_internal_inode(struct sb *sbi, inum_t inum,
 		iattr = &null_iattr;
 
 	inode = tux_create_specific_inode(dir, inum, iattr, 0);
-	assert(IS_ERR(inode) || tux_inode(inode)->inum == inum);
-	unlock_new_inode(inode);
+	if (!IS_ERR(inode)) {
+		assert(tux_inode(inode)->inum == inum);
+		unlock_new_inode(inode);
+	}
 	return inode;
 }
 
