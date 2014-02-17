@@ -10,7 +10,7 @@
 #endif
 
 #ifndef trace
-#define trace trace_on
+#define trace trace_off
 #endif
 
 static void __delta_transition(struct sb *sb, struct delta_ref *delta_ref);

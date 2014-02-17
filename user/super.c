@@ -11,7 +11,7 @@
 #include "tux3user.h"
 
 #ifndef trace
-#define trace trace_on
+#define trace trace_off
 #endif
 
 static void inode_init_once(struct inode *inode)
