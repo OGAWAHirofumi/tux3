@@ -221,8 +221,6 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 		if (err)
 			goto error;
 		inum = tux_inode(inode)->inum;
-		if (inum >= MAX_INODES)
-			inum = TUX_NORMAL_INO - 1;
 		sb->nextinum = inum + 1; /* FIXME: racy */
 	}
 
