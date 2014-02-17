@@ -158,6 +158,34 @@ static void test02(struct sb *sb)
 	clean_main(sb);
 }
 
+/* Create multiple directories in root */
+static void test03(struct sb *sb)
+{
+	struct tux_iattr dir_attr = { .mode = S_IFDIR | S_IRWXU };
+	struct tux_iattr reg_attr = { .mode = S_IFREG | S_IRWXU };
+	struct inode *dir, *inode;
+	char name[100];
+
+	for (int d = 0; d < 3; d++) {
+		snprintf(name, 100, "dir%i", d);
+		trace("directory %.*s...", strlen(name), name);
+		dir = tuxcreate(sb->rootdir, name, strlen(name), &dir_attr);
+		test_assert(!IS_ERR(dir));
+
+		for (int i = 0; i < 10; i++) {
+			snprintf(name, 100, "foo%i", i);
+			trace("create %.*s", strlen(name), name);
+			inode = tuxcreate(dir, name, strlen(name), &reg_attr);
+			test_assert(!IS_ERR(inode));
+			iput(inode);
+		}
+		iput(dir);
+	}
+
+	force_delta(sb);
+	clean_main(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -196,6 +224,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test02"))
 		test02(sb);
+	test_end();
+
+	if (test_start("test03"))
+		test03(sb);
 	test_end();
 
 	clean_main(sb);
