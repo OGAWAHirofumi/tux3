@@ -83,6 +83,8 @@ static inline struct inode *file_inode(struct file *f)
 	struct inode *__inode = &__tux->vfs_inode;		\
 								\
 	inode_init(__tux, sb, mode);				\
+	/* Set TUX_INVALID_INO explicitly (tux_set_inum()) */	\
+	__tux->inum = TUX_INVALID_INO;				\
 	/* Initialize lock for convenience. */			\
 	init_rwsem(&__tux->btree.lock);				\
 								\

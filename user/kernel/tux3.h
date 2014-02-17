@@ -124,14 +124,14 @@ static inline void *decode48(void *at, u64 *val)
 #define TUXKEY_LIMIT		(MAX_TUXKEY + 1)
 
 /* Special inode numbers */
-#define TUX_BITMAP_INO		0
-#define TUX_COUNTMAP_INO	1	/* Block group free count map */
-#define TUX_VTABLE_INO		2
-#define TUX_ATABLE_INO		3
-#define TUX_ROOTDIR_INO		4
+#define TUX_INVALID_INO		0	/* FIXME: just for debugging */
+#define TUX_BITMAP_INO		1
+#define TUX_COUNTMAP_INO	2	/* Block group free count map */
+#define TUX_VTABLE_INO		3
+#define TUX_ATABLE_INO		4
 #define TUX_VOLMAP_INO		61	/* This doesn't have entry in ileaf */
 #define TUX_LOGMAP_INO		62	/* This is volmap for log blocks */
-#define TUX_INVALID_INO		63	/* FIXME: just for debugging */
+#define TUX_ROOTDIR_INO		63
 #define TUX_NORMAL_INO		64	/* until this ino, reserved ino */
 
 struct disksuper {
