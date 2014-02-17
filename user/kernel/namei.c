@@ -118,13 +118,25 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 	return err;
 }
 
+static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
+{
+	struct buffer_head *buffer;
+	tux_dirent *entry;
+
+	entry = tux_find_dirent(dir, &dentry->d_name, &buffer);
+	if (IS_ERR(entry))
+		return PTR_ERR(entry);
+
+	return tux_delete_dirent(dir, buffer, entry);
+}
+
 static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 			  struct tux_iattr *iattr, const char *symname)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
 	struct inode *inode;
 	unsigned len = strlen(symname) + 1;
-	int err;
+	int err, err2;
 
 	/* FIXME: We want more length? */
 	if (len > PAGE_CACHE_SIZE)
@@ -134,13 +146,26 @@ static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 	inode = tux_new_inode(dir, iattr, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
-		err = page_symlink(inode, symname, len);
+		err = tux_create_dirent(dir, &dentry->d_name, inode);
 		if (!err) {
-			err = tux_add_dirent(dir, dentry, inode);
-			if (!err)
+			/* FIXME: we may want to initialize symlink earlier */
+			err = page_symlink(inode, symname, len);
+			if (!err) {
+				d_instantiate(dentry, inode);
 				unlock_new_inode(inode);
+				goto out;
+			}
+
+			err2 = tux_del_dirent(dir, dentry);
+			if (err2)
+				tux3_fs_error(sb, "Failed to recover dir entry (err %d)", err2);
+			clear_nlink(inode);
+			tux3_mark_inode_dirty(inode);
+			unlock_new_inode(inode);
+			iput(inode);
 		}
 	}
+out:
 	change_end(sb);
 
 	return err;
@@ -159,18 +184,6 @@ static int tux3_symlink(struct inode *dir, struct dentry *dentry,
 	return __tux3_symlink(dir, dentry, &iattr, symname);
 }
 #endif /* !__KERNEL__ */
-
-static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
-{
-	struct buffer_head *buffer;
-	tux_dirent *entry;
-
-	entry = tux_find_dirent(dir, &dentry->d_name, &buffer);
-	if (IS_ERR(entry))
-		return PTR_ERR(entry);
-
-	return tux_delete_dirent(dir, buffer, entry);
-}
 
 static int tux3_unlink(struct inode *dir, struct dentry *dentry)
 {
