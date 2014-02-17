@@ -53,6 +53,8 @@ extern int __build_bug_on_failed;
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
 
+#define abs64(x)	llabs(x)
+
 /*
  * This looks more complex than it should be. But we need to
  * get the type for the ~ right in round_down (it needs to be
