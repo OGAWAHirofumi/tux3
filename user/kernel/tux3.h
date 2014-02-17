@@ -308,6 +308,7 @@ struct sb {
 	/*
 	 * For frontend and backend
 	 */
+	spinlock_t countmap_lock;
 	struct countmap_pin countmap_pin;
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 

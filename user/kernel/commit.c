@@ -45,6 +45,7 @@ static void init_sb(struct sb *sb)
 	INIT_LIST_HEAD(&sb->unify_buffers);
 
 	INIT_LIST_HEAD(&sb->alloc_inodes);
+	spin_lock_init(&sb->countmap_lock);
 	spin_lock_init(&sb->forked_buffers_lock);
 	init_link_circular(&sb->forked_buffers);
 	spin_lock_init(&sb->dirty_inodes_lock);

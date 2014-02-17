@@ -19,48 +19,80 @@
  * Group counts
  */
 
-static int countmap_load(struct sb *sb, block_t group)
+void countmap_put(struct countmap_pin *pin)
 {
-	block_t block = group >> (sb->blockbits - 1);
-	struct countmap_pin *pin = &sb->countmap_pin;
+	if (pin->buffer) {
+		blockput(pin->buffer);
+		pin->buffer = NULL;
+	}
+}
 
-	if (!pin->buffer || bufindex(pin->buffer) != block) {
-		if (pin->buffer)
-			blockput(pin->buffer);
-		pin->buffer = blockread(mapping(sb->countmap), block);
-		if (!pin->buffer) {
+/*
+ * Load and pin one block of the groupmap. Returns with spinlock held.
+ * Access from frontend is read only and write access from backend is single
+ * threaded, so rw spinlock may reduce frontend contention if there is any.
+ * This could be extended to pin multiple blocks if contention causes too
+ * many block reads.
+ */
+static struct buffer_head *countmap_load(struct sb *sb, block_t group)
+{
+	struct countmap_pin *pin = &sb->countmap_pin;
+	block_t block = group >> (sb->blockbits - 1);
+	struct buffer_head *buffer;
+
+	spin_lock(&sb->countmap_lock);
+	buffer = pin->buffer;
+	if (buffer && bufindex(buffer) == block) {
+		get_bh(buffer);
+		spin_unlock(&sb->countmap_lock);
+	} else {
+		spin_unlock(&sb->countmap_lock);
+
+		buffer = blockread(mapping(sb->countmap), block);
+		if (!buffer) {
 			tux3_err(sb, "block read failed");
-			return -EIO;
+			return ERR_PTR(-EIO);
 		}
 	}
-	return 0;
+
+	return buffer;
+}
+
+static void countmap_pin_update(struct sb *sb, struct buffer_head *buffer)
+{
+	if (sb->countmap_pin.buffer != buffer) {
+		countmap_put(&sb->countmap_pin);
+		sb->countmap_pin.buffer = buffer;
+	} else
+		blockput(buffer);
 }
 
 static int countmap_add(struct sb *sb, block_t group, int count)
 {
 	unsigned offset = group & (sb->blockmask >> 1);
-	struct buffer_head *clone;
+	struct buffer_head *buffer, *clone;
 	__be16 *p;
-	int err;
 
-	err = countmap_load(sb, group);
-	if (err)
-		return err;
+	buffer = countmap_load(sb, group);
+	if (IS_ERR(buffer))
+		return PTR_ERR(buffer);
 	trace("add %d to group %Lu", count, group);
 	/*
 	 * The countmap is modified only by backend.  blockdirty()
 	 * should never return -EAGAIN.
 	 */
-	clone = blockdirty(sb->countmap_pin.buffer, sb->unify);
+	clone = blockdirty(buffer, sb->unify);
 	if (IS_ERR(clone)) {
-		err = PTR_ERR(clone);
-		assert(err != -EAGAIN);
-		return err;
+		assert(PTR_ERR(clone) != -EAGAIN);
+		blockput(buffer);
+		return PTR_ERR(clone);
 	}
-	sb->countmap_pin.buffer = clone;
 
-	p = bufdata(sb->countmap_pin.buffer);
+	spin_lock(&sb->countmap_lock);
+	p = bufdata(clone);
 	be16_add_cpu(p + offset, count);
+	countmap_pin_update(sb, clone);
+	spin_unlock(&sb->countmap_lock);
 
 	return 0;
 }
@@ -90,26 +122,24 @@ static int countmap_add_segment(struct sb *sb, block_t start, unsigned blocks,
 	return countmap_add(sb, group, set ? blocks : -blocks);
 }
 
-void countmap_put(struct countmap_pin *pin)
-{
-	if (pin->buffer) {
-		blockput(pin->buffer);
-		pin->buffer = NULL;
-	}
-}
-
 static int countmap_used(struct sb *sb, block_t group)
 {
 	unsigned offset = group & (sb->blockmask >> 1);
+	struct buffer_head *buffer;
 	__be16 *p;
-	int err;
+	u16 count;
 
-	err = countmap_load(sb, group);
-	if (err)
-		return err;
+	buffer = countmap_load(sb, group);
+	if (IS_ERR(buffer))
+		return PTR_ERR(buffer);
 
-	p = bufdata(sb->countmap_pin.buffer);
-	return be16_to_cpup(p + offset);
+	spin_lock(&sb->countmap_lock);
+	p = bufdata(buffer);
+	count = be16_to_cpup(p + offset);
+	countmap_pin_update(sb, buffer);
+	spin_unlock(&sb->countmap_lock);
+
+	return count;
 }
 
 #ifndef __KERNEL__
