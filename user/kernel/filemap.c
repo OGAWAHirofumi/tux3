@@ -73,13 +73,19 @@ void show_segs(struct block_segment seg[], unsigned segs)
 static int map_bfree(struct inode *inode, block_t block, unsigned count)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
-	if (inode == sb->bitmap) {
+
+	switch (tux_inode(inode)->inum) {
+	case TUX_BITMAP_INO:
+	case TUX_COUNTMAP_INO:
 		log_bfree_on_unify(sb, block, count);
 		defer_bfree(sb, &sb->deunify, block, count);
-	} else {
+		break;
+	default:
 		log_bfree(sb, block, count);
 		defer_bfree(sb, &sb->defree, block, count);
+		break;
 	}
+
 	return 0;
 }
 

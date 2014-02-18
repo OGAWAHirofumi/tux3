@@ -135,6 +135,12 @@ int make_tux3(struct sb *sb)
 		goto error_change_end;
 	}
 
+	sb->countmap = create_internal_inode(sb, TUX_COUNTMAP_INO, NULL);
+	if (IS_ERR(sb->countmap)) {
+		err = PTR_ERR(sb->countmap);
+		goto error_change_end;
+	}
+
 	change_end_atomic(sb);
 
 	/* Set fake backend mark to modify backend objects. */

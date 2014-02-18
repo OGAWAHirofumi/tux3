@@ -297,6 +297,18 @@ struct draw_data_ops draw_bitmap = {
 	.draw_end	= draw_bitmap_end,
 };
 
+static void draw_countmap_start(struct graph_info *gi, struct btree *btree)
+{
+	draw_data_start(gi, btree);
+	fprintf(gi->fp, "label = \"countmap table\"\n");
+}
+
+struct draw_data_ops draw_countmap = {
+	.draw_start	= draw_countmap_start,
+	.draw_data	= draw_data,
+	.draw_end	= draw_data_end,
+};
+
 static void draw_vtable_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
@@ -790,6 +802,10 @@ static struct {
 	[TUX_BITMAP_INO] =  {
 		.name = "bitmap",
 		.info = &draw_bitmap,
+	},
+	[TUX_COUNTMAP_INO] =  {
+		.name = "countmap",
+		.info = &draw_countmap,
 	},
 	[TUX_VTABLE_INO] = {
 		.name = "vtable",

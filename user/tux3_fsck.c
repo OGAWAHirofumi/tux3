@@ -237,6 +237,10 @@ static void fsck_check_bitmap(struct sb *sb, struct fsck_context *context)
 	}
 }
 
+static void fsck_check_countmap(struct sb *sb, struct fsck_context *context)
+{
+}
+
 static void fsck_check_inodes(struct sb *sb, struct fsck_context *context)
 {
 	if (context->freeinodes != sb->freeinodes) {
@@ -365,6 +369,7 @@ static int fsck_main(struct sb *sb)
 	walk_btree(otree_btree(sb), &fsck_otree_ops, &context);
 
 	fsck_check_bitmap(sb, &context);
+	fsck_check_countmap(sb, &context);
 	fsck_check_inodes(sb, &context);
 
 	err = replay_stage3(rp, 0);

@@ -61,15 +61,21 @@ static void cleanup_dirty_inode(struct inode *inode)
 static void cleanup_dirty_for_umount(struct sb *sb)
 {
 	unsigned unify = sb->unify;
+	struct list_head *head;
 
 	/*
 	 * Pinned buffer and bitmap are not flushing always, it is
 	 * normal. So, this clean those for unmount.
 	 */
 	if (sb->bitmap) {
-		struct list_head *head = tux3_dirty_buffers(sb->bitmap, unify);
+		head = tux3_dirty_buffers(sb->bitmap, unify);
 		cleanup_dirty_buffers(sb->bitmap, head, unify);
 		cleanup_dirty_inode(sb->bitmap);
+	}
+	if (sb->countmap) {
+		head = tux3_dirty_buffers(sb->countmap, unify);
+		cleanup_dirty_buffers(sb->countmap, head, unify);
+		cleanup_dirty_inode(sb->countmap);
 	}
 	if (sb->volmap) {
 		cleanup_dirty_buffers(sb->volmap, &sb->unify_buffers, unify);
@@ -110,6 +116,8 @@ static void __tux3_put_super(struct sb *sbi)
 	sbi->vtable = NULL;
 	iput(sbi->bitmap);
 	sbi->bitmap = NULL;
+	iput(sbi->countmap);
+	sbi->countmap = NULL;
 	iput(sbi->logmap);
 	sbi->logmap = NULL;
 	iput(sbi->volmap);
@@ -195,6 +203,13 @@ struct replay *tux3_init_fs(struct sb *sbi)
 		goto error_inode;
 	}
 	sbi->bitmap = inode;
+
+	inode = iget_or_create_inode(sbi, TUX_COUNTMAP_INO);
+	if (IS_ERR(inode)) {
+		name = "countmap";
+		goto error_inode;
+	}
+	sbi->countmap = inode;
 #if 0
 	inode = tux3_iget(sbi, TUX_VTABLE_INO);
 	if (IS_ERR(inode)) {

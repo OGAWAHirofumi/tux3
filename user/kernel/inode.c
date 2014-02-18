@@ -582,6 +582,7 @@ int tux3_save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	       tux_inode(inode)->inum != TUX_INVALID_INO);
 	switch (tux_inode(inode)->inum) {
 	case TUX_BITMAP_INO:
+	case TUX_COUNTMAP_INO:
 	case TUX_VTABLE_INO:
 	case TUX_ATABLE_INO:
 		/* FIXME: assert(only btree should be changed); */
@@ -999,6 +1000,7 @@ static void tux_setup_inode(struct inode *inode)
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
 		switch (inum) {
 		case TUX_BITMAP_INO:
+		case TUX_COUNTMAP_INO:
 		case TUX_VTABLE_INO:
 		case TUX_ATABLE_INO:
 			/* set fake i_size to escape the check of block_* */
@@ -1027,6 +1029,7 @@ static void tux_setup_inode(struct inode *inode)
 		/* Prevent reentering into our fs recursively by mem reclaim */
 		switch (inum) {
 		case TUX_BITMAP_INO:
+		case TUX_COUNTMAP_INO:
 		case TUX_VOLMAP_INO:
 		case TUX_LOGMAP_INO:
 			/* FIXME: we should use non-__GFP_FS for all? */
@@ -1044,8 +1047,13 @@ static void tux_setup_inode(struct inode *inode)
 		 *
 		 * See, FIXME in tux3_mark_buffer_unify().
 		 */
-		if (inum == TUX_BITMAP_INO || inum == TUX_VOLMAP_INO)
+		switch (inum) {
+		case TUX_BITMAP_INO:
+		case TUX_COUNTMAP_INO:
+		case TUX_VOLMAP_INO:
 			tux3_set_inode_always_dirty(inode);
+			break;
+		}
 		break;
 	}
 	default:

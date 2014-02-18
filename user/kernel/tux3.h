@@ -125,9 +125,10 @@ static inline void *decode48(void *at, u64 *val)
 
 /* Special inode numbers */
 #define TUX_BITMAP_INO		0
-#define TUX_VTABLE_INO		1
-#define TUX_ATABLE_INO		2
-#define TUX_ROOTDIR_INO		3
+#define TUX_COUNTMAP_INO	1	/* Block group free count map */
+#define TUX_VTABLE_INO		2
+#define TUX_ATABLE_INO		3
+#define TUX_ROOTDIR_INO		4
 #define TUX_VOLMAP_INO		61	/* This doesn't have entry in ileaf */
 #define TUX_LOGMAP_INO		62	/* This is volmap for log blocks */
 #define TUX_INVALID_INO		63	/* FIXME: just for debugging */
@@ -261,6 +262,7 @@ struct sb {
 	struct btree otree;	/* Orphan btree */
 	struct inode *volmap;	/* Volume metadata cache (like blockdev). */
 	struct inode *bitmap;	/* allocation bitmap special file */
+	struct inode *countmap;	/* block group free count map */
 	struct inode *rootdir;	/* root directory special file */
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */

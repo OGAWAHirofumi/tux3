@@ -312,6 +312,7 @@ static void tux_setup_inode(struct inode *inode)
 		/* FIXME: bitmap, logmap, vtable, atable doesn't have S_IFMT */
 		switch (tux_inode(inode)->inum) {
 		case TUX_BITMAP_INO:
+		case TUX_COUNTMAP_INO:
 		case TUX_VTABLE_INO:
 		case TUX_ATABLE_INO:
 			/* set fake i_size to escape the check of block_* */
