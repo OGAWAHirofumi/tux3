@@ -65,6 +65,31 @@ static int countmap_add(struct sb *sb, block_t group, int count)
 	return 0;
 }
 
+static int countmap_add_segment(struct sb *sb, block_t start, unsigned blocks,
+				int set)
+{
+	block_t group = start >> sb->groupbits;
+
+	/* Compile option: support cross-group segments */
+	if (1 && group != (start + blocks) >> sb->groupbits) {
+		unsigned groupsize = 1 << sb->groupbits;
+		unsigned groupmask = groupsize - 1;
+
+		while (blocks) {
+			unsigned grouplen = (~start & groupmask) + 1;
+			int len = min(grouplen, blocks);
+			int err = countmap_add(sb, group++, set ? len : -len);
+			if (err)
+				return err;
+			start += len;
+			blocks -= len;
+		}
+		return 0;
+	}
+
+	return countmap_add(sb, group, set ? blocks : -blocks);
+}
+
 void countmap_put(struct countmap_pin *pin)
 {
 	if (pin->buffer) {
@@ -243,6 +268,7 @@ static int __bitmap_modify(struct sb *sb, block_t start, unsigned blocks,
 	unsigned mapmask = mapsize - 1;
 	unsigned mapoffset = start & mapmask;
 	block_t mapblock, mapblocks = (start + blocks + mapmask) >> mapshift;
+	unsigned orig_blocks = blocks;
 
 	assert(blocks > 0);
 	assert(start + blocks <= sb->volblocks);
@@ -255,8 +281,7 @@ static int __bitmap_modify(struct sb *sb, block_t start, unsigned blocks,
 		buffer = blockread(mapping(bitmap), mapblock);
 		if (!buffer) {
 			tux3_err(sb, "block read failed");
-			// !!! error return sucks here
-			return -EIO;
+			return -EIO; /* FIXME: error handling */
 		}
 
 		len = min(mapsize - mapoffset, blocks);
@@ -266,22 +291,20 @@ static int __bitmap_modify(struct sb *sb, block_t start, unsigned blocks,
 			tux3_fs_error(sb, "%s: start 0x%Lx, count %x",
 				      set ? "already allocated" : "double free",
 				      start, blocks);
-
-			return -EIO;	/* FIXME: error code? */
+			return -EIO; /* FIXME: error handling */
 		}
 
 		err = bitmap_modify_bits(sb, buffer, mapoffset, len, set);
 		if (err) {
 			blockput(buffer);
-			/* FIXME: error handling */
-			return err;
+			return err; /* FIXME: error handling */
 		}
 
 		mapoffset = 0;
 		blocks -= len;
 	}
 
-	return countmap_add(sb, start >> sb->groupbits, set ? blocks : -blocks);
+	return countmap_add_segment(sb, start, orig_blocks, set);
 }
 
 static int bitmap_modify(struct sb *sb, block_t start, unsigned blocks, int set)
