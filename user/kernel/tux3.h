@@ -783,6 +783,8 @@ void change_end_if_needed(struct sb *sb);
 #include "commit_flusher.h"
 
 /* dir.c */
+void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
+		   inum_t inum, umode_t mode);
 void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
 		       tux_dirent *entry, struct inode *new_inode);
 loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,

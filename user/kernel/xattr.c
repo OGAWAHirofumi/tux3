@@ -253,6 +253,9 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 		/* FIXME: better set a flag that unatom broke or something!!! */
 		return where;
 	}
+	/* This releases buffer */
+	tux_set_entry(buffer, bufdata(buffer) + (where & sb->blockmask),
+		      *atom, 0);
 
 	/* Enter into reverse map - maybe verify zero refs? */
 	where = unatom_dict_write(atable, *atom, where);

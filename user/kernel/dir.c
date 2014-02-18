@@ -96,11 +96,13 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 		      "zero length entry at inum %Lu, block %Lu",	\
 		      tux_inode(dir)->inum, block)
 
-static void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
-			  inum_t inum, umode_t mode)
+void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
+		   inum_t inum, umode_t mode)
 {
 	entry->inum = cpu_to_be64(inum);
 	entry->type = tux_type_by_mode[(mode & S_IFMT) >> STAT_SHIFT];
+	mark_buffer_dirty_non(buffer);
+	blockput(buffer);
 }
 
 /*
@@ -111,8 +113,6 @@ void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
 		       tux_dirent *entry, struct inode *inode)
 {
 	tux_set_entry(buffer, entry, tux_inode(inode)->inum, inode->i_mode);
-	mark_buffer_dirty_non(buffer);
-	blockput(buffer);
 
 	tux3_iattrdirty(dir);
 	dir->i_mtime = dir->i_ctime = gettime();
@@ -195,10 +195,6 @@ create:
 	memcpy(entry->name, name, len);
 	offset = (void *)entry - bufdata(clone);
 
-	tux_set_entry(clone, entry, inum, mode);
-	mark_buffer_dirty_non(clone);
-	blockput(clone);
-
 	*hold = clone;
 	return (block << sb->blockbits) + offset; /* only for xattr create */
 }
@@ -215,6 +211,9 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
 				 mode, &i_size, &buffer);
 	if (where < 0)
 		return where;
+
+	/* This releases buffer */
+	tux_set_entry(buffer, bufdata(buffer) + (where & tux_sb(dir->i_sb)->blockmask), inum, mode);
 
 	tux3_iattrdirty(dir);
 	if (dir->i_size != i_size)
