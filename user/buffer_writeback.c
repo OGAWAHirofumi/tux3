@@ -18,8 +18,11 @@ void tux3_iowait_wait(struct iowait *iowait)
  * Helper for buffer vector I/O.
  */
 
-#define buffers_entry(x) \
-	list_entry(x, struct buffer_head, link)
+static inline struct buffer_head *buffers_entry(struct list_head *x)
+{
+	return list_entry(x, struct buffer_head, link);
+}
+
 #define MAX_BUFVEC_COUNT	UINT_MAX
 
 /* Initialize bufvec */
