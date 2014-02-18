@@ -25,6 +25,10 @@
 #include "tux3.h"
 #include "kcompat.h"
 
+#ifndef trace
+#define trace trace_off
+#endif
+
 #define TUX_DIR_ALIGN		sizeof(inum_t)
 #define TUX_DIR_HEAD		(offsetof(tux_dirent, name))
 #define TUX_REC_LEN(name_len)	ALIGN((name_len) + TUX_DIR_HEAD, TUX_DIR_ALIGN)
@@ -203,6 +207,8 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 {
 	struct sb *sb = tux_sb(dir->i_sb);
 	inum_t inum = tux_inode(inode)->inum;
+	const char *name = (const char *)qstr->name;
+	unsigned len = qstr->len;
 	struct buffer_head *buffer;
 	tux_dirent *entry;
 	loff_t i_size, where;
@@ -210,14 +216,26 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 
 	/* Holding dir->i_mutex, so no i_size_read() */
 	i_size = dir->i_size;
-	where = tux_alloc_entry(dir, (const char *)qstr->name, qstr->len,
-				&i_size, &buffer);
+	where = tux_alloc_entry(dir, name, len, &i_size, &buffer);
 	if (where < 0)
 		return where;
 	entry = bufdata(buffer) + (where & sb->blockmask);
 
 	if (inum == TUX_INVALID_INO) {
-		err = tux_assign_inum(inode, sb->nextinum);
+		enum { guess_filesize = 1 << 13, guess_dirsize = 50 * guess_filesize };
+		enum { guess_dirent_size = 24, cluster = 32 };
+		enum { file_factor = guess_filesize / guess_dirent_size };
+		enum { dir_factor = guess_dirsize / guess_dirent_size };
+
+		int is_dir = S_ISDIR(inode->i_mode);
+		unsigned factor = is_dir ? dir_factor : file_factor;
+		inum_t next = sb->nextinum; /* FIXME: racy */
+		inum_t base = max(tux_inode(dir)->inum + 1, (inum_t)TUX_NORMAL_INO);
+		inum_t guess = base + ((factor * where) >> sb->blockbits);
+		inum_t goal = (is_dir || abs64(next - guess) > cluster) ? guess : next;
+		trace("'%.*s' base = 0x%Lx, guess = 0x%Lx, goal = 0x%Lx", len, name, base, guess, goal);
+
+		err = tux_assign_inum(inode, goal);
 		if (err)
 			goto error;
 		inum = tux_inode(inode)->inum;
