@@ -35,8 +35,7 @@ out:
 static int tux_add_dirent(struct inode *dir, struct dentry *dentry,
 			  struct inode *inode)
 {
-	int err = tux_create_dirent(dir, &dentry->d_name,
-				    tux_inode(inode)->inum, inode->i_mode);
+	int err = tux_create_dirent(dir, &dentry->d_name, inode);
 	if (!err)
 		d_instantiate(dentry, inode);
 	return err;
@@ -300,7 +299,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 			}
 		}
 		err = tux_create_dirent(new_dir, &new_dentry->d_name,
-				tux_inode(old_inode)->inum, old_inode->i_mode);
+					old_inode);
 		if (err)
 			goto error;
 		if (new_subdir)

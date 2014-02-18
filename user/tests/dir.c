@@ -24,19 +24,23 @@ static void test01(struct sb *sb, struct inode *dir)
 
 	struct qstr name1 = { .name = (unsigned char *)"hello", .len = 5, };
 	struct qstr name2 = { .name = (unsigned char *)"world", .len = 5, };
+	struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFREG);
+	tux_inode(inode1)->inum = 0x666;
+	struct inode *inode2 = rapid_open_inode(sb, NULL, S_IFLNK);
+	tux_inode(inode2)->inum = 0x777;
 
 	change_begin_atomic(sb);
 
 	test_assert(tux_dir_is_empty(dir) == 0);
 
-	err = tux_create_dirent(dir, &name1, 0x666, S_IFREG);
+	err = tux_create_dirent(dir, &name1, inode1);
 	test_assert(!err);
-	err = tux_create_dirent(dir, &name2, 0x777, S_IFLNK);
+	err = tux_create_dirent(dir, &name2, inode2);
 	test_assert(!err);
 
 	entry = tux_find_dirent(dir, &name1, &buffer);
 	test_assert(!IS_ERR(entry));
-	test_assert(be64_to_cpu(entry->inum) == 0x666);
+	test_assert(be64_to_cpu(entry->inum) == tux_inode(inode1)->inum);
 	test_assert(be16_to_cpu(entry->rec_len) >= name1.len + 2);
 	test_assert(entry->name_len == name1.len);
 	test_assert(entry->type == TUX_REG);
@@ -48,7 +52,7 @@ static void test01(struct sb *sb, struct inode *dir)
 
 	entry = tux_find_dirent(dir, &name2, &buffer);
 	test_assert(!IS_ERR(entry));
-	test_assert(be64_to_cpu(entry->inum) == 0x777);
+	test_assert(be64_to_cpu(entry->inum) == tux_inode(inode2)->inum);
 	test_assert(be16_to_cpu(entry->rec_len) >= name2.len + 2);
 	test_assert(entry->name_len == name2.len);
 	test_assert(entry->type == TUX_LNK);
@@ -58,6 +62,8 @@ static void test01(struct sb *sb, struct inode *dir)
 
 	change_end_atomic(sb);
 
+	free_map(inode1->map);
+	free_map(inode2->map);
 	clean_main(sb, dir);
 }
 
@@ -87,6 +93,9 @@ static void test02(struct sb *sb, struct inode *dir)
 	change_begin_atomic(sb);
 
 	for (int i = 0; i < 10; i++) {
+		struct inode *inode1 = rapid_open_inode(sb, NULL, S_IFREG);
+		tux_inode(inode1)->inum = i + 99;
+
 		char name[100];
 		sprintf(name, "file%i", i);
 
@@ -94,8 +103,10 @@ static void test02(struct sb *sb, struct inode *dir)
 			.name = (unsigned char *)name,
 			.len = strlen(name),
 		};
-		err = tux_create_dirent(dir, &qstr, i+99, S_IFREG);
+		err = tux_create_dirent(dir, &qstr, inode1);
 		test_assert(!err);
+
+		free_map(inode1->map);
 	}
 
 	char dents[10000];

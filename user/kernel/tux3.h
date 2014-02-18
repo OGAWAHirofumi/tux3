@@ -789,8 +789,8 @@ void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
 		       tux_dirent *entry, struct inode *new_inode);
 loff_t tux_alloc_entry(struct inode *dir, const char *name, unsigned len,
 		       loff_t *size, struct buffer_head **hold);
-int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
-		      umode_t mode);
+int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
+		      struct inode *inode);
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
 			   struct buffer_head **result, loff_t size);
 tux_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,

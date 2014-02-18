@@ -198,9 +198,11 @@ create:
 	return (block << sb->blockbits) + offset; /* only for xattr create */
 }
 
-int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
-		      umode_t mode)
+int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
+		      struct inode *inode)
 {
+	inum_t inum = tux_inode(inode)->inum;
+	umode_t mode = inode->i_mode;
 	struct buffer_head *buffer;
 	loff_t i_size, where;
 
