@@ -134,6 +134,15 @@ void del_defer_alloc_inum(struct inode *inode)
 	list_del_init(&tux_inode(inode)->alloc_list);
 }
 
+void cancel_defer_alloc_inum(struct inode *inode)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	down_write(&itree_btree(sb)->lock);	/* FIXME: spinlock is enough? */
+	del_defer_alloc_inum(inode);
+	up_write(&itree_btree(sb)->lock);
+}
+
 /*
  * Inode btree expansion algorithm
  *
@@ -287,16 +296,31 @@ error:
 	return err;
 }
 
+static void tux_assign_inum_failed(struct inode *inode)
+{
+	/*
+	 * If inode was initialized and hashed already, it would be
+	 * better to use deferred deletion path.
+	 */
+	assert(!inode_unhashed(inode));
+
+	cancel_defer_alloc_inum(inode);
+
+	/* We drop the inode early without delete process in flusher */
+	make_bad_inode(inode);
+
+	clear_nlink(inode);
+	unlock_new_inode(inode);
+	iput(inode);
+}
+
 int tux_assign_inum(struct inode *inode, inum_t goal)
 {
 	int err;
 
 	err = alloc_inum(inode, goal);
-	if (err) {
-		make_bad_inode(inode);
-		iput(inode);
-		return err;
-	}
+	if (err)
+		goto error;
 #if 0
 	/*
 	 * FIXME: temporary hack. We shouldn't insert inode to hash
@@ -307,10 +331,12 @@ int tux_assign_inum(struct inode *inode, inum_t goal)
 		/* Can be nfsd race happened, or fs corruption. */
 		tux3_warn(tux_sb(dir->i_sb), "inode insert error: inum %Lx",
 			  inum);
-		iput(inode);
-		return -EIO;
+		err = -EIO;
+		goto error;
 	}
 #endif
+	/* The inode was hashed, we can use deferred deletion from here */
+
 	/*
 	 * The unhashed inode ignores mark_inode_dirty(), so it should
 	 * be called after insert_inode_hash().
@@ -319,6 +345,10 @@ int tux_assign_inum(struct inode *inode, inum_t goal)
 	tux3_mark_inode_dirty(inode);
 
 	return 0;
+
+error:
+	tux_assign_inum_failed(inode);
+	return err;
 }
 
 /* Allocate inode with specific inum allocation policy */

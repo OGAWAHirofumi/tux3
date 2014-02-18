@@ -49,7 +49,7 @@ static void cleanup_dirty_inode(struct inode *inode)
 		trace(">>> clean inum %Lx, i_count %d, i_state %lx",
 		      tux_inode(inode)->inum, atomic_read(&inode->i_count),
 		      inode->i_state);
-		del_defer_alloc_inum(inode);
+		cancel_defer_alloc_inum(inode);
 		tux3_clear_dirty_inode(inode);
 	}
 }
