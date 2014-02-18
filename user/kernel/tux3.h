@@ -843,9 +843,9 @@ extern struct btree_ops otree_ops;
 void tux3_inode_copy_attrs(struct inode *inode, unsigned delta);
 struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
+struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
+			    dev_t rdev);
 void del_defer_alloc_inum(struct inode *inode);
-struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
-			       dev_t rdev);
 int tux_assign_inum(struct inode *inode);
 struct inode *tux_create_specific_inode(struct inode *dir, inum_t inum,
 					struct tux_iattr *iattr, dev_t rdev);

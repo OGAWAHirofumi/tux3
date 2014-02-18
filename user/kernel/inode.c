@@ -49,8 +49,8 @@ struct inode *tux_new_logmap(struct sb *sb)
 	return inode;
 }
 
-static struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
-				   dev_t rdev)
+struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
+			    dev_t rdev)
 {
 	struct inode *inode;
 
@@ -340,19 +340,7 @@ error:
 	return err;
 }
 
-/* Allocate inode with linear inum allocation policy */
-struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
-			       dev_t rdev)
-{
-	struct inode *inode;
-
-	inode = tux_new_inode(dir, iattr, rdev);
-	if (!inode)
-		return ERR_PTR(-ENOMEM);
-
-	return inode;
-}
-
+/* Allocate inum to inode with linear allocation policy */
 int tux_assign_inum(struct inode *inode)
 {
 	int err;

@@ -54,7 +54,7 @@ static int __tux3_mknod(struct inode *dir, struct dentry *dentry,
 		return -EMLINK;
 
 	change_begin(tux_sb(dir->i_sb));
-	inode = tux_create_inode(dir, iattr, rdev);
+	inode = tux_new_inode(dir, iattr, rdev);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = tux_add_dirent(dir, dentry, inode);
@@ -137,7 +137,7 @@ static int __tux3_symlink(struct inode *dir, struct dentry *dentry,
 		return -ENAMETOOLONG;
 
 	change_begin(sb);
-	inode = tux_create_inode(dir, iattr, 0);
+	inode = tux_new_inode(dir, iattr, 0);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		err = page_symlink(inode, symname, len);
