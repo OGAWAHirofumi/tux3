@@ -204,7 +204,9 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 	struct sb *sb = tux_sb(dir->i_sb);
 	inum_t inum = tux_inode(inode)->inum;
 	struct buffer_head *buffer;
+	tux_dirent *entry;
 	loff_t i_size, where;
+	int err, err2;
 
 	/* Holding dir->i_mutex, so no i_size_read() */
 	i_size = dir->i_size;
@@ -212,11 +214,12 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 				&i_size, &buffer);
 	if (where < 0)
 		return where;
+	entry = bufdata(buffer) + (where & sb->blockmask);
 
 	if (inum == TUX_INVALID_INO) {
-		int err = tux_assign_inum(inode, sb->nextinum);
+		err = tux_assign_inum(inode, sb->nextinum);
 		if (err)
-			return err;
+			goto error;
 		inum = tux_inode(inode)->inum;
 		if (inum >= MAX_INODES)
 			inum = TUX_NORMAL_INO - 1;
@@ -224,7 +227,7 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 	}
 
 	/* This releases buffer */
-	tux_set_entry(buffer, bufdata(buffer) + (where & sb->blockmask), inum, inode->i_mode);
+	tux_set_entry(buffer, entry, inum, inode->i_mode);
 
 	tux3_iattrdirty(dir);
 	if (dir->i_size != i_size)
@@ -234,6 +237,13 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 	tux3_mark_inode_dirty(dir);
 
 	return 0;
+
+error:
+	err2 = tux_delete_entry(dir, buffer, entry);
+	if (err2)
+		tux3_fs_error(sb, "Failed to recover dir entry (err %d)", err2);
+
+	return err;
 }
 
 tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
