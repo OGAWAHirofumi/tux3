@@ -15,6 +15,68 @@
 #define trace trace_on
 #endif
 
+/*
+ * Group counts
+ */
+
+static int countmap_load(struct sb *sb, block_t group)
+{
+	block_t block = group >> (sb->blockbits - 1);
+	struct countmap_pin *pin = &sb->countmap_pin;
+
+	if (!pin->buffer || bufindex(pin->buffer) != block) {
+		if (pin->buffer)
+			blockput(pin->buffer);
+		pin->buffer = blockread(mapping(sb->countmap), block);
+		if (!pin->buffer) {
+			tux3_err(sb, "block read failed");
+			return -EIO;
+		}
+	}
+	return 0;
+}
+
+static int countmap_add(struct sb *sb, block_t group, int count)
+{
+	unsigned offset = group & (sb->blockmask >> 1);
+	struct buffer_head *clone;
+	__be16 *p;
+	int err;
+
+	err = countmap_load(sb, group);
+	if (err)
+		return err;
+	trace("add %d to group %Lu", count, group);
+	/*
+	 * The countmap is modified only by backend.  blockdirty()
+	 * should never return -EAGAIN.
+	 */
+	clone = blockdirty(sb->countmap_pin.buffer, sb->unify);
+	if (IS_ERR(clone)) {
+		err = PTR_ERR(clone);
+		assert(err != -EAGAIN);
+		return err;
+	}
+	sb->countmap_pin.buffer = clone;
+
+	p = bufdata(sb->countmap_pin.buffer);
+	be16_add_cpu(p + offset, count);
+
+	return 0;
+}
+
+void countmap_put(struct countmap_pin *pin)
+{
+	if (pin->buffer) {
+		blockput(pin->buffer);
+		pin->buffer = NULL;
+	}
+}
+
+/*
+ * Bitmap
+ */
+
 #ifndef __KERNEL__
 block_t count_range(struct inode *inode, block_t start, block_t count)
 {
@@ -200,7 +262,7 @@ static int __bitmap_modify(struct sb *sb, block_t start, unsigned blocks,
 		blocks -= len;
 	}
 
-	return 0;
+	return countmap_add(sb, start >> sb->groupbits, set ? blocks : -blocks);
 }
 
 static int bitmap_modify(struct sb *sb, block_t start, unsigned blocks, int set)

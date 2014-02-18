@@ -108,6 +108,8 @@ static void __tux3_put_super(struct sb *sbi)
 	destroy_defer_bfree(&sbi->deunify);
 	destroy_defer_bfree(&sbi->defree);
 
+	countmap_put(&sbi->countmap_pin);
+
 	iput(sbi->rootdir);
 	sbi->rootdir = NULL;
 	iput(sbi->atable);

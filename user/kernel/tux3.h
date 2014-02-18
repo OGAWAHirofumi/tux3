@@ -227,6 +227,11 @@ struct sb_delta_dirty {
 	struct list_head dirty_inodes;	/* dirty inodes list */
 };
 
+/* Pin a block in cache and keep a pointer to it */
+struct countmap_pin {
+	struct buffer_head *buffer;
+};
+
 /* Tux3-specific sb is a handle for the entire volume state */
 struct sb {
 	union {
@@ -267,7 +272,7 @@ struct sb {
 	struct inode *vtable;	/* version table special file */
 	struct inode *atable;	/* xattr atom special file */
 
-	unsigned blocksize, blockbits, blockmask;
+	unsigned blocksize, blockbits, blockmask, groupbits;
 	u64 freeinodes;		/* Number of free inode numbers. This is
 				 * including the deferred allocated inodes */
 	block_t volblocks, freeblocks, nextblock;
@@ -303,6 +308,7 @@ struct sb {
 	/*
 	 * For frontend and backend
 	 */
+	struct countmap_pin countmap_pin;
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 
 	spinlock_t forked_buffers_lock;
@@ -697,6 +703,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 #endif /* !__KERNEL__ */
 
 /* balloc.c */
+void countmap_put(struct countmap_pin *countmap_pin);
 block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
 int balloc_find_range(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,

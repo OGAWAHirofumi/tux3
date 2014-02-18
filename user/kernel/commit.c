@@ -84,6 +84,7 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
+	sb->groupbits = 13; // FIXME: put in disk super?
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
 	/* Initialize base indexes for atable */
 	atable_init_base(sb);

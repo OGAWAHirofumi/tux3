@@ -3,6 +3,10 @@
  * otherwise balloc.o will be linked
  */
 
+void countmap_put(struct countmap_pin *countmap_pin)
+{
+}
+
 int balloc_find_range(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,
 	block_t start, block_t range, unsigned *blocks)
