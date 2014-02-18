@@ -415,8 +415,16 @@ int balloc_find_range(struct sb *sb,
 }
 
 /*
- * Allocate block segments from entire volume.  Wrap to bottom of
- * volume if needed.
+ * Allocate block segments from entire volume.  Wrap around volume if needed.
+ * Returns negative if error, zero if at least one block found
+ *
+ * Scan entire volume exactly once. Start at current goal, continue to end
+ * of group, then continue scanning a group at a time, wrapping around to
+ * volume base if necessary. Skip any groups with less than some threshold
+ * of free blocks, depending on original request size. The first and last
+ * partial groups are scanned regardless of threshold in the first pass
+ * and never in the second pass. The second pass scans groups skipped in
+ * the first pass that are not completely full.
  *
  * return value:
  * < 0 - error
@@ -426,31 +434,70 @@ int balloc_find(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,
 	unsigned *blocks)
 {
-	block_t goal = sb->nextblock, volsize = sb->volblocks;
-	int err, newsegs = 0;
+	block_t goal = sb->nextblock, volsize = sb->volblocks, start = goal;
+	block_t topgroup = volsize >> sb->groupbits;
+	unsigned groupsize = 1 << sb->groupbits, groupmask = groupsize - 1;
+	unsigned need = *blocks;
+	unsigned threshold = min(need, groupsize >> 2);
+	int err, newsegs = 0, pass = 0;
 
-	err = balloc_find_range(sb, seg, maxsegs, &newsegs, goal,
-				volsize - goal, blocks);
-	trace("=> try0: segs = %d, blocks = %u", newsegs, *blocks);
-	if (err)
-		return err;
+	trace("scan volume for %u blocks, goal = %Lu", need, goal);
+	trace("groupsize = %u, topgroup = %Lu, threshold = %u",
+	      groupsize, topgroup, threshold);
+	//bitmap_dump(sb->bitmap, 0, volsize);
+	//groups_dump(sb, 0, (volsize + groupmask) >> sb->groupbits);
 
-	if (*blocks && newsegs < maxsegs) {
-		err = balloc_find_range(sb, seg, maxsegs, &newsegs, 0, goal,
-					blocks);
-		trace("=> try1: segs = %d, blocks = %u", newsegs, *blocks);
-		if (err < 0)
-			return err;
-	}
+	do {
+		block_t tail = volsize;
+		trace("--- pass%i ---", pass + 1);
+		trace("group %Lu: start", goal >> sb->groupbits);
+		do {
+			block_t group = goal >> sb->groupbits;
+			block_t next = goal + groupsize;
+			int skip = pass > 0, top = group == topgroup;
+			if (tail != volsize) {
+				unsigned size, used;
 
-	if (!newsegs) {
-		/* FIXME: This is for debugging. Remove this */
-		tux3_warn(sb, "couldn't balloc: blocks %u, freeblocks %Lu",
-			  *blocks, sb->freeblocks);
-		return -ENOSPC;
-	}
+				if (tail < groupsize && goal + tail == start) {
+					trace("group %Lu: back to start",
+					      goal >> sb->groupbits);
+					next = goal + tail;
+					goto last;
+				}
+				size = top ? (volsize & groupmask) : groupsize;
+				used = countmap_used(sb, group);
+				trace("group %Lu: check used", group);
+				assert(used <= size);
+				skip = used == size || (size - used < threshold) ^ pass;
+				next = goal + size;
+			}
+			next &= ~groupmask;
+			if (top)
+				next = volsize;
+last:
+			trace("goal = %Lu, next = %Lu, skip = %i",
+			      goal, next, skip);
+			if (!skip) {
+				err = balloc_find_range(sb, seg, maxsegs,
+							&newsegs, goal,
+							next - goal, &need);
+				if (err)
+					return err;
+				if (!need || newsegs == maxsegs)
+					goto done;
+				trace("=> result: segs = %d, need = %u, tail = %Lu",
+				      newsegs, need, tail);
+			}
 
+			tail -= next - goal;
+			/* skip reserved at bottom? */
+			goal = next == volsize ? 0 : next;
+		} while (tail);
+	} while (++pass < 2);
+
+done:
 	*segs = newsegs;
+	*blocks = need;
 
 	return 0;
 }
