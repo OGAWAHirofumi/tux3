@@ -297,16 +297,63 @@ struct draw_data_ops draw_bitmap = {
 	.draw_end	= draw_bitmap_end,
 };
 
+static int countmap_has_dirty;
+
 static void draw_countmap_start(struct graph_info *gi, struct btree *btree)
 {
 	draw_data_start(gi, btree);
-	fprintf(gi->fp, "label = \"countmap table\"\n");
+	fprintf(gi->fp, "label = \"{ dump of countmap data");
+}
+
+static void draw_countmap_data(struct graph_info *gi, struct btree *btree,
+			     struct buffer_head *leafbuf,
+			     block_t index, block_t block, unsigned count)
+{
+	struct sb *sb = btree->sb;
+	struct inode *countmap = sb->countmap;
+
+	for (unsigned i = 0; i < count; i++) {
+		unsigned size = sb->blocksize >> 1;
+		block_t group = (index + i) << (sb->blockbits - 1);
+		struct buffer_head *buffer;
+		__be16 *p, *limit;
+
+		fprintf(gi->fp, " | index %llu", (index + i));
+		buffer = blockread(mapping(countmap), index + i);
+		assert(buffer);
+
+		p = bufdata(buffer);
+		limit = p + size;
+		while (p < limit) {
+			if (*p) {
+				fprintf(gi->fp, " | group %llu: %u",
+					group, be16_to_cpu(*p));
+			}
+			p++;
+			group++;
+		}
+
+		fprintf(gi->fp, " \\l"); /* left align */
+
+		if (buffer_dirty(buffer))
+			countmap_has_dirty = 1;
+		blockput(buffer);
+	}
+}
+
+static void draw_countmap_end(struct graph_info *gi, struct btree *btree)
+{
+	fprintf(gi->fp,
+		" }\"\n"
+		"%s",
+		countmap_has_dirty ? "color = red\n" : "");
+	draw_data_end(gi, btree);
 }
 
 struct draw_data_ops draw_countmap = {
 	.draw_start	= draw_countmap_start,
-	.draw_data	= draw_data,
-	.draw_end	= draw_data_end,
+	.draw_data	= draw_countmap_data,
+	.draw_end	= draw_countmap_end,
 };
 
 static void draw_vtable_start(struct graph_info *gi, struct btree *btree)
