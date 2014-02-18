@@ -213,54 +213,6 @@ out:
 	return ret;
 }
 
-struct ialloc_policy {
-	inum_t (*goal)(struct inode *, void *);
-	void (*update)(struct inode *, inum_t);
-};
-
-/*
- * Try to allocate specified inum for internal inode.
- */
-static inum_t ialloc_specific_goal(struct inode *inode, void *data)
-{
-	return *(inum_t *)data;
-}
-
-static void ialloc_noop_update(struct inode *inode, inum_t inum)
-{
-}
-
-static struct ialloc_policy ialloc_specific = {
-	.goal	= ialloc_specific_goal,
-	.update	= ialloc_noop_update,
-};
-
-/*
- * Try to allocate inum linearly.
- * FIXME: we should use per-directory inum policy.
- */
-static inum_t ialloc_linear_goal(struct inode *inode, void *data)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-	return sb->nextinum;
-}
-
-static void ialloc_linear_update(struct inode *inode, inum_t inum)
-{
-	struct sb *sb = tux_sb(inode->i_sb);
-
-	inum++;
-	if (inum >= MAX_INODES)
-		sb->nextinum = TUX_NORMAL_INO;
-	else
-		sb->nextinum = inum;
-}
-
-static struct ialloc_policy ialloc_linear = {
-	.goal	= ialloc_linear_goal,
-	.update	= ialloc_linear_update,
-};
-
 static int tux_test(struct inode *inode, void *data)
 {
 	return tux_inode(inode)->inum == *(inum_t *)data;
@@ -272,13 +224,11 @@ static int tux_set(struct inode *inode, void *data)
 	return 0;
 }
 
-static int alloc_inum(struct inode *inode, struct ialloc_policy *policy,
-		      void *policy_data)
+static int alloc_inum(struct inode *inode, inum_t goal)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itree = itree_btree(sb);
 	struct cursor *cursor;
-	inum_t goal;
 	int err = 0;
 
 	cursor = alloc_cursor(itree, 1); /* +1 for now depth */
@@ -286,7 +236,6 @@ static int alloc_inum(struct inode *inode, struct ialloc_policy *policy,
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
-	goal = policy->goal(inode, policy_data);
 	while (1) {
 		err = find_free_inum(cursor, goal, &goal);
 		if (err)
@@ -320,8 +269,6 @@ static int alloc_inum(struct inode *inode, struct ialloc_policy *policy,
 
 	add_defer_alloc_inum(inode);
 
-	policy->update(inode, goal);
-
 	/*
 	 * If inum is not reserved area, account it. If inum is
 	 * reserved area, inode might not be written into itree. So,
@@ -340,12 +287,11 @@ error:
 	return err;
 }
 
-/* Allocate inum to inode with linear allocation policy */
-int tux_assign_inum(struct inode *inode)
+int tux_assign_inum(struct inode *inode, inum_t goal)
 {
 	int err;
 
-	err = alloc_inum(inode, &ialloc_linear, NULL);
+	err = alloc_inum(inode, goal);
 	if (err) {
 		make_bad_inode(inode);
 		iput(inode);
@@ -386,32 +332,9 @@ struct inode *tux_create_specific_inode(struct inode *dir, inum_t inum,
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
-	err = alloc_inum(inode, &ialloc_specific, &inum);
-	if (err) {
-		make_bad_inode(inode);
-		iput(inode);
+	err = tux_assign_inum(inode, inum);
+	if (err)
 		return ERR_PTR(err);
-	}
-#if 0
-	/*
-	 * FIXME: temporary hack. We shouldn't insert inode to hash
-	 * in alloc_inum before initializing completely.
-	 */
-	inum_t inum = tux_inode(inode)->inum;
-	if (insert_inode_locked4(inode, inum, tux_test, &inum) < 0) {
-		/* Can be nfsd race happened, or fs corruption. */
-		tux3_warn(tux_sb(dir->i_sb), "inode insert error: inum %Lx",
-			  inum);
-		iput(inode);
-		return ERR_PTR(-EIO);
-	}
-#endif
-	/*
-	 * The unhashed inode ignores mark_inode_dirty(), so it should
-	 * be called after insert_inode_hash().
-	 */
-	tux3_iattrdirty(inode);
-	tux3_mark_inode_dirty(inode);
 
 	return inode;
 }
