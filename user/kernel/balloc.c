@@ -73,6 +73,34 @@ void countmap_put(struct countmap_pin *pin)
 	}
 }
 
+static int countmap_used(struct sb *sb, block_t group)
+{
+	unsigned offset = group & (sb->blockmask >> 1);
+	__be16 *p;
+	int err;
+
+	err = countmap_load(sb, group);
+	if (err)
+		return err;
+
+	p = bufdata(sb->countmap_pin.buffer);
+	return be16_to_cpup(p + offset);
+}
+
+#ifndef __KERNEL__
+void countmap_dump(struct sb *sb, block_t start, block_t count)
+{
+	unsigned groupbits = sb->groupbits, groupsize = 1 << groupbits;
+
+	for (block_t group = start; group < count; group++) {
+		block_t block = group << groupbits;
+		block_t blocks = min_t(block_t, sb->volblocks - block, groupsize);
+		__tux3_dbg("%Lu: %i used, ", group, countmap_used(sb, group));
+		bitmap_dump(sb->bitmap, block, blocks);
+	}
+}
+#endif /* !__KERNEL__ */
+
 /*
  * Bitmap
  */
@@ -96,7 +124,7 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 	unsigned offset = (start & mapmask) >> 3;
 
 	for (block_t block = start >> mapshift; block < blocks; block++) {
-		//trace("count block %x/%x", block, blocks);
+		trace_off("count block %x/%x", block, blocks);
 		struct buffer_head *buffer = blockread(mapping(inode), block);
 		if (!buffer)
 			return -1;
@@ -113,65 +141,56 @@ block_t count_range(struct inode *inode, block_t start, block_t count)
 	return total;
 }
 
-block_t bitmap_dump(struct inode *inode, block_t start, block_t count)
+void bitmap_dump(struct inode *inode, block_t start, block_t count)
 {
+	enum { show_used = 0 };
 	struct sb *sb = tux_sb(inode->i_sb);
 	unsigned mapshift = sb->blockbits + 3;
-	unsigned mapmask = (1 << mapshift) - 1;
-	block_t limit = start + count;
-	block_t blocks = (limit + mapmask) >> mapshift, active = 0;
-	unsigned offset = (start & mapmask) >> 3;
-	unsigned startbit = start & 7;
-	block_t tail = (count + startbit + 7) >> 3, begin = -1;
+	unsigned mapsize = 1 << mapshift;
+	unsigned mapmask = mapsize - 1;
+	unsigned offset = (start & mapmask) >> 3, bit = start & 7, total = 0;
+	block_t limit = start + count, blocks = (limit + mapmask) >> mapshift;
+	block_t tail = (count + bit + 7) >> 3, begin = -1;
 
-	__tux3_dbg("%Ld bitmap blocks:\n", blocks);
+	__tux3_dbg("%s regions in %Lu/%Lu: ", show_used ? "used" : "free", start, count);
 	for (block_t block = start >> mapshift; block < blocks; block++) {
-		int ended = 0, any = 0;
 		struct buffer_head *buffer = blockread(mapping(inode), block);
-		if (!buffer)
-			return -1;
+		assert(buffer);
 		unsigned bytes = sb->blocksize - offset;
 		if (bytes > tail)
 			bytes = tail;
-		unsigned char *p = bufdata(buffer) + offset, *top = p + bytes;
-		for (; p < top; p++, startbit = 0) {
+		unsigned char *data = bufdata(buffer), *p = data + offset, *top = p + bytes;
+		for (; p < top; p++, bit = 0) {
 			unsigned c = *p;
-			if (!any && c)
-				__tux3_dbg("[%Lx] ", block);
-			any |= c;
-			if ((!c && begin < 0) || (c == 0xff && begin >= 0))
+			if ((!c && ((begin >= 0) ^ show_used)))
 				continue;
-			for (int i = startbit, mask = 1 << startbit; i < 8; i++, mask <<= 1) {
-				if (!(c & mask) == (begin < 0))
+			if (((c == 0xff) && ((begin < 0) ^ show_used)))
+				continue;
+			for (int i = bit, mask = 1 << bit; i < 8; i++, mask <<= 1) {
+				if (!(c & mask) ^ (begin < 0) ^ show_used)
 					continue;
-				block_t found = i + (((void *)p - bufdata(buffer)) << 3) + (block << mapshift);
-				if (begin < 0)
+				block_t found = i + ((p - data) << 3) + (block << mapshift);
+				if (found == limit)
+					break;
+				if (begin < 0) {
+					__tux3_dbg("%Lu", found);
 					begin = found;
-				else {
-					if ((begin >> mapshift) != block)
-						__tux3_dbg("-%Lx ", found - 1);
-					else if (begin == found - 1)
-						__tux3_dbg("%Lx ", begin);
-					else
-						__tux3_dbg("%Lx-%Lx ", begin, found - 1);
+					total++;
+				} else {
+					__tux3_dbg("/%Lu ", found - begin);
 					begin = -1;
-					ended++;
 				}
 			}
 		}
-		active += !!any;
 		blockput(buffer);
 		tail -= bytes;
 		offset = 0;
-		if (begin >= 0)
-			__tux3_dbg("%Lx-", begin);
-		if (any)
-			__tux3_dbg("\n");
 	}
-	__tux3_dbg("(%Ld active)\n", active);
-	return -1;
+	if ((begin >= 0))
+		__tux3_dbg("/%Lu ", start + count - begin);
+	__tux3_dbg("(%u)\n", total);
 }
-#endif
+#endif /* !__KERNEL__ */
 
 /*
  * Modify bits on one block, then adjust ->freeblocks.

@@ -704,7 +704,7 @@ struct buffer_head *blockget(struct address_space *mapping, block_t iblock);
 
 /* balloc.c */
 void countmap_put(struct countmap_pin *countmap_pin);
-block_t bitmap_dump(struct inode *inode, block_t start, block_t count);
+void bitmap_dump(struct inode *inode, block_t start, block_t count);
 int balloc_find_range(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,
 	block_t start, block_t range, unsigned *blocks);
