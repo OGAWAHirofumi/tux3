@@ -64,6 +64,10 @@ static void clean_main(struct sb *sb)
 {
 	invalidate_buffers(sb->bitmap->map);
 	free_map(sb->bitmap->map);
+
+	countmap_put(&sb->countmap_pin);
+	invalidate_buffers(sb->countmap->map);
+	free_map(sb->countmap->map);
 }
 
 /* Tests bits set/clear/test functions */
@@ -312,6 +316,15 @@ static void test08(struct sb *sb, block_t blocks)
 	clean_main(sb);
 }
 
+static void initialize_buffer(struct inode *inode, block_t block)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct buffer_head *buffer = blockget(inode->map, block);
+	memset(bufdata(buffer), 0, sb->blocksize);
+	set_buffer_clean(buffer);
+	blockput(buffer);
+}
+
 int main(int argc, char *argv[])
 {
 #define BITMAP_BLOCKS	10
@@ -329,13 +342,13 @@ int main(int argc, char *argv[])
 
 	struct inode *bitmap = rapid_open_inode(sb, NULL, 0);
 	sb->bitmap = bitmap;
+	struct inode *countmap = rapid_open_inode(sb, NULL, 0);
+	sb->countmap = countmap;
 
-	/* Setup buffers for bitmap */
+	/* Setup buffers for bitmap/countmap */
 	for (int block = 0; block < BITMAP_BLOCKS; block++) {
-		struct buffer_head *buffer = blockget(bitmap->map, block);
-		memset(bufdata(buffer), 0, sb->blocksize);
-		set_buffer_clean(buffer);
-		blockput(buffer);
+		initialize_buffer(sb->bitmap, block);
+		initialize_buffer(sb->countmap, block);
 	}
 
 	/* Set fake backend mark to modify backend objects. */
