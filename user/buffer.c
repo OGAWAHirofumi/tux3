@@ -466,7 +466,7 @@ struct buffer_head *blockread(map_t *map, block_t block)
 		ret = bufvec_contig_add(&bufvec, buffer);
 		assert(ret == 1);
 
-		buftrace("read buffer %Lx, state %i", buffer->index, buffer->state);
+		buftrace("read buffer [%Lx], state %i", buffer->index, buffer->state);
 		int err = buffer->map->io(READ, &bufvec);
 		if (err || !buffer_clean(buffer)) {
 			blockput(buffer);

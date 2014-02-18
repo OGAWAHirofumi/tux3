@@ -344,8 +344,8 @@ int balloc_find_range(struct sb *sb,
 	unsigned mapmask = mapsize - 1;
 	struct buffer_head *buffer;
 
-	trace("find %u blocks in [%Lu+%Lu], segs = %d",
-	      *blocks, start, range, *segs);
+	trace("find %u blocks in [%Lu/%Lu], segs = %d",
+		  *blocks, start, range, *segs);
 
 	assert(*blocks > 0);
 	assert(start < sb->volblocks);
@@ -382,10 +382,10 @@ int balloc_find_range(struct sb *sb,
 				block_t found = mapbase + offset;
 
 				if (*segs && mergable(&seg[*segs - 1], found)) {
-					trace("append seg [%Lu+%u]", found, count);
+					trace("append seg [%Lu/%u]", found, count);
 					seg[*segs - 1].count += count;
 				} else {
-					trace("balloc seg [%Lu+%u]", found, count);
+					trace("balloc seg [%Lu/%u]", found, count);
 					seg[(*segs)++] = (struct block_segment){
 						.block = found,
 						.count = count,
@@ -548,7 +548,7 @@ block_t balloc_one(struct sb *sb)
 int bfree(struct sb *sb, block_t start, unsigned blocks)
 {
 	assert(tux3_under_backend(sb));
-	trace("bfree extent [%Lu+%u], ", start, blocks);
+	trace("bfree extent [%Lu/%u], ", start, blocks);
 	return bitmap_test_and_modify(sb, start, blocks, 0);
 }
 
