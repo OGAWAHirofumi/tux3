@@ -208,10 +208,6 @@ static int get_freeatom(struct inode *atable, atom_t *atom)
 	return 0;
 }
 
-// bug waiting to happen...
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len, struct buffer_head **result, loff_t size);
-loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len, inum_t inum, umode_t mode, loff_t *size, struct buffer_head **hold);
-
 /* Find atom of name */
 static int find_atom(struct inode *atable, const char *name, unsigned len,
 		     atom_t *atom)

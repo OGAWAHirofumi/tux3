@@ -207,14 +207,18 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
 		      umode_t mode)
 {
 	struct buffer_head *buffer;
-	loff_t where;
+	loff_t i_size, where;
 
-	tux3_iattrdirty(dir);
-
+	/* Holding dir->i_mutex, so no i_size_read() */
+	i_size = dir->i_size;
 	where = tux_create_entry(dir, (const char *)qstr->name, qstr->len, inum,
-				 mode, &dir->i_size, &buffer);
+				 mode, &i_size, &buffer);
 	if (where < 0)
 		return where;
+
+	tux3_iattrdirty(dir);
+	if (dir->i_size != i_size)
+		i_size_write(dir, i_size);
 
 	dir->i_mtime = dir->i_ctime = gettime();
 	tux3_mark_inode_dirty(dir);
@@ -261,6 +265,7 @@ error:
 tux_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,
 			    struct buffer_head **result)
 {
+	/* Holding dir->i_mutex, so no i_size_read() */
 	return tux_find_entry(dir, (const char *)qstr->name, qstr->len,
 			      result, dir->i_size);
 }
