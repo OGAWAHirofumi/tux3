@@ -235,6 +235,7 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 {
 	struct sb *sb = tux_sb(atable->i_sb);
 	struct buffer_head *buffer;
+	loff_t where;
 	int err;
 
 	err = find_atom(atable, name, len, atom);
@@ -247,8 +248,7 @@ static int make_atom(struct inode *atable, const char *name, unsigned len,
 	if (err)
 		return err;
 
-	loff_t where = tux_create_entry(atable, name, len, *atom, 0,
-					&sb->atomdictsize, &buffer);
+	where = tux_alloc_entry(atable, name, len, &sb->atomdictsize, &buffer);
 	if (where < 0) {
 		/* FIXME: better set a flag that unatom broke or something!!! */
 		return where;

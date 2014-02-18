@@ -119,9 +119,8 @@ void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
 	tux3_mark_inode_dirty(dir);
 }
 
-loff_t tux_create_entry(struct inode *dir, const char *name, unsigned len,
-			inum_t inum, umode_t mode, loff_t *size,
-			struct buffer_head **hold)
+loff_t tux_alloc_entry(struct inode *dir, const char *name, unsigned len,
+		       loff_t *size, struct buffer_head **hold)
 {
 	unsigned delta = tux3_get_current_delta();
 	struct sb *sb = tux_sb(dir->i_sb);
@@ -207,8 +206,8 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr, inum_t inum,
 
 	/* Holding dir->i_mutex, so no i_size_read() */
 	i_size = dir->i_size;
-	where = tux_create_entry(dir, (const char *)qstr->name, qstr->len, inum,
-				 mode, &i_size, &buffer);
+	where = tux_alloc_entry(dir, (const char *)qstr->name, qstr->len,
+				&i_size, &buffer);
 	if (where < 0)
 		return where;
 
