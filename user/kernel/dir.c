@@ -202,7 +202,6 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 		      struct inode *inode)
 {
 	inum_t inum = tux_inode(inode)->inum;
-	umode_t mode = inode->i_mode;
 	struct buffer_head *buffer;
 	loff_t i_size, where;
 
@@ -213,8 +212,15 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 	if (where < 0)
 		return where;
 
+	if (inum == TUX_INVALID_INO) {
+		int err = tux_assign_inum(inode);
+		if (err)
+			return err;
+		inum = tux_inode(inode)->inum;
+	}
+
 	/* This releases buffer */
-	tux_set_entry(buffer, bufdata(buffer) + (where & tux_sb(dir->i_sb)->blockmask), inum, mode);
+	tux_set_entry(buffer, bufdata(buffer) + (where & tux_sb(dir->i_sb)->blockmask), inum, inode->i_mode);
 
 	tux3_iattrdirty(dir);
 	if (dir->i_size != i_size)

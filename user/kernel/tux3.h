@@ -846,6 +846,7 @@ struct inode *tux_new_logmap(struct sb *sb);
 void del_defer_alloc_inum(struct inode *inode);
 struct inode *tux_create_inode(struct inode *dir, struct tux_iattr *iattr,
 			       dev_t rdev);
+int tux_assign_inum(struct inode *inode);
 struct inode *tux_create_specific_inode(struct inode *dir, inum_t inum,
 					struct tux_iattr *iattr, dev_t rdev);
 struct inode *tux3_iget(struct sb *sb, inum_t inum);
