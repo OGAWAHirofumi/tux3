@@ -36,7 +36,7 @@ static void idata_copy(struct inode *inode, struct tux3_iattr_data *idata)
 	idata->i_gid		= i_gid_read(inode);
 	idata->i_nlink		= inode->i_nlink;
 	idata->i_rdev		= inode->i_rdev;
-	idata->i_size		= inode->i_size;
+	idata->i_size		= i_size_read(inode);
 //	idata->i_atime		= inode->i_atime;
 	idata->i_mtime		= inode->i_mtime;
 	idata->i_ctime		= inode->i_ctime;

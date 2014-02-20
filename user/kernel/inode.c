@@ -833,7 +833,7 @@ int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat
 	 *
 	 * But, it is purely unnecessary overhead.
 	 */
-	stat->blocks = ALIGN(inode->i_size, sb->blocksize) >> 9;
+	stat->blocks = ALIGN(i_size_read(inode), sb->blocksize) >> 9;
 	return 0;
 }
 
