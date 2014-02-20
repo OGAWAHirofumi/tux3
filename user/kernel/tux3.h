@@ -800,7 +800,7 @@ int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 		     tux_dirent *entry);
 int tux_delete_dirent(struct inode *dir, struct buffer_head *buffer,
 		      tux_dirent *entry);
-int tux_readdir(struct file *file, void *state, filldir_t filldir);
+int tux_readdir(struct file *file, struct dir_context *ctx);
 int tux_dir_is_empty(struct inode *dir);
 
 /* dleaf.c */

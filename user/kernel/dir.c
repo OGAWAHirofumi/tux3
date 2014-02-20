@@ -317,19 +317,18 @@ static unsigned char filetype[TUX_TYPES] = {
 	[TUX_LNK] = DT_LNK,
 };
 
-int tux_readdir(struct file *file, void *state, filldir_t filldir)
+int tux_readdir(struct file *file, struct dir_context *ctx)
 {
-	loff_t pos = file->f_pos;
 	struct inode *dir = file_inode(file);
 	int revalidate = file->f_version != dir->i_version;
 	struct sb *sb = tux_sb(dir->i_sb);
 	unsigned blockbits = sb->blockbits;
 	block_t block, blocks = dir->i_size >> blockbits;
-	unsigned offset = pos & sb->blockmask;
+	unsigned offset = ctx->pos & sb->blockmask;
 
 	assert(!(dir->i_size & sb->blockmask));
 
-	for (block = pos >> blockbits ; block < blocks; block++) {
+	for (block = ctx->pos >> blockbits; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
 		if (!buffer)
 			return -EIO;
@@ -341,7 +340,7 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 				while (p < entry && p->rec_len)
 					p = next_entry(p);
 				offset = (void *)p - base;
-				file->f_pos = (block << blockbits) + offset;
+				ctx->pos = (block << blockbits) + offset;
 			}
 			file->f_version = dir->i_version;
 			revalidate = 0;
@@ -355,16 +354,13 @@ int tux_readdir(struct file *file, void *state, filldir_t filldir)
 			}
 			if (!is_deleted(entry)) {
 				unsigned type = (entry->type < TUX_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
-				int lame = filldir(
-					state, entry->name, entry->name_len,
-					(block << blockbits) | ((void *)entry - base),
-					be64_to_cpu(entry->inum), type);
-				if (lame) {
+				if (!dir_emit(ctx, entry->name, entry->name_len,
+					      be64_to_cpu(entry->inum), type)) {
 					blockput(buffer);
 					return 0;
 				}
 			}
-			file->f_pos += tux_rec_len_from_disk(entry->rec_len);
+			ctx->pos += tux_rec_len_from_disk(entry->rec_len);
 		}
 		blockput(buffer);
 		offset = 0;
