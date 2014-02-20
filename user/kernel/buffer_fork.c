@@ -334,6 +334,13 @@ static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 		SetPageMappedToDisk(newpage);
 
 #if 0	/* FIXME: need? */
+	/*
+	 * Copy NUMA information to the new page, to prevent over-eager
+	 * future migrations of this same page.
+	 */
+	cpupid = page_cpupid_xchg_last(oldpage, -1);
+	page_cpupid_xchg_last(newpage, cpupid);
+
 	mlock_migrate_page(newpage, page);
 	ksm_migrate_page(newpage, page);
 #endif
