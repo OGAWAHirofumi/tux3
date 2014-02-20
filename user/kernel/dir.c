@@ -364,6 +364,11 @@ int tux_readdir(struct file *file, struct dir_context *ctx)
 		}
 		blockput(buffer);
 		offset = 0;
+
+		if (ctx->pos < dir->i_size) {
+			if (!dir_relax(dir))
+				return 0;
+		}
 	}
 	return 0;
 }
