@@ -30,6 +30,7 @@ struct wb_writeback_work {
 	unsigned int for_kupdate:1;
 	unsigned int range_cyclic:1;
 	unsigned int for_background:1;
+	unsigned int for_sync:1;	/* sync(2) WB_SYNC_ALL writeback */
 	enum wb_reason reason;		/* why was writeback initiated? */
 
 	struct list_head list;		/* pending work list */
@@ -251,13 +252,14 @@ static long tux3_do_writeback(struct bdi_writeback *wb, int force_wait)
 		      work->range_cyclic, work->for_background,
 		      work->reason, work->done);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0)
 		/*
 		 * Override sync mode, in case we must wait for completion
 		 * because this thread is exiting now.
 		 */
 		if (force_wait)
 			work->sync_mode = WB_SYNC_ALL;
-
+#endif
 		wrote += tux3_wb_writeback(wb, work);
 
 		/*
