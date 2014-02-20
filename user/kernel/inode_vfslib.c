@@ -18,13 +18,11 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	struct file *file = iocb->ki_filp;
 	struct inode *inode = file->f_mapping->host;
 	struct sb *sb = tux_sb(inode->i_sb);
-	struct blk_plug plug;
 	ssize_t ret;
 
 	BUG_ON(iocb->ki_pos != pos);
 
 	mutex_lock(&inode->i_mutex);
-	blk_start_plug(&plug);
 	/* For each ->write_end() calls change_end(). */
 	change_begin(sb);
 	/* For timestamp. FIXME: convert this to ->update_time handler? */
@@ -40,7 +38,6 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 		if (err < 0 && ret > 0)
 			ret = err;
 	}
-	blk_finish_plug(&plug);
 	return ret;
 }
 
