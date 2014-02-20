@@ -354,13 +354,10 @@ static void oldpage_try_remove_from_lru(struct page *page)
 	/* Required functions are not exported at 3.4.4 */
 }
 
-/* Schedule to add LRU list */
+/* Schedule to add LRU list (based on putback_lru_page()) */
 static void newpage_add_lru(struct page *page)
 {
-	if (TestClearPageActive(page))
-		__lru_cache_add(page, LRU_ACTIVE_FILE);
-	else
-		__lru_cache_add(page, LRU_INACTIVE_FILE);
+	__lru_cache_add(page);
 }
 
 enum ret_needfork {
