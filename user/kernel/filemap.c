@@ -1135,6 +1135,7 @@ const struct address_space_operations tux_file_aops = {
 #endif
 //	.migratepage		= buffer_migrate_page,	/* FIXME */
 //	.is_partially_uptodate	= block_is_partially_uptodate,
+//	.is_dirty_writeback	= buffer_check_dirty_writeback,
 };
 
 static int tux3_symlink_write_begin(struct file *file,
@@ -1164,6 +1165,7 @@ const struct address_space_operations tux_symlink_aops = {
 #endif
 //	.migratepage		= buffer_migrate_page,	/* FIXME */
 //	.is_partially_uptodate	= block_is_partially_uptodate,
+//	.is_dirty_writeback	= buffer_check_dirty_writeback,
 };
 
 static int tux3_blk_readpage(struct file *file, struct page *page)
@@ -1191,15 +1193,17 @@ static int tux3_blk_writepage(struct page *page, struct writeback_control *wbc)
 #endif
 
 const struct address_space_operations tux_blk_aops = {
-	.readpage	= tux3_blk_readpage,
-//	.writepage	= tux3_blk_writepage,
-//	.writepages	= tux3_writepages,
-	.writepage	= tux3_disable_writepage,
-	.writepages	= tux3_disable_writepages,
-	.write_begin	= tux3_blk_write_begin,
-	.bmap		= tux3_bmap,
-	.invalidatepage	= tux3_invalidatepage,
-//	.migratepage	= buffer_migrate_page,		/* FIXME */
+	.readpage		= tux3_blk_readpage,
+//	.writepage		= tux3_blk_writepage,
+//	.writepages		= tux3_writepages,
+	.writepage		= tux3_disable_writepage,
+	.writepages		= tux3_disable_writepages,
+	.write_begin		= tux3_blk_write_begin,
+	.bmap			= tux3_bmap,
+	.invalidatepage		= tux3_invalidatepage,
+//	.migratepage		= buffer_migrate_page,		/* FIXME */
+//	.is_partially_uptodate	= block_is_partially_uptodate,
+//	.is_dirty_writeback	= buffer_check_dirty_writeback,
 };
 
 static int tux3_vol_get_block(struct inode *inode, sector_t iblock,
@@ -1236,11 +1240,13 @@ static int tux3_vol_write_begin(struct file *file,
 }
 
 const struct address_space_operations tux_vol_aops = {
-	.readpage	= tux3_vol_readpage,
-//	.writepage	= tux3_vol_writepage,
-	.writepage	= tux3_disable_writepage,
-	.writepages	= tux3_disable_writepages,
-	.write_begin	= tux3_vol_write_begin,
-	.invalidatepage	= tux3_invalidatepage,
+	.readpage		= tux3_vol_readpage,
+//	.writepage		= tux3_vol_writepage,
+	.writepage		= tux3_disable_writepage,
+	.writepages		= tux3_disable_writepages,
+	.write_begin		= tux3_vol_write_begin,
+	.invalidatepage		= tux3_invalidatepage,
+//	.is_partially_uptodate  = block_is_partially_uptodate,
+//	.is_dirty_writeback	= buffer_check_dirty_writeback,
 };
 #endif /* __KERNEL__ */
