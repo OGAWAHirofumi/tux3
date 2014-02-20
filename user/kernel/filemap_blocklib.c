@@ -360,10 +360,12 @@ void tux3_try_cancel_dirty_page(struct page *page)
  *
  * Caller must hold lock_page().
  */
-static void tux3_invalidatepage(struct page *page, unsigned long offset)
+static void tux3_invalidatepage(struct page *page, unsigned int offset,
+				unsigned int length)
 {
 	struct buffer_head *head, *bh, *next;
 	unsigned int curr_off = 0;
+	unsigned int stop = length + offset;
 	int has_dirty = 0;
 
 	BUG_ON(!PageLocked(page));
@@ -371,15 +373,23 @@ static void tux3_invalidatepage(struct page *page, unsigned long offset)
 	if (!page_has_buffers(page))
 		goto out;
 
+	/*
+	 * Check for overflow
+	 */
+	BUG_ON(stop > PAGE_CACHE_SIZE || stop < length);
+
 	head = page_buffers(page);
 	bh = head;
 	do {
 		unsigned int next_off = curr_off + bh->b_size;
 		next = bh->b_this_page;
 
-		/* Is this block fully invalidated? */
-		if (offset <= curr_off)
-			tux3_invalidate_buffer(bh);
+		/* Are we still fully in range ? */
+		if (next_off <= stop) {
+			/* Is this block fully invalidated? */
+			if (offset <= curr_off)
+				tux3_invalidate_buffer(bh);
+		}
 
 		/* If buffer is dirty, don't cancel dirty page */
 		if (buffer_dirty(bh))
@@ -390,7 +400,7 @@ static void tux3_invalidatepage(struct page *page, unsigned long offset)
 	} while (bh != head);
 
 	if (!has_dirty)
-		cancel_dirty_page(page, PAGE_CACHE_SIZE - offset);
+		cancel_dirty_page(page, length);
 
 	/*
 	 * We release buffers only if the entire page is being invalidated.
@@ -570,8 +580,10 @@ retry_grab:
 zero_fill_page:
 	zero_user_segment(page, offset, PAGE_CACHE_SIZE);
 	cleancache_invalidate_page(mapping, page);
-	if (invalid_from && page_has_buffers(page))
-		mapping->a_ops->invalidatepage(page, invalid_from);
+	if (invalid_from && page_has_buffers(page)) {
+		mapping->a_ops->invalidatepage(page, invalid_from,
+					       PAGE_CACHE_SIZE - invalid_from);
+	}
 
 	err = 0;
 
@@ -604,14 +616,13 @@ int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 void tux3_truncate_inode_pages_range(struct address_space *mapping,
 				     loff_t lstart, loff_t lend)
 {
-	const pgoff_t start = (lstart + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
-#if 0
-	const unsigned partial = lstart & (PAGE_CACHE_SIZE - 1);
-#endif
-	struct pagevec pvec;
-	pgoff_t index;
-	pgoff_t end;
-	int i;
+	pgoff_t		start;		/* inclusive */
+	pgoff_t		end;		/* exclusive */
+	unsigned int	partial_start;	/* inclusive */
+	unsigned int	partial_end;	/* exclusive */
+	struct pagevec	pvec;
+	pgoff_t		index;
+	int		i;
 
 #if 0 /* FIXME */
 	cleancache_invalidate_inode(mapping);
@@ -619,13 +630,31 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 	if (mapping->nrpages == 0)
 		return;
 
-	BUG_ON((lend & (PAGE_CACHE_SIZE - 1)) != (PAGE_CACHE_SIZE - 1));
-	end = (lend >> PAGE_CACHE_SHIFT);
+	/* Offsets within partial pages */
+	partial_start = lstart & (PAGE_CACHE_SIZE - 1);
+	partial_end = (lend + 1) & (PAGE_CACHE_SIZE - 1);
+
+	/*
+	 * 'start' and 'end' always covers the range of pages to be fully
+	 * truncated. Partial pages are covered with 'partial_start' at the
+	 * start of the range and 'partial_end' at the end of the range.
+	 * Note that 'end' is exclusive while 'lend' is inclusive.
+	 */
+	start = (lstart + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+	if (lend == -1)
+		/*
+		 * lend == -1 indicates end-of-file so we have to set 'end'
+		 * to the highest possible pgoff_t and since the type is
+		 * unsigned we're using -1.
+		 */
+		end = -1;
+	else
+		end = (lend + 1) >> PAGE_CACHE_SHIFT;
 
 	pagevec_init(&pvec, 0);
 	index = start;
-	while (index <= end && pagevec_lookup(&pvec, mapping, index,
-			min(end - index, (pgoff_t)PAGEVEC_SIZE - 1) + 1)) {
+	while (index < end && pagevec_lookup(&pvec, mapping, index,
+			min(end - index, (pgoff_t)PAGEVEC_SIZE))) {
 #if 0 /* FIXME */
 		mem_cgroup_uncharge_start();
 #endif
@@ -634,7 +663,7 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 
 			/* We rely upon deletion not changing page->index */
 			index = page->index;
-			if (index > end)
+			if (index >= end)
 				break;
 
 			if (!trylock_page(page))
@@ -658,21 +687,43 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 	}
 #if 0
 	/* Partial page is handled on tux3_truncate_page() */
-	if (partial) {
+	if (partial_start) {
 		struct page *page = find_lock_page(mapping, start - 1);
 		if (page) {
+			unsigned int top = PAGE_CACHE_SIZE;
+			if (start > end) {
+				/* Truncation within a single page */
+				top = partial_end;
+				partial_end = 0;
+			}
 			wait_on_page_writeback(page);
-			tux3_truncate_partial_page(page, partial);
+			tux3_truncate_partial_page(page, partial_start, top);
+			unlock_page(page);
+			page_cache_release(page);
+		}
+	}
+	if (partial_end) {
+		struct page *page = find_lock_page(mapping, end);
+		if (page) {
+			wait_on_page_writeback(page);
+			tux3_truncate_partial_page(page, 0, partial_end);
 			unlock_page(page);
 			page_cache_release(page);
 		}
 	}
 #endif
+	/*
+	 * If the truncation happened within a single page no pages
+	 * will be released, just zeroed, so we can bail out now.
+	 */
+	if (start >= end)
+		return;
+
 	index = start;
 	for ( ; ; ) {
 		cond_resched();
 		if (!pagevec_lookup(&pvec, mapping, index,
-			min(end - index, (pgoff_t)PAGEVEC_SIZE - 1) + 1)) {
+			min(end - index, (pgoff_t)PAGEVEC_SIZE))) {
 #if 0
 			if (index == start)
 				break;
@@ -686,7 +737,7 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 			break;
 #endif
 		}
-		if (index == start && pvec.pages[0]->index > end) {
+		if (index == start && pvec.pages[0]->index >= end) {
 			pagevec_release(&pvec);
 			break;
 		}
@@ -698,7 +749,7 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 
 			/* We rely upon deletion not changing page->index */
 			index = page->index;
-			if (index > end)
+			if (index >= end)
 				break;
 
 			lock_page(page);
