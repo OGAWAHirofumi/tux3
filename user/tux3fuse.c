@@ -636,12 +636,18 @@ static void tux3fuse_releasedir(fuse_req_t req, fuse_ino_t ino,
 	tux3fuse_release(req, ino, fi);
 }
 
-struct fillstate { char *dirent; int done; u64 ino; unsigned type; };
+struct fillstate {
+	struct dir_context ctx;
+	char *dirent;
+	int done;
+	u64 ino;
+	unsigned type;
+};
 
-static int tux3fuse_filler(void *info, const char *name, int namelen,
+static int tux3fuse_filler(void *ctx, const char *name, int namelen,
 			   loff_t offset, u64 ino, unsigned type)
 {
-	struct fillstate *state = info;
+	struct fillstate *state = ctx;
 	if (state->done || namelen > TUX_NAME_LEN)
 		return -EINVAL;
 	trace("'%.*s'\n", namelen, name);
@@ -659,7 +665,10 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 {
 	trace("(%lx)", ino);
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
-	struct file *dirfile = &(struct file){ .f_inode = inode, .f_pos = offset };
+	struct file *dirfile = &(struct file){
+		.f_inode = inode,
+		.f_pos = offset,
+	};
 	char dirent[TUX_NAME_LEN + 1];
 	char *buf = malloc(size);
 	if (!buf) {
@@ -668,10 +677,17 @@ static void tux3fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	}
 
 	while (dirfile->f_pos < dirfile->f_inode->i_size) {
-		struct fillstate fstate = { .dirent = dirent };
+		struct fillstate fstate = {
+			.ctx = {
+				.actor = tux3fuse_filler,
+			},
+			.dirent = dirent,
+		};
 		int err;
 
-		err = tux_readdir(dirfile, &fstate, tux3fuse_filler);
+		fstate.ctx.pos = dirfile->f_pos;
+		err = tux_readdir(dirfile, &fstate.ctx);
+		dirfile->f_pos = fstate.ctx.pos;
 		if (err) {
 			fuse_reply_err(req, -err);
 			free(buf);

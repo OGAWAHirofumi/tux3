@@ -43,20 +43,6 @@ static inline struct timespec gettime(void)
 	return (struct timespec){ .tv_sec = now.tv_sec, .tv_nsec = now.tv_usec * 1000 };
 }
 
-#define MAX_LFS_FILESIZE	((loff_t)LLONG_MAX)
-
-/* File handle */
-struct file {
-	struct inode	*f_inode;
-	u64		f_version;
-	loff_t		f_pos;
-};
-
-static inline struct inode *file_inode(struct file *f)
-{
-	return f->f_inode;
-}
-
 #include "kernel/tux3.h"
 
 #define INIT_DISKSB(_bits, _blocks) (struct disksuper){		\

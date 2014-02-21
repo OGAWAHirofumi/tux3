@@ -106,6 +106,20 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry);
 #define WRITE_FUA	(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FUA)
 #define WRITE_FLUSH_FUA	(WRITE | REQ_SYNC | REQ_NOIDLE | REQ_FLUSH | REQ_FUA)
 
+/* File handle */
+struct file {
+	struct inode	*f_inode;
+	u64		f_version;
+	loff_t		f_pos;
+};
+
+#define MAX_LFS_FILESIZE	((loff_t)LLONG_MAX)
+
+static inline struct inode *file_inode(struct file *f)
+{
+	return f->f_inode;
+}
+
 /*
  * File types
  *
@@ -123,6 +137,21 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry);
 #define DT_WHT		14
 
 typedef int (*filldir_t)(void *, const char *, int, loff_t, u64, unsigned);
+struct dir_context {
+	const filldir_t actor;
+	loff_t pos;
+};
+
+static inline bool dir_emit(struct dir_context *ctx,
+			    const char *name, int namelen,
+			    u64 ino, unsigned type)
+{
+	return ctx->actor(ctx, name, namelen, ctx->pos, ino, type) == 0;
+}
+static inline bool dir_relax(struct inode *inode)
+{
+	return true;
+}
 
 void inc_nlink(struct inode *inode);
 void drop_nlink(struct inode *inode);

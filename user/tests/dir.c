@@ -109,8 +109,11 @@ static void test02(struct sb *sb, struct inode *dir)
 		free_map(inode1->map);
 	}
 
-	char dents[10000];
-	err = tux_readdir(file, dents, filldir);
+	struct dir_context ctx = {
+		.actor	= filldir,
+		.pos	= 0,
+	};
+	err = tux_readdir(file, &ctx);
 	test_assert(!err);
 
 	change_end_atomic(sb);
