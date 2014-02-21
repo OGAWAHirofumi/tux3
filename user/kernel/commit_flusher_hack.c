@@ -579,7 +579,8 @@ int tux3_init_flusher(struct sb *sb)
 void tux3_exit_flusher(struct sb *sb)
 {
 	struct backing_dev_info *bdi = vfs_sb(sb)->s_bdi;
-	tux3_destroy_writeback(bdi);
+	if (bdi == &sb->bdi)
+		tux3_destroy_writeback(bdi);
 }
 
 static void schedule_flush_delta(struct sb *sb)
