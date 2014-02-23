@@ -973,7 +973,7 @@ static void tux3_write_failed(struct address_space *mapping, loff_t to)
 		 *
 		 * FIXME: right?
 		 */
-		truncate_pagecache(inode, to, inode->i_size);
+		truncate_pagecache(inode, inode->i_size);
 	}
 }
 

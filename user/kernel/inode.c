@@ -575,7 +575,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 #else
 	const unsigned boundary = tux_sb(inode->i_sb)->blocksize;
 #endif
-	loff_t oldsize, holebegin;
+	loff_t holebegin;
 	int is_expand, err;
 
 	if (newsize == inode->i_size)
@@ -584,8 +584,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	/* inode_dio_wait(inode); */	/* FIXME: for direct I/O */
 
 	err = 0;
-	oldsize = inode->i_size;
-	is_expand = newsize > oldsize;
+	is_expand = newsize > inode->i_size;
 
 	if (!is_expand) {
 		err = tux3_truncate_partial_block(inode, newsize);
@@ -604,7 +603,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 		tux3_truncate_inode_pages_range(inode->i_mapping, holebegin,
 						LLONG_MAX);
 #endif
-		truncate_pagecache(inode, oldsize, holebegin);
+		truncate_pagecache(inode, holebegin);
 	}
 
 	if (!is_expand) {

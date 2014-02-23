@@ -39,7 +39,7 @@ struct dentry *d_splice_alias(struct inode *inode, struct dentry *dentry)
 	return NULL;
 }
 
-void truncate_pagecache(struct inode *inode, loff_t oldsize, loff_t newsize)
+void truncate_pagecache(struct inode *inode, loff_t newsize)
 {
 	truncate_inode_pages(mapping(inode), newsize);
 }
@@ -50,5 +50,5 @@ void truncate_setsize(struct inode *inode, loff_t newsize)
 
 	inode->i_size = newsize;
 	if (newsize < oldsize)
-		truncate_pagecache(inode, oldsize, newsize);
+		truncate_pagecache(inode, newsize);
 }
