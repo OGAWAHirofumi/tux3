@@ -14,64 +14,63 @@
 #define FSCK_BITMAP_ERROR	100
 #define FSCK_INODE_ERROR	101
 
-struct fsck_context {
-	int error;
-
-	/* Shadow bitmap */
-	const char *shadow_name;
-	int shadow_fd;
-	int shadow_size;
+struct fsck_shadow {
+	const char *name;
+	int fd;
+	int size;
 
 	void *mapptr;
 	size_t mapsize;
 	loff_t mappos;
+};
+
+struct fsck_context {
+	int error;
+
+	/* Shadow bitmap */
+	struct fsck_shadow bitmap_s;
 
 	block_t freeblocks;
 	block_t freeinodes;
 };
 
 /*
- * Shadow bitmap operations
+ * Shadow file operations
  */
 
-static void fsck_init_context(struct sb *sb, struct fsck_context *context,
-			      int delete)
+static void fsck_init_shadow(struct fsck_shadow *shadow, size_t size,
+			     int delete)
 {
-	size_t size = (sb->volblocks + 7) >> 3;
 	int fd;
 
 	/* Setup shadow bitmap */
-	fd = open(context->shadow_name, O_CREAT | O_RDWR | O_EXCL, 0644);
+	fd = open(shadow->name, O_CREAT | O_RDWR | O_EXCL, 0644);
 	if (fd < 0)
-		strerror_exit(1, errno, "couldn't create %s",
-			      context->shadow_name);
+		strerror_exit(1, errno, "couldn't create %s", shadow->name);
 
 	if (ftruncate(fd, size) < 0)
 		strerror_exit(1, errno, "ftruncate");
 
 	if (delete)
-		unlink(context->shadow_name);
+		unlink(shadow->name);
 
-	context->shadow_fd	= fd;
-	context->shadow_size	= size;
-	context->mapptr		= NULL;
-	context->mappos		= -1;
-	context->mapsize	= 0;
-
-	context->freeblocks	= sb->volblocks;
-	context->freeinodes = MAX_INODES - TUX_NORMAL_INO;
+	shadow->fd	= fd;
+	shadow->size	= size;
+	shadow->mapptr	= NULL;
+	shadow->mappos	= -1;
+	shadow->mapsize	= 0;
 }
 
-static void fsck_destroy_context(struct fsck_context *context)
+static void fsck_destroy_shadow(struct fsck_shadow *shadow)
 {
-	if (context->mapptr)
-		munmap(context->mapptr, context->mapsize);
-	close(context->shadow_fd);
+	if (shadow->mapptr)
+		munmap(shadow->mapptr, shadow->mapsize);
+	close(shadow->fd);
 }
 
-/* Map shadow bitmap for each 256MB region */
-static void *shadow_bitmap_read(struct sb *sb, struct fsck_context *context,
-				block_t index)
+/* Map shadow file for each 256MB region */
+static void *fsck_shadow_read(struct sb *sb, struct fsck_shadow *shadow,
+			      block_t index)
 {
 #define MAP_BITS	28
 #define MAP_SIZE	((loff_t)1 << MAP_BITS)
@@ -79,26 +78,90 @@ static void *shadow_bitmap_read(struct sb *sb, struct fsck_context *context,
 	loff_t pos = index << sb->blockbits;
 	loff_t mappos = pos & ~MAP_MASK;
 	unsigned mapoffset = pos & MAP_MASK;
-	void *ptr = context->mapptr;
+	void *ptr = shadow->mapptr;
 
-	if (mappos != context->mappos) {
+	if (mappos != shadow->mappos) {
 		size_t mapsize;
 
-		if (context->mapptr)
-			munmap(context->mapptr, context->mapsize);
+		if (shadow->mapptr)
+			munmap(shadow->mapptr, shadow->mapsize);
 
-		mapsize = min(context->shadow_size - mappos, MAP_SIZE);
+		mapsize = min(shadow->size - mappos, MAP_SIZE);
 		ptr = mmap(NULL, mapsize, PROT_READ | PROT_WRITE, MAP_SHARED,
-			   context->shadow_fd, mappos);
+			   shadow->fd, mappos);
 		if (ptr == MAP_FAILED)
 			strerror_exit(1, errno, "mmap");
 
-		context->mapptr		= ptr;
-		context->mappos		= mappos;
-		context->mapsize	= mapsize;
+		shadow->mapptr		= ptr;
+		shadow->mappos		= mappos;
+		shadow->mapsize	= mapsize;
 	}
 
 	return ptr + mapoffset;
+}
+
+struct fsck_cmp_shadow_data {
+	struct fsck_context *context;
+	void (*compare)(struct fsck_context *, struct btree *,
+			struct buffer_head *, struct buffer_head *,
+			block_t, block_t);
+};
+
+/* Compare shadow file with extent */
+static void
+fsck_cmp_shadow_extent(struct btree *btree, struct buffer_head *parent,
+		       block_t index, block_t block, unsigned count, void *data)
+{
+	struct inode *inode = btree_inode(btree);
+	struct fsck_cmp_shadow_data *cmp_data = data;
+	struct fsck_context *context = cmp_data->context;
+	block_t limit = index + count;
+
+	while (index < limit) {
+		struct buffer_head *buffer;
+
+		buffer = blockread(mapping(inode), index);
+		assert(buffer);
+
+		cmp_data->compare(context, btree, parent, buffer, index, block);
+
+		blockput(buffer);
+		index++;
+	}
+}
+
+static struct walk_dleaf_ops fsck_cmp_shadow_dleaf_ops = {
+	.extent = fsck_cmp_shadow_extent,
+};
+
+static void fsck_cmp_shadow_dleaf(struct btree *btree,
+				  struct buffer_head *buffer, void *data)
+{
+	walk_dleaf(btree, buffer, &fsck_cmp_shadow_dleaf_ops, data);
+}
+
+static struct walk_btree_ops walk_cmp_shadow_dtree_ops = {
+	.leaf	= fsck_cmp_shadow_dleaf,
+};
+
+/*
+ * Fsck context
+ */
+
+static void fsck_init_context(struct sb *sb, struct fsck_context *context,
+			      int delete)
+{
+	size_t size = (sb->volblocks + 7) >> 3;
+
+	fsck_init_shadow(&context->bitmap_s, size, delete);
+
+	context->freeblocks = sb->volblocks;
+	context->freeinodes = MAX_INODES - TUX_NORMAL_INO;
+}
+
+static void fsck_destroy_context(struct fsck_context *context)
+{
+	fsck_destroy_shadow(&context->bitmap_s);
 }
 
 static void shadow_bitmap_modify(struct sb *sb, struct fsck_context *context,
@@ -115,7 +178,7 @@ static void shadow_bitmap_modify(struct sb *sb, struct fsck_context *context,
 	trace("start %Lu, count %u, set %d", start, count, set);
 
 	for (mapblock = start >> mapshift; mapblock < mapblocks; mapblock++) {
-		void *p = shadow_bitmap_read(sb, context, mapblock);
+		void *p = fsck_shadow_read(sb, &context->bitmap_s, mapblock);
 		unsigned len = min(mapsize - mapoffset, count);
 
 		if (!test(p, mapoffset, len)) {
@@ -154,81 +217,55 @@ static inline unsigned long le_long_to_cpu(const unsigned long y)
 
 /* Compare bitmap with shadow bitmap */
 static void
-fsck_cmp_bitmap_extent(struct btree *btree, struct buffer_head *parent,
-		       block_t index, block_t block, unsigned count,
-		       void *data)
+fsck_cmp_bitmap(struct fsck_context *context, struct btree *btree,
+		struct buffer_head *parent, struct buffer_head *buffer,
+		block_t index, block_t block)
 {
-	struct fsck_context *context = data;
 	struct sb *sb = btree->sb;
-	struct inode *bitmap = sb->bitmap;
 	unsigned mapshift = sb->blockbits + 3;
-	unsigned mapsize = 1 << mapshift;
 	block_t start = index << mapshift;
-	block_t limit = index + count;
+	unsigned long *bmp, *shw;
+	int i;
 
-	while (index < limit) {
-		struct buffer_head *buffer;
-		unsigned long *bmp, *shw;
-		int i;
+	bmp = bufdata(buffer);
+	shw = fsck_shadow_read(sb, &context->bitmap_s, index);
 
-		buffer = blockread(mapping(bitmap), index);
-		assert(buffer);
+	for (i = 0; i < sb->blocksize / sizeof(*bmp); i++) {
+		unsigned long diff = shw[i] ^ bmp[i];
+		unsigned long s, b;
+		int j;
 
-		bmp = bufdata(buffer);
-		shw = shadow_bitmap_read(sb, context, index);
+		if (!diff)
+			continue;
 
-		for (i = 0; i < sb->blocksize / sizeof(*bmp); i++) {
-			unsigned long diff = shw[i] ^ bmp[i];
-			unsigned long s, b;
-			int j;
-
-			if (!diff)
+		s = le_long_to_cpu(shw[i]);
+		b = le_long_to_cpu(bmp[i]);
+		diff = s ^ b;
+		for (j = 0; j < BITS_PER_LONG; j++) {
+			if (!(diff & (1UL << j)))
 				continue;
 
-			s = le_long_to_cpu(shw[i]);
-			b = le_long_to_cpu(bmp[i]);
-			diff = s ^ b;
-			for (j = 0; j < BITS_PER_LONG; j++) {
-				if (!(diff & (1UL << j)))
-					continue;
+			tux3_err(sb,
+				 "diff: block %Lu, shadow %u, bitmap %u",
+				 start + (i * BITS_PER_LONG) + j,
+				 !!(s & (1UL << j)),
+				 !!(b & (1UL << j)));
 
-				tux3_err(sb,
-					"diff: block %Lu, shadow %u, bitmap %u",
-					start + (i * BITS_PER_LONG) + j,
-					!!(s & (1UL << j)),
-					!!(b & (1UL << j)));
-
-				context->error = FSCK_BITMAP_ERROR;
-			}
+			context->error = FSCK_BITMAP_ERROR;
 		}
-
-		blockput(buffer);
-
-		index++;
-		start += mapsize;
 	}
 }
 
-static struct walk_dleaf_ops fsck_cmp_bitmap_dleaf_ops = {
-	.extent = fsck_cmp_bitmap_extent,
-};
-
-static void fsck_cmp_bitmap_dleaf(struct btree *btree,
-				  struct buffer_head *buffer, void *data)
-{
-	walk_dleaf(btree, buffer, &fsck_cmp_bitmap_dleaf_ops, data);
-}
-
-static struct walk_btree_ops walk_cmp_bitmap_dtree_ops = {
-	.leaf	= fsck_cmp_bitmap_dleaf,
-};
-
 static void fsck_check_bitmap(struct sb *sb, struct fsck_context *context)
 {
+	struct fsck_cmp_shadow_data cmp_data = {
+		.context = context,
+		.compare = fsck_cmp_bitmap,
+	};
 	struct inode *bitmap = sb->bitmap;
 	struct btree *dtree = &tux_inode(bitmap)->btree;
 
-	walk_btree(dtree, &walk_cmp_bitmap_dtree_ops, context);
+	walk_btree(dtree, &walk_cmp_shadow_dtree_ops, &cmp_data);
 
 	if (context->freeblocks != sb->freeblocks) {
 		tux3_err(sb, "shadow freeblocks %Lu, freeblocks %Lu",
@@ -348,7 +385,9 @@ static void fsck_mark_superblock(struct sb *sb, struct fsck_context *context)
 static int fsck_main(struct sb *sb)
 {
 	struct fsck_context context = {
-		.shadow_name = "shadow_bitmap",
+		.bitmap_s = {
+			.name = "shadow_bitmap",
+		},
 	};
 	int err;
 
