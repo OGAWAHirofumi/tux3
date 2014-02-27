@@ -12,7 +12,8 @@
 #include "walk.c"
 
 #define FSCK_BITMAP_ERROR	100
-#define FSCK_INODE_ERROR	101
+#define FSCK_COUNTMAP_ERROR	101
+#define FSCK_INODE_ERROR	102
 
 struct fsck_shadow {
 	const char *name;
@@ -29,6 +30,8 @@ struct fsck_context {
 
 	/* Shadow bitmap */
 	struct fsck_shadow bitmap_s;
+	/* Shadow countmap */
+	struct fsck_shadow countmap_s;
 
 	block_t freeblocks;
 	block_t freeinodes;
@@ -151,9 +154,13 @@ static struct walk_btree_ops walk_cmp_shadow_dtree_ops = {
 static void fsck_init_context(struct sb *sb, struct fsck_context *context,
 			      int delete)
 {
-	size_t size = (sb->volblocks + 7) >> 3;
+#define SHIFT_ALIGN(x, b)	(((x) + (1 << (b)) - 1) >> (b))
 
-	fsck_init_shadow(&context->bitmap_s, size, delete);
+	size_t bitmap_size = SHIFT_ALIGN(sb->volblocks, 3);
+	size_t countmap_size = SHIFT_ALIGN(sb->volblocks, sb->groupbits) << 1;
+
+	fsck_init_shadow(&context->bitmap_s, bitmap_size, delete);
+	fsck_init_shadow(&context->countmap_s, countmap_size, delete);
 
 	context->freeblocks = sb->volblocks;
 	context->freeinodes = MAX_INODES - TUX_NORMAL_INO;
@@ -161,7 +168,35 @@ static void fsck_init_context(struct sb *sb, struct fsck_context *context,
 
 static void fsck_destroy_context(struct fsck_context *context)
 {
+	fsck_destroy_shadow(&context->countmap_s);
 	fsck_destroy_shadow(&context->bitmap_s);
+}
+
+/*
+ * Modify shadow files
+ */
+
+static void shadow_countmap_modify(struct sb *sb, struct fsck_context *context,
+				   block_t start, unsigned count, int set)
+{
+	unsigned groupsize = 1 << sb->groupbits;
+	unsigned groupmask = groupsize - 1;
+
+	while (count) {
+		block_t group = start >> sb->groupbits;
+		block_t index = group >> (sb->blockbits - 1);
+		unsigned offset = group & (sb->blockmask >> 1);
+		unsigned grouplen = (~start & groupmask) + 1;
+		int len = min(grouplen, count);
+		int diff = set ? len : -len;
+		__be16 *p;
+
+		p = fsck_shadow_read(sb, &context->countmap_s, index);
+		be16_add_cpu(p + offset, diff);
+
+		start += len;
+		count -= len;
+	}
 }
 
 static void shadow_bitmap_modify(struct sb *sb, struct fsck_context *context,
@@ -174,6 +209,8 @@ static void shadow_bitmap_modify(struct sb *sb, struct fsck_context *context,
 	block_t mapblock, mapblocks = (start + count + mapmask) >> mapshift;
 	int (*test)(u8 *, unsigned, unsigned) = set ? all_clear : all_set;
 	void (*modify)(u8 *, unsigned, unsigned) = set ? set_bits : clear_bits;
+
+	shadow_countmap_modify(sb, context, start, count, set);
 
 	trace("start %Lu, count %u, set %d", start, count, set);
 
@@ -203,6 +240,58 @@ static void shadow_bitmap_modify(struct sb *sb, struct fsck_context *context,
 /*
  * Checking
  */
+
+/* Compare countmap with shadow countmap */
+static void
+fsck_cmp_countmap(struct fsck_context *context, struct btree *btree,
+		  struct buffer_head *parent, struct buffer_head *buffer,
+		  block_t index, block_t block)
+{
+	struct sb *sb = btree->sb;
+	block_t group;
+	unsigned long *cnt, *shw;
+	int i;
+
+	cnt = bufdata(buffer);
+	shw = fsck_shadow_read(sb, &context->countmap_s, index);
+
+	for (i = 0; i < sb->blocksize / sizeof(*cnt); i++) {
+		unsigned long diff = shw[i] ^ cnt[i];
+		int nr = sizeof(*shw) / sizeof(__be16);
+		__be16 *s, *c;
+		int j;
+
+		if (!diff)
+			continue;
+
+		group = (index << (sb->groupbits - 1)) + (i * nr);
+		s = (__be16 *)&shw[i];
+		c = (__be16 *)&cnt[i];
+		for (j = 0; j < nr; j++) {
+			if (s[j] == c[j])
+				continue;
+
+			tux3_err(sb,
+				 "diff: group %Lu, shadow %u, countmap %u",
+				 group + j,
+				 be16_to_cpu(s[j]), be16_to_cpu(c[j]));
+
+			context->error = FSCK_COUNTMAP_ERROR;
+		}
+	}
+}
+
+static void fsck_check_countmap(struct sb *sb, struct fsck_context *context)
+{
+	struct fsck_cmp_shadow_data cmp_data = {
+		.context = context,
+		.compare = fsck_cmp_countmap,
+	};
+	struct inode *countmap = sb->countmap;
+	struct btree *dtree = &tux_inode(countmap)->btree;
+
+	walk_btree(dtree, &walk_cmp_shadow_dtree_ops, &cmp_data);
+}
 
 static inline unsigned long le_long_to_cpu(const unsigned long y)
 {
@@ -272,10 +361,6 @@ static void fsck_check_bitmap(struct sb *sb, struct fsck_context *context)
 		     context->freeblocks, sb->freeblocks);
 		context->error = FSCK_BITMAP_ERROR;
 	}
-}
-
-static void fsck_check_countmap(struct sb *sb, struct fsck_context *context)
-{
 }
 
 static void fsck_check_inodes(struct sb *sb, struct fsck_context *context)
@@ -387,6 +472,9 @@ static int fsck_main(struct sb *sb)
 	struct fsck_context context = {
 		.bitmap_s = {
 			.name = "shadow_bitmap",
+		},
+		.countmap_s = {
+			.name = "shadow_countmap",
 		},
 	};
 	int err;
