@@ -630,6 +630,12 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 	if (mapping->nrpages == 0)
 		return;
 
+	/* FIXME: should use MAX_LFS_FILESIZE, instead of -1 */
+	if (lend == -1 || lend > MAX_LFS_FILESIZE)
+		lend = MAX_LFS_FILESIZE;
+	/* Caller must check maximum size, otherwrite pgoff_t can overflow */
+	BUG_ON(lstart > MAX_LFS_FILESIZE);
+
 	/* Offsets within partial pages */
 	partial_start = lstart & (PAGE_CACHE_SIZE - 1);
 	partial_end = (lend + 1) & (PAGE_CACHE_SIZE - 1);
@@ -640,16 +646,8 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 	 * start of the range and 'partial_end' at the end of the range.
 	 * Note that 'end' is exclusive while 'lend' is inclusive.
 	 */
-	start = (lstart + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
-	if (lend == -1)
-		/*
-		 * lend == -1 indicates end-of-file so we have to set 'end'
-		 * to the highest possible pgoff_t and since the type is
-		 * unsigned we're using -1.
-		 */
-		end = -1;
-	else
-		end = (lend + 1) >> PAGE_CACHE_SHIFT;
+	start = ((u64)lstart + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+	end = ((u64)lend + 1) >> PAGE_CACHE_SHIFT;
 
 	pagevec_init(&pvec, 0);
 	index = start;

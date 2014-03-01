@@ -601,7 +601,7 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 		/* FIXME: The buffer fork before invalidate. We should merge to
 		 * truncate_pagecache() */
 		tux3_truncate_inode_pages_range(inode->i_mapping, holebegin,
-						LLONG_MAX);
+						MAX_LFS_FILESIZE);
 #endif
 		truncate_pagecache(inode, holebegin);
 	}
