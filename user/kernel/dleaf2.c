@@ -115,15 +115,15 @@ static int dleaf2_sniff(struct btree *btree, void *leaf)
 {
 	struct dleaf2 *dleaf = leaf;
 	if (dleaf->magic != cpu_to_be16(TUX3_MAGIC_DLEAF2))
-		return 1;
-	if (!dleaf->count)
-		return 1;
-	/* Last should be sentinel */
-	struct extent ex;
-	get_extent(dleaf->table + be16_to_cpu(dleaf->count) - 1, &ex);
-	if (ex.physical == 0)
-		return 1;
-	return 0;
+		return 0;
+	if (dleaf->count) {
+		/* Last should be sentinel */
+		struct extent ex;
+		get_extent(dleaf->table + be16_to_cpu(dleaf->count) - 1, &ex);
+		if (ex.physical != 0)
+			return 0;
+	}
+	return 1;
 }
 
 static int dleaf2_can_free(struct btree *btree, void *leaf)
