@@ -100,7 +100,9 @@ static inline tuxkey_t get_index(struct group *group, struct entry *entry)
 static int dleaf_sniff(struct btree *btree, void *leaf)
 {
 	struct dleaf *dleaf = leaf;
-	return dleaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF);
+	if (dleaf->magic != cpu_to_be16(TUX3_MAGIC_DLEAF))
+		return -1;
+	return 0;
 }
 
 static int dleaf_can_free(struct btree *btree, void *vleaf)
@@ -284,7 +286,7 @@ static int dleaf_split_at(void *from, void *into, int split, unsigned blocksize)
 static tuxkey_t dleaf_split(struct btree *btree, tuxkey_t hint, void *from, void *into)
 {
 	struct dleaf *leaf = from, *leaf2 = into;
-	assert(dleaf_sniff(btree, from));
+	assert(!dleaf_sniff(btree, from));
 	unsigned blocksize = btree->sb->blocksize;
 	struct group *gdict = from + blocksize, *gbase = gdict - dleaf_groups(leaf);
 	struct entry *edict = (void *)gbase;

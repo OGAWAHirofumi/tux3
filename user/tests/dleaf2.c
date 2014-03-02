@@ -43,7 +43,7 @@ static struct dleaf2 *dleaf2_create(struct btree *btree)
 
 static void dleaf2_destroy(struct btree *btree, struct dleaf2 *leaf)
 {
-	assert(btree->ops->leaf_sniff(btree, leaf));
+	assert(!btree->ops->leaf_sniff(btree, leaf));
 	free(leaf);
 }
 

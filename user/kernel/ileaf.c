@@ -94,7 +94,9 @@ static int ileaf_free(struct btree *btree, struct ileaf *ileaf)
 static int ileaf_sniff(struct btree *btree, void *leaf)
 {
 	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
-	return ((struct ileaf *)leaf)->magic == attr_ops->magic;
+	if (((struct ileaf *)leaf)->magic != attr_ops->magic)
+		return -1;
+	return 0;
 }
 
 static int ileaf_can_free(struct btree *btree, void *leaf)
@@ -202,7 +204,7 @@ static void ileaf_trim(struct btree *btree, struct ileaf *leaf)
 static tuxkey_t ileaf_split(struct btree *btree, tuxkey_t hint,
 			    void *from, void *into)
 {
-	assert(ileaf_sniff(btree, from));
+	assert(!ileaf_sniff(btree, from));
 	struct ileaf *leaf = from, *dest = into;
 	__be16 *dict = ileaf_dict(btree, from);
 	__be16 *destdict = ileaf_dict(btree, into);

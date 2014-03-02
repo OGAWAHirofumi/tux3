@@ -27,7 +27,7 @@ static struct ileaf *ileaf_create(struct btree *btree)
 
 static void ileaf_destroy(struct btree *btree, struct ileaf *leaf)
 {
-	assert(ileaf_sniff(btree, leaf));
+	assert(!ileaf_sniff(btree, leaf));
 	free(leaf);
 }
 

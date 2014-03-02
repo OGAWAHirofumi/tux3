@@ -33,6 +33,7 @@ static void clean_main(struct sb *sb, struct inode *inode)
 	tux3_exit_mem();
 }
 
+#define ULEAF_MAGIC	0xc0de
 struct uleaf { u32 magic, count; struct uentry { u16 key, val; } entries[]; };
 
 struct uleaf_req {
@@ -49,7 +50,7 @@ static void uleaf_btree_init(struct btree *btree)
 static int uleaf_init(struct btree *btree, void *leaf)
 {
 	struct uleaf *uleaf = leaf;
-	*uleaf = (struct uleaf){ .magic = 0xc0de };
+	*uleaf = (struct uleaf){ .magic = ULEAF_MAGIC };
 	return 0;
 }
 
@@ -62,7 +63,9 @@ static unsigned uleaf_free(struct btree *btree, void *leaf)
 static int uleaf_sniff(struct btree *btree, void *leaf)
 {
 	struct uleaf *uleaf = leaf;
-	return uleaf->magic == 0xc0de;
+	if (uleaf->magic != ULEAF_MAGIC)
+		return -1;
+	return 0;
 }
 
 static int uleaf_can_free(struct btree *btree, void *leaf)
@@ -85,7 +88,7 @@ static void uleaf_dump(struct btree *btree, void *data)
 
 static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t hint, void *vfrom, void *vinto)
 {
-	test_assert(uleaf_sniff(btree, vfrom));
+	test_assert(!uleaf_sniff(btree, vfrom));
 	struct uleaf *from = vfrom, *into = vinto;
 	unsigned at = from->count / 2;
 	if (from->count && hint > from->entries[from->count - 1].key) // binsearch!
@@ -140,7 +143,7 @@ static int uleaf_merge(struct btree *btree, void *vinto, void *vfrom)
 static struct uentry *uleaf_resize(struct btree *btree, tuxkey_t key,
 				   struct uleaf *leaf, unsigned one)
 {
-	test_assert(uleaf_sniff(btree, leaf));
+	test_assert(!uleaf_sniff(btree, leaf));
 	unsigned at = uleaf_seek(btree, key, leaf);
 	if (at < leaf->count && leaf->entries[at].key == key)
 		goto out;
@@ -218,7 +221,7 @@ static void test01(struct sb *sb, struct inode *inode)
 
 	/* ->leaf_init() should be called */
 	struct buffer_head *buffer = new_leaf(btree);
-	test_assert(uleaf_sniff(btree, bufdata(buffer)));
+	test_assert(!uleaf_sniff(btree, bufdata(buffer)));
 	/* Test of uleaf_insert() */
 	for (int i = 0; i < 7; i++)
 		uleaf_insert(btree, bufdata(buffer), i, i + 0x100);
@@ -581,7 +584,7 @@ static void test06(struct sb *sb, struct inode *inode)
 	int leaf_key[] = { 3, 6, 10, 13, };
 	for (int i = 0; i < ARRAY_SIZE(leaf); i++) {
 		leaf[i] = new_leaf(btree);
-		test_assert(uleaf_sniff(btree, bufdata(leaf[i])));
+		test_assert(!uleaf_sniff(btree, bufdata(leaf[i])));
 		for (int j = leaf_key[i]; j < leaf_key[i] + 2; j++)
 			uleaf_insert(btree, bufdata(leaf[i]), j, j + 0x100);
 	}
@@ -718,7 +721,7 @@ static void test07(struct sb *sb, struct inode *inode)
 	int leaf_key[] = { 3, 6, 10, 13, };
 	for (int i = 0; i < ARRAY_SIZE(leaf); i++) {
 		leaf[i] = new_leaf(btree);
-		test_assert(uleaf_sniff(btree, bufdata(leaf[i])));
+		test_assert(!uleaf_sniff(btree, bufdata(leaf[i])));
 		for (int j = leaf_key[i]; j < leaf_key[i] + 2; j++)
 			uleaf_insert(btree, bufdata(leaf[i]), j, j + 0x100);
 	}

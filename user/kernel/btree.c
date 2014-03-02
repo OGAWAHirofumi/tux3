@@ -84,7 +84,9 @@ static inline void bnode_buffer_init(struct buffer_head *buffer)
 
 static inline int bnode_sniff(struct bnode *bnode)
 {
-	return bnode->magic == cpu_to_be16(TUX3_MAGIC_BNODE);
+	if (bnode->magic != cpu_to_be16(TUX3_MAGIC_BNODE))
+		return -1;
+	return 0;
 }
 
 static struct buffer_head *new_node(struct btree *btree)
@@ -345,7 +347,7 @@ static int cursor_read_root(struct cursor *cursor)
 	buffer = vol_bread(btree->sb, btree->root.block);
 	if (!buffer)
 		return -EIO; /* FIXME: stupid, it might have been NOMEM */
-	assert(bnode_sniff(bufdata(buffer)));
+	assert(!bnode_sniff(bufdata(buffer)));
 	cursor_push(cursor, buffer, ((struct bnode *)bufdata(buffer))->entries);
 	return 0;
 }
@@ -384,13 +386,13 @@ static int cursor_advance_down(struct cursor *cursor)
 
 	if (cursor->level < btree->root.depth - 1) {
 		struct bnode *node = bufdata(buffer);
-		assert(bnode_sniff(node));
+		assert(!bnode_sniff(node));
 		cursor_push(cursor, buffer, node->entries);
 		cursor_check(cursor);
 		return 1;
 	}
 
-	assert(btree->ops->leaf_sniff(btree, bufdata(buffer)));
+	assert(!btree->ops->leaf_sniff(btree, bufdata(buffer)));
 	cursor_push(cursor, buffer, NULL);
 	cursor_check(cursor);
 	return 0;
@@ -468,7 +470,7 @@ int btree_traverse(struct cursor *cursor, tuxkey_t key, u64 len,
 		tuxkey_t bottom = cursor_this_key(cursor);
 		tuxkey_t limit = cursor_next_key(cursor);
 		void *leaf = bufdata(cursor_leafbuf(cursor));
-		assert(btree->ops->leaf_sniff(btree, leaf));
+		assert(!btree->ops->leaf_sniff(btree, leaf));
 
 		if (key < bottom) {
 			len -= min_t(u64, len, bottom - key);
@@ -516,7 +518,7 @@ void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
 	struct buffer_head *buffer;
 	do {
 		buffer = cursor_leafbuf(cursor);
-		assert((btree->ops->leaf_sniff)(btree, bufdata(buffer)));
+		assert(!btree->ops->leaf_sniff(btree, bufdata(buffer)));
 		(btree->ops->leaf_dump)(btree, bufdata(buffer));
 	} while (--count && cursor_advance(cursor));
 
@@ -1200,7 +1202,7 @@ int btree_write(struct cursor *cursor, struct btree_key_range *key)
 
 			/* Reread leaf after redirect */
 			leaf = bufdata(cursor_leafbuf(cursor));
-			assert(ops->leaf_sniff(btree, leaf));
+			assert(!ops->leaf_sniff(btree, leaf));
 
 			ret = ops->leaf_write(btree, bottom, limit, leaf, key,
 					      &split_hint);
@@ -1233,7 +1235,7 @@ int btree_read(struct cursor *cursor, struct btree_key_range *key)
 	/* FIXME: we might be better to support multiple leaves */
 
 	assert(bottom <= key->start && key->start < limit);
-	assert(ops->leaf_sniff(btree, leaf));
+	assert(!ops->leaf_sniff(btree, leaf));
 
 	return ops->leaf_read(btree, bottom, limit, leaf, key);
 }
@@ -1298,7 +1300,7 @@ int free_empty_btree(struct btree *btree)
 	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
 	if (!rootbuf)
 		return -EIO;
-	assert(bnode_sniff(bufdata(rootbuf)));
+	assert(!bnode_sniff(bufdata(rootbuf)));
 	/* Make btree has no root */
 	btree->root = no_root;
 	tux3_mark_btree_dirty(btree);
@@ -1361,7 +1363,7 @@ int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock)
 		err = -EIO;	/* FIXME: error code */
 		goto error_put_newbuf;
 	}
-	assert(bnode_sniff(bufdata(oldbuf)));
+	assert(!bnode_sniff(bufdata(oldbuf)));
 
 	memcpy(bufdata(newbuf), bufdata(oldbuf), bufsize(newbuf));
 	mark_buffer_unify_atomic(newbuf);
