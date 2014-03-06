@@ -79,7 +79,12 @@ static int tux3_clear_page_dirty_for_io(struct page *page)
 static void __tux3_test_set_page_writeback(struct page *page, int old_writeback)
 {
 	struct address_space *mapping = page->mapping;
+#if 0	/* FIXME */
+	bool locked;
+	unsigned long memcg_flags;
 
+	mem_cgroup_begin_update_page_stat(page, &locked, &memcg_flags);
+#endif
 	if (mapping) {
 		struct backing_dev_info *bdi = mapping->backing_dev_info;
 		unsigned long flags;
@@ -108,4 +113,7 @@ static void __tux3_test_set_page_writeback(struct page *page, int old_writeback)
 		account_page_writeback(page);
 		tux3_accout_set_writeback(page);
 	}
+#if 0	/* FIXME */
+	mem_cgroup_end_update_page_stat(page, &locked, &memcg_flags);
+#endif
 }
