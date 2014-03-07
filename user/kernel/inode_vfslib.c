@@ -31,19 +31,11 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	change_end_if_needed(sb);
 	mutex_unlock(&inode->i_mutex);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
-	if (ret > 0 || ret == -EIOCBQUEUED) {
-#else
 	if (ret > 0) {
-#endif
 		ssize_t err;
 
 		err = generic_write_sync(file, iocb->ki_pos - ret, ret);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0)
-		if (err < 0 && ret > 0)
-#else
 		if (err < 0)
-#endif
 			ret = err;
 	}
 	return ret;

@@ -182,7 +182,7 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 	unsigned mask = tux3_dirty_mask(flags, delta);
 	struct sb_delta_dirty *s_ddc;
 	struct inode_delta_dirty *i_ddc;
-	int re_dirtied = 0, initial_dirty = 0;
+	int re_dirtied = 0;
 
 	if ((tuxnode->flags & mask) == mask)
 		return;
@@ -206,7 +206,6 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 
 		if (s_ddc) {
 			spin_lock(&sb->dirty_inodes_lock);
-			initial_dirty = list_empty(&s_ddc->dirty_inodes);
 			if (list_empty(&i_ddc->dirty_list)) {
 				list_add_tail(&i_ddc->dirty_list,
 					      &s_ddc->dirty_inodes);
@@ -224,13 +223,6 @@ void tux3_dirty_inode(struct inode *inode, int flags)
 	 */
 	if (re_dirtied)
 		tux3_inode_wb_update_dirtied_when(inode);
-
-	/*
-	 * If dirty inode list was empty, we start the timer for
-	 * periodical flush.
-	 */
-	if (initial_dirty)
-		tux3_start_periodical_flusher(sb);
 }
 
 /*

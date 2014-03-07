@@ -262,7 +262,6 @@ static void bufvec_prepare_and_unlock_page(struct page *page)
 static void bufvec_page_end_io(struct page *page, int uptodate, int quiet)
 {
 	end_page_writeback(page);
-	tux3_accout_clear_writeback(page);
 }
 
 /* Completion of buffer for I/O */
