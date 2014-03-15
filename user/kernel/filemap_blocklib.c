@@ -210,6 +210,7 @@ retry:
 static int __tux3_commit_write(struct inode *inode, struct page *page,
 			       unsigned from, unsigned to)
 {
+	unsigned delta = tux3_get_current_delta();
 	unsigned block_start, block_end;
 	int partial = 0;
 	unsigned blocksize;
@@ -226,7 +227,7 @@ static int __tux3_commit_write(struct inode *inode, struct page *page,
 				partial = 1;
 		} else {
 			set_buffer_uptodate(bh);
-			__tux3_mark_buffer_dirty(bh, tux3_get_current_delta());
+			__tux3_mark_buffer_dirty(bh, delta);
 		}
 		clear_buffer_new(bh);
 
