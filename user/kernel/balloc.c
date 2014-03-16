@@ -60,7 +60,22 @@ static struct buffer_head *countmap_load(struct sb *sb, block_t group)
 
 static void countmap_pin_update(struct sb *sb, struct buffer_head *buffer)
 {
-	if (sb->countmap_pin.buffer != buffer) {
+	/*
+	 * If buffer is forked, don't set the forked buffer to pin, to
+	 * prevent countmap_add() grabs the forked buffer.
+	 *
+	 * NOTE:
+	 *               cpu0                     cpu1
+	 *                                    buf0 = blockread()
+	 *      clone = blockdirty(buf0)
+	 *      [buf0 became forked buffer]
+	 *                                    countmap_pin_update(buf0)
+	 *      countmap_pin_update(clone)
+	 *
+	 * Like above, pin can have the forked buffer for short time though.
+	 * cpu0 will update soon.
+	 */
+	if (sb->countmap_pin.buffer != buffer && !buffer_forked(buffer)) {
 		countmap_put(&sb->countmap_pin);
 		sb->countmap_pin.buffer = buffer;
 	} else
