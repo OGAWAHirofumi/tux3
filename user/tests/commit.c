@@ -756,6 +756,42 @@ static void test07(struct sb *sb)
 	clean_main(sb);
 }
 
+/* Test for replay of LOG_BNODE_FREE order */
+static void test08(struct sb *sb)
+{
+	test_assert(make_tux3(sb) == 0);
+
+	struct tux_iattr iattr = { .mode = S_IFREG | S_IRWXU };
+	const char name[] = "a";
+	struct inode *inode;
+	inode = tuxcreate(sb->rootdir, name, strlen(name), &iattr);
+	test_assert(inode);
+	struct file *file = &(struct file){ .f_inode = inode };
+	char buf[10] = {};
+	test_assert(tuxwrite(file, buf, sizeof(buf)) == sizeof(buf));
+	test_assert(force_delta(sb) == 0);
+
+	/* "freed_block" should recorded as LOG_BNODE_FREE */
+	struct btree *btree = &tux_inode(inode)->btree;
+	block_t freed_block = btree->root.block;
+	tuxunlink(sb->rootdir, name, strlen(name));
+	iput(inode);
+	test_assert(force_delta(sb) == 0);
+
+	/* Reuse "freed_block" for redirect target */
+	tux3_start_backend(sb);
+	struct btree *itree = itree_btree(sb);
+	block_t oldblock = itree->root.block;
+	log_bnode_redirect(sb, oldblock, freed_block);
+	itree->root.block = freed_block;
+	tux3_end_backend();
+
+	/* Flush logblocks */
+	test_assert(force_delta(sb) == 0);
+
+	clean_main_and_fsck(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -810,6 +846,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test07"))
 		test07(sb);
+	test_end();
+
+	if (test_start("test08"))
+		test08(sb);
 	test_end();
 
 	clean_main(sb);
