@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
 
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, size >> dev->bits);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 
 	sb->volmap = tux_new_volmap(sb);
 	assert(sb->volmap);

@@ -26,7 +26,7 @@ static void schedule_flush_delta(struct sb *sb);
 #define ALLOW_FRONTEND_MODIFY
 
 /* Initialize the lock and list */
-static void init_sb(struct sb *sb)
+static int init_sb(struct sb *sb)
 {
 	int i;
 
@@ -53,6 +53,12 @@ static void init_sb(struct sb *sb)
 	/* Initialize sb_delta_dirty */
 	for (i = 0; i < ARRAY_SIZE(sb->s_ddc); i++)
 		INIT_LIST_HEAD(&sb->s_ddc[i].dirty_inodes);
+
+	sb->idefer_map = tux3_alloc_idefer_map();
+	if (!sb->idefer_map)
+		return -ENOMEM;
+
+	return 0;
 }
 
 static void setup_roots(struct sb *sb, struct disksuper *super)
@@ -115,10 +121,17 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 }
 
 /* Initialize and setup sb by on-disk super block */
-void setup_sb(struct sb *sb, struct disksuper *super)
+int setup_sb(struct sb *sb, struct disksuper *super)
 {
-	init_sb(sb);
+	int err;
+
+	err = init_sb(sb);
+	if (err)
+		return err;
+
 	__setup_sb(sb, super);
+
+	return 0;
 }
 
 /* Load on-disk super block, and call setup_sb() with it */
@@ -128,7 +141,9 @@ int load_sb(struct sb *sb)
 	int err;
 
 	/* At least initialize sb, even if load is failed */
-	init_sb(sb);
+	err = init_sb(sb);
+	if (err)
+		return err;
 
 	err = devio(READ, sb_dev(sb), SB_LOC, super, SB_LEN);
 	if (err)

@@ -90,6 +90,9 @@ struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 /*
  * Deferred ileaf update for inode number allocation
  */
+
+#include "inode_defer.c"
+
 /* must hold itree->btree.lock */
 static int is_defer_alloc_inum(struct inode *inode)
 {
@@ -97,41 +100,25 @@ static int is_defer_alloc_inum(struct inode *inode)
 }
 
 /* must hold itree->btree.lock */
-static int find_defer_alloc_inum(struct sb *sb, inum_t inum)
-{
-	/*
-	 * FIXME: temporary hack. We should replace this by efficient
-	 * one something like bitmap.
-	 */
-#if 0
-	struct tux3_inode *tuxnode;
-
-	list_for_each_entry(tuxnode, &sb->alloc_inodes, alloc_list) {
-		if (tuxnode->inum == inum)
-			return 1;
-	}
-#else
-	struct inode *tmp = tux3_ilookup_nowait(sb, inum);
-	if (tmp) {
-		iput(tmp);
-		return 1;
-	}
-#endif
-	return 0;
-}
-
-/* must hold itree->btree.lock */
-static void add_defer_alloc_inum(struct inode *inode)
+static int add_defer_alloc_inum(struct inode *inode)
 {
 	/* FIXME: need to reserve space (ileaf/bnodes) for this inode? */
 	struct sb *sb = tux_sb(inode->i_sb);
-	list_add_tail(&tux_inode(inode)->alloc_list, &sb->alloc_inodes);
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	int err = tux3_idefer_add(sb->idefer_map, tuxnode->inum);
+	if (!err)
+		list_add_tail(&tuxnode->alloc_list, &sb->alloc_inodes);
+	return err;
 }
 
 /* must hold itree->btree.lock. FIXME: spinlock is enough? */
 void del_defer_alloc_inum(struct inode *inode)
 {
-	list_del_init(&tux_inode(inode)->alloc_list);
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	if (!list_empty(&tuxnode->alloc_list))
+		tux3_idefer_del(sb->idefer_map, tuxnode->inum);
+	list_del_init(&tuxnode->alloc_list);
 }
 
 void cancel_defer_alloc_inum(struct inode *inode)
@@ -246,28 +233,18 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 
 	down_write(&cursor->btree->lock);
 	while (1) {
+		inum_t orig;
+
 		err = find_free_inum(cursor, goal, &goal);
 		if (err)
 			goto error;
 
-		/*
-		 * Is this inum already used by deferred inum allocation?
-		 *
-		 * FIXME: Can be nfsd race happened, or fs corruption.
-		 * And we would want to move this outside btree->lock.
-		 */
-		if (insert_inode_locked4(inode, goal, tux_test, &goal) >= 0)
+		/* Skip deferred allocate inums */
+		orig = goal;
+		goal = tux3_idefer_find_free(sb->idefer_map, orig);
+		if (orig == goal)
 			break;
-
-		/*
-		 * Skip deferred allocate inums.
-		 *
-		 * FIXME: This is inefficient, we should replace with
-		 * better way.
-		 */
-		goal++;
-		while (find_defer_alloc_inum(sb, goal))
-			goal++;
+		/* If goal marked as deferred inums, retry from itree */
 	}
 
 	init_btree(&tux_inode(inode)->btree, sb, no_root, dtree_ops());
@@ -276,7 +253,9 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 	tux_set_inum(inode, goal);
 	tux_setup_inode(inode);
 
-	add_defer_alloc_inum(inode);
+	err = add_defer_alloc_inum(inode);
+	if (err)
+		goto error;
 
 	/*
 	 * If inum is not reserved area, account it. If inum is
@@ -316,25 +295,22 @@ static void tux_assign_inum_failed(struct inode *inode)
 
 int tux_assign_inum(struct inode *inode, inum_t goal)
 {
+	inum_t inum;
 	int err;
 
 	err = alloc_inum(inode, goal);
 	if (err)
 		goto error;
-#if 0
-	/*
-	 * FIXME: temporary hack. We shouldn't insert inode to hash
-	 * in alloc_inum before initializing completely.
-	 */
-	inum_t inum = tux_inode(inode)->inum;
+
+	inum = tux_inode(inode)->inum;
 	if (insert_inode_locked4(inode, inum, tux_test, &inum) < 0) {
 		/* Can be nfsd race happened, or fs corruption. */
-		tux3_warn(tux_sb(dir->i_sb), "inode insert error: inum %Lx",
+		tux3_warn(tux_sb(inode->i_sb), "inode insert error: inum %Lx",
 			  inum);
 		err = -EIO;
 		goto error;
 	}
-#endif
+
 	/* The inode was hashed, we can use deferred deletion from here */
 
 	/*

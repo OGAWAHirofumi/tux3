@@ -198,10 +198,26 @@ error:
 
 int tux3_init_mem(void)
 {
-	return tux3_init_hole_cache();
+	int err;
+
+	err = tux3_init_hole_cache();
+	if (err)
+		goto error_hole;
+
+	err = tux3_init_idefer_cache();
+	if (err)
+		goto error_idefer;
+
+	return 0;
+
+error_idefer:
+	tux3_destroy_hole_cache();
+error_hole:
+	return err;
 }
 
 void tux3_exit_mem(void)
 {
+	tux3_destroy_idefer_cache();
 	tux3_destroy_hole_cache();
 }

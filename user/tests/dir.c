@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
 
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, 150);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 
 	struct inode *dir = rapid_open_inode(sb, NULL, S_IFDIR);
 

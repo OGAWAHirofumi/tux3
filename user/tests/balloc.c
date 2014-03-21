@@ -68,6 +68,8 @@ static void clean_main(struct sb *sb)
 	countmap_put(&sb->countmap_pin);
 	invalidate_buffers(sb->countmap->map);
 	free_map(sb->countmap->map);
+	tux3_free_idefer_map(sb->idefer_map);
+	tux3_exit_mem();
 }
 
 /* Tests bits set/clear/test functions */
@@ -331,10 +333,13 @@ int main(int argc, char *argv[])
 	/* This expect buffer is never reclaimed */
 	init_buffers(dev, 1 << 20, 1);
 
+	int err = tux3_init_mem();
+	assert(!err);
+
 	block_t volblocks = (BITMAP_BLOCKS << (dev->bits + 3)) - 3;
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, volblocks);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 	sb->groupbits = groupbits;
 
 	test_init(argv[0]);
@@ -391,6 +396,5 @@ int main(int argc, char *argv[])
 	tux3_end_backend();
 
 	clean_main(sb);
-
 	return test_failures();
 }

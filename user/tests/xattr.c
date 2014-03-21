@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
 
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, volsize >> dev->bits);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 
 	sb->atomref_base = 1 << 10;
 	sb->unatom_base = 1 << 11;

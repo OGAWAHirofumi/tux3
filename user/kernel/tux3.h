@@ -232,6 +232,7 @@ struct countmap_pin {
 	struct buffer_head *buffer;
 };
 
+struct tux3_idefer_map;
 /* Tux3-specific sb is a handle for the entire volume state */
 struct sb {
 	union {
@@ -310,6 +311,7 @@ struct sb {
 	 */
 	spinlock_t countmap_lock;
 	struct countmap_pin countmap_pin;
+	struct tux3_idefer_map *idefer_map;
 	struct list_head alloc_inodes;	/* deferred inum allocation inodes */
 
 	spinlock_t forked_buffers_lock;
@@ -761,7 +763,7 @@ int replay_bnode_del(struct replay *rp, block_t bnode, tuxkey_t key, unsigned co
 int replay_bnode_adjust(struct replay *rp, block_t bnode, tuxkey_t from, tuxkey_t to);
 
 /* commit.c */
-void setup_sb(struct sb *sb, struct disksuper *super);
+int setup_sb(struct sb *sb, struct disksuper *super);
 int load_sb(struct sb *sb);
 int save_sb(struct sb *sb);
 void tux3_start_backend(struct sb *sb);
@@ -846,6 +848,10 @@ struct inode *tux_new_volmap(struct sb *sb);
 struct inode *tux_new_logmap(struct sb *sb);
 struct inode *tux_new_inode(struct inode *dir, struct tux_iattr *iattr,
 			    dev_t rdev);
+struct tux3_idefer_map *tux3_alloc_idefer_map(void);
+void tux3_free_idefer_map(struct tux3_idefer_map *map);
+int __init tux3_init_idefer_cache(void);
+void tux3_destroy_idefer_cache(void);
 void del_defer_alloc_inum(struct inode *inode);
 void cancel_defer_alloc_inum(struct inode *inode);
 int tux_assign_inum(struct inode *inode, inum_t goal);

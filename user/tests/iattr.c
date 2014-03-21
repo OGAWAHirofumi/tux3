@@ -18,6 +18,12 @@
 #include "writeback.c"
 #include "kernel/iattr.c"
 
+static void clean_main(struct sb *sb)
+{
+	tux3_free_idefer_map(sb->idefer_map);
+	tux3_exit_mem();
+}
+
 /* Test encode_attrs() and decode_attrs() */
 static void test01(struct sb *sb)
 {
@@ -89,9 +95,12 @@ int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 9 };
 
+	int err = tux3_init_mem();
+	assert(!err);
+
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, 100);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 
 	test_init(argv[0]);
 
@@ -99,5 +108,6 @@ int main(int argc, char *argv[])
 		test01(sb);
 	test_end();
 
+	clean_main(sb);
 	return test_failures();
 }

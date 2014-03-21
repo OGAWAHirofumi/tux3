@@ -17,6 +17,12 @@
 
 #include "kernel/ileaf.c"
 
+static void clean_main(struct sb *sb)
+{
+	tux3_free_idefer_map(sb->idefer_map);
+	tux3_exit_mem();
+}
+
 static struct ileaf *ileaf_create(struct btree *btree)
 {
 	struct ileaf *leaf = malloc(btree->sb->blocksize);
@@ -175,9 +181,13 @@ static void test01(struct sb *sb, struct btree *btree)
 int main(int argc, char *argv[])
 {
 	struct dev *dev = &(struct dev){ .bits = 12 };
+
+	int err = tux3_init_mem();
+	assert(!err);
+
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, 150);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 
 	struct btree btree;
 	init_btree(&btree, sb, no_root, &itree_ops);
@@ -188,5 +198,6 @@ int main(int argc, char *argv[])
 		test01(sb, &btree);
 	test_end();
 
+	clean_main(sb);
 	return test_failures();
 }

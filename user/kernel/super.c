@@ -128,6 +128,8 @@ static void __tux3_put_super(struct sb *sbi)
 	/* Cleanup flusher after inode was evicted */
 	tux3_exit_flusher(sbi);
 
+	tux3_free_idefer_map(sbi->idefer_map);
+	sbi->idefer_map = NULL;
 	/* FIXME: add more sanity check */
 	assert(list_empty(&sbi->alloc_inodes));
 	assert(link_empty(&sbi->forked_buffers));
@@ -533,6 +535,10 @@ static int __init init_tux3(void)
 	if (err)
 		goto error_hole;
 
+	err = tux3_init_idefer_cache();
+	if (err)
+		goto error_idefer;
+
 	err = register_filesystem(&tux3_fs_type);
 	if (err)
 		goto error_fs;
@@ -540,9 +546,11 @@ static int __init init_tux3(void)
 	return 0;
 
 error_fs:
-	tux3_destroy_inodecache();
-error_hole:
+	tux3_destroy_idefer_cache();
+error_idefer:
 	tux3_destroy_hole_cache();
+error_hole:
+	tux3_destroy_inodecache();
 error:
 	return err;
 }
@@ -550,6 +558,7 @@ error:
 static void __exit exit_tux3(void)
 {
 	unregister_filesystem(&tux3_fs_type);
+	tux3_destroy_idefer_cache();
 	tux3_destroy_hole_cache();
 	tux3_destroy_inodecache();
 }

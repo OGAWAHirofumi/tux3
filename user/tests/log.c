@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
 
 	struct sb *sb = rapid_sb(dev);
 	sb->super = INIT_DISKSB(dev->bits, 2048);
-	setup_sb(sb, &sb->super);
+	assert(!setup_sb(sb, &sb->super));
 
 	sb->logmap = tux_new_logmap(sb);
 	assert(sb->logmap);
@@ -118,6 +118,5 @@ int main(int argc, char *argv[])
 	tux3_end_backend();
 
 	clean_main(sb);
-
 	return test_failures();
 }
