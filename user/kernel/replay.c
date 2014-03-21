@@ -340,22 +340,8 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 {
 	struct sb *sb = rp->sb;
 	struct logblock *log = bufdata(logbuf);
-	block_t blocknr = rp->blocknrs[bufindex(logbuf)];
 	unsigned char *data = log->data;
 	int err;
-
-	/*
-	 * Log block address itself works as balloc log, and adjust
-	 * bitmap and deunify even if logblocks is before latest
-	 * unify, to prevent to be overwritten. (This must be after
-	 * LOG_FREEBLOCKS replay if there is it.)
-	 */
-	trace("LOG BLOCK: logblock %Lx", blocknr);
-	err = replay_update_bitmap(rp, blocknr, 1, 1);
-	if (err)
-		return err;
-	/* Mark log block as deunify block */
-	defer_bfree(sb, &sb->deunify, blocknr, 1);
 
 	/* If log is before latest unify, those were already applied to FS. */
 	if (bufindex(logbuf) < rp->unify_index) {
@@ -501,6 +487,31 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 	return 0;
 }
 
+static int replay_logblock_mark(struct replay *rp, struct buffer_head *logbuf)
+{
+	struct sb *sb = rp->sb;
+	block_t blocknr = rp->blocknrs[bufindex(logbuf)];
+	int err;
+
+	/*
+	 * Log block address itself works as balloc log, and adjust
+	 * bitmap and deunify even if logblocks is before latest
+	 * unify, to prevent to be overwritten. (This must be after
+	 * LOG_FREEBLOCKS replay if there is it.)
+	 *
+	 * Update bitmap after logical update replay, because this
+	 * logblock address can be freed while replaying.
+	 */
+	trace("LOG BLOCK: logblock %Lx", blocknr);
+	err = replay_update_bitmap(rp, blocknr, 1, 1);
+	if (err)
+		return err;
+	/* Mark log block as deunify block */
+	defer_bfree(sb, &sb->deunify, blocknr, 1);
+
+	return 0;
+}
+
 static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 {
 	struct sb *sb = rp->sb;
@@ -539,6 +550,10 @@ struct replay *replay_stage1(struct sb *sb)
 int replay_stage2(struct replay *rp)
 {
 	int err = replay_logblocks(rp, replay_log_stage2);
+	if (err)
+		goto error;
+
+	err = replay_logblocks(rp, replay_logblock_mark);
 	if (err)
 		goto error;
 
