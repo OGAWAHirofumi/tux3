@@ -130,6 +130,14 @@ static void clean_main(struct sb *sb)
 	tux3_exit_mem();
 }
 
+/* cleanup of main() after fsck() */
+static void clean_main_and_fsck(struct sb *sb)
+{
+	clean_sb(sb);
+	fsck(sb);
+	tux3_exit_mem();
+}
+
 /* Generate all type of logs, and replay. */
 static void test01(struct sb *sb)
 {
@@ -792,6 +800,38 @@ static void test08(struct sb *sb)
 	clean_main_and_fsck(sb);
 }
 
+/* Test for cross boundary allocation on countmap group and fsck */
+static void test09(struct sb *sb)
+{
+	unsigned align = 1 << sb->groupbits;
+	block_t start = align * 3;	/* pick free blocks on boundary */
+
+	test_assert(make_tux3(sb) == 0);
+	test_assert(force_unify(sb) == 0);
+
+	tux3_start_backend(sb);
+	/* Allocate cross boundary blocks */
+	struct block_segment seg[10];
+	unsigned blocks = 10;
+	int err, segs = 0;
+
+	err = balloc_find_range(sb, seg, ARRAY_SIZE(seg), &segs,
+				start - (blocks / 2), 100, &blocks);
+	test_assert(!err);
+	test_assert(segs == 1);	/* supporting cross boundary allocation? */
+	test_assert(!blocks);
+	test_assert(!balloc_use(sb, seg, segs));
+	/* Setup log records for above blocks to pass fsck */
+	log_balloc(sb, seg[0].block, seg[0].count);
+	log_bfree_on_unify(sb, seg[0].block, seg[0].count);
+	tux3_end_backend();
+
+	/* Flush logblocks */
+	test_assert(force_delta(sb) == 0);
+
+	clean_main_and_fsck(sb);
+}
+
 int main(int argc, char *argv[])
 {
 	if (argc < 2)
@@ -850,6 +890,10 @@ int main(int argc, char *argv[])
 
 	if (test_start("test08"))
 		test08(sb);
+	test_end();
+
+	if (test_start("test09"))
+		test09(sb);
 	test_end();
 
 	clean_main(sb);
