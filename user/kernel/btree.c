@@ -1504,7 +1504,7 @@ int replay_bnode_merge(struct replay *rp, block_t src, block_t dst)
 
 	blockput(dstbuf);
 error_put_srcbuf:
-	blockput(srcbuf);
+	blockput_free_unify(sb, srcbuf);
 error:
 	return err;
 }

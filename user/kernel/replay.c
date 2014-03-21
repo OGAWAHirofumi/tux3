@@ -298,6 +298,14 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 				return err;
 			break;
 		}
+		case LOG_BNODE_FREE:
+		{
+			u64 block;
+			data = decode48(data, &block);
+			trace("%s: block %Lx", log_name[code], block);
+			blockput_free_unify(sb, vol_find_get_block(sb, block));
+			break;
+		}
 		case LOG_FREEBLOCKS:
 		{
 			u64 freeblocks;
@@ -313,7 +321,6 @@ static int replay_log_stage1(struct replay *rp, struct buffer_head *logbuf)
 		case LOG_BFREE_RELOG:
 		case LOG_LEAF_REDIRECT:
 		case LOG_LEAF_FREE:
-		case LOG_BNODE_FREE:
 		case LOG_ORPHAN_ADD:
 		case LOG_ORPHAN_DEL:
 		case LOG_UNIFY:
@@ -414,12 +421,6 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			err = replay_update_bitmap(rp, block, 1, 0);
 			if (err)
 				return err;
-
-			if (code == LOG_BNODE_FREE) {
-				struct buffer_head *buffer =
-					vol_find_get_block(sb, block);
-				blockput_free_unify(sb, buffer);
-			}
 			break;
 		}
 		case LOG_BNODE_ROOT:
@@ -463,8 +464,6 @@ static int replay_log_stage2(struct replay *rp, struct buffer_head *logbuf)
 			err = replay_update_bitmap(rp, src, 1, 0);
 			if (err)
 				return err;
-
-			blockput_free_unify(sb, vol_find_get_block(sb, src));
 			break;
 		}
 		case LOG_ORPHAN_ADD:
@@ -522,7 +521,7 @@ static int replay_logblocks(struct replay *rp, replay_log_t replay_log_func)
 	return 0;
 }
 
-/* Replay physical update like bnode, etc. */
+/* Replay physical update like bnode, buffer state, etc. */
 struct replay *replay_stage1(struct sb *sb)
 {
 	struct replay *rp = replay_prepare(sb);
