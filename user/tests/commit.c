@@ -20,6 +20,65 @@
 
 #include "tux3_fsck.c"
 
+/* Make snapshot of volume */
+static int snapshot_fd;
+
+static void snapshot_volume(struct sb *sb)
+{
+	char templete[] = "test-XXXXXX";
+	char buf[4096];
+	int fd;
+
+	fd = mkstemp(templete);
+	assert(fd >= 0);
+	unlink(templete);
+
+	loff_t offset = 0;
+	while (1) {
+		ssize_t ret, ret2;
+
+		ret = pread(sb->dev->fd, buf, sizeof(buf), offset);
+		assert(ret >= 0);
+		if (!ret)
+			break;
+
+		ret2 = pwrite(fd, buf, ret, offset);
+		assert(ret == ret2);
+
+		offset += ret;
+	}
+
+	snapshot_fd = fd;
+}
+
+static void restore_volume(struct sb *sb)
+{
+	char buf[4096];
+
+	assert(snapshot_fd >= 0);
+
+	loff_t offset = 0;
+	while (1) {
+		ssize_t ret, ret2;
+
+		ret = pread(snapshot_fd, buf, sizeof(buf), offset);
+		assert(ret >= 0);
+		if (!ret)
+			break;
+
+		ret2 = pwrite(sb->dev->fd, buf, ret, offset);
+		assert(ret == ret2);
+
+		offset += ret;
+	}
+}
+
+static void clean_snapshot(void)
+{
+	close(snapshot_fd);
+	snapshot_fd = 0;
+}
+
 static block_t check_block;
 
 static int check_defree_block(struct sb *sb, u64 val)
@@ -205,6 +264,8 @@ static void test01(struct sb *sb)
 
 	check_dirty(sb);
 
+	snapshot_volume(sb);
+
 	if (test_start("test01.1")) {
 		test_assert(force_delta(sb) == 0);
 		clean_sb(sb);
@@ -215,6 +276,8 @@ static void test01(struct sb *sb)
 		clean_main(sb);
 	}
 	test_end();
+
+	restore_volume(sb);
 
 	if (test_start("test01.2")) {
 		test_assert(force_unify(sb) == 0);
@@ -227,7 +290,10 @@ static void test01(struct sb *sb)
 	}
 	test_end();
 
+	restore_volume(sb);
 	test_assert(force_delta(sb) == 0);
+
+	clean_snapshot();
 	clean_main(sb);
 }
 
@@ -298,6 +364,8 @@ static void test03(struct sb *sb)
 	iput(inode);
 	test_assert(force_delta(sb) == 0);
 
+	snapshot_volume(sb);
+
 	if (test_start("test03.1")) {
 		/* unlink created inode */
 		test_assert(tuxunlink(sb->rootdir, r.name, r.namelen) == 0);
@@ -313,6 +381,8 @@ static void test03(struct sb *sb)
 		clean_main(sb);
 	}
 	test_end();
+
+	restore_volume(sb);
 
 	if (test_start("test03.2")) {
 		test_assert(force_unify(sb) == 0);
@@ -332,6 +402,7 @@ static void test03(struct sb *sb)
 	}
 	test_end();
 
+	clean_snapshot();
 	clean_main(sb);
 }
 
@@ -577,6 +648,8 @@ static void test05(struct sb *sb)
 
 	iput(dir);
 
+	snapshot_volume(sb);
+
 	/* rmdir after flush */
 	if (test_start("test05.1")) {
 		test_assert(force_delta(sb) == 0);
@@ -595,6 +668,9 @@ static void test05(struct sb *sb)
 		clean_main(sb);
 	}
 	test_end();
+
+	restore_volume(sb);
+
 	/* rmdir before flush */
 	if (test_start("test05.2")) {
 		/* rmdir created dir */
@@ -612,7 +688,10 @@ static void test05(struct sb *sb)
 	}
 	test_end();
 
+	restore_volume(sb);
 	test_assert(force_delta(sb) == 0);
+
+	clean_snapshot();
 	clean_main(sb);
 }
 
@@ -670,6 +749,8 @@ static void test06(struct sb *sb)
 	/* Check inum is not same */
 	test_assert(r[2].inum != r[3].inum);
 
+	snapshot_volume(sb);
+
 	/* Test rename after flush */
 	if (test_start("test06.1")) {
 		test_assert(force_delta(sb) == 0);
@@ -701,6 +782,9 @@ static void test06(struct sb *sb)
 		clean_main(sb);
 	}
 	test_end();
+
+	restore_volume(sb);
+
 	/* Test rename before flush */
 	if (test_start("test06.2")) {
 		int err;
@@ -731,7 +815,10 @@ static void test06(struct sb *sb)
 	}
 	test_end();
 
+	restore_volume(sb);
 	test_assert(force_delta(sb) == 0);
+
+	clean_snapshot();
 	clean_main(sb);
 }
 
