@@ -495,6 +495,7 @@ static struct walk_btree_ops dump_dtree_ops = {
 
 static const char *dtree_name[] = {
 	[TUX_BITMAP_INO]	= "bitmap",
+	[TUX_COUNTMAP_INO]	= "countmap",
 	[TUX_VTABLE_INO]	= "vtable",
 	[TUX_ATABLE_INO]	= "atable",
 	[TUX_ROOTDIR_INO]	= "rootdir",
