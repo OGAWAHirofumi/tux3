@@ -37,7 +37,7 @@ static struct replay *alloc_replay(struct sb *sb, unsigned logcount)
 {
 	struct replay *rp;
 
-	rp = malloc(sizeof(*rp) + logcount * sizeof(block_t));
+	rp = kmalloc(sizeof(*rp) + logcount * sizeof(block_t), GFP_NOFS);
 	if (!rp)
 		return ERR_PTR(-ENOMEM);
 
@@ -56,7 +56,7 @@ static void free_replay(struct replay *rp)
 {
 	assert(list_empty(&rp->log_orphan_add));
 	assert(list_empty(&rp->orphan_in_otree));
-	free(rp);
+	kfree(rp);
 }
 
 static int replay_check_log(struct replay *rp, struct buffer_head *logbuf)

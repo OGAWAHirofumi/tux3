@@ -34,7 +34,7 @@ struct tux3_idefer_map *tux3_alloc_idefer_map(void)
 {
 	struct tux3_idefer_map *map;
 
-	map = malloc(sizeof(*map));
+	map = kmalloc(sizeof(*map), GFP_NOFS);
 	if (map) {
 		int i;
 		for (i = 0; i < NODE_HASH_SIZE; i++)
@@ -49,7 +49,7 @@ void tux3_free_idefer_map(struct tux3_idefer_map *map)
 		int i;
 		for (i = 0; i < NODE_HASH_SIZE; i++)
 			assert(hlist_empty(&map->heads[i]));
-		free(map);
+		kfree(map);
 	}
 }
 

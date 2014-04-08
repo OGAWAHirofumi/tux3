@@ -247,8 +247,9 @@ static inline int alloc_cursor_size(int count)
 struct cursor *alloc_cursor(struct btree *btree, int extra)
 {
 	int maxlevel = btree->root.depth + extra;
-	struct cursor *cursor = malloc(alloc_cursor_size(maxlevel + 1));
+	struct cursor *cursor;
 
+	cursor = kmalloc(alloc_cursor_size(maxlevel + 1), GFP_NOFS);
 	if (cursor) {
 		cursor->btree = btree;
 		cursor->level = -1;
@@ -268,7 +269,7 @@ void free_cursor(struct cursor *cursor)
 #ifdef CURSOR_DEBUG
 	assert(cursor->level == -1);
 #endif
-	free(cursor);
+	kfree(cursor);
 }
 
 /* Lookup the index entry contains key */
@@ -808,17 +809,15 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 	/* Chop all range if len >= TUXKEY_LIMIT */
 	limit = (len >= TUXKEY_LIMIT) ? TUXKEY_LIMIT : start + len;
 
-	prev = malloc(sizeof(*prev) * btree->root.depth);
+	prev = kzalloc(sizeof(*prev) * btree->root.depth, GFP_NOFS);
 	if (prev == NULL)
 		return -ENOMEM;
-	memset(prev, 0, sizeof(*prev) * btree->root.depth);
 
-	cii = malloc(sizeof(*cii) * btree->root.depth);
+	cii = kzalloc(sizeof(*cii) * btree->root.depth, GFP_NOFS);
 	if (cii == NULL) {
 		ret = -ENOMEM;
 		goto error_cii;
 	}
-	memset(cii, 0, sizeof(*cii) * btree->root.depth);
 
 	cursor = alloc_cursor(btree, 0);
 	if (!cursor) {
@@ -962,9 +961,9 @@ error_btree_probe:
 
 	free_cursor(cursor);
 error_alloc_cursor:
-	free(cii);
+	kfree(cii);
 error_cii:
-	free(prev);
+	kfree(prev);
 
 	return ret;
 }

@@ -280,7 +280,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 	struct dleaf *tail = NULL;
 	tuxkey_t tailkey = 0; // probably can just use limit instead
 	if (!dwalk_end(walk)) {
-		tail = malloc(sb->blocksize); // error???
+		tail = kmalloc(sb->blocksize, GFP_NOFS); // error???
 		dleaf_init(btree, tail);
 		tailkey = dwalk_index(walk);
 		dwalk_copy(walk, tail);
@@ -346,7 +346,7 @@ static int map_region1(struct inode *inode, block_t start, unsigned count,
 	mark_buffer_dirty_non(cursor_leafbuf(cursor));
 out_create:
 	if (tail)
-		free(tail);
+		kfree(tail);
 out_release:
 	if (cursor)
 		release_cursor(cursor);

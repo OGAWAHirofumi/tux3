@@ -35,7 +35,7 @@ struct orphan {
 
 static struct orphan *alloc_orphan(inum_t inum)
 {
-	struct orphan *orphan = malloc(sizeof(struct orphan));
+	struct orphan *orphan = kmalloc(sizeof(struct orphan), GFP_NOFS);
 	if (!orphan)
 		return ERR_PTR(-ENOMEM);
 
@@ -46,7 +46,7 @@ static struct orphan *alloc_orphan(inum_t inum)
 
 static void free_orphan(struct orphan *orphan)
 {
-	free(orphan);
+	kfree(orphan);
 }
 
 /* Caller must care about locking if needed */

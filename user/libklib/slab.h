@@ -79,6 +79,12 @@ struct kmem_cache {
 	void (*ctor)(void *);		/* Called on object slot creation */
 };
 
+static inline void kfree(const void *p)
+{
+	if (p)
+		free((void *)p);
+}
+
 struct kmem_cache *kmem_cache_create(const char *, size_t, size_t,
 				     unsigned long,
 				     void (*)(void *));
@@ -87,12 +93,39 @@ void kmem_cache_free(struct kmem_cache *, void *);
 
 void *kmem_cache_alloc(struct kmem_cache *, gfp_t);
 
+static inline void *kmalloc(size_t size, gfp_t flags)
+{
+	void *p = malloc(size);
+	if (p) {
+		if (flags & __GFP_ZERO)
+			memset(p, 0, size);
+	}
+	return p;
+}
+
+static inline void *kmalloc_array(size_t n, size_t size, gfp_t flags)
+{
+	if (size != 0 && n > SIZE_MAX / size)
+		return NULL;
+	return kmalloc(n * size, flags);
+}
+
+static inline void *kcalloc(size_t n, size_t size, gfp_t flags)
+{
+	return kmalloc_array(n, size, flags | __GFP_ZERO);
+}
+
 /*
  * Shortcuts
  */
 static inline void *kmem_cache_zalloc(struct kmem_cache *k, gfp_t flags)
 {
 	return kmem_cache_alloc(k, flags | __GFP_ZERO);
+}
+
+static inline void *kzalloc(size_t size, gfp_t flags)
+{
+	return kmalloc(size, flags | __GFP_ZERO);
 }
 
 #endif /* !LIBKLIB_SLAB_H */

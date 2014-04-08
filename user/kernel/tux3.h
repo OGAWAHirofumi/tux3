@@ -461,17 +461,6 @@ static inline map_t *mapping(struct inode *inode)
 	return inode->i_mapping;
 }
 
-static inline void *malloc(size_t size)
-{
-	might_sleep();
-	return kmalloc(size, GFP_NOFS);
-}
-
-static inline void free(void *ptr)
-{
-	kfree(ptr);
-}
-
 static inline struct block_device *sb_dev(struct sb *sb)
 {
 	return sb->vfs_sb->s_bdev;

@@ -463,7 +463,7 @@ struct xcache {
 void free_xcache(struct inode *inode)
 {
 	if (tux_inode(inode)->xcache) {
-		free(tux_inode(inode)->xcache);
+		kfree(tux_inode(inode)->xcache);
 		tux_inode(inode)->xcache = NULL;
 	}
 }
@@ -473,7 +473,7 @@ int new_xcache(struct inode *inode, unsigned size)
 {
 	struct xcache *xcache;
 
-	xcache = malloc(sizeof(*xcache) + size);
+	xcache = kmalloc(sizeof(*xcache) + size, GFP_NOFS);
 	if (!xcache)
 		return -ENOMEM;
 
@@ -502,7 +502,7 @@ static int expand_xcache(struct inode *inode, unsigned size)
 	assert(size);
 	assert(size <= USHRT_MAX);
 
-	xcache = malloc(sizeof(*xcache) + size);
+	xcache = kmalloc(sizeof(*xcache) + size, GFP_NOFS);
 	if (!xcache)
 		return -ENOMEM;
 
@@ -511,7 +511,7 @@ static int expand_xcache(struct inode *inode, unsigned size)
 	else {
 		xcache->size = old->size;
 		memcpy(xcache->xattrs, old->xattrs, old->size);
-		free(old);
+		kfree(old);
 	}
 	xcache->maxsize = size;
 
