@@ -236,8 +236,6 @@ void tux3_mark_btree_dirty(struct btree *btree)
 		struct tux3_inode *tuxnode = tux_inode(btree_inode(btree));
 
 		spin_lock(&tuxnode->lock);
-		/* FIXME: Frontend modify btree for now, so this is not true */
-		//assert(tuxnode->flags);
 		tuxnode->flags |= TUX3_DIRTY_BTREE;
 		spin_unlock(&tuxnode->lock);
 	}
@@ -275,8 +273,6 @@ static void tux3_clear_dirty_inode_nolock(struct inode *inode, unsigned delta,
 	old_dirty = tuxnode->flags & (TUX3_DIRTY_BTREE | mask);
 	/* Clear dirty flags for delta */
 	tuxnode->flags &= ~(TUX3_DIRTY_BTREE | mask);
-	/* FIXME: Purge inode is from frontend for now, so this is not true */
-	//assert(!(old_dirty & TUX3_DIRTY_BTREE) || (old_dirty & mask));
 
 	/* Remove inode from list */
 	if (old_dirty) {
