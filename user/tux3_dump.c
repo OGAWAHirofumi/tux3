@@ -12,6 +12,9 @@
 #include "walk.c"
 
 static int opt_stats = 1;
+static int opt_dump_block = 1;
+static FILE *block_fp;
+static char *dump_block_name = "block_dump.log";
 
 struct stats_seek {
 	block_t blocks;				/* total seek blocks */
@@ -360,6 +363,14 @@ stats_print(struct sb *sb, struct stats_btree *stats, int data, int dir,
 	stats_print_depth_seek(&stats->depth_seek);
 }
 
+#define dump_block_pr(b, fmt, args...) do {			\
+	fprintf(block_fp, "%Lu " fmt "\n" , b , ##args);	\
+} while (0)
+
+#define dump_extent_pr(i, b, c, fmt, args...) do {			\
+	fprintf(block_fp, "%Lu %Lu(%u) " fmt "\n" , b , i , c , ##args); \
+} while (0)
+
 struct dump_info {
 	struct stats_fs *stats;
 	void *private;
@@ -428,6 +439,11 @@ static void dump_dleaf_extent(struct btree *btree, struct buffer_head *dleafbuf,
 		walk_extent_dir(btree, dleafbuf, index, block, count,
 				dump_data_dir, data);
 
+	if (opt_dump_block) {
+		inum_t inum = tux_inode(btree_inode(btree))->inum;
+		dump_extent_pr(index, block, count, "inum-%Lu-extent", inum);
+	}
+
 	if (opt_stats) {
 		int level = btree->root.depth - 1;
 
@@ -452,12 +468,28 @@ static void dump_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 	int empty = dleaf_can_free(btree, dleaf);
 	int level = btree->root.depth - 1;
 
+	if (opt_dump_block) {
+		inum_t inum = tux_inode(btree_inode(btree))->inum;
+		dump_block_pr(bufindex(dleafbuf), "inum-%Lu-leaf", inum);
+	}
+
 	if (opt_stats) {
 		stats_block_add(di->stats->own, level, bufindex(dleafbuf),
 				bytes, empty);
 	}
 
 	walk_dleaf(btree, dleafbuf, &dump_dleaf_ops, di);
+}
+
+static void dump_dtree_bnode(struct btree *btree, struct buffer_head *buffer,
+			     int level, void *data)
+{
+	if (opt_dump_block) {
+		inum_t inum = tux_inode(btree_inode(btree))->inum;
+		dump_block_pr(bufindex(buffer), "inum-%Lu-bnode", inum);
+	}
+
+	dump_bnode(btree, buffer, level, data);
 }
 
 /* FIXME: Where is counted the direct extent stats? */
@@ -472,6 +504,11 @@ static void dump_extent(struct btree *btree, struct buffer_head *ileafbuf,
 		walk_extent_dir(btree, NULL, index, block, count,
 				dump_data_dir, data);
 
+	if (opt_dump_block) {
+		inum_t inum = tux_inode(btree_inode(btree))->inum;
+		dump_extent_pr(index, block, count, "inum-%Lu-extent", inum);
+	}
+
 	if (opt_stats) {
 		stats_data_seek_add(di->stats->own, block, count);
 		stats_child_seek_add(di->stats->own, 0, bufindex(ileafbuf),
@@ -481,7 +518,7 @@ static void dump_extent(struct btree *btree, struct buffer_head *ileafbuf,
 }
 
 static struct walk_btree_ops dump_dtree_ops = {
-	.bnode	= dump_bnode,
+	.bnode	= dump_dtree_bnode,
 	.leaf	= dump_dleaf,
 
 	.extent	= dump_extent,
@@ -612,12 +649,24 @@ static void __dump_ileaf(struct dump_info *di, struct btree *btree,
 static void dump_ileaf(struct btree *btree, struct buffer_head *ileafbuf,
 		       void *data)
 {
+	if (opt_dump_block)
+		dump_block_pr(bufindex(ileafbuf), "itree-leaf");
+
 	__dump_ileaf(data, btree, ileafbuf, dump_ileaf_attr);
 	walk_ileaf(btree, ileafbuf, dump_ileaf_cb, data);
 }
 
+static void dump_itree_bnode(struct btree *btree, struct buffer_head *buffer,
+			     int level, void *data)
+{
+	if (opt_dump_block)
+		dump_block_pr(bufindex(buffer), "itree-bnode");
+
+	dump_bnode(btree, buffer, level, data);
+}
+
 static struct walk_btree_ops dump_itree_ops = {
-	.bnode	= dump_bnode,
+	.bnode	= dump_itree_bnode,
 	.leaf	= dump_ileaf,
 };
 
@@ -630,11 +679,23 @@ static void dump_oleaf_attr(struct dump_info *di, struct btree *btree,
 static void dump_oleaf(struct btree *btree, struct buffer_head *oleafbuf,
 		       void *data)
 {
+	if (opt_dump_block)
+		dump_block_pr(bufindex(oleafbuf), "otree-leaf");
+
 	__dump_ileaf(data, btree, oleafbuf, dump_oleaf_attr);
 }
 
+static void dump_otree_bnode(struct btree *btree, struct buffer_head *buffer,
+			     int level, void *data)
+{
+	if (opt_dump_block)
+		dump_block_pr(bufindex(buffer), "otree-bnode");
+
+	dump_bnode(btree, buffer, level, data);
+}
+
 static struct walk_btree_ops dump_otree_ops = {
-	.bnode	= dump_bnode,
+	.bnode	= dump_otree_bnode,
 	.leaf	= dump_oleaf,
 };
 
@@ -643,6 +704,9 @@ static void dump_log_pre(struct sb *sb, struct buffer_head *buffer,
 {
 	struct dump_info *di = data;
 	struct logblock *log = bufdata(buffer);
+
+	if (opt_dump_block)
+		dump_block_pr(bufindex(buffer), "logblock");
 
 	if (opt_stats) {
 		block_t seek = stats_suppose_seek(bufindex(buffer), 1);
@@ -664,6 +728,12 @@ static int dump_main(struct sb *sb, int verbose)
 
 	if (verbose)
 		opt_stats++;
+
+	if (opt_dump_block) {
+		block_fp = fopen(dump_block_name, "w");
+		if (!block_fp)
+			return errno;
+	}
 
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
@@ -701,6 +771,11 @@ static int dump_main(struct sb *sb, int verbose)
 
 	destroy_stats_fs(&stats_itree);
 	destroy_stats_fs(&stats_otree);
+
+	if (block_fp) {
+		fclose(block_fp);
+		block_fp = NULL;
+	}
 
 	return 0;
 }
