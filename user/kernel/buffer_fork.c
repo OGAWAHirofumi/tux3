@@ -198,6 +198,42 @@ void free_forked_buffers(struct sb *sb, struct inode *inode, int force)
 #include "mmap_builtin_hack.h"
 
 /*
+ * Clear writable to protect oldpage from following mmap write race.
+ *
+ *        cpu0                          cpu1                   cpu2
+ *                                                           [mmap write]
+ *                                                           mmap write(old)
+ *                                                               page fault
+ *                                     [backend]                 dirty old
+ *                                     delta++
+ *    [page_fault]
+ *    page fork
+ *                                                           mmap write(old)
+ *                                                               no page fault
+ *        copy_page(new, old)                                    modify page
+ *        replace_pte(new, old)
+ *                                     flusher
+ *                                     page_mkclean(old)
+ *
+ * There is delay between delta++ and page_mkclean() for I/O. So,
+ * while cpu0 copying data on page by page fork, another cpu (cpu2)
+ * can change data on the same page. If this race happens, new and old
+ * page can have different data.
+ */
+static void prepare_clone_page(struct page *page)
+{
+	assert(PageLocked(page));
+
+	/*
+	 * If backend flusher is still not clearing the dirty flag and
+	 * (not call page_mkclean()) for I/O. Call it here to prevent
+	 * above race, instead.
+	 */
+	if (PageDirty(page))
+		page_mkclean(page);
+}
+
+/*
  * This replaces the oldpage on radix-tree with newpage atomically.
  *
  * Similar to migrate_pages(), but the oldpage is for writeout.
@@ -600,6 +636,9 @@ struct page *pagefork_for_blockdirty(struct page *oldpage, unsigned newdelta)
 		/* We can dirty this buffer. */
 		goto out;
 	}
+
+	/* Clear writable to protect oldpage from mmap write race */
+	prepare_clone_page(oldpage);
 
 	/*
 	 * We need to buffer fork. Start to clone the oldpage.
