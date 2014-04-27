@@ -1,7 +1,7 @@
 typedef void (*walk_data_dir_cb)(struct btree *, struct buffer_head *,
 				 block_t, tux_dirent *, void *);
 
-static void walk_data_dir(struct btree *btree, struct buffer_head *leafbuf,
+static void walk_data_dir(struct btree *btree, struct buffer_head *dleafbuf,
 			  struct buffer_head *buffer, block_t block,
 			  void *callback_ptr, void *data)
 {
@@ -16,11 +16,11 @@ static void walk_data_dir(struct btree *btree, struct buffer_head *leafbuf,
 	}
 }
 
-static void walk_extent_dir(struct btree *btree, struct buffer_head *leafbuf,
+static void walk_extent_dir(struct btree *btree, struct buffer_head *dleafbuf,
 			    block_t index, block_t block, unsigned count,
 			    walk_data_dir_cb callback, void *data)
 {
-	walk_extent(btree, leafbuf, index, block, count,
+	walk_extent(btree, dleafbuf, index, block, count,
 		    walk_data_dir, callback, data);
 }
 

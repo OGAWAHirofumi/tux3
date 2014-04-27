@@ -21,7 +21,7 @@ typedef void (*walk_data_cb)(struct btree *, struct buffer_head *,
 			     struct buffer_head *, block_t,
 			     void *, void *);
 
-static void walk_extent(struct btree *btree, struct buffer_head *leafbuf,
+static void walk_extent(struct btree *btree, struct buffer_head *dleafbuf,
 			block_t index, block_t block, unsigned count,
 			walk_data_cb walk_data,
 			void *callback, void *data)
@@ -32,7 +32,7 @@ static void walk_extent(struct btree *btree, struct buffer_head *leafbuf,
 		buffer = blockread(mapping(btree_inode(btree)), index + i);
 		assert(buffer);
 
-		walk_data(btree, leafbuf, buffer, block + i, callback, data);
+		walk_data(btree, dleafbuf, buffer, block + i, callback, data);
 
 		blockput(buffer);
 	}
@@ -66,10 +66,10 @@ struct walk_dleaf_ops {
 		      unsigned, block_t, block_t, int, void *);
 };
 
-static void walk_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void walk_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 			struct walk_dleaf_ops *cb, void *data)
 {
-	struct dleaf *dleaf = bufdata(leafbuf);
+	struct dleaf *dleaf = bufdata(dleafbuf);
 	struct diskextent2 *dex, *dex_limit;
 	struct extent prev = { .logical = TUXKEY_LIMIT, };
 	unsigned count = 0;
@@ -84,14 +84,15 @@ static void walk_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 			count = ex.logical - prev.logical;
 			if (prev.physical) {
 				if (cb->extent)
-					cb->extent(btree, leafbuf, prev.logical,
-						   prev.physical, count, data);
+					cb->extent(btree, dleafbuf,
+						   prev.logical, prev.physical,
+						   count, data);
 			}
 		}
 
 		if (cb->entry) {
 			int is_sentinel = dex == dex_limit - 1;
-			cb->entry(btree, leafbuf, count,
+			cb->entry(btree, dleafbuf, count,
 				  ex.version, ex.logical, ex.physical,
 				  is_sentinel,
 				  data);
@@ -109,10 +110,10 @@ static inline u16 ileaf_attr_size(__be16 *dict, int at)
 	return size;
 }
 
-static void walk_ileaf(struct btree *btree, struct buffer_head *leafbuf,
+static void walk_ileaf(struct btree *btree, struct buffer_head *ileafbuf,
 		       walk_ileaf_cb callback, void *data)
 {
-	struct ileaf *ileaf = bufdata(leafbuf);
+	struct ileaf *ileaf = bufdata(ileafbuf);
 	__be16 *dict = ileaf_dict(btree, ileaf);
 	int at;
 
@@ -130,7 +131,7 @@ static void walk_ileaf(struct btree *btree, struct buffer_head *leafbuf,
 				      inum, PTR_ERR(inode));
 		}
 
-		callback(leafbuf, at, inode, data);
+		callback(ileafbuf, at, inode, data);
 
 		iput(inode);
 	}

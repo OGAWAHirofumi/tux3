@@ -376,7 +376,7 @@ static void fsck_check_inodes(struct sb *sb, struct fsck_context *context)
  * Walk filesystem
  */
 
-static void fsck_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+static void fsck_dleaf_extent(struct btree *btree, struct buffer_head *dleafbuf,
 			      block_t index, block_t block, unsigned count,
 			      void *data)
 {
@@ -395,13 +395,13 @@ static void fsck_bnode(struct btree *btree, struct buffer_head *buffer,
 	shadow_bitmap_modify(btree->sb, context, bufindex(buffer), 1, 1);
 }
 
-static void fsck_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void fsck_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 		       void *data)
 {
 	struct fsck_context *context = data;
-	shadow_bitmap_modify(btree->sb, context, bufindex(leafbuf), 1, 1);
+	shadow_bitmap_modify(btree->sb, context, bufindex(dleafbuf), 1, 1);
 
-	walk_dleaf(btree, leafbuf, &fsck_dleaf_ops, data);
+	walk_dleaf(btree, dleafbuf, &fsck_dleaf_ops, data);
 }
 
 static struct walk_btree_ops fsck_dtree_ops = {
@@ -409,7 +409,7 @@ static struct walk_btree_ops fsck_dtree_ops = {
 	.leaf	= fsck_dleaf,
 };
 
-static void fsck_ileaf_cb(struct buffer_head *leafbuf, int at,
+static void fsck_ileaf_cb(struct buffer_head *ileafbuf, int at,
 			  struct inode *inode, void *data)
 {
 	struct fsck_context *context = data;
@@ -421,13 +421,13 @@ static void fsck_ileaf_cb(struct buffer_head *leafbuf, int at,
 	walk_btree(dtree, &fsck_dtree_ops, data);
 }
 
-static void fsck_ileaf(struct btree *btree, struct buffer_head *leafbuf,
+static void fsck_ileaf(struct btree *btree, struct buffer_head *ileafbuf,
 		       void *data)
 {
 	struct fsck_context *context = data;
-	shadow_bitmap_modify(btree->sb, context, bufindex(leafbuf), 1, 1);
+	shadow_bitmap_modify(btree->sb, context, bufindex(ileafbuf), 1, 1);
 
-	walk_ileaf(btree, leafbuf, fsck_ileaf_cb, data);
+	walk_ileaf(btree, ileafbuf, fsck_ileaf_cb, data);
 }
 
 static struct walk_btree_ops fsck_itree_ops = {
@@ -435,11 +435,11 @@ static struct walk_btree_ops fsck_itree_ops = {
 	.leaf	= fsck_ileaf,
 };
 
-static void fsck_oleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void fsck_oleaf(struct btree *btree, struct buffer_head *oleafbuf,
 		       void *data)
 {
 	struct fsck_context *context = data;
-	shadow_bitmap_modify(btree->sb, context, bufindex(leafbuf), 1, 1);
+	shadow_bitmap_modify(btree->sb, context, bufindex(oleafbuf), 1, 1);
 }
 
 static struct walk_btree_ops fsck_otree_ops = {

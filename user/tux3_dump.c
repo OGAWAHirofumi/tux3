@@ -388,7 +388,7 @@ static void dump_bnode(struct btree *btree, struct buffer_head *buffer,
 	}
 }
 
-static void dump_data_dir(struct btree *btree, struct buffer_head *leafbuf,
+static void dump_data_dir(struct btree *btree, struct buffer_head *dleafbuf,
 			  block_t block, tux_dirent *entry, void *data)
 {
 	if (opt_stats) {
@@ -417,7 +417,7 @@ static void dump_data_dir(struct btree *btree, struct buffer_head *leafbuf,
 	}
 }
 
-static void dump_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+static void dump_dleaf_extent(struct btree *btree, struct buffer_head *dleafbuf,
 			      block_t index, block_t block, unsigned count,
 			      void *data)
 {
@@ -425,14 +425,14 @@ static void dump_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
 	struct inode *inode = btree_inode(btree);
 
 	if (S_ISDIR(inode->i_mode) && opt_stats)
-		walk_extent_dir(btree, leafbuf, index, block, count,
+		walk_extent_dir(btree, dleafbuf, index, block, count,
 				dump_data_dir, data);
 
 	if (opt_stats) {
 		int level = btree->root.depth - 1;
 
 		stats_data_seek_add(di->stats->own, block, count);
-		stats_child_seek_add(di->stats->own, level, bufindex(leafbuf),
+		stats_child_seek_add(di->stats->own, level, bufindex(dleafbuf),
 				     block);
 		stats_data_add(di->stats->own, block, count);
 	}
@@ -442,22 +442,22 @@ static struct walk_dleaf_ops dump_dleaf_ops = {
 	.extent = dump_dleaf_extent,
 };
 
-static void dump_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void dump_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 			void *data)
 {
 	struct dump_info *di = data;
-	struct dleaf *dleaf = bufdata(leafbuf);
+	struct dleaf *dleaf = bufdata(dleafbuf);
 	unsigned bytes = sizeof(*dleaf)
 		+ sizeof(*dleaf->table) * be16_to_cpu(dleaf->count);
 	int empty = dleaf_can_free(btree, dleaf);
 	int level = btree->root.depth - 1;
 
 	if (opt_stats) {
-		stats_block_add(di->stats->own, level, bufindex(leafbuf),
+		stats_block_add(di->stats->own, level, bufindex(dleafbuf),
 				bytes, empty);
 	}
 
-	walk_dleaf(btree, leafbuf, &dump_dleaf_ops, di);
+	walk_dleaf(btree, dleafbuf, &dump_dleaf_ops, di);
 }
 
 static struct walk_btree_ops dump_dtree_ops = {
@@ -473,7 +473,7 @@ static const char *dtree_name[] = {
 	[TUX_ROOTDIR_INO]	= "rootdir",
 };
 
-static void dump_ileaf_cb(struct buffer_head *leafbuf, int at,
+static void dump_ileaf_cb(struct buffer_head *ileafbuf, int at,
 			  struct inode *inode, void *data)
 {
 	if (!has_root(&tux_inode(inode)->btree))
@@ -527,7 +527,7 @@ typedef void (*dump_ileaf_attr_t)(struct dump_info *, struct btree *,
 				  struct buffer_head *, inum_t, void *, u16);
 
 static void dump_ileaf_attr(struct dump_info *di, struct btree *btree,
-			    struct buffer_head *leafbuf, inum_t inum,
+			    struct buffer_head *ileafbuf, inum_t inum,
 			    void *attrs, u16 size)
 {
 	struct sb *sb = btree->sb;
@@ -545,7 +545,7 @@ static void dump_ileaf_attr(struct dump_info *di, struct btree *btree,
 
 	if (opt_stats && has_root(&tux_inode(inode)->btree)) {
 		int level = btree->root.depth - 1;
-		stats_child_seek_add(di->stats->own, level, bufindex(leafbuf),
+		stats_child_seek_add(di->stats->own, level, bufindex(ileafbuf),
 				     tux_inode(inode)->btree.root.block);
 	}
 
@@ -554,10 +554,10 @@ static void dump_ileaf_attr(struct dump_info *di, struct btree *btree,
 }
 
 static void __dump_ileaf(struct dump_info *di, struct btree *btree,
-			 struct buffer_head *leafbuf,
+			 struct buffer_head *ileafbuf,
 			 dump_ileaf_attr_t dump_ileaf_attr)
 {
-	struct ileaf *ileaf = bufdata(leafbuf);
+	struct ileaf *ileaf = bufdata(ileafbuf);
 	__be16 *dict = ileaf_dict(btree, ileaf);
 	int at;
 
@@ -574,7 +574,7 @@ static void __dump_ileaf(struct dump_info *di, struct btree *btree,
 
 		offset = limit;
 
-		dump_ileaf_attr(di, btree, leafbuf, inum, attrs, size);
+		dump_ileaf_attr(di, btree, ileafbuf, inum, attrs, size);
 	}
 
 	if (opt_stats) {
@@ -582,16 +582,16 @@ static void __dump_ileaf(struct dump_info *di, struct btree *btree,
 		int empty = btree->ops->leaf_can_free(btree, ileaf);
 		int level = btree->root.depth - 1;
 
-		stats_block_add(di->stats->own, level, bufindex(leafbuf),
+		stats_block_add(di->stats->own, level, bufindex(ileafbuf),
 				bytes, empty);
 	}
 }
 
-static void dump_ileaf(struct btree *btree, struct buffer_head *leafbuf,
+static void dump_ileaf(struct btree *btree, struct buffer_head *ileafbuf,
 		       void *data)
 {
-	__dump_ileaf(data, btree, leafbuf, dump_ileaf_attr);
-	walk_ileaf(btree, leafbuf, dump_ileaf_cb, data);
+	__dump_ileaf(data, btree, ileafbuf, dump_ileaf_attr);
+	walk_ileaf(btree, ileafbuf, dump_ileaf_cb, data);
 }
 
 static struct walk_btree_ops dump_itree_ops = {
@@ -600,15 +600,15 @@ static struct walk_btree_ops dump_itree_ops = {
 };
 
 static void dump_oleaf_attr(struct dump_info *di, struct btree *btree,
-			    struct buffer_head *leafbuf, inum_t inum,
+			    struct buffer_head *oleafbuf, inum_t inum,
 			    void *attrs, u16 size)
 {
 }
 
-static void dump_oleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void dump_oleaf(struct btree *btree, struct buffer_head *oleafbuf,
 		       void *data)
 {
-	__dump_ileaf(data, btree, leafbuf, dump_oleaf_attr);
+	__dump_ileaf(data, btree, oleafbuf, dump_oleaf_attr);
 }
 
 static struct walk_btree_ops dump_otree_ops = {

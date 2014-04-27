@@ -77,7 +77,8 @@ static void image_write_buffer(struct image_context *context,
  * Walk filesystem
  */
 
-static void image_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+static void image_dleaf_extent(struct btree *btree,
+			       struct buffer_head *dleafbuf,
 			       block_t index, block_t block, unsigned count,
 			       void *data)
 {
@@ -96,26 +97,26 @@ static void image_bnode(struct btree *btree, struct buffer_head *buffer,
 	image_write_buffer(context, buffer, bufindex(buffer));
 }
 
-static void __image_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void __image_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 			  void *data, int write_data)
 {
 	struct image_context *context = data;
-	image_write_buffer(context, leafbuf, bufindex(leafbuf));
+	image_write_buffer(context, dleafbuf, bufindex(dleafbuf));
 
 	if (write_data)
-		walk_dleaf(btree, leafbuf, &image_dleaf_ops, data);
+		walk_dleaf(btree, dleafbuf, &image_dleaf_ops, data);
 }
 
-static void image_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void image_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 			void *data)
 {
-	__image_dleaf(btree, leafbuf, data, 1);
+	__image_dleaf(btree, dleafbuf, data, 1);
 }
 
-static void image_dleaf_without_data(struct btree *btree,
-				     struct buffer_head *leafbuf, void *data)
+static void image_dleaf_no_data(struct btree *btree,
+				     struct buffer_head *dleafbuf, void *data)
 {
-	__image_dleaf(btree, leafbuf, data, 0);
+	__image_dleaf(btree, dleafbuf, data, 0);
 }
 
 static struct walk_btree_ops image_dtree_ops = {
@@ -123,29 +124,29 @@ static struct walk_btree_ops image_dtree_ops = {
 	.leaf	= image_dleaf,
 };
 
-static struct walk_btree_ops image_dtree_without_data_ops = {
+static struct walk_btree_ops image_dtree_no_data_ops = {
 	.bnode	= image_bnode,
-	.leaf	= image_dleaf_without_data,
+	.leaf	= image_dleaf_no_data,
 };
 
-static void image_ileaf_cb(struct buffer_head *leafbuf, int at,
+static void image_ileaf_cb(struct buffer_head *ileafbuf, int at,
 			   struct inode *inode, void *data)
 {
 	struct btree *dtree = &tux_inode(inode)->btree;
 
 	if (!opt_data && S_ISREG(inode->i_mode))
-		walk_btree(dtree, &image_dtree_without_data_ops, data);
+		walk_btree(dtree, &image_dtree_no_data_ops, data);
 	else
 		walk_btree(dtree, &image_dtree_ops, data);
 }
 
-static void image_ileaf(struct btree *btree, struct buffer_head *leafbuf,
+static void image_ileaf(struct btree *btree, struct buffer_head *ileafbuf,
 			void *data)
 {
 	struct image_context *context = data;
-	image_write_buffer(context, leafbuf, bufindex(leafbuf));
+	image_write_buffer(context, ileafbuf, bufindex(ileafbuf));
 
-	walk_ileaf(btree, leafbuf, image_ileaf_cb, data);
+	walk_ileaf(btree, ileafbuf, image_ileaf_cb, data);
 }
 
 static struct walk_btree_ops image_itree_ops = {
@@ -153,11 +154,11 @@ static struct walk_btree_ops image_itree_ops = {
 	.leaf	= image_ileaf,
 };
 
-static void image_oleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void image_oleaf(struct btree *btree, struct buffer_head *oleafbuf,
 			void *data)
 {
 	struct image_context *context = data;
-	image_write_buffer(context, leafbuf, bufindex(leafbuf));
+	image_write_buffer(context, oleafbuf, bufindex(oleafbuf));
 }
 
 static struct walk_btree_ops image_otree_ops = {

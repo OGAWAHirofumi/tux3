@@ -186,7 +186,7 @@ static void draw_btree_post(struct btree *btree, void *data)
 struct draw_data_ops {
 	void (*draw_start)(struct graph_info *gi, struct btree *btree);
 	void (*draw_data)(struct graph_info *gi, struct btree *btree,
-			  struct buffer_head *leafbuf,
+			  struct buffer_head *dleafbuf,
 			  block_t index, block_t block, unsigned count);
 	void (*draw_end)(struct graph_info *gi, struct btree *btree);
 };
@@ -208,7 +208,7 @@ static void draw_data_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void draw_data(struct graph_info *gi, struct btree *btree,
-		      struct buffer_head *leafbuf,
+		      struct buffer_head *dleafbuf,
 		      block_t index, block_t block, unsigned count)
 {
 }
@@ -236,7 +236,7 @@ static void draw_bitmap_start(struct graph_info *gi, struct btree *btree)
 static int bitmap_has_dirty;
 
 static void draw_bitmap_data(struct graph_info *gi, struct btree *btree,
-			     struct buffer_head *leafbuf,
+			     struct buffer_head *dleafbuf,
 			     block_t index, block_t block, unsigned count)
 {
 	struct sb *sb = btree->sb;
@@ -306,7 +306,7 @@ static void draw_countmap_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void draw_countmap_data(struct graph_info *gi, struct btree *btree,
-			     struct buffer_head *leafbuf,
+			     struct buffer_head *dleafbuf,
 			     block_t index, block_t block, unsigned count)
 {
 	struct sb *sb = btree->sb;
@@ -375,7 +375,7 @@ static void draw_atable_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
-			    struct buffer_head *leafbuf,
+			    struct buffer_head *dleafbuf,
 			    struct buffer_head *buffer, block_t block,
 			    int atable)
 {
@@ -455,7 +455,7 @@ static void draw_atable_unatom(struct graph_info *gi, struct btree *btree,
 }
 
 static void draw_atable_data(struct graph_info *gi, struct btree *btree,
-			     struct buffer_head *leafbuf,
+			     struct buffer_head *dleafbuf,
 			     block_t index, block_t block, unsigned count)
 {
 	static int start_atomref = 1, start_unatom = 1;
@@ -469,7 +469,7 @@ static void draw_atable_data(struct graph_info *gi, struct btree *btree,
 
 		if (index < sb->atomref_base) {
 			/* atom name table */
-			__draw_dir_data(gi, btree, leafbuf, buffer, block+i, 1);
+			__draw_dir_data(gi, btree, dleafbuf, buffer, block+i,1);
 		} else if (index < sb->unatom_base) {
 			/* atom refcount table */
 			if (start_atomref) {
@@ -528,7 +528,7 @@ static void draw_dir_start(struct graph_info *gi, struct btree *btree)
 }
 
 static void draw_dir_data(struct graph_info *gi, struct btree *btree,
-			  struct buffer_head *leafbuf,
+			  struct buffer_head *dleafbuf,
 			  block_t index, block_t block, unsigned count)
 {
 	struct buffer_head *buffer;
@@ -537,7 +537,7 @@ static void draw_dir_data(struct graph_info *gi, struct btree *btree,
 		buffer = blockread(mapping(btree_inode(btree)), index + i);
 		assert(buffer);
 
-		__draw_dir_data(gi, btree, leafbuf, buffer, block + i, 0);
+		__draw_dir_data(gi, btree, dleafbuf, buffer, block + i, 0);
 
 		blockput(buffer);
 	}
@@ -588,28 +588,29 @@ static const char *get_dleaf_name(struct buffer_head *dleaf_buf)
 	return name;
 }
 
-static void draw_dleaf_start(struct graph_info *gi, struct buffer_head *leafbuf)
+static void draw_dleaf_start(struct graph_info *gi,
+			     struct buffer_head *dleafbuf)
 {
-	block_t blocknr = leafbuf->index;
+	block_t blocknr = dleafbuf->index;
 
 	fprintf(gi->fp,
 		"%s [\n"
 		"label = \"{ <head> [%s] (blocknr %llu%s)",
-		get_dleaf_name(leafbuf), gi->lname, blocknr,
-		buffer_dirty(leafbuf) ? ", dirty" : "");
+		get_dleaf_name(dleafbuf), gi->lname, blocknr,
+		buffer_dirty(dleafbuf) ? ", dirty" : "");
 }
 
-static void draw_dleaf_end(struct graph_info *gi, struct buffer_head *leafbuf)
+static void draw_dleaf_end(struct graph_info *gi, struct buffer_head *dleafbuf)
 {
 	fprintf(gi->fp,
 		" }\"\n"
 		"shape = record\n"
 		"%s"
 		"];\n",
-		buffer_dirty(leafbuf) ? "color = red\n" : "");
+		buffer_dirty(dleafbuf) ? "color = red\n" : "");
 }
 
-static void draw_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
+static void draw_dleaf_extent(struct btree *btree, struct buffer_head *dleafbuf,
 			      block_t index, block_t block, unsigned count,
 			      void *data)
 {
@@ -617,11 +618,11 @@ static void draw_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
 	struct graph_info *data_gi = dtree_gi->private;
 	struct draw_data_ops *draw_data_ops = data_gi->private;
 
-	draw_data_ops->draw_data(data_gi, btree, leafbuf,
+	draw_data_ops->draw_data(data_gi, btree, dleafbuf,
 				 index, block, count);
 }
 
-static void draw_dleaf_entry(struct btree *btree, struct buffer_head *leafbuf,
+static void draw_dleaf_entry(struct btree *btree, struct buffer_head *dleafbuf,
 			      unsigned prev_count,
 			      unsigned version, block_t index, block_t block,
 			      int is_sentinel, void *data)
@@ -646,29 +647,29 @@ static struct walk_dleaf_ops draw_dleaf_ops = {
 	.entry = draw_dleaf_entry,
 };
 
-static void draw_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void draw_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 		       void *data)
 {
 	struct graph_info *gi = data;
-	struct dleaf *dleaf = bufdata(leafbuf);
+	struct dleaf *dleaf = bufdata(dleafbuf);
 
 	if (!opt_verbose && (drawn & DRAWN_DLEAF))
 		return;
 	drawn |= DRAWN_DLEAF;
 
-	draw_dleaf_start(gi, leafbuf);
+	draw_dleaf_start(gi, dleafbuf);
 
 	fprintf(gi->fp,
 		" | magic 0x%04x, count %u",
 		be16_to_cpu(dleaf->magic), be16_to_cpu(dleaf->count));
 
-	walk_dleaf(btree, leafbuf, &draw_dleaf_ops, gi);
+	walk_dleaf(btree, dleafbuf, &draw_dleaf_ops, gi);
 
-	draw_dleaf_end(gi, leafbuf);
+	draw_dleaf_end(gi, dleafbuf);
 
 	/* write link: dleaf -> file data */
 	add_link(gi, "%s:s -> %s [ltail=%s, lhead=cluster_%s];\n",
-		 get_dleaf_name(leafbuf), gi->filedata,
+		 get_dleaf_name(dleafbuf), gi->filedata,
 		 gi->subgraph, gi->filedata);
 }
 
@@ -718,7 +719,7 @@ static struct draw_data_ops *dtree_funcs[S_IFMT >> S_SHIFT] = {
 	[S_IFLNK >> S_SHIFT]	= &draw_symlink,
 };
 
-static void draw_ileaf_cb(struct buffer_head *leafbuf, int at,
+static void draw_ileaf_cb(struct buffer_head *ileafbuf, int at,
 			  struct inode *inode, void *data)
 {
 	if (!has_root(&tux_inode(inode)->btree))
@@ -727,7 +728,7 @@ static void draw_ileaf_cb(struct buffer_head *leafbuf, int at,
 	struct graph_info *gi = data;
 	struct btree *dtree = &tux_inode(inode)->btree;
 	inum_t inum = tux_inode(inode)->inum;
-	block_t blocknr = bufindex(leafbuf);	/* blocknr of ileaf */
+	block_t blocknr = bufindex(ileafbuf);	/* blocknr of ileaf */
 
 	struct draw_data_ops *draw_data_ops;
 	char bname[64];
@@ -792,7 +793,7 @@ typedef void (*draw_ileaf_attr_t)(struct graph_info *, struct btree *,
 				  struct buffer_head *, inum_t, void *, u16);
 
 static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
-			    struct buffer_head *leafbuf, inum_t inum,
+			    struct buffer_head *ileafbuf, inum_t inum,
 			    void *attrs, u16 size)
 {
 	struct sb *sb = btree->sb;
@@ -824,12 +825,12 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 }
 
 static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
-			 struct buffer_head *leafbuf,
+			 struct buffer_head *ileafbuf,
 			 draw_ileaf_attr_t draw_ileaf_attr)
 {
-	struct ileaf *ileaf = bufdata(leafbuf);
+	struct ileaf *ileaf = bufdata(ileafbuf);
 	__be16 *dict = ileaf_dict(btree, ileaf);
-	block_t blocknr = leafbuf->index;
+	block_t blocknr = ileafbuf->index;
 	int at;
 
 	fprintf(gi->fp,
@@ -844,7 +845,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		"  </tr>\n",
 		blocknr,
 		gi->lname, blocknr,
-		buffer_dirty(leafbuf) ? ", dirty" : "",
+		buffer_dirty(ileafbuf) ? ", dirty" : "",
 		be16_to_cpu(ileaf->magic), icount(ileaf), ibase(ileaf));
 
 	/* draw inode attributes */
@@ -865,7 +866,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 			"    <td port=\"a%d\">",
 			at);
 
-		draw_ileaf_attr(gi, btree, leafbuf, inum, attrs, size);
+		draw_ileaf_attr(gi, btree, ileafbuf, inum, attrs, size);
 
 		fprintf(gi->fp,
 			"</td>\n"
@@ -892,7 +893,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 		"shape = plaintext\n"
 		"%s"
 		"];\n",
-		buffer_dirty(leafbuf) ? "color = red\n" : "");
+		buffer_dirty(ileafbuf) ? "color = red\n" : "");
 
 	/* draw allows from offset to attributes */
 	for (at = 0; at < icount(ileaf); at++) {
@@ -907,7 +908,7 @@ static void __draw_ileaf(struct graph_info *gi, struct btree *btree,
 	}
 }
 
-static void draw_ileaf(struct btree *btree, struct buffer_head *leafbuf,
+static void draw_ileaf(struct btree *btree, struct buffer_head *ileafbuf,
 		       void *data)
 {
 	struct graph_info *gi = data;
@@ -916,9 +917,9 @@ static void draw_ileaf(struct btree *btree, struct buffer_head *leafbuf,
 		return;
 	drawn |= DRAWN_ILEAF;
 
-	__draw_ileaf(gi, btree, leafbuf, draw_ileaf_attr);
+	__draw_ileaf(gi, btree, ileafbuf, draw_ileaf_attr);
 
-	walk_ileaf(btree, leafbuf, draw_ileaf_cb, gi);
+	walk_ileaf(btree, ileafbuf, draw_ileaf_cb, gi);
 }
 
 static struct walk_btree_ops draw_itree_ops = {
@@ -929,13 +930,13 @@ static struct walk_btree_ops draw_itree_ops = {
 };
 
 static void draw_oleaf_attr(struct graph_info *gi, struct btree *btree,
-			    struct buffer_head *leafbuf, inum_t inum,
+			    struct buffer_head *oleafbuf, inum_t inum,
 			    void *attrs, u16 size)
 {
 	fprintf(gi->fp, "attrs (ino %llu, size %u)", inum, size);
 }
 
-static void draw_oleaf(struct btree *btree, struct buffer_head *leafbuf,
+static void draw_oleaf(struct btree *btree, struct buffer_head *oleafbuf,
 		       void *data)
 {
 	struct graph_info *gi = data;
@@ -944,7 +945,7 @@ static void draw_oleaf(struct btree *btree, struct buffer_head *leafbuf,
 		return;
 	drawn |= DRAWN_OLEAF;
 
-	__draw_ileaf(gi, btree, leafbuf, draw_oleaf_attr);
+	__draw_ileaf(gi, btree, oleafbuf, draw_oleaf_attr);
 }
 
 static struct walk_btree_ops draw_otree_ops = {
