@@ -2,6 +2,7 @@
 
 #ifdef __KERNEL__
 #include "tux3.h"
+#include "kcompat.h"
 
 int vecio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct bio_vec *vec,
 	bio_end_io_t endio, void *info)
@@ -11,13 +12,13 @@ int vecio(int rw, struct block_device *dev, loff_t offset, unsigned vecs, struct
 	if (!bio)
 		return -ENOMEM;
 	bio->bi_bdev = dev;
-	bio->bi_sector = offset >> 9;
+	bio_bi_sector(bio) = offset >> 9;
 	bio->bi_end_io = endio;
 	bio->bi_private = info;
 	bio->bi_vcnt = vecs;
 	memcpy(bio->bi_io_vec, vec, sizeof(*vec) * vecs);
 	while (vecs--)
-		bio->bi_size += bio->bi_io_vec[vecs].bv_len;
+		bio_bi_size(bio) += bio->bi_io_vec[vecs].bv_len;
 	submit_bio(rw, bio);
 	return 0;
 }
