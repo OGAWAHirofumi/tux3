@@ -1,136 +1,30 @@
-#ifndef TUX3_DLEAF_H
-#define TUX3_DLEAF_H
+#ifndef TUX3_DLEAF2_H
+#define TUX3_DLEAF2_H
 
-/* version:10, count:6, block:48 */
-struct diskextent { __be64 block_count_version; };
-#define MAX_GROUP_ENTRIES 255
-/* count:8, keyhi:24 */
-struct group { __be32 count_and_keyhi; };
-/* limit:8, keylo:24 */
-struct entry { __be32 limit_and_keylo; };
-struct dleaf { __be16 magic, groups, free, used; struct diskextent table[]; };
+struct dleaf_req {
+	struct btree_key_range key;	/* index and count */
 
-/* Maximum size of one extent on dleaf. */
-#define DLEAF_MAX_EXTENT_SIZE \
-	(sizeof(struct group)+sizeof(struct entry)+sizeof(struct diskextent))
+	int seg_cnt;			/* How many segs are available */
+	int seg_max;			/* Max size of seg[] */
+	struct block_segment *seg;	/* Pointer to seg[] */
 
-struct dwalk {
-	struct dleaf *leaf;
-	struct group *group, *gstop, *gdict;
-	struct entry *entry, *estop;
-	struct diskextent *exbase, *extent, *exstop;
-	struct {
-		struct group group;
-		struct entry entry;
-		int used, free, groups;
-	} mock;
+	int seg_idx;			/* use by dleaf2_write() internally */
+	int overwrite;
+
+	/* Callback to allocate blocks to ->seg for write */
+	int (*seg_find)(struct btree *, struct dleaf_req *, int, unsigned,
+			unsigned *);
+	int (*seg_alloc)(struct btree *, struct dleaf_req *, int);
+	void (*seg_free)(struct btree *, block_t, unsigned);
 };
 
-/* group wrappers */
-
-static inline struct group make_group(tuxkey_t keyhi, unsigned count)
+static inline unsigned seg_total_count(struct block_segment *seg, int nr_segs)
 {
-	return (struct group){ cpu_to_be32(keyhi | (count << 24)) };
+	unsigned total = 0;
+	int i;
+	for (i = 0; i < nr_segs; i++)
+		total += seg[i].count;
+	return total;
 }
 
-static inline unsigned group_keyhi(struct group *group)
-{
-	return be32_to_cpup((__be32 *)group) & 0xffffff;
-}
-
-static inline unsigned group_count(struct group *group)
-{
-	return *(unsigned char *)group;
-}
-
-static inline void set_group_count(struct group *group, int n)
-{
-	*(unsigned char *)group = n;
-}
-
-static inline void inc_group_count(struct group *group, int n)
-{
-	*(unsigned char *)group += n;
-}
-
-/* entry wrappers */
-
-static inline struct entry make_entry(tuxkey_t keylo, unsigned limit)
-{
-	return (struct entry){ cpu_to_be32(keylo | (limit << 24)) };
-}
-
-static inline unsigned entry_keylo(struct entry *entry)
-{
-	return be32_to_cpup((__be32 *)entry) & ~(-1 << 24);
-}
-
-static inline unsigned entry_limit(struct entry *entry)
-{
-	return *(unsigned char *)entry;
-}
-
-static inline void inc_entry_limit(struct entry *entry, int n)
-{
-	*(unsigned char *)entry += n;
-}
-
-/* extent wrappers */
-
-static inline struct diskextent make_extent(block_t block, unsigned count)
-{
-	assert(block < (1ULL << 48) && count - 1 < (1 << 6));
-	return (struct diskextent){ cpu_to_be64(((u64)(count - 1) << 48) | block) };
-}
-
-static inline block_t extent_block(struct diskextent extent)
-{
-	return be64_to_cpup((__be64 *)&extent) & ~(-1LL << 48);
-}
-
-static inline unsigned extent_count(struct diskextent extent)
-{
-	return ((be64_to_cpup((__be64 *)&extent) >> 48) & 0x3f) + 1;
-}
-
-static inline unsigned extent_version(struct diskextent extent)
-{
-	return be64_to_cpu(*(__be64 *)&extent) >> 54;
-}
-
-/* dleaf wrappers */
-
-static inline unsigned dleaf_groups(struct dleaf *leaf)
-{
-	return be16_to_cpu(leaf->groups);
-}
-
-static inline void set_dleaf_groups(struct dleaf *leaf, int n)
-{
-	leaf->groups = cpu_to_be16(n);
-}
-
-static inline void inc_dleaf_groups(struct dleaf *leaf, int n)
-{
-	be16_add_cpu(&leaf->groups, n);
-}
-
-int dleaf_init(struct btree *btree, void *leaf);
-unsigned dleaf_free(struct btree *btree, void *leaf);
-void dleaf_dump(struct btree *btree, void *vleaf);
-int dleaf_merge(struct btree *btree, void *vinto, void *vfrom);
-extern struct btree_ops dtree1_ops;
-
-void dwalk_redirect(struct dwalk *walk, struct dleaf *src, struct dleaf *dst);
-int dwalk_end(struct dwalk *walk);
-block_t dwalk_block(struct dwalk *walk);
-unsigned dwalk_count(struct dwalk *walk);
-tuxkey_t dwalk_index(struct dwalk *walk);
-int dwalk_next(struct dwalk *walk);
-int dwalk_back(struct dwalk *walk);
-int dwalk_probe(struct dleaf *leaf, unsigned blocksize, struct dwalk *walk, tuxkey_t key);
-int dwalk_mock(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
-void dwalk_copy(struct dwalk *walk, struct dleaf *dest);
-void dwalk_chop(struct dwalk *walk);
-int dwalk_add(struct dwalk *walk, tuxkey_t index, struct diskextent extent);
-#endif /* !TUX3_DLEAF_H */
+#endif /* !TUX3_DLEAF2_H */

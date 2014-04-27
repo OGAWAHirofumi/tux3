@@ -621,157 +621,6 @@ static void draw_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
 				 index, block, count);
 }
 
-static inline struct group *dleaf1_groups_ptr(struct btree *btree,
-					      struct dleaf *dleaf)
-{
-	return (void *)dleaf + btree->sb->blocksize;
-}
-
-static inline struct group *dleaf1_group_ptr(struct group *groups, int gr)
-{
-	return groups - (gr + 1);
-}
-
-static inline struct entry *dleaf1_entries(struct dleaf *dleaf,
-					   struct group *groups, int gr)
-{
-	struct entry *entries = (struct entry *)(groups - dleaf_groups(dleaf));
-	for (int i = 0; i < gr; i++)
-		entries -= group_count(dleaf1_group_ptr(groups, i));
-	return entries;
-}
-
-static inline struct entry *dleaf1_entry(struct entry *entries, int ent)
-{
-	return entries - (ent + 1);
-}
-
-static inline int dleaf1_extent_count(struct entry *entries, int ent)
-{
-	int offset = ent ? entry_limit(dleaf1_entry(entries, ent - 1)) : 0;
-	return entry_limit(dleaf1_entry(entries, ent)) - offset;
-}
-
-static inline struct diskextent *dleaf1_extents(struct dleaf *dleaf,
-						struct group *groups,
-						int gr, int ent)
-{
-	struct diskextent *extents = dleaf->table;
-	struct group *group;
-	struct entry *entries;
-	int i;
-
-	for (i = 0; i < gr; i++) {
-		group = dleaf1_group_ptr(groups, i);
-		entries = dleaf1_entries(dleaf, groups, i);
-		extents += entry_limit(dleaf1_entry(entries, group_count(group) - 1));
-	}
-	if (ent) {
-		entries = dleaf1_entries(dleaf, groups, i);
-		extents += entry_limit(dleaf1_entry(entries, ent - 1));
-	}
-
-	return extents;
-}
-
-static inline struct diskextent *dleaf1_extent(struct diskextent *extents,
-					       int ex)
-{
-	return extents + ex;
-}
-
-static struct walk_dleaf_ops draw_dleaf1_ops = {
-	.extent = draw_dleaf_extent,
-};
-
-static void draw_dleaf1(struct graph_info *gi, struct btree *btree,
-			struct buffer_head *leafbuf, void *data)
-{
-	struct dleaf *dleaf = bufdata(leafbuf);
-	struct group *groups = dleaf1_groups_ptr(btree, dleaf);
-	const char *dleaf_name = get_dleaf_name(leafbuf);
-	struct diskextent *extents;
-	int gr;
-
-	draw_dleaf_start(gi, leafbuf);
-
-	fprintf(gi->fp,
-		" | magic 0x%04x, free %u, used %u, groups %u",
-		be16_to_cpu(dleaf->magic), be16_to_cpu(dleaf->free),
-		be16_to_cpu(dleaf->used), dleaf_groups(dleaf));
-
-	/* draw extents */
-	for (gr = 0; gr < dleaf_groups(dleaf); gr++) {
-		struct group *group = dleaf1_group_ptr(groups, gr);
-		struct entry *entries = dleaf1_entries(dleaf, groups, gr);
-		for (int ent = 0; ent < group_count(group); ent++) {
-			int ex, ex_count = dleaf1_extent_count(entries, ent);
-			extents = dleaf1_extents(dleaf, groups, gr, ent);
-			for (ex = 0; ex < ex_count; ex++) {
-				fprintf(gi->fp,
-					" | <gr%uent%uex%u>"
-					" version 0x%03x, count %u, block %llu "
-					" (extent %u)",
-					gr, ent, ex,
-					extent_version(extents[ex]),
-					extent_count(extents[ex]),
-					extent_block(extents[ex]),
-					ex);
-			}
-		}
-	}
-	fprintf(gi->fp,
-		" | .....");
-
-	/* draw entries */
-	for (gr = dleaf_groups(dleaf) - 1; gr >= 0; gr--) {
-		struct group *group = dleaf1_group_ptr(groups, gr);
-		struct entry *entries = dleaf1_entries(dleaf, groups, gr);
-		int ent;
-
-		for (ent = group_count(group) - 1; ent >= 0; ent--) {
-			struct entry *entry = dleaf1_entry(entries, ent);
-
-			fprintf(gi->fp,
-				" | <gr%uent%u> limit %u, keylo 0x%06x"
-				" (entry %u, count %u, iblock %llu)",
-				gr, ent, entry_limit(entry), entry_keylo(entry),
-				ent, dleaf1_extent_count(entries, ent),
-				get_index(group, entry));
-		}
-	}
-
-	/* draw groups */
-	for (gr = dleaf_groups(dleaf) - 1; gr >= 0; gr--) {
-		struct group *group = dleaf1_group_ptr(groups, gr);
-
-		fprintf(gi->fp,
-			" | <gr%u> count %u, keyhi 0x%06x (group %u)",
-			gr, group_count(group), group_keyhi(group), gr);
-	}
-
-	draw_dleaf_end(gi, leafbuf);
-
-	for (gr = 0; gr < dleaf_groups(dleaf); gr++) {
-		struct group *group = dleaf1_group_ptr(groups, gr);
-		/* write link: dleaf:group -> dleaf:entry */
-		fprintf(gi->fp,
-			"%s:gr%u:w -> %s:gr%uent%u:w;\n",
-			dleaf_name, gr,
-			dleaf_name, gr, 0);
-		for (int ent = 0; ent < group_count(group); ent++) {
-			/* write link: dleaf:entry -> dleaf:extent */
-			fprintf(gi->fp,
-				"%s:gr%uent%u:w -> %s:gr%uent%uex%u:w;\n",
-				dleaf_name, gr, ent,
-				dleaf_name, gr, ent, 0);
-		}
-	}
-
-	/* Walk again for file data */
-	walk_dleaf(btree, leafbuf, &draw_dleaf1_ops, gi);
-}
-
 static void draw_dleaf2_entry(struct btree *btree, struct buffer_head *leafbuf,
 			      unsigned prev_count,
 			      unsigned version, block_t index, block_t block,
@@ -818,16 +667,12 @@ static void draw_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 {
 	struct graph_info *dtree_gi = data;
 	struct graph_info *data_gi = dtree_gi->private;
-	struct dleaf *dleaf = bufdata(leafbuf);
 
 	if (!opt_verbose && (drawn & DRAWN_DLEAF))
 		return;
 	drawn |= DRAWN_DLEAF;
 
-	if (dleaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF))
-		draw_dleaf1(dtree_gi, btree, leafbuf, data_gi);
-	else
-		draw_dleaf2(dtree_gi, btree, leafbuf, data_gi);
+	draw_dleaf2(dtree_gi, btree, leafbuf, data_gi);
 
 	/* write link: dleaf -> file data */
 	add_link(dtree_gi, "%s:s -> %s [ltail=%s, lhead=cluster_%s];\n",

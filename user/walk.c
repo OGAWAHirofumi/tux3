@@ -14,7 +14,6 @@
 /* walk has to access internal structure */
 #include "kernel/btree.c"
 #include "kernel/dleaf.c"
-#include "kernel/dleaf2.c"
 #include "kernel/ileaf.c"
 
 
@@ -67,24 +66,6 @@ struct walk_dleaf_ops {
 		      unsigned, block_t, block_t, int, void *);
 };
 
-static void walk_dleaf1(struct btree *btree, struct buffer_head *leafbuf,
-			struct walk_dleaf_ops *cb, void *data)
-{
-	struct sb *sb = btree->sb;
-	struct dleaf *dleaf = bufdata(leafbuf);
-	struct dwalk walk;
-
-	if (dwalk_probe(dleaf, sb->blocksize, &walk, 0)) {
-		do {
-			block_t index = dwalk_index(&walk);
-			block_t block = dwalk_block(&walk);
-			unsigned count = dwalk_count(&walk);
-
-			cb->extent(btree, leafbuf, index, block, count, data);
-		} while (dwalk_next(&walk));
-	}
-}
-
 static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 			struct walk_dleaf_ops *cb, void *data)
 {
@@ -124,12 +105,7 @@ static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 static void walk_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 		       struct walk_dleaf_ops *cb, void *data)
 {
-	struct dleaf *dleaf = bufdata(leafbuf);
-
-	if (dleaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF))
-		walk_dleaf1(btree, leafbuf, cb, data);
-	else
-		walk_dleaf2(btree, leafbuf, cb, data);
+	walk_dleaf2(btree, leafbuf, cb, data);
 }
 
 static inline u16 ileaf_attr_size(__be16 *dict, int at)

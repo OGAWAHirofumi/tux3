@@ -77,7 +77,7 @@ ifeq ($(shell pkg-config fuse && echo found), found)
 	FUSE_BIN = tux3fuse
 endif
 TEST_BIN	= tests/balloc tests/btree tests/buffer tests/commit \
-	tests/dir tests/dleaf tests/dleaf2 tests/filemap tests/iattr \
+	tests/dir tests/dleaf tests/filemap tests/iattr \
 	tests/ileaf tests/inode tests/log tests/xattr
 ALL_BIN		= $(TEST_BIN) $(TUX3_BIN) $(FUSE_BIN)
 
@@ -90,7 +90,7 @@ ALL_LIBS	= $(LIBTUX3) $(LIBKLIB)
 USER_OBJS	= current_task.o dir.o filemap.o inode.o namei.o options.o \
 	super.o utility.o writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
-	kernel/dleaf.o kernel/dleaf2.o kernel/iattr.o kernel/ileaf.o \
+	kernel/dleaf.o kernel/iattr.o kernel/ileaf.o \
 	kernel/log.o kernel/orphan.o kernel/replay.o kernel/xattr.o
 TEST_LIB_OBJS	= tests/test.o
 
@@ -102,7 +102,7 @@ LIBKLIB_OBJS	= libklib/find_next_bit.o libklib/fs.o libklib/list_sort.o \
 OBJS		= tux3.o
 FUSE_OBJS	= tux3fuse.o
 TEST_OBJS	= tests/balloc.o tests/btree.o tests/buffer.o tests/commit.o \
-	tests/dir.o tests/dleaf.o tests/dleaf2.o tests/filemap.o \
+	tests/dir.o tests/dleaf.o tests/filemap.o \
 	tests/iattr.o tests/ileaf.o tests/inode.o tests/log.o \
 	tests/xattr.o
 
@@ -128,7 +128,6 @@ tests/buffer: tests/buffer.o $(ALL_LIBS)
 tests/commit: tests/commit.o $(ALL_LIBS)
 tests/dir: tests/dir.o $(ALL_LIBS)
 tests/dleaf: tests/dleaf.o $(ALL_LIBS)
-tests/dleaf2: tests/dleaf2.o $(ALL_LIBS)
 tests/filemap: tests/filemap.o $(ALL_LIBS)
 tests/iattr: tests/iattr.o $(ALL_LIBS)
 tests/ileaf: tests/ileaf.o $(ALL_LIBS)

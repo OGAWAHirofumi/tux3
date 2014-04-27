@@ -442,23 +442,6 @@ static struct walk_dleaf_ops dump_dleaf_ops = {
 	.extent = dump_dleaf_extent,
 };
 
-static void dump_dleaf1(struct btree *btree, struct buffer_head *leafbuf,
-			void *data)
-{
-	struct dump_info *di = data;
-	struct dleaf *dleaf = bufdata(leafbuf);
-	unsigned bytes = sizeof(*dleaf) + dleaf_free(btree, dleaf);
-	int empty = dleaf_can_free(btree, dleaf);
-	int depth = btree->root.depth;
-
-	if (opt_stats) {
-		stats_block_add(di->stats->own, depth, bufindex(leafbuf),
-				bytes, empty);
-	}
-
-	walk_dleaf(btree, leafbuf, &dump_dleaf_ops, di);
-}
-
 static void dump_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 			void *data)
 {
@@ -480,12 +463,7 @@ static void dump_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 static void dump_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 		       void *data)
 {
-	struct dleaf *dleaf = bufdata(leafbuf);
-
-	if (dleaf->magic == cpu_to_be16(TUX3_MAGIC_DLEAF))
-		dump_dleaf1(btree, leafbuf, data);
-	else
-		dump_dleaf2(btree, leafbuf, data);
+	dump_dleaf2(btree, leafbuf, data);
 }
 
 static struct walk_btree_ops dump_dtree_ops = {

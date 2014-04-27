@@ -19,7 +19,7 @@
 #include "balloc-dummy.c"
 
 #include "../filemap.c"		/* for seg_alloc() */
-#include "kernel/dleaf2.c"
+#include "kernel/dleaf.c"
 
 static void clean_main(struct sb *sb, struct btree *btree)
 {

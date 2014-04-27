@@ -29,9 +29,6 @@ test_dir: dir
 test_dleaf: dleaf
 	$(VG) ./dleaf
 
-test_dleaf2: dleaf2
-	$(VG) ./dleaf2
-
 test_filemap: filemap
 	$(VG) ./filemap foodev
 

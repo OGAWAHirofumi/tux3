@@ -29,7 +29,7 @@
  */
 
 #include "tux3.h"
-#include "dleaf2.h"
+#include "dleaf.h"
 
 /*
  * The uptag is for filesystem integrity checking and corruption
