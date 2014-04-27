@@ -45,7 +45,7 @@ static void test01(struct sb *sb)
 	inode1->i_mtime	= spectime(0xbadface1badface2ULL);
 	tux_inode(inode1)->present = abits;
 	tux_inode(inode1)->btree = (struct btree){
-		.root = { .block = 0xcaba1f00dULL, .depth = 3 },
+		.root = { .block = 0xcaba1f00dULL, .depth = 4 },
 	};
 
 	tux3_mark_inode_dirty(inode1);

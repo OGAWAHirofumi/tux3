@@ -297,7 +297,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	/* Add keys to test tree_expand() until new depth */
 	for (int key = 0; key < keys; key++)
 		btree_write_test(cursor, key);
-	test_assert(btree->root.depth == 2);
+	test_assert(btree->root.depth == 3);
 	/* Check key again after addition completed */
 	for (int key = 0; key < keys; key++) {
 		test_assert(btree_probe(cursor, key) == 0);
@@ -310,7 +310,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	/* Delte all */
 	test_assert(btree_chop(btree, 0, TUXKEY_LIMIT) == 0);
 	/* btree should have empty root */
-	test_assert(btree->root.depth == 1);
+	test_assert(btree->root.depth == 2);
 
 	/* btree_probe() should return same path always */
 	test_assert(btree_probe(cursor, 0) == 0);
@@ -350,7 +350,7 @@ static void test03(struct sb *sb, struct inode *inode)
 
 	for (int key = keys - 1; key >= 0; key--)
 		btree_write_test(cursor, key);
-	assert(btree->root.depth >= 5); /* this test expects more than 5 */
+	assert(btree->root.depth >= 6); /* this test expects more than 6 */
 
 	/* Check key again after addition completed */
 	for (int key = keys - 1; key >= 0; key--) {
@@ -463,7 +463,7 @@ static void test05(struct sb *sb, struct inode *inode)
 	int keys = sb->entries_per_node * btree->entries_per_leaf * 100;
 	for (int key = keys - 1; key >= 0; key--)
 		btree_write_test(cursor, key);
-	assert(btree->root.depth >= 5); /* this test expects more than 5 */
+	assert(btree->root.depth >= 6); /* this test expects more than 6 */
 
 	test_assert(btree_probe(cursor, 0) == 0);
 	orig = malloc(sizeof(*orig) * (cursor->level + 1));
@@ -617,7 +617,7 @@ static void test06(struct sb *sb, struct inode *inode)
 	root->entries[0].block = cpu_to_be64(bufindex(node[1]));
 	root->entries[1].block = cpu_to_be64(bufindex(node[2]));
 	/* Set root node to btree */
-	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 2 };
+	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 3 };
 
 	for(int i = 0; i < ARRAY_SIZE(leaf); i++) {
 		mark_buffer_dirty_non(leaf[i]);
@@ -756,7 +756,7 @@ static void test07(struct sb *sb, struct inode *inode)
 	cursor_push(cursor, leaf[0], NULL);
 
 	/* Set root node to btree */
-	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 2 };
+	btree->root = (struct root){ .block = bufindex(node[0]), .depth = 3 };
 	cursor_check(cursor);
 
 	/* insert_leaf with keep == 0 */

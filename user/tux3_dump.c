@@ -72,8 +72,8 @@ static u64 average(u64 total, u64 nr)
 
 static struct stats_btree *alloc_stats_btree(int depth)
 {
-	size_t size = sizeof(struct stats_btree)
-		+ (depth + 1) * sizeof(struct stats_btree_level);
+	size_t size = sizeof(struct stats_btree) +
+		depth * sizeof(struct stats_btree_level);
 	struct stats_btree *own;
 
 	own = malloc(size);
@@ -185,7 +185,7 @@ stats_levels_sum(struct stats_btree *stats, int depth)
 {
 	struct stats_btree_level sum = {};
 
-	for (int i = 0; i <= depth; i++) {
+	for (int i = 0; i < depth; i++) {
 		sum.block.blocks	+= stats->levels[i].block.blocks;
 		sum.block.empty		+= stats->levels[i].block.empty;
 		sum.block.bytes		+= stats->levels[i].block.bytes;
@@ -214,10 +214,10 @@ static void stats_btree_merge(struct stats_btree **a, struct stats_btree *b)
 			/* Copy (*a) to tmp */
 			tmp->depth_seek = (*a)->depth_seek;
 			tmp->data = (*a)->data;
-			for (int i = 0; i < (*a)->depth; i++)
+			for (int i = 0; i < (*a)->depth - 1; i++)
 				tmp->levels[i] = (*a)->levels[i];
 			/* Set leaf info to new depth */
-			tmp->levels[tmp->depth] = (*a)->levels[(*a)->depth];
+			tmp->levels[tmp->depth-1] = (*a)->levels[(*a)->depth-1];
 
 			free_stats_btree(*a);
 			*a = tmp;
@@ -225,8 +225,8 @@ static void stats_btree_merge(struct stats_btree **a, struct stats_btree *b)
 	}
 
 	/* Merge bnode => bnode, and leaf => leaf */
-	for (int i = 0; i <= b->depth; i++) {
-		int level = i < b->depth ? i : (*a)->depth;
+	for (int i = 0; i < b->depth; i++) {
+		int level = (i <= b->depth - 2) ? i : (*a)->depth - 1;
 		struct stats_btree_level *la = &(*a)->levels[level];
 		struct stats_btree_level *lb = &b->levels[i];
 
@@ -274,10 +274,10 @@ static void stats_print_depth_seek(struct stats_seek *stats)
 static void stats_print_seeks(struct sb *sb, struct stats_btree *stats,
 			      int data, int dir)
 {
-	for (int i = 0; i <= stats->depth; i++) {
+	for (int i = 0; i < stats->depth; i++) {
 		char prefix[64];
 
-		if (i < stats->depth)
+		if (i <= stats->depth - 2)
 			snprintf(prefix, sizeof(prefix), "level %d => %d",
 				 i, i + 1);
 		else
@@ -341,7 +341,7 @@ stats_print(struct sb *sb, struct stats_btree *stats, int data, int dir,
 	sum = stats_levels_sum(stats, stats->depth - 1);
 	stats_print_level(sb, &sum, "bnode");
 
-	stats_print_level(sb, &stats->levels[stats->depth], "leaf");
+	stats_print_level(sb, &stats->levels[stats->depth - 1], "leaf");
 
 	/* Calc sum of bnode + leaf */
 	sum = stats_levels_sum(stats, stats->depth);
@@ -429,10 +429,10 @@ static void dump_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
 				dump_data_dir, data);
 
 	if (opt_stats) {
-		int depth = btree->root.depth;
+		int level = btree->root.depth - 1;
 
 		stats_data_seek_add(di->stats->own, block, count);
-		stats_child_seek_add(di->stats->own, depth, bufindex(leafbuf),
+		stats_child_seek_add(di->stats->own, level, bufindex(leafbuf),
 				     block);
 		stats_data_add(di->stats->own, block, count);
 	}
@@ -450,10 +450,10 @@ static void dump_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 	unsigned bytes = sizeof(*dleaf)
 		+ sizeof(*dleaf->table) * be16_to_cpu(dleaf->count);
 	int empty = dleaf_can_free(btree, dleaf);
-	int depth = btree->root.depth;
+	int level = btree->root.depth - 1;
 
 	if (opt_stats) {
-		stats_block_add(di->stats->own, depth, bufindex(leafbuf),
+		stats_block_add(di->stats->own, level, bufindex(leafbuf),
 				bytes, empty);
 	}
 
@@ -532,7 +532,6 @@ static void dump_ileaf_attr(struct dump_info *di, struct btree *btree,
 {
 	struct sb *sb = btree->sb;
 	struct inode *inode = rapid_open_inode(sb, NULL, 0);
-	int depth = btree->root.depth;
 #if 0
 	/* Check there is orphaned inode */
 	struct inode *cache_inode = tux3_ilookup(sb, inum);
@@ -545,7 +544,8 @@ static void dump_ileaf_attr(struct dump_info *di, struct btree *btree,
 	iattr_ops.decode(btree, inode, attrs, size);
 
 	if (opt_stats && has_root(&tux_inode(inode)->btree)) {
-		stats_child_seek_add(di->stats->own, depth, bufindex(leafbuf),
+		int level = btree->root.depth - 1;
+		stats_child_seek_add(di->stats->own, level, bufindex(leafbuf),
 				     tux_inode(inode)->btree.root.block);
 	}
 
@@ -559,7 +559,6 @@ static void __dump_ileaf(struct dump_info *di, struct btree *btree,
 {
 	struct ileaf *ileaf = bufdata(leafbuf);
 	__be16 *dict = ileaf_dict(btree, ileaf);
-	int depth = btree->root.depth;
 	int at;
 
 	/* draw inode attributes */
@@ -581,8 +580,9 @@ static void __dump_ileaf(struct dump_info *di, struct btree *btree,
 	if (opt_stats) {
 		unsigned bytes = sizeof(*ileaf) + ileaf_need(btree, ileaf);
 		int empty = btree->ops->leaf_can_free(btree, ileaf);
+		int level = btree->root.depth - 1;
 
-		stats_block_add(di->stats->own, depth, bufindex(leafbuf),
+		stats_block_add(di->stats->own, level, bufindex(leafbuf),
 				bytes, empty);
 	}
 }

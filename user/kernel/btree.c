@@ -115,7 +115,7 @@ static inline struct bnode *level_node(struct cursor *cursor, int level)
 
 struct buffer_head *cursor_leafbuf(struct cursor *cursor)
 {
-	assert(cursor->level == cursor->btree->root.depth);
+	assert(cursor->level == cursor->btree->root.depth - 1);
 	return cursor->path[cursor->level].buffer;
 }
 
@@ -246,16 +246,16 @@ static inline int alloc_cursor_size(int count)
 
 struct cursor *alloc_cursor(struct btree *btree, int extra)
 {
-	int maxlevel = btree->root.depth + extra;
+	int extra_depth = btree->root.depth + extra;
 	struct cursor *cursor;
 
-	cursor = kmalloc(alloc_cursor_size(maxlevel + 1), GFP_NOFS);
+	cursor = kmalloc(alloc_cursor_size(extra_depth), GFP_NOFS);
 	if (cursor) {
 		cursor->btree = btree;
 		cursor->level = -1;
 #ifdef CURSOR_DEBUG
-		cursor->maxlevel = maxlevel;
-		for (int i = 0; i <= maxlevel; i++) {
+		cursor->maxlevel = extra_depth - 1;
+		for (int i = 0; i < extra_depth; i++) {
 			cursor->path[i].buffer = FREE_BUFFER; /* for debug */
 			cursor->path[i].next = FREE_NEXT; /* for debug */
 		}
@@ -288,7 +288,7 @@ static struct index_entry *bnode_lookup(struct bnode *node, tuxkey_t key)
 static int cursor_level_finished(struct cursor *cursor)
 {
 	/* must not be leaf */
-	assert(cursor->level < cursor->btree->root.depth);
+	assert(cursor->level < cursor->btree->root.depth - 1);
 	return level_finished(cursor, cursor->level);
 }
 
@@ -300,7 +300,7 @@ static int cursor_level_finished(struct cursor *cursor)
 tuxkey_t cursor_next_key(struct cursor *cursor)
 {
 	int level = cursor->level;
-	assert(cursor->level == cursor->btree->root.depth);
+	assert(level == cursor->btree->root.depth - 1);
 	while (level--) {
 		if (!level_finished(cursor, level))
 			return be64_to_cpu(cursor->path[level].next->key);
@@ -311,7 +311,7 @@ tuxkey_t cursor_next_key(struct cursor *cursor)
 static tuxkey_t cursor_level_next_key(struct cursor *cursor)
 {
 	int level = cursor->level;
-	assert(cursor->level < cursor->btree->root.depth);
+	assert(level < cursor->btree->root.depth - 1);
 	while (level >= 0) {
 		if (!level_finished(cursor, level))
 			return be64_to_cpu(cursor->path[level].next->key);
@@ -323,13 +323,13 @@ static tuxkey_t cursor_level_next_key(struct cursor *cursor)
 /* Return key of this leaf */
 tuxkey_t cursor_this_key(struct cursor *cursor)
 {
-	assert(cursor->level == cursor->btree->root.depth);
+	assert(cursor->level == cursor->btree->root.depth - 1);
 	return be64_to_cpu((cursor->path[cursor->level - 1].next - 1)->key);
 }
 
 static tuxkey_t cursor_level_this_key(struct cursor *cursor)
 {
-	assert(cursor->level < cursor->btree->root.depth);
+	assert(cursor->level < cursor->btree->root.depth - 1);
 	return be64_to_cpu((cursor->path[cursor->level].next - 1)->key);
 }
 
@@ -377,7 +377,7 @@ static int cursor_advance_down(struct cursor *cursor)
 	struct buffer_head *buffer;
 	block_t child;
 
-	assert(cursor->level < btree->root.depth);
+	assert(cursor->level < btree->root.depth - 1);
 
 	child = be64_to_cpu(cursor->path[cursor->level].next->block);
 	buffer = vol_bread(btree->sb, child);
@@ -385,7 +385,7 @@ static int cursor_advance_down(struct cursor *cursor)
 		return -EIO; /* FIXME: stupid, it might have been NOMEM */
 	cursor->path[cursor->level].next++;
 
-	if (cursor->level < btree->root.depth - 1) {
+	if (cursor->level < btree->root.depth - 2) {
 		struct bnode *node = bufdata(buffer);
 		assert(!bnode_sniff(node));
 		cursor_push(cursor, buffer, node->entries);
@@ -575,11 +575,11 @@ int cursor_redirect(struct cursor *cursor)
 	struct sb *sb = btree->sb;
 	int level;
 
-	for (level = 0; level <= btree->root.depth; level++) {
+	for (level = 0; level < btree->root.depth; level++) {
 		struct buffer_head *buffer, *clone;
 		block_t parent, oldblock, newblock;
 		struct index_entry *entry;
-		int redirect, is_leaf = (level == btree->root.depth);
+		int redirect, is_leaf = (level == btree->root.depth - 1);
 
 		buffer = cursor->path[level].buffer;
 		/* If buffer needs to redirect to dirty, redirect it */
@@ -809,11 +809,11 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 	/* Chop all range if len >= TUXKEY_LIMIT */
 	limit = (len >= TUXKEY_LIMIT) ? TUXKEY_LIMIT : start + len;
 
-	prev = kzalloc(sizeof(*prev) * btree->root.depth, GFP_NOFS);
+	prev = kzalloc(sizeof(*prev) * (btree->root.depth - 1), GFP_NOFS);
 	if (prev == NULL)
 		return -ENOMEM;
 
-	cii = kzalloc(sizeof(*cii) * btree->root.depth, GFP_NOFS);
+	cii = kzalloc(sizeof(*cii) * (btree->root.depth - 1), GFP_NOFS);
 	if (cii == NULL) {
 		ret = -ENOMEM;
 		goto error_cii;
@@ -927,7 +927,7 @@ keep_prev_node:
 
 chop_root:
 	/* Remove depth if possible */
-	while (btree->root.depth > 1 && bcount(bufdata(prev[0])) == 1) {
+	while (btree->root.depth > 2 && bcount(bufdata(prev[0])) == 1) {
 		trace("drop btree level");
 		btree->root.block = bufindex(prev[1]);
 		btree->root.depth--;
@@ -944,14 +944,14 @@ chop_root:
 		log_bnode_free(sb, bufindex(prev[0]));
 		blockput_free_unify(sb, prev[0]);
 
-		vecmove(prev, prev + 1, btree->root.depth);
+		vecmove(prev, prev + 1, btree->root.depth - 1);
 	}
 	ret = 0;
 
 out:
 	if (leafprev)
 		blockput(leafprev);
-	for (int i = 0; i < btree->root.depth; i++) {
+	for (int i = 0; i < btree->root.depth - 1; i++) {
 		if (prev[i])
 			blockput(prev[i]);
 	}
@@ -1008,7 +1008,7 @@ static int insert_leaf(struct cursor *cursor, tuxkey_t childkey, struct buffer_h
 {
 	struct btree *btree = cursor->btree;
 	struct sb *sb = btree->sb;
-	int level = btree->root.depth;
+	int level = btree->root.depth - 1;
 	block_t childblock = bufindex(leafbuf);
 
 	if (keep)
@@ -1273,7 +1273,7 @@ int alloc_empty_btree(struct btree *btree)
 	mark_buffer_dirty_non(leafbuf);
 	blockput(leafbuf);
 
-	btree->root = (struct root){ .block = rootblock, .depth = 1 };
+	btree->root = (struct root){ .block = rootblock, .depth = 2 };
 	tux3_mark_btree_dirty(btree);
 
 	return 0;
@@ -1294,7 +1294,7 @@ int free_empty_btree(struct btree *btree)
 	if (!has_root(btree))
 		return 0;
 
-	assert(btree->root.depth == 1);
+	assert(btree->root.depth == 2);
 	struct sb *sb = btree->sb;
 	struct buffer_head *rootbuf = vol_bread(sb, btree->root.block);
 	if (!rootbuf)

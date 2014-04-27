@@ -97,8 +97,9 @@ static inline void *decode48(void *at, u64 *val)
  * 2012-02-16: Update for atomic commit
  * 2012-07-02: Use timestamp 32.32 fixed point. Increase log_balloc size.
  * 2012-12-20: Add ->usedinodes
+ * 2014-03-27: Change internal inum numbers. Change btree->root.depth.
  */
-#define TUX3_MAGIC		{ 't', 'u', 'x', '3', 0x20, 0x12, 0x12, 0x20 }
+#define TUX3_MAGIC		{ 't', 'u', 'x', '3', 0x20, 0x14, 0x03, 0x27 }
 #define TUX3_MAGIC_STR					\
 	((typeof(((struct disksuper *)0)->magic))TUX3_MAGIC)
 
@@ -161,8 +162,8 @@ struct disksuper {
 } __packed;
 
 struct root {
-	unsigned depth; /* btree levels not including leaf level */
-	block_t block; /* disk location of btree root */
+	unsigned depth;	/* btree levels include leaf level */
+	block_t block;	/* disk location of btree root */
 };
 
 struct btree {
@@ -604,9 +605,7 @@ struct replay {
 extern struct root no_root;
 static inline int has_root(struct btree *btree)
 {
-	/* FIXME: should use conditional inode->present */
-	return (btree->root.block != no_root.block) ||
-		(btree->root.depth != no_root.depth);
+	return btree->root.depth > 0;
 }
 
 /* Redirect ptr which is pointing data of src from src to dst */

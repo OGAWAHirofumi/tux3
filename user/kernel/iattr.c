@@ -130,7 +130,8 @@ void dump_attrs(struct inode *inode)
 		}
 	}
 	if (has_root(&tuxnode->btree))
-		__tux3_dbg("root %Lx:%u ", tuxnode->btree.root.block, tuxnode->btree.root.depth);
+		__tux3_dbg("root %Lx:%u ", tuxnode->btree.root.block,
+			   tuxnode->btree.root.depth);
 	__tux3_dbg("\n");
 }
 
