@@ -673,11 +673,25 @@ static void draw_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 		 gi->subgraph, gi->filedata);
 }
 
+static void draw_direct_extent(struct btree *btree,
+			       struct buffer_head *ileafbuf,
+			       block_t index, block_t block, unsigned count,
+			       void *data)
+{
+	struct graph_info *dtree_gi = data;
+	struct graph_info *data_gi = dtree_gi->private;
+	struct draw_data_ops *draw_data_ops = data_gi->private;
+
+	draw_data_ops->draw_data(data_gi, btree, NULL, index, block, count);
+}
+
 static struct walk_btree_ops draw_dtree_ops = {
 	.pre	= draw_btree_pre,
 	.bnode	= draw_bnode,
 	.leaf	= draw_dleaf,
 	.post	= draw_btree_post,
+
+	.extent	= draw_direct_extent,
 };
 
 static struct {
@@ -722,7 +736,7 @@ static struct draw_data_ops *dtree_funcs[S_IFMT >> S_SHIFT] = {
 static void draw_ileaf_cb(struct buffer_head *ileafbuf, int at,
 			  struct inode *inode, void *data)
 {
-	if (!has_root(&tux_inode(inode)->btree))
+	if (has_no_root(&tux_inode(inode)->btree))
 		return;
 
 	struct graph_info *gi = data;
@@ -752,11 +766,6 @@ static void draw_ileaf_cb(struct buffer_head *ileafbuf, int at,
 		drawn |= DRAWN_DTREE;
 	}
 
-	/* write link: ileaf -> dtree root bnode */
-	add_link(gi, "volmap_%llu:a%d:e -> volmap_%llu:n;\n",
-		 blocknr, at,
-		 dtree->root.block);
-
 	/* for draw dtree */
 	struct tmpfile_info *tmp = alloc_tmpfile();
 
@@ -768,6 +777,17 @@ static void draw_ileaf_cb(struct buffer_head *ileafbuf, int at,
 	};
 	snprintf(ginfo_dtree.filedata, sizeof(ginfo_dtree.filedata),
 		 "%s_data", bname);
+
+	if (has_direct_extent(dtree)) {
+		/* write link: ileaf -> file data */
+		add_link(gi, "volmap_%llu:a%d:e -> %s;\n",
+			 blocknr, at, ginfo_dtree.filedata);
+	} else {
+		/* write link: ileaf -> dtree root bnode */
+		add_link(gi, "volmap_%llu:a%d:e -> volmap_%llu:n;\n",
+			 blocknr, at,
+			 dtree->root.block);
+	}
 
 	/* for draw file data */
 	tmp = alloc_tmpfile();
@@ -782,7 +802,7 @@ static void draw_ileaf_cb(struct buffer_head *ileafbuf, int at,
 	ginfo_dtree.private = &ginfo_data;
 
 	draw_data_ops->draw_start(&ginfo_data, dtree);
-	walk_btree(dtree, &draw_dtree_ops, &ginfo_dtree);
+	walk_dtree(dtree, ileafbuf, &draw_dtree_ops, &ginfo_dtree);
 	draw_data_ops->draw_end(&ginfo_data, dtree);
 
 	/* draw at least one dleaf */
@@ -811,11 +831,13 @@ static void draw_ileaf_attr(struct graph_info *gi, struct btree *btree,
 
 	fprintf(gi->fp,
 		"%s"
-		"attrs (ino %llu, size %u, block %llu, depth %d%s)"
+		"attrs (ino %llu, size %u, direct %d, block %llu, %s %d%s)"
 		"%s",
 		orphan ? "<font color=\"blue\">" : "",
 		inum, size,
+		has_direct_extent(&tux_inode(inode)->btree),
 		tux_inode(inode)->btree.root.block,
+		has_direct_extent(&tux_inode(inode)->btree) ? "count" : "depth",
 		tux_inode(inode)->btree.root.depth,
 		orphan ? ", orphan" : "",
 		orphan ? "</font>" : "");

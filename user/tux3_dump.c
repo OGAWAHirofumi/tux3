@@ -460,9 +460,31 @@ static void dump_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 	walk_dleaf(btree, dleafbuf, &dump_dleaf_ops, di);
 }
 
+/* FIXME: Where is counted the direct extent stats? */
+static void dump_extent(struct btree *btree, struct buffer_head *ileafbuf,
+			block_t index, block_t block, unsigned count,
+			void *data)
+{
+	struct dump_info *di = data;
+	struct inode *inode = btree_inode(btree);
+
+	if (S_ISDIR(inode->i_mode) && opt_stats)
+		walk_extent_dir(btree, NULL, index, block, count,
+				dump_data_dir, data);
+
+	if (opt_stats) {
+		stats_data_seek_add(di->stats->own, block, count);
+		stats_child_seek_add(di->stats->own, 0, bufindex(ileafbuf),
+				     block);
+		stats_data_add(di->stats->own, block, count);
+	}
+}
+
 static struct walk_btree_ops dump_dtree_ops = {
 	.bnode	= dump_bnode,
 	.leaf	= dump_dleaf,
+
+	.extent	= dump_extent,
 };
 
 static const char *dtree_name[] = {
@@ -476,7 +498,7 @@ static const char *dtree_name[] = {
 static void dump_ileaf_cb(struct buffer_head *ileafbuf, int at,
 			  struct inode *inode, void *data)
 {
-	if (!has_root(&tux_inode(inode)->btree))
+	if (has_no_root(&tux_inode(inode)->btree))
 		return;
 
 	struct dump_info *di = data;
@@ -489,7 +511,7 @@ static void dump_ileaf_cb(struct buffer_head *ileafbuf, int at,
 		.stats = &stats_dtree,
 	};
 
-	walk_btree(dtree, &dump_dtree_ops, &di_dtree);
+	walk_dtree(dtree, ileafbuf, &dump_dtree_ops, &di_dtree);
 
 	if (opt_stats > 1) {
 		int special_inode;

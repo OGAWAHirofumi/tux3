@@ -404,9 +404,19 @@ static void fsck_dleaf(struct btree *btree, struct buffer_head *dleafbuf,
 	walk_dleaf(btree, dleafbuf, &fsck_dleaf_ops, data);
 }
 
+static void fsck_extent(struct btree *btree, struct buffer_head *ileafbuf,
+			block_t index, block_t block, unsigned count,
+			void *data)
+{
+	struct fsck_context *context = data;
+	shadow_bitmap_modify(btree->sb, context, block, count, 1);
+}
+
 static struct walk_btree_ops fsck_dtree_ops = {
 	.bnode	= fsck_bnode,
 	.leaf	= fsck_dleaf,
+
+	.extent	= fsck_extent,
 };
 
 static void fsck_ileaf_cb(struct buffer_head *ileafbuf, int at,
@@ -418,7 +428,7 @@ static void fsck_ileaf_cb(struct buffer_head *ileafbuf, int at,
 	if (tux_inode(inode)->inum >= TUX_NORMAL_INO)
 		context->freeinodes--;
 
-	walk_btree(dtree, &fsck_dtree_ops, data);
+	walk_dtree(dtree, ileafbuf, &fsck_dtree_ops, data);
 }
 
 static void fsck_ileaf(struct btree *btree, struct buffer_head *ileafbuf,

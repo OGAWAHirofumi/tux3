@@ -45,6 +45,10 @@ struct walk_btree_ops {
 	void (*bnode)(struct btree *, struct buffer_head *, int, void *);
 	void (*leaf)(struct btree *, struct buffer_head *, void *);
 	void (*post)(struct btree *, void *);
+
+	/* Handler for extents not in btree (direct extent) */
+	void (*extent)(struct btree *, struct buffer_head *, block_t, block_t,
+		       unsigned, void *);
 };
 
 struct walk_logchain_ops {
@@ -194,6 +198,21 @@ out:
 error:
 	release_cursor(cursor);
 	free_cursor(cursor);
+}
+
+static void walk_dtree(struct btree *btree, struct buffer_head *ileafbuf,
+		       struct walk_btree_ops *cb, void *data)
+{
+	if (has_direct_extent(btree)) {
+		if (cb->extent) {
+			block_t block = btree->root.block;
+			unsigned count = btree->root.count;
+			cb->extent(btree, ileafbuf, 0, block, count, data);
+		}
+		return;
+	}
+
+	walk_btree(btree, cb, data);
 }
 
 static const char *log_name[] = {
