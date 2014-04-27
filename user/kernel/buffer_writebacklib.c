@@ -20,7 +20,7 @@
  * This incoherency between the page's dirty flag and radix-tree tag is
  * unfortunate, but it only exists while the page is locked.
  */
-static int tux3_clear_page_dirty_for_io(struct page *page)
+static int tux3_clear_page_dirty_for_io(struct page *page, int outside)
 {
 	struct address_space *mapping = page->mapping;
 
@@ -53,8 +53,11 @@ static int tux3_clear_page_dirty_for_io(struct page *page)
 		 * threads doing their things.
 		 */
 		/* If PageForked(), don't touch PTE and don't dirty */
-		if (!PageForked(page) && page_mkclean(page))
-			set_page_dirty(page);
+		if (!PageForked(page) && page_mkclean(page)) {
+			/* FIXME: we should not need to call this */
+			if (!outside)
+				set_page_dirty(page);
+		}
 		/*
 		 * We carefully synchronise fault handlers against
 		 * installing a dirty pte and marking the page dirty

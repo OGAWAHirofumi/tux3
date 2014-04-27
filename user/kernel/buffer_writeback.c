@@ -225,7 +225,13 @@ bufvec_prepare_and_lock_page(struct bufvec *bufvec, struct page *page)
 	 *     clear_dirty_for_io()
 	 */
 	if (!keep_page_dirty(bufvec, page)) {
-		old_flag = tux3_clear_page_dirty_for_io(page);
+		/* FIXME: remove outside hack */
+		int outside;
+		offset = idata->i_size & (PAGE_CACHE_SIZE - 1);
+		last_index = idata->i_size >> PAGE_CACHE_SHIFT;
+		outside = offset && last_index == page->index;
+
+		old_flag = tux3_clear_page_dirty_for_io(page, outside);
 		assert(old_flag);
 	}
 
