@@ -50,9 +50,8 @@ static int guess_readahead(struct bufvec *bufvec, struct inode *inode,
 	bufvec_init(bufvec, inode->map, NULL, NULL);
 
 	limit = (inode->i_size + sb->blockmask) >> sb->blockbits;
-	/* FIXME: MAX_EXTENT is not true for dleaf2 */
-	if (limit > index + MAX_EXTENT)
-		limit = index + MAX_EXTENT;
+	if (limit > index + READAHEAD_BLOCKS)
+		limit = index + READAHEAD_BLOCKS;
 
 	/*
 	 * FIXME: pin buffers early may be inefficient. We can delay to

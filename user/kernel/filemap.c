@@ -155,7 +155,7 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq, int new_cnt)
 	return 0;
 }
 
-/* map_region() by using dleaf2 */
+/* map_region() by using dleaf */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
 		       struct block_segment seg[], unsigned seg_max,
 		       enum map_mode mode)

@@ -256,7 +256,7 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 	}
 
 	/* We don't use ->present for btree root */
-	init_btree(&tuxnode->btree, sb, btree_root, dtree_ops());
+	init_btree(&tuxnode->btree, sb, btree_root, &dtree_ops);
 
 	return attrs;
 }

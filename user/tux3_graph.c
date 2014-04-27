@@ -621,7 +621,7 @@ static void draw_dleaf_extent(struct btree *btree, struct buffer_head *leafbuf,
 				 index, block, count);
 }
 
-static void draw_dleaf2_entry(struct btree *btree, struct buffer_head *leafbuf,
+static void draw_dleaf_entry(struct btree *btree, struct buffer_head *leafbuf,
 			      unsigned prev_count,
 			      unsigned version, block_t index, block_t block,
 			      int is_sentinel, void *data)
@@ -641,15 +641,20 @@ static void draw_dleaf2_entry(struct btree *btree, struct buffer_head *leafbuf,
 		fprintf(dtree_gi->fp, " (sentinel)");
 }
 
-static struct walk_dleaf_ops draw_dleaf2_ops = {
+static struct walk_dleaf_ops draw_dleaf_ops = {
 	.extent = draw_dleaf_extent,
-	.entry = draw_dleaf2_entry,
+	.entry = draw_dleaf_entry,
 };
 
-static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
-			struct buffer_head *leafbuf, void *data)
+static void draw_dleaf(struct btree *btree, struct buffer_head *leafbuf,
+		       void *data)
 {
-	struct dleaf2 *dleaf = bufdata(leafbuf);
+	struct graph_info *gi = data;
+	struct dleaf *dleaf = bufdata(leafbuf);
+
+	if (!opt_verbose && (drawn & DRAWN_DLEAF))
+		return;
+	drawn |= DRAWN_DLEAF;
 
 	draw_dleaf_start(gi, leafbuf);
 
@@ -657,27 +662,14 @@ static void draw_dleaf2(struct graph_info *gi, struct btree *btree,
 		" | magic 0x%04x, count %u",
 		be16_to_cpu(dleaf->magic), be16_to_cpu(dleaf->count));
 
-	walk_dleaf(btree, leafbuf, &draw_dleaf2_ops, gi);
+	walk_dleaf(btree, leafbuf, &draw_dleaf_ops, gi);
 
 	draw_dleaf_end(gi, leafbuf);
-}
-
-static void draw_dleaf(struct btree *btree, struct buffer_head *leafbuf,
-		       void *data)
-{
-	struct graph_info *dtree_gi = data;
-	struct graph_info *data_gi = dtree_gi->private;
-
-	if (!opt_verbose && (drawn & DRAWN_DLEAF))
-		return;
-	drawn |= DRAWN_DLEAF;
-
-	draw_dleaf2(dtree_gi, btree, leafbuf, data_gi);
 
 	/* write link: dleaf -> file data */
-	add_link(dtree_gi, "%s:s -> %s [ltail=%s, lhead=cluster_%s];\n",
-		 get_dleaf_name(leafbuf), dtree_gi->filedata,
-		 dtree_gi->subgraph, dtree_gi->filedata);
+	add_link(gi, "%s:s -> %s [ltail=%s, lhead=cluster_%s];\n",
+		 get_dleaf_name(leafbuf), gi->filedata,
+		 gi->subgraph, gi->filedata);
 }
 
 static struct walk_btree_ops draw_dtree_ops = {

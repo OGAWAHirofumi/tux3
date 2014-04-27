@@ -61,15 +61,15 @@ struct walk_dleaf_ops {
 	/* callback for data extent */
 	void (*extent)(struct btree *, struct buffer_head *,
 		       block_t, block_t, unsigned, void *);
-	/* callback for dleaf2 entry */
+	/* callback for dleaf entry */
 	void (*entry)(struct btree *, struct buffer_head *, unsigned,
 		      unsigned, block_t, block_t, int, void *);
 };
 
-static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
+static void walk_dleaf(struct btree *btree, struct buffer_head *leafbuf,
 			struct walk_dleaf_ops *cb, void *data)
 {
-	struct dleaf2 *dleaf = bufdata(leafbuf);
+	struct dleaf *dleaf = bufdata(leafbuf);
 	struct diskextent2 *dex, *dex_limit;
 	struct extent prev = { .logical = TUXKEY_LIMIT, };
 	unsigned count = 0;
@@ -100,12 +100,6 @@ static void walk_dleaf2(struct btree *btree, struct buffer_head *leafbuf,
 		prev = ex;
 		dex++;
 	}
-}
-
-static void walk_dleaf(struct btree *btree, struct buffer_head *leafbuf,
-		       struct walk_dleaf_ops *cb, void *data)
-{
-	walk_dleaf2(btree, leafbuf, cb, data);
 }
 
 static inline u16 ileaf_attr_size(__be16 *dict, int at)

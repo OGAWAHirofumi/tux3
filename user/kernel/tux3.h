@@ -104,8 +104,7 @@ static inline void *decode48(void *at, u64 *val)
 
 #define TUX3_MAGIC_LOG		0x10ad
 #define TUX3_MAGIC_BNODE	0xb4de
-#define TUX3_MAGIC_DLEAF	0x1eaf
-#define TUX3_MAGIC_DLEAF2	0xbeaf
+#define TUX3_MAGIC_DLEAF	0xbeaf
 #define TUX3_MAGIC_ILEAF	0x90de
 #define TUX3_MAGIC_OLEAF	0x6eaf
 
@@ -115,7 +114,6 @@ static inline void *decode48(void *at, u64 *val)
 /* Maximum number of block address ("0" - "((1 << 48) - 1)") */
 #define MAX_BLOCKS_BITS		48
 #define MAX_BLOCKS		((block_t)1 << MAX_BLOCKS_BITS)
-#define MAX_EXTENT		(1 << 6)
 
 #define SB_LOC			(1 << 12)
 #define SB_LEN			(1 << 12)	/* this is maximum blocksize */
@@ -795,14 +793,7 @@ int tux_readdir(struct file *file, struct dir_context *ctx);
 int tux_dir_is_empty(struct inode *dir);
 
 /* dleaf.c */
-#include "dleaf.h"
-
-/* dleaf2.c */
-extern struct btree_ops dtree2_ops;
-static inline struct btree_ops *dtree_ops(void)
-{
-	return &dtree2_ops;
-}
+extern struct btree_ops dtree_ops;
 
 /* filemap.c */
 int tux3_filemap_overwrite_io(int rw, struct bufvec *bufvec);

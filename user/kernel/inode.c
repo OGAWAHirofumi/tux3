@@ -247,7 +247,7 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 		/* If goal marked as deferred inums, retry from itree */
 	}
 
-	init_btree(&tux_inode(inode)->btree, sb, no_root, dtree_ops());
+	init_btree(&tux_inode(inode)->btree, sb, no_root, &dtree_ops);
 
 	/* Final initialization of inode */
 	tux_set_inum(inode, goal);

@@ -45,6 +45,8 @@ static inline struct timespec gettime(void)
 
 #include "kernel/tux3.h"
 
+#define READAHEAD_BLOCKS (1 << 6)
+
 #define INIT_DISKSB(_bits, _blocks) (struct disksuper){		\
 	.magic		= TUX3_MAGIC,				\
 	.birthdate	= 0,					\

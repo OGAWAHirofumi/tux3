@@ -1,5 +1,5 @@
-#ifndef TUX3_DLEAF2_H
-#define TUX3_DLEAF2_H
+#ifndef TUX3_DLEAF_H
+#define TUX3_DLEAF_H
 
 struct dleaf_req {
 	struct btree_key_range key;	/* index and count */
@@ -8,7 +8,7 @@ struct dleaf_req {
 	int seg_max;			/* Max size of seg[] */
 	struct block_segment *seg;	/* Pointer to seg[] */
 
-	int seg_idx;			/* use by dleaf2_write() internally */
+	int seg_idx;			/* use by dleaf_write() internally */
 	int overwrite;
 
 	/* Callback to allocate blocks to ->seg for write */
@@ -27,4 +27,4 @@ static inline unsigned seg_total_count(struct block_segment *seg, int nr_segs)
 	return total;
 }
 
-#endif /* !TUX3_DLEAF2_H */
+#endif /* !TUX3_DLEAF_H */
