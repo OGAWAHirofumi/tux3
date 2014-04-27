@@ -469,7 +469,7 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 	/* FIXME: this should be merged to btree_expand()? */
 	down_write(&itree->lock);
 	if (!has_root(itree))
-		err = alloc_empty_btree(itree);
+		err = btree_alloc_empty(itree);
 	up_write(&itree->lock);
 	if (err)
 		return err;
@@ -669,7 +669,7 @@ int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		if (err)
 			goto error;
 	}
-	err = free_empty_btree(&tux_inode(inode)->btree);
+	err = btree_free_empty(&tux_inode(inode)->btree);
 	if (err)
 		goto error;
 

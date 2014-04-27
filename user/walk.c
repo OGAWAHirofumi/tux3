@@ -141,7 +141,7 @@ static void walk_btree(struct btree *btree, struct walk_btree_ops *cb,
 {
 	struct cursor *cursor;
 	struct buffer_head *buffer;
-	int err;
+	int ret;
 
 	if (!has_root(btree))
 		return;
@@ -153,37 +153,33 @@ static void walk_btree(struct btree *btree, struct walk_btree_ops *cb,
 	if (!cursor)
 		strerror_exit(1, ENOMEM, "out of memory");
 
-	err = cursor_read_root(cursor);
-	if (err) {
-		tux3_err(btree->sb, "cursor_read_root(): %d", err);
+	ret = cursor_read_root(cursor);
+	if (ret < 0) {
+		tux3_err(btree->sb, "cursor_read_root(): %d", ret);
 		goto error;
 	}
 
-	buffer = cursor->path[cursor->level].buffer;
-	if (cb->bnode)
-		cb->bnode(btree, buffer, cursor->level, data);
-
 	while (1) {
-		int ret = cursor_advance_down(cursor);
-		if (ret < 0) {
-			tux3_err(btree->sb, "cursor_advance_down() : %d", ret);
-			goto error;
-		}
 		if (ret) {
 			buffer = cursor->path[cursor->level].buffer;
 			if (cb->bnode)
 				cb->bnode(btree, buffer, cursor->level, data);
-			continue;
+		} else {
+			buffer = cursor_leafbuf(cursor);
+			if (cb->leaf)
+				cb->leaf(btree, buffer, data);
+
+			do {
+				if (!cursor_advance_up(cursor))
+					goto out;
+			} while (cursor_level_finished(cursor));
 		}
 
-		buffer = cursor_leafbuf(cursor);
-		if (cb->leaf)
-			cb->leaf(btree, buffer, data);
-
-		do {
-			if (!cursor_advance_up(cursor))
-				goto out;
-		} while (cursor_level_finished(cursor));
+		ret = cursor_advance_down(cursor);
+		if (ret < 0) {
+			tux3_err(btree->sb, "cursor_advance_down() : %d", ret);
+			goto error;
+		}
 	}
 
 out:

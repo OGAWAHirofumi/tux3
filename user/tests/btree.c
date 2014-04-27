@@ -213,11 +213,8 @@ static struct btree_ops ops = {
 static void test01(struct sb *sb, struct inode *inode)
 {
 	struct btree *btree = &tux_inode(inode)->btree;
-	int err;
 
 	init_btree(btree, sb, no_root, &ops);
-	err = alloc_empty_btree(btree);
-	test_assert(!err);
 
 	/* ->leaf_init() should be called */
 	struct buffer_head *buffer = new_leaf(btree);
@@ -286,7 +283,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	int err;
 
 	init_btree(btree, sb, no_root, &ops);
-	err = alloc_empty_btree(btree);
+	err = btree_alloc_empty(btree);
 	test_assert(!err);
 
 	struct cursor *cursor = alloc_cursor(btree, 8); /* +8 for new depth */
@@ -310,7 +307,7 @@ static void test02(struct sb *sb, struct inode *inode)
 	/* Delte all */
 	test_assert(btree_chop(btree, 0, TUXKEY_LIMIT) == 0);
 	/* btree should have empty root */
-	test_assert(btree->root.depth == 2);
+	test_assert(btree->root.depth == 1);
 
 	/* btree_probe() should return same path always */
 	test_assert(btree_probe(cursor, 0) == 0);
@@ -339,10 +336,10 @@ static void test03(struct sb *sb, struct inode *inode)
 	int err;
 
 	init_btree(btree, sb, no_root, &ops);
-	err = alloc_empty_btree(btree);
+	err = btree_alloc_empty(btree);
 	test_assert(!err);
 
-	struct cursor *cursor = alloc_cursor(btree, 8); /* +8 for new depth */
+	struct cursor *cursor = alloc_cursor(btree, 9); /* +9 for new depth */
 	test_assert(cursor);
 
 	/* Some depths */
@@ -393,11 +390,11 @@ static void test04(struct sb *sb, struct inode *inode)
 	int err;
 
 	init_btree(btree, sb, no_root, &ops);
-	err = alloc_empty_btree(btree);
+	err = btree_alloc_empty(btree);
 	test_assert(!err);
 
 	/* Insert_node test */
-	struct cursor *cursor = alloc_cursor(btree, 1); /* +1 for new depth */
+	struct cursor *cursor = alloc_cursor(btree, 2); /* +2 for new depth */
 	test_assert(cursor);
 
 	test_assert(!btree_probe(cursor, 0));
@@ -449,14 +446,10 @@ static void test05(struct sb *sb, struct inode *inode)
 	int err;
 
 	init_btree(btree, sb, no_root, &ops);
-	err = alloc_empty_btree(btree);
+	err = btree_alloc_empty(btree);
 	test_assert(!err);
 
-	init_btree(btree, sb, no_root, &ops);
-	err = alloc_empty_btree(btree);
-	test_assert(!err);
-
-	struct cursor *cursor = alloc_cursor(btree, 8); /* +8 for new depth */
+	struct cursor *cursor = alloc_cursor(btree, 9); /* +9 for new depth */
 	test_assert(cursor);
 
 	/* Some depths */
@@ -647,7 +640,7 @@ static void test06(struct sb *sb, struct inode *inode)
 	/* Chop (7 - 10) and check again */
 	test_assert(btree_chop(btree, 7, 4) == 0);
 	/* Check if adjust_parent_sep() changed key from 8 to 12 */
-	test_assert(cursor_read_root(cursor) == 0);
+	test_assert(cursor_read_root(cursor) == 1);
 	root = bufdata(cursor->path[cursor->level].buffer);
 	test_assert(be64_to_cpu(root->entries[1].key) == 12);
 	release_cursor(cursor);

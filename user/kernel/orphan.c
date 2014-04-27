@@ -100,7 +100,7 @@ int tux3_unify_orphan_add(struct sb *sb, struct list_head *orphan_add)
 
 	down_write(&otree->lock);
 	if (!has_root(otree))
-		err = alloc_empty_btree(otree);
+		err = btree_alloc_empty(otree);
 	up_write(&otree->lock);
 	if (err)
 		return err;

@@ -188,10 +188,9 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 
 	if (!has_root(btree) && mode != MAP_READ) {
 		/*
-		 * Allocate empty btree if this btree doesn't have it yet.
 		 * FIXME: this should be merged to insert_leaf() or something?
 		 */
-		err = alloc_empty_btree(btree);
+		err = btree_alloc_empty(btree);
 		if (err) {
 			segs = err;
 			goto out_unlock;

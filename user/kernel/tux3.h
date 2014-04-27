@@ -162,7 +162,7 @@ struct disksuper {
 } __packed;
 
 struct root {
-	unsigned depth;	/* btree levels include leaf level */
+	int depth;	/* btree levels include leaf level */
 	block_t block;	/* disk location of btree root */
 };
 
@@ -717,8 +717,8 @@ struct cursor *alloc_cursor(struct btree *btree, int);
 void free_cursor(struct cursor *cursor);
 
 void init_btree(struct btree *btree, struct sb *sb, struct root root, struct btree_ops *ops);
-int alloc_empty_btree(struct btree *btree);
-int free_empty_btree(struct btree *btree);
+int btree_alloc_empty(struct btree *btree);
+int btree_free_empty(struct btree *btree);
 struct buffer_head *new_leaf(struct btree *btree);
 tuxkey_t cursor_next_key(struct cursor *cursor);
 tuxkey_t cursor_this_key(struct cursor *cursor);
