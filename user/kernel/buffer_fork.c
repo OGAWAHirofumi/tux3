@@ -365,7 +365,8 @@ static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 	BUG_ON(PageForked(oldpage));
 
 	/* FIXME: right? */
-	BUG_ON(PageUnevictable(oldpage));
+	BUG_ON(PageSwapCache(oldpage));
+	BUG_ON(PageSwapBacked(oldpage));
 	BUG_ON(PageHuge(oldpage));
 	if (PageError(oldpage))
 		SetPageError(newpage);
@@ -385,9 +386,10 @@ static struct page *clone_page(struct page *oldpage, unsigned blocksize)
 	 */
 	cpupid = page_cpupid_xchg_last(oldpage, -1);
 	page_cpupid_xchg_last(newpage, cpupid);
-
-	mlock_migrate_page(newpage, page);
-	ksm_migrate_page(newpage, page);
+#endif
+	mlock_migrate_page(newpage, oldpage);
+#if 0
+	ksm_migrate_page(newpage, oldpage);
 #endif
 
 	/* Lock newpage before visible via radix tree */
