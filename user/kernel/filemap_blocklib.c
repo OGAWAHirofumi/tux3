@@ -813,10 +813,12 @@ void tux3_truncate_pagecache(struct inode *inode, loff_t newsize)
 	 * truncate_inode_pages finishes, hence the second
 	 * unmap_mapping_range call must be made for correctness.
 	 */
-	unmap_mapping_range(mapping, holebegin, 0, 1);
+	if (newsize <= holebegin)	/* Check overflow */
+		unmap_mapping_range(mapping, holebegin, 0, 1);
 	/* FIXME: The buffer fork before invalidate. We should merge to
 	 * truncate_inode_pages_range() */
 	tux3_truncate_inode_pages_range(mapping, newsize, MAX_LFS_FILESIZE);
 	truncate_inode_pages(mapping, newsize);
-	unmap_mapping_range(mapping, holebegin, 0, 1);
+	if (newsize <= holebegin)	/* Check overflow */
+		unmap_mapping_range(mapping, holebegin, 0, 1);
 }
