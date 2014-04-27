@@ -108,6 +108,18 @@ static int dleaf_init(struct btree *btree, void *leaf)
 		.magic = cpu_to_be16(TUX3_MAGIC_DLEAF),
 		.count = 0,
 	};
+	/* FIXME: should be refactoring and remove this from split path */
+	if (has_direct_extent(btree)) {
+		/* Convert direct extent to leaf */
+		struct sb *sb = btree->sb;
+		struct diskextent2 *dex = dleaf->table;
+
+		dleaf->count = cpu_to_be16(2);
+		put_extent(dex, sb->version, 0, btree->root.block);
+		put_extent(dex + 1, sb->version, btree->root.count, 0);
+
+		btree->root = no_root;
+	}
 	return 0;
 }
 

@@ -639,7 +639,7 @@ static int tux3_truncate_blocks(struct inode *inode, loff_t newsize)
 	struct sb *sb = tux_sb(inode->i_sb);
 	tuxkey_t index = (newsize + sb->blockmask) >> sb->blockbits;
 
-	return btree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
+	return dtree_chop(&tux_inode(inode)->btree, index, TUXKEY_LIMIT);
 }
 
 int tux3_purge_inode(struct inode *inode, struct tux3_iattr_data *idata,

@@ -150,6 +150,7 @@ static void tux3_iattr_read_and_clear(struct inode *inode,
 static void tux3_iattr_adjust_for_btree(struct inode *inode,
 					struct tux3_iattr_data *idata)
 {
-	if (has_root(&tux_inode(inode)->btree))
+	struct btree *btree = &tux_inode(inode)->btree;
+	if (!has_no_root(btree))
 		idata->present |= DATA_BTREE_BIT;
 }

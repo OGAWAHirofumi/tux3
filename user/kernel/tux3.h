@@ -161,9 +161,16 @@ struct disksuper {
 	__be32 logcount;	/* Count of log blocks in the current log chain */
 } __packed;
 
+enum { MAX_DIRECT_COUNT = SHRT_MAX };
+
+/* FIXME: maybe better to remove struct root to reduce holes in structure? */
 struct root {
-	int depth;	/* btree levels include leaf level */
-	block_t block;	/* disk location of btree root */
+	unsigned short direct; /* block/depth is an extent instead of btree */
+	union {
+		short count;	/* Number of blocks in direct extent */
+		short depth;	/* Btree levels include leaf level */
+	};
+	block_t block;	/* Disk location of btree root */
 };
 
 struct btree {
@@ -178,12 +185,16 @@ struct btree {
 
 static inline u64 pack_root(struct root *root)
 {
-	return (u64)root->depth << 48 | root->block;
+	return (u64)root->direct << 63 | (u64)root->depth << 48 | root->block;
 }
 
 static inline struct root unpack_root(u64 v)
 {
-	return (struct root){ .depth = v >> 48, .block = v & (-1ULL >> 16), };
+	return (struct root){
+		.direct = v >> 63,
+		.depth = (v >> 48) & 0x7fff,
+		.block = v & (-1ULL >> 16),
+	};
 }
 
 /* Path cursor for btree traversal */
@@ -601,11 +612,23 @@ struct replay {
 	block_t blocknrs[];	/* block address of log blocks */
 };
 
-/* Does this btree have root bnode/leaf? */
+/* Does this root has direct extent? */
+static inline int has_direct_extent(struct btree *btree)
+{
+	return btree->root.direct;
+}
+
 extern struct root no_root;
+/* Does this root has bnode/leaf? */
 static inline int has_root(struct btree *btree)
 {
-	return btree->root.depth > 0;
+	return !has_direct_extent(btree) && btree->root.depth > 0;
+}
+
+/* Doesn't have both btree or direct extent? */
+static inline int has_no_root(struct btree *btree)
+{
+	return btree->root.depth == 0;
 }
 
 /* Redirect ptr which is pointing data of src from src to dst */
@@ -795,6 +818,7 @@ int tux_dir_is_empty(struct inode *dir);
 extern struct btree_ops dtree_ops;
 
 /* filemap.c */
+int dtree_chop(struct btree *btree, tuxkey_t start, u64 len);
 int tux3_filemap_overwrite_io(int rw, struct bufvec *bufvec);
 int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec);
 

@@ -155,6 +155,120 @@ static int seg_alloc(struct btree *btree, struct dleaf_req *rq, int new_cnt)
 	return 0;
 }
 
+static int seg_alloc_one(struct btree *btree, block_t start, unsigned count,
+			 struct block_segment seg[1])
+{
+	struct sb *sb = btree->sb;
+	unsigned need = count;
+	int err, segs = 0;
+
+	err = balloc_find(sb, seg, 1, &segs, &need);
+	if (err)
+		return err;
+	if (need) {
+		/* FIXME: tell unused seg[] to balloc for reusing seg[] later */
+		/* balloc_cache(sb, seg, segs); */
+		return 0;
+	}
+	assert(segs == 1);
+
+	err = balloc_use(sb, seg, 1);
+	if (err)
+		return err;
+	return segs;
+}
+
+int dtree_chop(struct btree *btree, tuxkey_t start, u64 len)
+{
+	if (has_direct_extent(btree)) {
+		block_t block = btree->root.block;
+		unsigned count = btree->root.count;
+		/* FIXME: does not support hole_punch yet. */
+		assert(len == TUXKEY_LIMIT);
+		if (start < count) {
+			if (start == 0)
+				btree->root = no_root;
+			else
+				btree->root.count = start;
+			tux3_mark_btree_dirty(btree);
+			seg_free(btree, block + start, count - start);
+		}
+		return 0;
+	}
+
+	return btree_chop(btree, start, len);
+}
+
+/*
+ * Map logical extent to physical extent in direct extent.
+ *
+ * return value:
+ * < 0 - error
+ *   0 - fallback to btree
+ * 0 < - number of mapped seg[]
+ */
+static int map_direct(struct btree *btree, block_t start, unsigned count,
+		      struct block_segment seg[], unsigned seg_max,
+		      enum map_mode mode)
+{
+	int segs = 0;
+
+	if (mode == MAP_READ) {
+		/*
+		 * Map direct extent. If mapping is only hole,
+		 * btree stuff handles it.
+		 */
+		if (start < btree->root.count) {
+			unsigned direct_count = btree->root.count;
+			seg[0] = (struct block_segment){
+				.block = btree->root.block + start,
+				.count = count,
+			};
+			segs++;
+
+			if (start + count > direct_count) {
+				seg[0].count = direct_count - start;
+				if (seg_max <= segs)
+					return segs;
+
+				/* Fill hole */
+				seg[segs++] = (struct block_segment){
+					.block = 0,
+					.count = start + count - direct_count,
+					.state = BLOCK_SEG_HOLE,
+				};
+			}
+		}
+	} else {
+		/* FIXME: overwrite is not implemented yet */
+		if (mode == MAP_WRITE)
+			return 0;
+		/* This doesn't fit to direct extent */
+		if (start != 0 || count > MAX_DIRECT_COUNT)
+			return 0;
+		/* Rewriting existing extent partially */
+		if (count < btree->root.count)
+			return 0;
+
+		segs = seg_alloc_one(btree, start, count, seg);
+		if (segs <= 0)
+			return segs;
+		log_balloc(btree->sb, seg->block, seg->count);
+
+		if (btree->root.count)
+			seg_free(btree, btree->root.block, btree->root.count);
+
+		btree->root = (struct root){
+			.direct = 1,
+			.count = seg->count,
+			.block = seg->block,
+		};
+		tux3_mark_btree_dirty(btree);
+	}
+
+	return segs;
+}
+
 /* map_region() by using dleaf */
 static int map_region2(struct inode *inode, block_t start, unsigned count,
 		       struct block_segment seg[], unsigned seg_max,
@@ -186,14 +300,21 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 			down_write(&btree->lock);
 	}
 
-	if (!has_root(btree) && mode != MAP_READ) {
+	if (!has_root(btree)) {
+		/* If there is no btree root, try direct extent */
+		segs = map_direct(btree, start, count, seg, seg_max, mode);
+		if (segs)
+			goto out_unlock;
+
 		/*
 		 * FIXME: this should be merged to insert_leaf() or something?
 		 */
-		err = btree_alloc_empty(btree);
-		if (err) {
-			segs = err;
-			goto out_unlock;
+		if (mode != MAP_READ) {
+			err = btree_alloc_empty(btree);
+			if (err) {
+				segs = err;
+				goto out_unlock;
+			}
 		}
 	}
 	if (has_root(btree)) {

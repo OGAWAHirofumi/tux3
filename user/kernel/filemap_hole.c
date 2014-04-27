@@ -91,7 +91,7 @@ int tux3_flush_hole(struct inode *inode, unsigned delta)
 
 		assert(hole->start + hole->count == MAX_BLOCKS);
 		/* FIXME: we would want to delay to free blocks */
-		ret = btree_chop(&tuxnode->btree, hole->start, TUXKEY_LIMIT);
+		ret = dtree_chop(&tuxnode->btree, hole->start, TUXKEY_LIMIT);
 		if (ret && !err)
 			err = ret;		/* FIXME: error handling */
 
