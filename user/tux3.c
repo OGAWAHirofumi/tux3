@@ -266,18 +266,46 @@ static int cmd_dump(struct sb *sb, const char *progname, const char *command,
 static int cmd_image(struct sb *sb, const char *progname, const char *command,
 		     int argc, const char **args)
 {
-	struct vars vars = {};
+	struct options options[] = {
+		{ "need_data", "d", 0, "Include data blocks too", },
+		{ "verbose", "v", OPT_MANY, "dump level", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+	struct image_opts opts = {};
+	const char *volname;
 	int err;
 
-	common_options(&argc, &args, onlyhelp, 4, progname, command,
-		       "<src> <dest>", &vars);
-	const char *filename = args[3];
+	const char *blurb = "<src> <dst>";
+	int optc = common_parse(&argc, &args, options, 4, progname,
+				command, blurb, &volname);
 
-	err = open_sb(vars.volname, sb);
+	void *optv = argv2optv(args);
+
+	for (int i = 0; i < optc; i++) {
+		switch (options[optindex(optv, i)].terse[0]) {
+		case 'd':
+			opts.need_data = 1;
+			break;
+		case 'v':
+			opts.verbose++;
+			break;
+		case '?':
+			usage(options, progname, command, blurb, " [OPTIONS]");
+			exit(0);
+		case 0:
+			usage(options, progname, command, blurb, NULL);
+			exit(0);
+		}
+	}
+	opts.dst_name = args[3];
+
+	err = open_sb(volname, sb);
 	if (err)
 		return err;
 
-	err = image_main(sb, filename);
+	err = image_main(sb, &opts);
 
 	free(argv2optv(args));
 	return err;

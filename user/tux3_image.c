@@ -10,6 +10,12 @@
 
 #include "walk.c"
 
+struct image_opts {
+	const char *dst_name;
+	int verbose;
+	int need_data;
+};
+
 /*
  * 0 - minimum
  * 1 - include deunify blocks
@@ -17,7 +23,7 @@
  */
 static int opt_verbose;
 /* include data blocks */
-static int opt_data;
+static int opt_need_data;
 
 struct image_context {
 	struct sb *sb;
@@ -144,7 +150,7 @@ static void image_ileaf_cb(struct buffer_head *ileafbuf, int at,
 {
 	struct btree *dtree = &tux_inode(inode)->btree;
 
-	if (!opt_data && S_ISREG(inode->i_mode))
+	if (!opt_need_data && S_ISREG(inode->i_mode))
 		walk_dtree(dtree, ileafbuf, &image_dtree_no_data_ops, data);
 	else
 		walk_dtree(dtree, ileafbuf, &image_dtree_ops, data);
@@ -254,10 +260,13 @@ static void image_copy_superblock(struct sb *sb, struct image_context *context)
 	image_write(context, 0, count);
 }
 
-static int image_main(struct sb *sb, const char *name)
+static int image_main(struct sb *sb, struct image_opts *opts)
 {
 	struct image_context context;
 	int err;
+
+	opt_verbose = opts->verbose;
+	opt_need_data = opts->need_data;
 
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp)) {
@@ -265,7 +274,7 @@ static int image_main(struct sb *sb, const char *name)
 		return err;
 	}
 
-	image_init_context(sb, &context, name);
+	image_init_context(sb, &context, opts->dst_name);
 
 	image_copy_superblock(sb, &context);
 	walk_logchain(sb, &image_logchain_ops, &context);
