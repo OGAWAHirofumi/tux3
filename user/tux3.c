@@ -55,8 +55,112 @@ static int open_fs(const char *volname, struct sb *sb)
 	return replay_stage3(rp, 1);
 }
 
-static int mkfs(const char *volname, struct sb *sb, unsigned blocksize)
+static void usage(struct options *options, const char *progname,
+		  const char *cmdname, const char *name, const char *blurb)
 {
+	int cols = 80, tabs[] = { 3, 40, cols < 60 ? 60 : cols };
+	char lead[300], help[3000] = {};
+
+	if (cmdname)
+		snprintf(lead, sizeof(lead), "Usage: %s %s %s%s",
+			 progname, cmdname, name, blurb ? : "");
+	else
+		snprintf(lead, sizeof(lead), "Usage: %s %s%s",
+			 progname, name, blurb ? : "");
+
+	opthelp(help, sizeof(help), options, tabs, lead, !blurb);
+	printf("%s\n", help);
+}
+
+static struct options onlyhelp[] = {
+	{ "verbose", "v", OPT_MANY, "Verbose output", },
+	{ "usage", "", 0, "Show usage", },
+	{ "help", "?", 0, "Show help", },
+	{},
+};
+
+struct vars {
+	const char *volname;
+	unsigned blocksize;
+	loff_t seek;
+	int verbose;
+};
+
+static int common_parse(int *argc, const char ***args, struct options *options,
+		int need, const char *progname, const char *cmdname,
+		const char *blurb, const char **volname)
+{
+	unsigned space = optspace(options, *argc, *args);
+	void *optv = malloc(space);
+	if (!optv)
+		strerror_exit(1, errno, "malloc");
+
+	int optc = optscan(options, argc, args, optv, space);
+	if (optc < 0)
+		error_exit("%s!", opterror(optv));
+
+	if (*argc != need) {
+		usage(options, progname, cmdname, blurb, NULL);
+		exit(1);
+	}
+
+	assert(need > 2);
+	*volname = (*args)[2];
+	return optc;
+}
+
+static void common_options(int *argc, const char ***args,
+		struct options *options, int need, const char *progname,
+		const char *cmdname, const char *blurb, struct vars *vars)
+{
+	int optc = common_parse(argc, args, options, need, progname,
+				cmdname, blurb, &vars->volname);
+
+	void *optv = argv2optv(*args);
+
+	for (int i = 0; i < optc; i++) {
+		const char *value = optvalue(optv, i);
+		switch (options[optindex(optv, i)].terse[0]) {
+		case 'b':
+			vars->blocksize = strtoul(value, NULL, 0);
+			break;
+		case 's':
+			vars->seek = strtoull(value, NULL, 0);
+			break;
+		case 'v':
+			vars->verbose++;
+			break;
+		case '?':
+			usage(options, progname, cmdname, blurb, " [OPTIONS]");
+			exit(0);
+		case 0:
+			usage(options, progname, cmdname, blurb, NULL);
+			exit(0);
+		}
+	}
+}
+
+static int cmd_mkfs(struct sb *sb, const char *progname, const char *command,
+		    int argc, const char **args)
+{
+	struct options options[] = {
+		{ "blocksize", "b", OPT_HASARG | OPT_NUMBER,
+		  "Set block size", },
+		{ "verbose", "v", OPT_MANY, "Verbose output", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+	struct vars vars = { .blocksize = 1 << 12, .verbose = 0 };
+
+	common_options(&argc, &args, options, 3, progname, command,
+		       "<volume>", &vars);
+
+	printf("Make tux3 filesystem on %s (blocksize %u)\n",
+	       vars.volname, vars.blocksize);
+
+	const char *volname = vars.volname;
+	int blocksize = vars.blocksize;
 	int fd = open_volume(volname);
 
 	loff_t volsize = 0;
@@ -84,69 +188,86 @@ static int mkfs(const char *volname, struct sb *sb, unsigned blocksize)
 	if (!sb->logmap)
 		return -ENOMEM;
 
-	return make_tux3(sb);
+	int err = make_tux3(sb);
+
+	show_tree_range(itree_btree(sb), 0, -1);
+	free(argv2optv(args));
+
+	return err;
 }
 
-static void usage(struct options *options, const char *progname,
-		  const char *cmdname, const char *name, const char *blurb)
+static int cmd_fsck(struct sb *sb, const char *progname, const char *command,
+		    int argc, const char **args)
 {
-	int cols = 80, tabs[] = { 3, 40, cols < 60 ? 60 : cols };
-	char lead[300], help[3000] = {};
+	struct vars vars = {};
+	int err;
 
-	if (cmdname)
-		snprintf(lead, sizeof(lead), "Usage: %s %s %s%s",
-			 progname, cmdname, name, blurb ? : "");
-	else
-		snprintf(lead, sizeof(lead), "Usage: %s %s%s",
-			 progname, name, blurb ? : "");
+	common_options(&argc, &args, onlyhelp, 3, progname, "fsck",
+		       "<volume>", &vars);
+	err = open_sb(vars.volname, sb);
+	if (err)
+		return err;
 
-	opthelp(help, sizeof(help), options, tabs, lead, !blurb);
-	printf("%s\n", help);
+	err = fsck_main(sb);
+
+	free(argv2optv(args));
+	return err;
 }
 
-struct vars { const char *volname; unsigned blocksize; long long seek; int verbose; };
-
-static void command_options(int *argc, const char ***args,
-		struct options *options, int need, const char *progname,
-		const char *cmdname, const char *blurb, struct vars *vars)
+static int cmd_dump(struct sb *sb, const char *progname, const char *command,
+		    int argc, const char **args)
 {
-	unsigned space = optspace(options, *argc, *args);
-	void *optv = malloc(space);
-	if (!optv)
-		strerror_exit(1, errno, "malloc");
+	struct vars vars = {};
+	int err;
 
-	int optc = optscan(options, argc, args, optv, space);
-	if (optc < 0)
-		error_exit("%s!", opterror(optv));
+	common_options(&argc, &args, onlyhelp, 3, progname, command,
+		       "<volume>", &vars);
+	err = open_sb(vars.volname, sb);
+	if (err)
+		return err;
 
-	for (int i = 0; i < optc; i++) {
-		const char *value = optvalue(optv, i);
-		switch (options[optindex(optv, i)].terse[0]) {
-		case 'b':
-			vars->blocksize = strtoul(value, NULL, 0);
-			break;
-		case 's':
-			vars->seek = strtoull(value, NULL, 0);
-			break;
-		case 'v':
-			vars->verbose++;
-			break;
-		case '?':
-			usage(options, progname, cmdname, blurb, " [OPTIONS]");
-			exit(0);
-		case 0:
-			usage(options, progname, cmdname, blurb, NULL);
-			exit(0);
-		}
-	}
+	err = dump_main(sb, vars.verbose);
 
-	if (*argc != need) {
-		usage(options, progname, cmdname, blurb, NULL);
-		exit(1);
-	}
+	free(argv2optv(args));
+	return err;
+}
 
-	assert(need > 2);
-	vars->volname = (*args)[2];
+static int cmd_image(struct sb *sb, const char *progname, const char *command,
+		     int argc, const char **args)
+{
+	struct vars vars = {};
+	int err;
+
+	common_options(&argc, &args, onlyhelp, 4, progname, command,
+		       "<src> <dest>", &vars);
+	const char *filename = args[3];
+
+	err = open_sb(vars.volname, sb);
+	if (err)
+		return err;
+
+	err = image_main(sb, filename);
+
+	free(argv2optv(args));
+	return err;
+}
+
+static int cmd_graph(struct sb *sb, const char *progname, const char *command,
+		     int argc, const char **args)
+{
+	struct vars vars = {};
+	int err;
+
+	common_options(&argc, &args, onlyhelp, 3, progname, command,
+		       "<volume>", &vars);
+	err = open_sb(vars.volname, sb);
+	if (err)
+		return err;
+
+	err = graph_main(sb, vars.volname, vars.verbose);
+
+	free(argv2optv(args));
+	return err;
 }
 
 int main(int argc, char *argv[])
@@ -235,13 +356,6 @@ int main(int argc, char *argv[])
 	struct dev *dev = &(struct dev){};
 	struct sb *sb = rapid_sb(dev);	/* dev->bits still zero, take care */
 
-	struct options onlyhelp[] = {
-		{ "verbose", "v", OPT_MANY, "Verbose output", },
-		{ "usage", "", 0, "Show usage", },
-		{ "help", "?", 0, "Show help", },
-		{},
-	};
-
 	struct options onlyseek[] = {
 		{ "seek", "s", OPT_HASARG | OPT_NUMBER, "Set file position", },
 		{ "verbose", "v", OPT_MANY, "Verbose output", },
@@ -265,94 +379,59 @@ int main(int argc, char *argv[])
 	}
 
 	switch (cmd) {
-	case CMD_MKFS: {
-		struct options mkfs_options[] = {
-			{ "blocksize", "b", OPT_HASARG | OPT_NUMBER,
-			  "Set block size", },
-			{ "verbose", "v", OPT_MANY, "Verbose output", },
-			{ "usage", "", 0, "Show usage", },
-			{ "help", "?", 0, "Show help", },
-			{},
-		};
-		command_options(&argc, &args, mkfs_options, 3, progname, command,
-				"<volume>", &vars);
-
-		printf("Make tux3 filesystem on %s (blocksize %u)\n",
-		       vars.volname, vars.blocksize);
-
-		err = mkfs(vars.volname, sb, vars.blocksize);
+	case CMD_MKFS:
+		err = cmd_mkfs(sb, progname, command, argc, args);
 		if (err)
 			goto error;
-		show_tree_range(itree_btree(sb), 0, -1);
-	}
 		break;
 
 	case CMD_FSCK:
-		command_options(&argc, &args, onlyhelp, 3, progname, command,
-				"<volume>", &vars);
-		err = open_sb(vars.volname, sb);
-		if (err)
-			goto error;
-		err = fsck_main(sb);
+		err = cmd_fsck(sb, progname, command, argc, args);
 		if (err)
 			goto error;
 		break;
 
 	case CMD_DUMP:
-		command_options(&argc, &args, onlyhelp, 3, progname, command,
-				"<volume>", &vars);
-		err = open_sb(vars.volname, sb);
-		if (err)
-			goto error;
-		err = dump_main(sb, vars.verbose);
+		err = cmd_dump(sb, progname, command, argc, args);
 		if (err)
 			goto error;
 		break;
 
 	case CMD_IMAGE:
-		command_options(&argc, &args, onlyhelp, 4, progname, command,
-				"<src> <dest>", &vars);
-		filename = args[3];
-		err = open_sb(vars.volname, sb);
-		if (err)
-			goto error;
-		err = image_main(sb, filename);
+		err = cmd_image(sb, progname, command, argc, args);
 		if (err)
 			goto error;
 		break;
 
 	case CMD_GRAPH:
-		command_options(&argc, &args, onlyhelp, 3, progname, command,
-				"<volume>", &vars);
-		err = open_sb(vars.volname, sb);
-		if (err)
-			goto error;
-		err = graph_main(sb, vars.volname, vars.verbose);
+		err = cmd_graph(sb, progname, command, argc, args);
 		if (err)
 			goto error;
 		break;
 
 	case CMD_DELTA:
-		command_options(&argc, &args, onlyhelp, 3, progname, command,
-				"<volume>", &vars);
+		common_options(&argc, &args, onlyhelp, 3, progname, command,
+			       "<volume>", &vars);
 		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		force_delta(sb);
+		free(argv2optv(args));
 		break;
 
 	case CMD_UNIFY:
-		command_options(&argc, &args, onlyhelp, 3, progname, command,
-				"<volume>", &vars);
+		common_options(&argc, &args, onlyhelp, 3, progname, command,
+			       "<volume>", &vars);
 		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
 		force_unify(sb);
+		free(argv2optv(args));
 		break;
 
 	case CMD_WRITE:
-		command_options(&argc, &args, onlyseek, 4, progname, command,
-				"<volume> <filename>", &vars);
+		common_options(&argc, &args, onlyseek, 4, progname, command,
+			       "<volume> <filename>", &vars);
 		filename = args[3];
 		err = open_fs(vars.volname, sb);
 		if (err)
@@ -391,14 +470,15 @@ int main(int argc, char *argv[])
 		err = sync_super(sb);
 		if (err)
 			goto error;
+		free(argv2optv(args));
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		//tux_dump_entries(blockget(sb->rootdir->map, 0));
 		//show_tree_range(&sb->itree, 0, -1);
 		break;
 
 	case CMD_READ:
-		command_options(&argc, &args, onlyseek, 4, progname, command,
-				"<volume> <filename>", &vars);
+		common_options(&argc, &args, onlyseek, 4, progname, command,
+			       "<volume> <filename>", &vars);
 		filename = args[3];
 		err = open_fs(vars.volname, sb);
 		if (err)
@@ -423,11 +503,12 @@ int main(int argc, char *argv[])
 			goto error;
 		}
 		hexdump(buf, got);
+		free(argv2optv(args));
 		break;
 
 	case CMD_SET:
-		command_options(&argc, &args, onlyhelp, 5, progname, command,
-				"<volume> <filename> <attribute>", &vars);
+		common_options(&argc, &args, onlyhelp, 5, progname, command,
+			       "<volume> <filename> <attribute>", &vars);
 		filename = args[3];
 		attrname = args[4];
 		err = open_fs(vars.volname, sb);
@@ -452,11 +533,12 @@ int main(int argc, char *argv[])
 		err = sync_super(sb);
 		if (err)
 			goto error;
+		free(argv2optv(args));
 		break;
 
 	case CMD_GET:
-		command_options(&argc, &args, onlyhelp, 5, progname, command,
-				"<volume> <filename> <attribute>", &vars);
+		common_options(&argc, &args, onlyhelp, 5, progname, command,
+			       "<volume> <filename> <attribute>", &vars);
 		filename = args[3];
 		attrname = args[4];
 		err = open_fs(vars.volname, sb);
@@ -486,11 +568,12 @@ int main(int argc, char *argv[])
 		hexdump(data, size);
 		free(data);
 		iput(inode);
+		free(argv2optv(args));
 		break;
 
 	case CMD_STAT:
-		command_options(&argc, &args, onlyhelp, 4, progname, command,
-				"<volume> <filename>", &vars);
+		common_options(&argc, &args, onlyhelp, 4, progname, command,
+			       "<volume> <filename>", &vars);
 		filename = args[3];
 		err = open_fs(vars.volname, sb);
 		if (err)
@@ -502,11 +585,12 @@ int main(int argc, char *argv[])
 		}
 		dump_attrs(inode);
 		iput(inode);
+		free(argv2optv(args));
 		break;
 
 	case CMD_DELETE:
-		command_options(&argc, &args, onlyhelp, 4, progname, command,
-				"<volume> <filename>", &vars);
+		common_options(&argc, &args, onlyhelp, 4, progname, command,
+			       "<volume> <filename>", &vars);
 		filename = args[3];
 		err = open_fs(vars.volname, sb);
 		if (err)
@@ -523,11 +607,12 @@ int main(int argc, char *argv[])
 		err = sync_super(sb);
 		if (err)
 			goto error;
+		free(argv2optv(args));
 		break;
 
 	case CMD_TRUNCATE:
-		command_options(&argc, &args, onlysize, 4, progname, command,
-				"<volume> <filename>", &vars);
+		common_options(&argc, &args, onlysize, 4, progname, command,
+			       "<volume> <filename>", &vars);
 		filename = args[3];
 		err = open_fs(vars.volname, sb);
 		if (err)
@@ -545,6 +630,7 @@ int main(int argc, char *argv[])
 		err = sync_super(sb);
 		if (err)
 			goto error;
+		free(argv2optv(args));
 		break;
 
 	default:
@@ -556,7 +642,6 @@ int main(int argc, char *argv[])
 	//show_buffers(sb->volmap->map);
 	put_super(sb);
 	tux3_exit_mem();
-	free(argv2optv(args));	/* Free memory allocated by command_options() */
 	free(optv);
 	return 0;
 
