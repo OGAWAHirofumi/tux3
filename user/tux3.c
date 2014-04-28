@@ -217,16 +217,47 @@ static int cmd_fsck(struct sb *sb, const char *progname, const char *command,
 static int cmd_dump(struct sb *sb, const char *progname, const char *command,
 		    int argc, const char **args)
 {
-	struct vars vars = {};
+	struct options options[] = {
+		{ "dump_block", "b", OPT_HASARG,
+		  "Set filename for block number dump", },
+		{ "stats", "s", OPT_MANY, "Statistics", },
+		{ "usage", "", 0, "Show usage", },
+		{ "help", "?", 0, "Show help", },
+		{},
+	};
+	struct dump_opts opts = {};
+	const char *volname;
 	int err;
 
-	common_options(&argc, &args, onlyhelp, 3, progname, command,
-		       "<volume>", &vars);
-	err = open_sb(vars.volname, sb);
+	const char *blurb = "<volname>";
+	int optc = common_parse(&argc, &args, options, 3, progname,
+				command, blurb, &volname);
+
+	void *optv = argv2optv(args);
+
+	for (int i = 0; i < optc; i++) {
+		const char *value = optvalue(optv, i);
+		switch (options[optindex(optv, i)].terse[0]) {
+		case 's':
+			opts.stats++;
+			break;
+		case 'b':
+			opts.dump_block = value;
+			break;
+		case '?':
+			usage(options, progname, command, blurb, " [OPTIONS]");
+			exit(0);
+		case 0:
+			usage(options, progname, command, blurb, NULL);
+			exit(0);
+		}
+	}
+
+	err = open_sb(volname, sb);
 	if (err)
 		return err;
 
-	err = dump_main(sb, vars.verbose);
+	err = dump_main(sb, &opts);
 
 	free(argv2optv(args));
 	return err;

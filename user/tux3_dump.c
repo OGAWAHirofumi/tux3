@@ -11,10 +11,14 @@
 
 #include "walk.c"
 
-static int opt_stats = 1;
-static int opt_dump_block = 1;
+struct dump_opts {
+	const char *dump_block;
+	int stats;
+};
+
+static int opt_stats;
+static const char *opt_dump_block;
 static FILE *block_fp;
-static char *dump_block_name = "block_dump.log";
 
 struct stats_seek {
 	block_t blocks;				/* total seek blocks */
@@ -722,15 +726,15 @@ static struct walk_logchain_ops dump_logchain_ops = {
 	.pre	= dump_log_pre,
 };
 
-static int dump_main(struct sb *sb, int verbose)
+static int dump_main(struct sb *sb, struct dump_opts *opts)
 {
 	int err;
 
-	if (verbose)
-		opt_stats++;
+	opt_stats = opts->stats;
+	opt_dump_block = opts->dump_block;
 
 	if (opt_dump_block) {
-		block_fp = fopen(dump_block_name, "w");
+		block_fp = fopen(opt_dump_block, "w");
 		if (!block_fp)
 			return errno;
 	}
