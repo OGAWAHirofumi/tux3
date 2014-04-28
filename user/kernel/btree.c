@@ -295,7 +295,8 @@ struct cursor *alloc_cursor(struct btree *btree, int extra)
 void free_cursor(struct cursor *cursor)
 {
 #ifdef CURSOR_DEBUG
-	assert(cursor->level == -1);
+	if (cursor)
+		assert(cursor->level == -1);
 #endif
 	kfree(cursor);
 }

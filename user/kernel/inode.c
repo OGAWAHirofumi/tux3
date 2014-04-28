@@ -227,11 +227,13 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 	struct cursor *cursor;
 	int err = 0;
 
-	cursor = alloc_cursor(itree, 1); /* +1 for now depth */
-	if (!cursor)
-		return -ENOMEM;
+	down_write(&itree->lock);
+	cursor = alloc_cursor(itree, 0);
+	if (!cursor) {
+		err = -ENOMEM;
+		goto error;
+	}
 
-	down_write(&cursor->btree->lock);
 	while (1) {
 		inum_t orig;
 
@@ -269,7 +271,7 @@ static int alloc_inum(struct inode *inode, inum_t goal)
 	}
 
 error:
-	up_write(&cursor->btree->lock);
+	up_write(&itree->lock);
 	free_cursor(cursor);
 
 	return err;
@@ -392,13 +394,16 @@ static int open_inode(struct inode *inode)
 {
 	struct sb *sb = tux_sb(inode->i_sb);
 	struct btree *itree = itree_btree(sb);
+	struct cursor *cursor;
 	int err;
 
-	struct cursor *cursor = alloc_cursor(itree, 0);
-	if (!cursor)
-		return -ENOMEM;
+	down_read(&itree->lock);
+	cursor = alloc_cursor(itree, 0);
+	if (!cursor) {
+		err = -ENOMEM;
+		goto out;
+	}
 
-	down_read(&cursor->btree->lock);
 	if ((err = btree_probe(cursor, tux_inode(inode)->inum)))
 		goto out;
 
@@ -418,7 +423,7 @@ static int open_inode(struct inode *inode)
 
 	release_cursor(cursor);
 out:
-	up_read(&cursor->btree->lock);
+	up_read(&itree->lock);
 	free_cursor(cursor);
 
 	return err;
