@@ -7,6 +7,11 @@ void countmap_put(struct countmap_pin *countmap_pin)
 {
 }
 
+int countmap_used(struct sb *sb, block_t group)
+{
+	return 0;
+}
+
 int balloc_find_range(struct sb *sb,
 	struct block_segment *seg, int maxsegs, int *segs,
 	block_t start, block_t range, unsigned *blocks)

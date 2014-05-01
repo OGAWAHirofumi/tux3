@@ -137,7 +137,7 @@ static int countmap_add_segment(struct sb *sb, block_t start, unsigned blocks,
 	return countmap_add(sb, group, set ? blocks : -blocks);
 }
 
-static int countmap_used(struct sb *sb, block_t group)
+int countmap_used(struct sb *sb, block_t group)
 {
 	unsigned offset = group & (sb->blockmask >> 1);
 	struct buffer_head *buffer;
