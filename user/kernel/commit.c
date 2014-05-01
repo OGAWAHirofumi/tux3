@@ -768,10 +768,14 @@ int change_end(struct sb *sb)
  * }
  * change_end_if_need()
  */
-void change_begin_if_needed(struct sb *sb)
+void change_begin_if_needed(struct sb *sb, int need_sep)
 {
 	if (current->journal_info == NULL)
 		change_begin(sb);
+	else if (need_sep) {
+		change_end(sb);
+		change_begin(sb);
+	}
 }
 
 void change_end_if_needed(struct sb *sb)

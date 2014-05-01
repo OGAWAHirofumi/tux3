@@ -790,7 +790,7 @@ void change_begin_atomic_nested(struct sb *sb, void **ptr);
 void change_end_atomic_nested(struct sb *sb, void *ptr);
 void change_begin(struct sb *sb);
 int change_end(struct sb *sb);
-void change_begin_if_needed(struct sb *sb);
+void change_begin_if_needed(struct sb *sb, int need_sep);
 void change_end_if_needed(struct sb *sb);
 
 /* commit_flusher.c */
