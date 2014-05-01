@@ -74,18 +74,6 @@ static int uleaf_can_free(struct btree *btree, void *leaf)
 	return uleaf->count == 0;
 }
 
-static void uleaf_dump(struct btree *btree, void *data)
-{
-#if 0
-	struct uleaf *leaf = data;
-	__tux3_dbg("leaf %p/%i", leaf, leaf->count);
-	struct uentry *entry, *limit = leaf->entries + leaf->count;
-	for (entry = leaf->entries; entry < limit; entry++)
-		__tux3_dbg(" %x:%x", entry->key, entry->val);
-	__tux3_dbg(" (%x free)\n", uleaf_free(btree, leaf));
-#endif
-}
-
 static tuxkey_t uleaf_split(struct btree *btree, tuxkey_t hint, void *vfrom, void *vinto)
 {
 	test_assert(!uleaf_sniff(btree, vfrom));
@@ -206,7 +194,6 @@ static struct btree_ops ops = {
 
 	.leaf_sniff	= uleaf_sniff,
 	.leaf_can_free	= uleaf_can_free,
-	.leaf_dump	= uleaf_dump,
 };
 
 /* Test of new_leaf() and new_node() */
@@ -239,7 +226,6 @@ static void test01(struct sb *sb, struct inode *inode)
 		}
 	}
 	mark_buffer_dirty_non(buffer);
-	uleaf_dump(btree, bufdata(buffer));
 	blockput(buffer);
 
 	clean_main(sb, inode);

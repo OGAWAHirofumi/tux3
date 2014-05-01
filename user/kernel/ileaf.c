@@ -105,43 +105,6 @@ static int ileaf_can_free(struct btree *btree, void *leaf)
 	return icount(ileaf) == 0;
 }
 
-static void ileaf_dump(struct btree *btree, void *vleaf)
-{
-	if (!tux3_trace)
-		return;
-
-	struct ileaf_attr_ops *attr_ops = btree->ops->private_ops;
-	struct ileaf *leaf = vleaf;
-	inum_t inum = ibase(leaf);
-	__be16 *dict = ileaf_dict(btree, leaf);
-	unsigned offset = 0;
-
-	__tux3_dbg("ileaf 0x%Lx/%i (%x bytes free)",
-		   ibase(leaf), icount(leaf), ileaf_free(btree, leaf));
-
-	for (int i = 0; i < icount(leaf); i++, inum++) {
-		int limit = __atdict(dict, i + 1), size = limit - offset;
-		if (!size)
-			continue;
-		if (size < 0)
-			__tux3_dbg("  0x%Lx: <corrupt>\n", inum);
-		else if (!size)
-			__tux3_dbg("  0x%Lx: <empty>\n", inum);
-		else if (attr_ops == &iattr_ops) {
-			/* FIXME: this doesn't work in kernel */
-			struct tux3_inode tuxnode = {};
-			struct inode *inode = &tuxnode.vfs_inode;
-			void *attrs = leaf->table + offset;
-
-			inode->i_sb = vfs_sb(btree->sb),
-			attr_ops->decode(btree, inode, attrs, size);
-
-			free_xcache(inode);
-		}
-		offset = limit;
-	}
-}
-
 void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigned *result)
 {
 	assert(inum >= ibase(leaf));
@@ -484,7 +447,6 @@ struct btree_ops itree_ops = {
 
 	.leaf_sniff	= ileaf_sniff,
 	.leaf_can_free	= ileaf_can_free,
-	.leaf_dump	= ileaf_dump,
 };
 
 struct btree_ops otree_ops = {
@@ -500,7 +462,6 @@ struct btree_ops otree_ops = {
 
 	.leaf_sniff	= ileaf_sniff,
 	.leaf_can_free	= ileaf_can_free,
-	.leaf_dump	= ileaf_dump,
 };
 
 /*

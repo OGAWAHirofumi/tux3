@@ -522,39 +522,6 @@ out:
 	return ret;
 }
 
-void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count)
-{
-	__tux3_dbg("%i level btree at %Li:\n",
-		   btree->root.depth, btree->root.block);
-	if (!has_root(btree))
-		return;
-
-	struct cursor *cursor = alloc_cursor(btree, 0);
-	if (!cursor) {
-		tux3_err(btree->sb, "out of memory");
-		return;
-	}
-	if (btree_probe(cursor, start)) {
-		tux3_fs_error(btree->sb, "tell me why!!!");
-		goto out;
-	}
-
-	struct buffer_head *buffer;
-	do {
-		buffer = cursor_leafbuf(cursor);
-		assert(!btree->ops->leaf_sniff(btree, bufdata(buffer)));
-		(btree->ops->leaf_dump)(btree, bufdata(buffer));
-	} while (--count && cursor_advance(cursor));
-
-out:
-	free_cursor(cursor);
-}
-
-void show_tree(struct btree *btree)
-{
-	show_tree_range(btree, 0, -1);
-}
-
 static void level_redirect_blockput(struct cursor *cursor, int level, struct buffer_head *clone)
 {
 	struct buffer_head *buffer = cursor->path[level].buffer;

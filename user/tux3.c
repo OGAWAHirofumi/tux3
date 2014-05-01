@@ -49,9 +49,6 @@ static int open_fs(const char *volname, struct sb *sb)
 	struct replay *rp = tux3_init_fs(sb);
 	if (IS_ERR(rp))
 		return PTR_ERR(rp);
-	show_tree_range(&tux_inode(sb->rootdir)->btree, 0, -1);
-	show_tree_range(&tux_inode(sb->bitmap)->btree, 0, -1);
-
 	return replay_stage3(rp, 1);
 }
 
@@ -190,7 +187,6 @@ static int cmd_mkfs(struct sb *sb, const char *progname, const char *command,
 
 	int err = make_tux3(sb);
 
-	show_tree_range(itree_btree(sb), 0, -1);
 	free(argv2optv(args));
 
 	return err;
@@ -532,7 +528,6 @@ int main(int argc, char *argv[])
 		free(argv2optv(args));
 		//bitmap_dump(sb->bitmap, 0, sb->volblocks);
 		//tux_dump_entries(blockget(sb->rootdir->map, 0));
-		//show_tree_range(&sb->itree, 0, -1);
 		break;
 
 	case CMD_READ:
@@ -542,7 +537,6 @@ int main(int argc, char *argv[])
 		err = open_fs(vars.volname, sb);
 		if (err)
 			goto error;
-		//show_tree_range(&sb->itree, 0, -1);
 		//tux_dump_entries(blockread(sb->rootdir->map, 0));
 		inode = tuxopen(sb->rootdir, filename, strlen(filename));
 		if (IS_ERR(inode)) {

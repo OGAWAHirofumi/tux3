@@ -149,29 +149,6 @@ static int dleaf_can_free(struct btree *btree, void *leaf)
 	return 1;
 }
 
-static void __dleaf_dump(struct btree *btree, struct dleaf *dleaf,
-			  const char *prefix)
-{
-	if (!tux3_trace)
-		return;
-
-	unsigned i;
-	__tux3_dbg("%sdleaf %p, magic %x, count %u\n", prefix,
-		   dleaf, be16_to_cpu(dleaf->magic), be16_to_cpu(dleaf->count));
-	for (i = 0; i < be16_to_cpu(dleaf->count); i++) {
-		struct extent ex;
-		get_extent(dleaf->table + i, &ex);
-		__tux3_dbg("  logical %Lu, physical %Lu, version %u\n",
-			   ex.logical, ex.physical, ex.version);
-	}
-}
-
-static void dleaf_dump(struct btree *btree, void *leaf)
-{
-	struct dleaf *dleaf = leaf;
-	__dleaf_dump(btree, dleaf, "");
-}
-
 /* Lookup logical address in diskextent2 <= index */
 static struct diskextent2 *
 __dleaf_lookup_index(struct btree *btree, struct dleaf *dleaf,
@@ -853,5 +830,4 @@ struct btree_ops dtree_ops = {
 
 	.leaf_sniff	= dleaf_sniff,
 	.leaf_can_free	= dleaf_can_free,
-	.leaf_dump	= dleaf_dump,
 };

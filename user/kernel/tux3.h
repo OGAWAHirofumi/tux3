@@ -596,7 +596,6 @@ struct btree_ops {
 	int (*leaf_sniff)(struct btree *btree, void *leaf);
 	/* return value: 1 - can free, 0 - can't free */
 	int (*leaf_can_free)(struct btree *btree, void *leaf);
-	void (*leaf_dump)(struct btree *btree, void *leaf);
 };
 
 /* Information for replay */
@@ -762,8 +761,6 @@ int noop_pre_write(struct btree *btree, tuxkey_t key_bottom, tuxkey_t key_limit,
 		   void *leaf, struct btree_key_range *key);
 int btree_write(struct cursor *cursor, struct btree_key_range *key);
 int btree_read(struct cursor *cursor, struct btree_key_range *key);
-void show_tree_range(struct btree *btree, tuxkey_t start, unsigned count);
-void show_tree(struct btree *btree);
 int cursor_redirect(struct cursor *cursor);
 int replay_bnode_redirect(struct replay *rp, block_t oldblock, block_t newblock);
 int replay_bnode_root(struct replay *rp, block_t root, unsigned count,
