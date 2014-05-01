@@ -33,14 +33,14 @@ static void add_maps(struct inode *inode, block_t index,
 }
 
 /* Create segments, then save state to buffer */
-static int d_map_region(struct inode *inode, block_t start, unsigned count,
+static int d_filemap(struct inode *inode, block_t start, unsigned count,
 			struct block_segment *seg, unsigned seg_max,
 			enum map_mode mode)
 {
 	int segs;
 	/* this should be called with "mode != MAP_READ" */
 	assert(mode != MAP_READ);
-	segs = map_region(inode, start, count, seg, seg_max, mode);
+	segs = filemap(inode, start, count, seg, seg_max, mode);
 	if (segs > 0)
 		add_maps(inode, start, seg, segs);
 	return segs;
@@ -67,11 +67,11 @@ static void check_maps(struct inode *inode, block_t index,
 }
 
 /* Check returned segments are same state with buffer */
-static int check_map_region(struct inode *inode, block_t start, unsigned count,
+static int check_filemap(struct inode *inode, block_t start, unsigned count,
 			    struct block_segment *seg, unsigned seg_max)
 {
 	int segs;
-	segs = map_region(inode, start, count, seg, seg_max, MAP_READ);
+	segs = filemap(inode, start, count, seg, seg_max, MAP_READ);
 	if (segs > 0)
 		check_maps(inode, start, seg, segs);
 	return segs;
@@ -87,7 +87,7 @@ struct test_data {
 static void test01(struct sb *sb, struct inode *inode)
 {
 	/*
-	 * FIXME: map_region() are not supporting to read segments on
+	 * FIXME: filemap() are not supporting to read segments on
 	 * multiple leaves at once.
 	 */
 #define CAN_HANDLE_A_LEAF	1
@@ -101,16 +101,16 @@ static void test01(struct sb *sb, struct inode *inode)
 		tux3_start_backend(sb);
 
 		for (int i = 0, j = 0; i < 30; i++, j++) {
-			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
+			segs = d_filemap(inode, 2*i, 1, &seg, 1, MAP_WRITE);
 			test_assert(segs == 1);
 		}
 #ifdef CAN_HANDLE_A_LEAF
 		for (int i = 0; i < 30; i++) {
-			segs = check_map_region(inode, 2*i, 1, &seg, 1);
+			segs = check_filemap(inode, 2*i, 1, &seg, 1);
 			test_assert(segs == 1);
 		}
 #else
-		segs = check_map_region(inode, 0, 30*2, seg, ARRAY_SIZE(seg));
+		segs = check_filemap(inode, 0, 30*2, seg, ARRAY_SIZE(seg));
 		test_assert(segs == 30*2);
 #endif
 
@@ -124,18 +124,18 @@ static void test01(struct sb *sb, struct inode *inode)
 			for (int i = 0; i < 30; i++) {
 				if (index <= i*2)
 					break;
-				segs = check_map_region(inode, 2*i, 1, &seg, 1);
+				segs = check_filemap(inode, 2*i, 1, &seg, 1);
 				test_assert(segs == 1);
 			}
 #else
-			segs = check_map_region(inode, 0, 30*2, seg,
+			segs = check_filemap(inode, 0, 30*2, seg,
 						ARRAY_SIZE(seg));
 			test_assert(segs == i*2);
 #endif
 		}
 
 		/* Check if truncated all */
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, MAP_READ);
+		segs = filemap(inode, 0, INT_MAX, &seg, 1, MAP_READ);
 		test_assert(segs == 1);
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == BLOCK_SEG_HOLE);
@@ -156,16 +156,16 @@ static void test01(struct sb *sb, struct inode *inode)
 		tux3_start_backend(sb);
 
 		for (int i = 30; i >= 0; i--) {
-			segs = d_map_region(inode, 2*i, 1, &seg, 1, MAP_WRITE);
+			segs = d_filemap(inode, 2*i, 1, &seg, 1, MAP_WRITE);
 			test_assert(segs == 1);
 		}
 #ifdef CAN_HANDLE_A_LEAF
 		for (int i = 30; i >= 0; i--) {
-			segs = check_map_region(inode, 2*i, 1, &seg, 1);
+			segs = check_filemap(inode, 2*i, 1, &seg, 1);
 			test_assert(segs == 1);
 		}
 #else
-		segs = check_map_region(inode, 0, 30*2, seg, ARRAY_SIZE(seg));
+		segs = check_filemap(inode, 0, 30*2, seg, ARRAY_SIZE(seg));
 		test_assert(segs == i*2);
 #endif
 
@@ -173,7 +173,7 @@ static void test01(struct sb *sb, struct inode *inode)
 		test_assert(!err);
 
 		/* Check if truncated all */
-		segs = map_region(inode, 0, INT_MAX, &seg, 1, MAP_READ);
+		segs = filemap(inode, 0, INT_MAX, &seg, 1, MAP_READ);
 		test_assert(segs == 1);
 		test_assert(seg.count == INT_MAX);
 		test_assert(seg.state == BLOCK_SEG_HOLE);
@@ -207,23 +207,23 @@ static void test02(struct sb *sb, struct inode *inode)
 	for (int i = 0; i < ARRAY_SIZE(data); i++) {
 		int segs1, segs2;
 
-		segs1 = d_map_region(inode, data[i].index, data[i].count,
+		segs1 = d_filemap(inode, data[i].index, data[i].count,
 				    seg, ARRAY_SIZE(seg), data[i].mode);
 		test_assert(segs1 > 0);
 		total_segs += segs1;
 
-		segs2 = check_map_region(inode, data[i].index, data[i].count,
+		segs2 = check_filemap(inode, data[i].index, data[i].count,
 					 seg, ARRAY_SIZE(seg));
 		test_assert(segs1 == segs2);
 	}
 
 	/* Check whole rage from 0 */
-	int segs = check_map_region(inode, 0, 200, seg, ARRAY_SIZE(seg));
+	int segs = check_filemap(inode, 0, 200, seg, ARRAY_SIZE(seg));
 	test_assert(segs >= total_segs);
 
 	tux3_end_backend();
 
-	/* Clear dirty page to prevent to call map_region again */
+	/* Clear dirty page to prevent to call filemap again */
 	change_begin_atomic(sb);
 	truncate_inode_pages(mapping(inode), 0);
 	change_end_atomic(sb);
@@ -242,32 +242,32 @@ static void test03(struct sb *sb, struct inode *inode)
 	tux3_start_backend(sb);
 
 	/* Create range */
-	segs1 = d_map_region(inode, 2, 5, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
+	segs1 = d_filemap(inode, 2, 5, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 2, 5, seg2, ARRAY_SIZE(seg2));
+	segs2 = check_filemap(inode, 2, 5, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs1 == segs2);
 
 	/* Overwrite range */
-	segs1 = d_map_region(inode, 4, 1, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
+	segs1 = d_filemap(inode, 4, 1, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 4, 1, seg1, ARRAY_SIZE(seg1));
+	segs2 = check_filemap(inode, 4, 1, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 == segs2);
 	test_assert(seg1[0].block == seg2[0].block + 2);
 
 	/* Read 1st range again (overwrite should not add new segments) */
-	segs1 = check_map_region(inode, 2, 5, seg1, ARRAY_SIZE(seg1));
+	segs1 = check_filemap(inode, 2, 5, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 == segs2);
 	test_assert(seg1[0].block == seg2[0].block);
 	test_assert(seg1[0].count == seg2[0].count);
 	test_assert(seg1[0].count == 5);
 
 	/* Check whole rage from 0 */
-	segs2 = check_map_region(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
+	segs2 = check_filemap(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs2 >= segs1);
 
 	tux3_end_backend();
 
-	/* Clear dirty page to prevent to call map_region again */
+	/* Clear dirty page to prevent to call filemap again */
 	change_begin_atomic(sb);
 	truncate_inode_pages(mapping(inode), 0);
 	change_end_atomic(sb);
@@ -286,24 +286,24 @@ static void test04(struct sb *sb, struct inode *inode)
 	tux3_start_backend(sb);
 
 	/* Create extents */
-	segs1 = d_map_region(inode, 2, 2, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
+	segs1 = d_filemap(inode, 2, 2, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 2, 2, seg2, ARRAY_SIZE(seg2));
+	segs2 = check_filemap(inode, 2, 2, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs1 == segs2);
 
 	/* Overwrite extent and hole at once */
-	segs1 = d_map_region(inode, 2, 4, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
+	segs1 = d_filemap(inode, 2, 4, seg1, ARRAY_SIZE(seg1), MAP_WRITE);
 	test_assert(segs1 > 0);
-	segs2 = check_map_region(inode, 2, 4, seg1, ARRAY_SIZE(seg1));
+	segs2 = check_filemap(inode, 2, 4, seg1, ARRAY_SIZE(seg1));
 	test_assert(segs1 == segs2);
 
 	/* Check whole rage from 0 */
-	segs2 = check_map_region(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
+	segs2 = check_filemap(inode, 0, 200, seg2, ARRAY_SIZE(seg2));
 	test_assert(segs2 >= segs1);
 
 	tux3_end_backend();
 
-	/* Clear dirty page to prevent to call map_region again */
+	/* Clear dirty page to prevent to call filemap again */
 	change_begin_atomic(sb);
 	truncate_inode_pages(mapping(inode), 0);
 	change_end_atomic(sb);
@@ -321,12 +321,12 @@ static void __test05(struct test_data data[], int nr, struct inode *inode)
 	for (int i = 0; i < nr; i++, t++) {
 		int segs1, segs2;
 
-		segs1 = d_map_region(inode, t->index, t->count,
+		segs1 = d_filemap(inode, t->index, t->count,
 				     seg, ARRAY_SIZE(seg), t->mode);
 		test_assert(segs1 > 0);
 		total_segs += segs1;
 
-		segs2 = check_map_region(inode, t->index, t->count,
+		segs2 = check_filemap(inode, t->index, t->count,
 					 seg, ARRAY_SIZE(seg));
 		test_assert(segs1 == segs2);
 	}
@@ -334,7 +334,7 @@ static void __test05(struct test_data data[], int nr, struct inode *inode)
 	/* Check whole rage */
 	block_t idx = data[0].index;
 	unsigned end = data[nr - 1].index + data[nr - 1].count + 10;
-	segs = check_map_region(inode, idx, end - idx, seg, ARRAY_SIZE(seg));
+	segs = check_filemap(inode, idx, end - idx, seg, ARRAY_SIZE(seg));
 	test_assert(segs >= total_segs);
 #endif
 }

@@ -89,7 +89,7 @@ static int guess_readahead(struct bufvec *bufvec, struct inode *inode,
 
 	/*
 	 * FIXME: pin buffers early may be inefficient. We can delay to
-	 * prepare buffers until map_region() was done.
+	 * prepare buffers until filemap() was done.
 	 */
 	buffer = blockget(mapping(inode), index++);
 	if (!buffer)
@@ -179,7 +179,7 @@ static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec)
 
 	struct block_segment seg[10];
 
-	int segs = map_region(inode, index, count, seg, ARRAY_SIZE(seg), mode);
+	int segs = filemap(inode, index, count, seg, ARRAY_SIZE(seg), mode);
 	if (segs < 0)
 		return segs;
 	assert(segs);

@@ -18,8 +18,8 @@
  *				   tux3_unify_orphan_del,
  *				   load_otree_orphan)
  *
- * down_write(inode: btree->lock) (btree_chop, map_region for write)
- * down_read(inode: btree->lock) (map_region for read)
+ * down_write(inode: btree->lock) (btree_chop, filemap for write)
+ * down_read(inode: btree->lock) (filemap for read)
  *
  * inode->i_mutex
  *     mapping->private_lock (front uses to protect dirty buffer list)
@@ -52,9 +52,9 @@
 #endif
 
 enum map_mode {
-	MAP_READ	= 0,	/* map_region for read */
-	MAP_WRITE	= 1,	/* map_region for overwrite */
-	MAP_REDIRECT	= 2,	/* map_region for redirected write
+	MAP_READ	= 0,	/* filemap for read */
+	MAP_WRITE	= 1,	/* filemap for overwrite */
+	MAP_REDIRECT	= 2,	/* filemap for redirected write
 				 * (copy-on-write) */
 	MAX_MAP_MODE,
 };
@@ -269,8 +269,8 @@ static int map_direct(struct btree *btree, block_t start, unsigned count,
 	return segs;
 }
 
-/* map_region() by using dleaf */
-static int map_region2(struct inode *inode, block_t start, unsigned count,
+/* filemap() by using dleaf */
+static int filemap2(struct inode *inode, block_t start, unsigned count,
 		       struct block_segment seg[], unsigned seg_max,
 		       enum map_mode mode)
 {
@@ -285,10 +285,10 @@ static int map_region2(struct inode *inode, block_t start, unsigned count,
 	 *
 	 * tux3_flush_inode_internal() (flush bitmap)
 	 *   flush_list()
-	 *     map_region() (for flush)
+	 *     filemap() (for flush)
 	 *       balloc()
 	 *         read bitmap
-	 *           map_region() (for read)
+	 *           filemap() (for read)
 	 *
 	 * But bitmap is used (read/write) only from backend.
 	 * So, no need to lock.
@@ -404,7 +404,7 @@ out_unlock:
  * < 0 - error
  * 0 < - number of physical extents which were mapped
  */
-static int map_region(struct inode *inode, block_t start, unsigned count,
+static int filemap(struct inode *inode, block_t start, unsigned count,
 		      struct block_segment seg[], unsigned seg_max,
 		      enum map_mode mode)
 {
@@ -416,7 +416,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 	 */
 
 	if (mode == MAP_READ) {
-		/* If whole region was hole, don't need to call map_region */
+		/* If whole region was hole, don't need to call filemap */
 		if (tux3_is_hole(inode, start, count)) {
 			assert(seg_max >= 1);
 			seg[0].state = BLOCK_SEG_HOLE;
@@ -426,7 +426,7 @@ static int map_region(struct inode *inode, block_t start, unsigned count,
 		}
 	}
 
-	segs = map_region2(inode, start, count, seg, seg_max, mode);
+	segs = filemap2(inode, start, count, seg, seg_max, mode);
 
 	if (mode == MAP_READ) {
 		/* Update seg[] with hole information */
@@ -465,7 +465,7 @@ static int filemap_extent_io(enum map_mode mode, int rw, struct bufvec *bufvec)
 	/* FIXME: For now, this is only for write */
 	assert(mode != MAP_READ);
 
-	int segs = map_region(inode, index, count, seg, ARRAY_SIZE(seg), mode);
+	int segs = filemap(inode, index, count, seg, ARRAY_SIZE(seg), mode);
 	if (segs < 0)
 		return segs;
 	assert(segs);
@@ -543,9 +543,9 @@ static int __tux3_get_block(struct inode *inode, sector_t iblock,
 	}
 	assert(mode < MAX_MAP_MODE);
 
-	segs = map_region(inode, iblock, max_blocks, &seg, 1, mode);
+	segs = filemap(inode, iblock, max_blocks, &seg, 1, mode);
 	if (segs < 0) {
-		tux3_err(sb, "map_region failed: %d", segs);
+		tux3_err(sb, "filemap failed: %d", segs);
 		return -EIO;
 	}
 	assert(segs == 1);

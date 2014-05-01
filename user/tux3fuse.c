@@ -567,7 +567,7 @@ static void tux3fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	struct file *file = &(struct file){ .f_inode = inode, };
 	int err;
 
-	/* FIXME: better to use map_region() directly */
+	/* FIXME: better to use filemap() directly */
 	trace("userspace tries to seek to %Li\n", (s64)offset);
 	if (offset >= inode->i_size) {
 		fuse_reply_buf(req, NULL, 0);
@@ -609,7 +609,7 @@ static void tux3fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 	struct inode *inode = (struct inode *)(unsigned long)fi->fh;
 	struct file *file = &(struct file){ .f_inode = inode };
 
-	/* FIXME: better to use map_region() directly */
+	/* FIXME: better to use filemap() directly */
 	tuxseek(file, offset);
 
 	int written = tuxwrite(file, buf, size);
