@@ -703,9 +703,11 @@ int blockio_vec(int rw, struct bufvec *bufvec, block_t block, unsigned count);
 
 #define tux3_msg(sb, fmt, ...)						\
 	__tux3_msg(sb, KERN_INFO, "", fmt, ##__VA_ARGS__)
-#define tux3_err(sb, fmt, ...)						\
+#define __tux3_err(sb, func, line, fmt, ...)				\
 	__tux3_msg(sb, KERN_ERR, " error",				\
-		   "%s:%d: " fmt, __func__, __LINE__, ##__VA_ARGS__)
+		   "%s:%d: " fmt, func, line, ##__VA_ARGS__)
+#define tux3_err(sb, fmt, ...)						\
+	__tux3_err(sb, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define tux3_warn(sb, fmt, ...)					\
 	__tux3_msg(sb, KERN_WARNING, " warning", fmt, ##__VA_ARGS__)
 

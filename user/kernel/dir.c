@@ -306,6 +306,39 @@ static unsigned char filetype[TUX_TYPES] = {
 	[TUX_LNK] = DT_LNK,
 };
 
+/*
+ * Return 0 if the directory entry is OK, and 1 if there is a problem
+ */
+static int __check_dir_entry(const char *func, int line, struct inode *dir,
+			     struct buffer_head *buffer, tux_dirent *entry)
+{
+	struct sb *sb = tux_sb(dir->i_sb);
+	const char *error_msg = NULL;
+	const void *base = bufdata(buffer);
+	const int off = (void *)entry - base;
+	const int rlen = tux_rec_len_from_disk(entry->rec_len);
+
+	if (unlikely(rlen < TUX_REC_LEN(1)))
+		error_msg = "rec_len is smaller than minimal";
+	else if (unlikely(rlen & (TUX_DIR_ALIGN - 1)))
+		error_msg = "rec_len alignment error";
+	else if (unlikely(rlen < TUX_REC_LEN(entry->name_len)))
+		error_msg = "rec_len is too small for name_len";
+	else if (unlikely(off + rlen > sb->blocksize))
+		error_msg = "directory entry across range";
+	else
+		return 0;
+
+	__tux3_err(sb, func, line,
+		   "bad entry: %s: inum %Lu, block %Lu, off %d, rec_len %d",
+		   error_msg, tux_inode(dir)->inum, bufindex(buffer),
+		   off, rlen);
+
+	return 1;
+}
+#define check_dir_entry(d, b, e)		\
+	__check_dir_entry(__func__, __LINE__, d, b, e)
+
 int tux_readdir(struct file *file, struct dir_context *ctx)
 {
 	struct inode *dir = file_inode(file);
@@ -316,6 +349,10 @@ int tux_readdir(struct file *file, struct dir_context *ctx)
 	unsigned offset = ctx->pos & sb->blockmask;
 
 	assert(!(dir->i_size & sb->blockmask));
+
+	/* Clearly invalid offset */
+	if (unlikely(offset & (TUX_DIR_ALIGN - 1)))
+		return -ENOENT;
 
 	for (block = ctx->pos >> blockbits; block < blocks; block++) {
 		struct buffer_head *buffer = blockread(mapping(dir), block);
@@ -336,10 +373,10 @@ int tux_readdir(struct file *file, struct dir_context *ctx)
 		}
 		tux_dirent *limit = base + sb->blocksize - TUX_REC_LEN(1);
 		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
-			if (entry->rec_len == 0) {
-				blockput(buffer);
-				tux_zero_len_error(dir, block);
-				return -EIO;
+			if (check_dir_entry(dir, buffer, entry)) {
+				/* On error, skip to next block */
+				ctx->pos = (ctx->pos | (sb->blocksize - 1)) + 1;
+				break;
 			}
 			if (!is_deleted(entry)) {
 				unsigned type = (entry->type < TUX_TYPES) ? filetype[entry->type] : DT_UNKNOWN;
