@@ -674,9 +674,6 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create);
 struct buffer_head *__get_buffer(struct page *page, int offset);
 void tux3_try_cancel_dirty_page(struct page *page);
-int tux3_truncate_partial_block(struct inode *inode, loff_t newsize);
-void tux3_truncate_inode_pages_range(struct address_space *mapping,
-				     loff_t lstart, loff_t lend);
 extern const struct address_space_operations tux_file_aops;
 extern const struct address_space_operations tux_symlink_aops;
 extern const struct address_space_operations tux_blk_aops;
@@ -822,6 +819,8 @@ extern struct btree_ops dtree_ops;
 int dtree_chop(struct btree *btree, tuxkey_t start, u64 len);
 int tux3_filemap_overwrite_io(int rw, struct bufvec *bufvec);
 int tux3_filemap_redirect_io(int rw, struct bufvec *bufvec);
+int tux3_truncate_partial_block(struct inode *inode, loff_t newsize);
+void tux3_truncate_pagecache(struct inode *inode, loff_t newsize);
 
 /* iattr.c */
 void dump_attrs(struct inode *inode);

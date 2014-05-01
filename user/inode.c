@@ -251,35 +251,6 @@ void i_size_write(struct inode *inode, loff_t i_size)
 	inode->i_size = i_size;
 }
 
-/* Truncate partial block. If partial, we have to update last block. */
-static int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
-{
-	unsigned delta = tux3_get_current_delta();
-	struct sb *sb = tux_sb(inode->i_sb);
-	block_t index = newsize >> sb->blockbits;
-	unsigned offset = newsize & sb->blockmask;
-	struct buffer_head *buffer, *clone;
-
-	if (!offset)
-		return 0;
-
-	buffer = blockread(mapping(inode), index);
-	if (!buffer)
-		return -EIO;
-
-	clone = blockdirty(buffer, delta);
-	if (IS_ERR(clone)) {
-		blockput(buffer);
-		return PTR_ERR(clone);
-	}
-
-	memset(bufdata(clone) + offset, 0, sb->blocksize - offset);
-	mark_buffer_dirty_non(clone);
-	blockput(clone);
-
-	return 0;
-}
-
 /* For now, we doesn't cache inode */
 static int generic_drop_inode(struct inode *inode)
 {

@@ -261,8 +261,15 @@ static void tux3_delete_from_page_cache(struct page *page)
 	/* Leave page->index set: truncation lookup relies upon it */
 	mapping->nrpages--;
 	__dec_zone_page_state(page, NR_FILE_PAGES);
+	BUG_ON(page_mapped(page));
 
-	/* Dirty accounting is done by writeback path */
+	/*
+	 * The following dirty accounting is done by writeback
+	 * path. So, we don't need to do here.
+	 *
+	 * dec_zone_page_state(page, NR_FILE_DIRTY);
+	 * dec_bdi_stat(mapping->backing_dev_info, BDI_RECLAIMABLE);
+	 */
 	spin_unlock_irq(&mapping->tree_lock);
 
 #if 0 /* FIXME */
@@ -673,6 +680,8 @@ int bufferfork_to_invalidate(struct address_space *mapping, struct page *page)
 	/* We keep page->mapping as is, so get refcount for radix-tree. */
 	page_cache_get(page);
 
+	/* FIXME: need this? */
+	ClearPageMappedToDisk(page);
 	/* Delete page from radix-tree */
 	tux3_delete_from_page_cache(page);
 

@@ -4,6 +4,40 @@
 #define trace trace_on
 #endif
 
+/* Truncate partial block. If partial, we have to update last block. */
+int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
+{
+	unsigned delta = tux3_get_current_delta();
+	struct sb *sb = tux_sb(inode->i_sb);
+	block_t index = newsize >> sb->blockbits;
+	unsigned offset = newsize & sb->blockmask;
+	struct buffer_head *buffer, *clone;
+
+	if (!offset)
+		return 0;
+
+	buffer = blockread(mapping(inode), index);
+	if (!buffer)
+		return -EIO;
+
+	clone = blockdirty(buffer, delta);
+	if (IS_ERR(clone)) {
+		blockput(buffer);
+		return PTR_ERR(clone);
+	}
+
+	memset(bufdata(clone) + offset, 0, sb->blocksize - offset);
+	mark_buffer_dirty_non(clone);
+	blockput(clone);
+
+	return 0;
+}
+
+void tux3_truncate_pagecache(struct inode *inode, loff_t newsize)
+{
+	truncate_pagecache(inode, newsize);
+}
+
 #include "kernel/filemap.c"
 
 static int filemap_bufvec_check(struct bufvec *bufvec, enum map_mode mode)

@@ -577,15 +577,8 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	i_size_write(inode, newsize);
 	/* Roundup. Partial page is handled by tux3_truncate_partial_block() */
 	holebegin = round_up(newsize, boundary);
-	if (newsize <= holebegin) {	/* Check overflow */
-#ifdef __KERNEL__
-		/* FIXME: The buffer fork before invalidate. We should merge to
-		 * truncate_pagecache() */
-		tux3_truncate_inode_pages_range(inode->i_mapping, holebegin,
-						MAX_LFS_FILESIZE);
-#endif
-		truncate_pagecache(inode, holebegin);
-	}
+	if (newsize <= holebegin)	/* Check overflow */
+		tux3_truncate_pagecache(inode, holebegin);
 
 	if (!is_expand) {
 		err = tux3_add_truncate_hole(inode, newsize);

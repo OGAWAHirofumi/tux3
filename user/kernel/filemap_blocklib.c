@@ -603,6 +603,26 @@ int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
 }
 
 /*
+ * Based on truncate_inode_page()
+ *
+ * Unmap page under lock_page(). Without lock_page(), mmap can
+ * recreate page by page fault.
+ *
+ * So, this unmap page, then fork page to truncate if need. With this,
+ * we can prevent to recreate page by page fault.
+ */
+static int tux3_truncate_inode_page(struct address_space *mapping,
+				    struct page *page)
+{
+	if (page_mapped(page)) {
+		unmap_mapping_range(mapping,
+				   (loff_t)page->index << PAGE_CACHE_SHIFT,
+				   PAGE_CACHE_SIZE, 0);
+	}
+	return bufferfork_to_invalidate(mapping, page);
+}
+
+/*
  * Copy of truncate_inode_pages_range()
  *
  * Changes:
@@ -614,8 +634,8 @@ int tux3_truncate_partial_block(struct inode *inode, loff_t newsize)
  * without invalidate. This way is inefficient, and we would want to merge
  * tux3_truncate_inode_pages_page() and truncate_inode_pages_range().
  */
-void tux3_truncate_inode_pages_range(struct address_space *mapping,
-				     loff_t lstart, loff_t lend)
+static void tux3_truncate_inode_pages_range(struct address_space *mapping,
+					    loff_t lstart, loff_t lend)
 {
 	pgoff_t		start;		/* inclusive */
 	pgoff_t		end;		/* exclusive */
@@ -674,7 +694,7 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 				continue;
 			}
 #endif
-			bufferfork_to_invalidate(mapping, page);
+			tux3_truncate_inode_page(mapping, page);
 			unlock_page(page);
 		}
 		pagevec_release(&pvec);
@@ -756,7 +776,7 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 #if 0
 			wait_on_page_writeback(page);
 #endif
-			bufferfork_to_invalidate(mapping, page);
+			tux3_truncate_inode_page(mapping, page);
 			unlock_page(page);
 		}
 		pagevec_release(&pvec);
@@ -768,4 +788,35 @@ void tux3_truncate_inode_pages_range(struct address_space *mapping,
 #if 0 /* FIXME */
 	cleancache_invalidate_inode(mapping);
 #endif
+}
+
+/*
+ * Copy of truncate_pagecache()
+ *
+ * Changes:
+ * - to call tux3_truncate_inode_pages_range() additionally.
+ *
+ * FIXME: merge tux3_truncate_inode_pages_range() and
+ * truncate_inode_pages_range(), then remove this.
+ */
+void tux3_truncate_pagecache(struct inode *inode, loff_t newsize)
+{
+	struct address_space *mapping = inode->i_mapping;
+	loff_t holebegin = round_up(newsize, PAGE_SIZE);
+
+	/*
+	 * unmap_mapping_range is called twice, first simply for
+	 * efficiency so that truncate_inode_pages does fewer
+	 * single-page unmaps.  However after this first call, and
+	 * before truncate_inode_pages finishes, it is possible for
+	 * private pages to be COWed, which remain after
+	 * truncate_inode_pages finishes, hence the second
+	 * unmap_mapping_range call must be made for correctness.
+	 */
+	unmap_mapping_range(mapping, holebegin, 0, 1);
+	/* FIXME: The buffer fork before invalidate. We should merge to
+	 * truncate_inode_pages_range() */
+	tux3_truncate_inode_pages_range(mapping, newsize, MAX_LFS_FILESIZE);
+	truncate_inode_pages(mapping, newsize);
+	unmap_mapping_range(mapping, holebegin, 0, 1);
 }
