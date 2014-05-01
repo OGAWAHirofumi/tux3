@@ -782,6 +782,7 @@ static int buffer_index_cmp(void *priv, struct list_head *a,
 int flush_list(struct inode *inode, struct tux3_iattr_data *idata,
 	       struct list_head *head, int req_flag)
 {
+	struct tux3_inode *tuxnode = tux_inode(inode);
 	struct bufvec bufvec;
 	int err = 0;
 
@@ -798,8 +799,9 @@ int flush_list(struct inode *inode, struct tux3_iattr_data *idata,
 	while (bufvec_next_buffer_page(&bufvec)) {
 		/* Collect contiguous buffer range */
 		if (bufvec_contig_collect(&bufvec)) {
-			/* Start I/O */
-			err = tux_inode(inode)->io(WRITE | req_flag, &bufvec);
+			policy_extents(&bufvec);
+
+			err = tuxnode->io(WRITE | req_flag, &bufvec);
 			if (err)
 				break;
 		}

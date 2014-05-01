@@ -67,9 +67,62 @@ inum_t policy_inum(struct inode *dir, loff_t where, struct inode *inode)
 
 	return goal;
 }
+
+static block_t fold_goal(struct sb *sb, block_t goal)
+{
+	goal &= sb->volmask;
+	if (goal >= sb->volblocks)
+		goal -= (sb->volmask + 1) >> 1;
+	return goal;
+}
+
+void policy_inode_init(inum_t *previous)
+{
+	*previous = TUX_INVALID_INO - 1;
+}
+
+/*
+ * Policy to setup goal for inode for starting inode flush.
+ */
+void policy_inode(struct inode *inode, inum_t *previous)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+	struct tux3_inode *tuxnode = tux_inode(inode);
+	/*
+	 * Let inum determine block allocation goal, unless inodes are
+	 * written in inum order, then use linear allocation.
+	 */
+	if (tuxnode->inum != ++(*previous))
+		sb->nextblock = fold_goal(sb, *previous = tuxnode->inum);
+}
+
+/*
+ * Policy to choice physical address for creating extents.
+ */
+void policy_extents(struct bufvec *bufvec)
+{
+	struct inode *inode = bufvec_inode(bufvec);
+	struct sb *sb = tux_sb(inode->i_sb);
+	block_t base = tux_inode(inode)->inum;
+	unsigned blockbits = sb->blockbits, far = 1 << (21 - blockbits);
+	struct buffer_head *buf = bufvec_contig_buf(bufvec);
+	block_t offset = bufindex(buf);
+
+	if (abs64(base + offset - sb->nextblock) > far)
+		sb->nextblock = fold_goal(sb, base + offset);
+}
 #else /* POLICY_LINEAR */
 inum_t policy_inum(struct inode *dir, loff_t where, struct inode *inode)
 {
 	return tux_sb(dir->i_sb)->nextinum;
+}
+void policy_inode_init(inum_t *previous)
+{
+}
+void policy_inode(struct inode *inode, inum_t *previous)
+{
+}
+void policy_extents(struct bufvec *bufvec)
+{
 }
 #endif /* POLICY_LINEAR */

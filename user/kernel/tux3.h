@@ -286,7 +286,7 @@ struct sb {
 	unsigned blocksize, blockbits, blockmask, groupbits;
 	u64 freeinodes;		/* Number of free inode numbers. This is
 				 * including the deferred allocated inodes */
-	block_t volblocks, freeblocks, nextblock;
+	block_t volblocks, volmask, freeblocks, nextblock;
 	inum_t nextinum;	/* FIXME: temporary hack to avoid to find
 				 * same area in itree for free inum. */
 	unsigned entries_per_node; /* must be per-btree type, get rid of this */
@@ -930,6 +930,9 @@ struct replay *tux3_init_fs(struct sb *sbi);
 
 /* policy.c */
 inum_t policy_inum(struct inode *dir, loff_t where, struct inode *inode);
+void policy_inode_init(inum_t *previous);
+void policy_inode(struct inode *inode, inum_t *previous);
+void policy_extents(struct bufvec *bufvec);
 
 /* replay.c */
 struct replay *replay_stage1(struct sb *sb);

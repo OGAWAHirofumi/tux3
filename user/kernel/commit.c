@@ -74,6 +74,12 @@ static loff_t calc_maxbytes(loff_t blocksize)
 	return min_t(loff_t, blocksize << MAX_BLOCKS_BITS, MAX_LFS_FILESIZE);
 }
 
+/* FIXME: Should goes into core */
+static inline u64 roundup_pow_of_two64(u64 n)
+{
+	return 1ULL << fls64(n - 1);
+}
+
 /* Setup sb by on-disk super block */
 static void __setup_sb(struct sb *sb, struct disksuper *super)
 {
@@ -92,6 +98,7 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	sb->blocksize = 1 << sb->blockbits;
 	sb->blockmask = (1 << sb->blockbits) - 1;
 	sb->groupbits = 13; // FIXME: put in disk super?
+	sb->volmask = roundup_pow_of_two64(sb->volblocks) - 1;
 	sb->entries_per_node = calc_entries_per_node(sb->blocksize);
 	/* Initialize base indexes for atable */
 	atable_init_base(sb);
@@ -108,10 +115,12 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 	sb->atomgen = be32_to_cpu(super->atomgen);
 	sb->freeatom = be32_to_cpu(super->freeatom);
 	/* logchain and logcount are read from super directly */
-	trace("blocksize %u, blockbits %u, blockmask %08x",
-	      sb->blocksize, sb->blockbits, sb->blockmask);
-	trace("volblocks %Lu, freeblocks %Lu, freeinodes %Lu, nextblock %Lu",
-	      sb->volblocks, sb->freeblocks, sb->freeinodes, sb->nextblock);
+	trace("blocksize %u, blockbits %u, blockmask %08x, groupbits %u",
+	      sb->blocksize, sb->blockbits, sb->blockmask, sb->groupbits);
+	trace("volblocks %Lu, volmask %Lx",
+	      sb->volblocks, sb->volmask);
+	trace("freeblocks %Lu, freeinodes %Lu, nextblock %Lu",
+	      sb->freeblocks, sb->freeinodes, sb->nextblock);
 	trace("atom_dictsize %Lu, freeatom %u, atomgen %u",
 	      (s64)sb->atomdictsize, sb->freeatom, sb->atomgen);
 	trace("logchain %Lu, logcount %u",

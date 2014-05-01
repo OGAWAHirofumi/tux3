@@ -605,6 +605,7 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
 	struct list_head *dirty_inodes = &s_ddc->dirty_inodes;
 	struct inode_delta_dirty *i_ddc, *safe;
+	inum_t private;
 	int err;
 
 	/* ->dirty_inodes owned by backend. No need to lock here */
@@ -612,10 +613,12 @@ int tux3_flush_inodes(struct sb *sb, unsigned delta)
 	/* Sort by tuxnode->inum. FIXME: do we want to sort? */
 	list_sort(&delta, dirty_inodes, inode_inum_cmp);
 
+	policy_inode_init(&private);
 	list_for_each_entry_safe(i_ddc, safe, dirty_inodes, dirty_list) {
 		struct tux3_inode *tuxnode = i_ddc_to_inode(i_ddc, delta);
 		struct inode *inode = &tuxnode->vfs_inode;
 
+		policy_inode(inode, &private);
 		assert(!tux3_is_inode_no_flush(inode));
 
 		err = tux3_flush_inode(inode, delta, 0);

@@ -286,7 +286,8 @@ int flush_list(struct inode *inode, struct tux3_iattr_data *idata,
 	while (bufvec_next_buffer(&bufvec)) {
 		/* Collect contiguous buffer range */
 		if (bufvec_contig_collect(&bufvec)) {
-			/* Start I/O */
+			policy_extents(&bufvec);
+
 			err = mapping(inode)->io(WRITE | req_flag, &bufvec);
 			if (err)
 				break;
