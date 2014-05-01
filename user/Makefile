@@ -91,7 +91,8 @@ USER_OBJS	= current_task.o dir.o filemap.o inode.o namei.o options.o \
 	super.o utility.o writeback.o
 KERN_OBJS	= kernel/balloc.o kernel/btree.o kernel/commit.o \
 	kernel/dleaf.o kernel/iattr.o kernel/ileaf.o \
-	kernel/log.o kernel/orphan.o kernel/replay.o kernel/xattr.o
+	kernel/log.o kernel/orphan.o kernel/policy.o kernel/replay.o \
+	kernel/xattr.o
 TEST_LIB_OBJS	= tests/test.o
 
 # LIBKLIB objects

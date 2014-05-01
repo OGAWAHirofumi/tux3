@@ -928,6 +928,9 @@ int replay_load_orphan_inodes(struct replay *rp);
 /* super.c */
 struct replay *tux3_init_fs(struct sb *sbi);
 
+/* policy.c */
+inum_t policy_inum(struct inode *dir, loff_t where, struct inode *inode);
+
 /* replay.c */
 struct replay *replay_stage1(struct sb *sb);
 int replay_stage2(struct replay *rp);

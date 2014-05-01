@@ -222,18 +222,7 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 	entry = bufdata(buffer) + (where & sb->blockmask);
 
 	if (inum == TUX_INVALID_INO) {
-		enum { guess_filesize = 1 << 13, guess_dirsize = 50 * guess_filesize };
-		enum { guess_dirent_size = 24, cluster = 32 };
-		enum { file_factor = guess_filesize / guess_dirent_size };
-		enum { dir_factor = guess_dirsize / guess_dirent_size };
-
-		int is_dir = S_ISDIR(inode->i_mode);
-		unsigned factor = is_dir ? dir_factor : file_factor;
-		inum_t next = sb->nextinum; /* FIXME: racy */
-		inum_t base = max(tux_inode(dir)->inum + 1, (inum_t)TUX_NORMAL_INO);
-		inum_t guess = base + ((factor * where) >> sb->blockbits);
-		inum_t goal = (is_dir || abs64(next - guess) > cluster) ? guess : next;
-		trace("'%.*s' base = 0x%Lx, guess = 0x%Lx, goal = 0x%Lx", len, name, base, guess, goal);
+		inum_t goal = policy_inum(dir, where, inode);
 
 		err = tux_assign_inum(inode, goal);
 		if (err)
