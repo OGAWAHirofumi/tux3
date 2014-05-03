@@ -431,6 +431,7 @@ struct tux3_inode {
 	spinlock_t hole_extents_lock;	/* lock for hole_extents */
 	struct list_head hole_extents;	/* hole extents list */
 
+	struct rw_semaphore truncate_lock; /* lock for truncate and mmap */
 	spinlock_t lock;		/* lock for inode metadata */
 	/* Per-delta dirty data for inode */
 	unsigned flags;			/* flags for inode state */

@@ -146,6 +146,7 @@ static int tux3_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 	sb_start_pagefault(inode->i_sb);
 
 retry:
+	down_read(&tux_inode(inode)->truncate_lock);
 	lock_page(page);
 	if (page->mapping != mapping(inode)) {
 		unlock_page(page);
@@ -177,6 +178,7 @@ retry:
 		change_end_atomic_nested(sb, ptr);
 		unlock_page(page);
 		page_cache_release(page);
+		up_read(&tux_inode(inode)->truncate_lock);
 
 		switch (PTR_ERR(clone)) {
 		case -EAGAIN:
@@ -218,6 +220,7 @@ retry:
 //	ret = VM_FAULT_LOCKED;
 #endif
 out:
+	up_read(&tux_inode(inode)->truncate_lock);
 	sb_end_pagefault(inode->i_sb);
 
 	return ret;

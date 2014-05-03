@@ -267,6 +267,7 @@ static void tux3_inode_init_once(void *mem)
 	INIT_LIST_HEAD(&tuxnode->orphan_list);
 	spin_lock_init(&tuxnode->hole_extents_lock);
 	INIT_LIST_HEAD(&tuxnode->hole_extents);
+	init_rwsem(&tuxnode->truncate_lock);
 	spin_lock_init(&tuxnode->lock);
 	/* Initialize inode_delta_dirty */
 	for (i = 0; i < ARRAY_SIZE(tuxnode->i_ddc); i++) {
