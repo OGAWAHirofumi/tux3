@@ -822,11 +822,22 @@ static void test06(struct sb *sb)
 	clean_main(sb);
 }
 
+static void add_dirty_inode(struct sb *sb)
+{
+	/* Add dirty inode, but no actual flushing data */
+	change_begin(sb);
+	__tux3_mark_inode_dirty(sb->rootdir, I_DIRTY_PAGES);
+	change_end(sb);
+}
+
 /* Test for partial alloc to flush logblocks */
 static void test07(struct sb *sb)
 {
 	test_assert(make_tux3(sb) == 0);
 	test_assert(force_unify(sb) == 0);
+
+	/* Make dirty inode to workaround tux3_has_dirty_inodes() check */
+	add_dirty_inode(sb);
 
 	tux3_start_backend(sb);
 	/* Make non contiguous blocks */
@@ -873,6 +884,9 @@ static void test08(struct sb *sb)
 	iput(inode);
 	test_assert(force_delta(sb) == 0);
 
+	/* Make dirty inode to workaround tux3_has_dirty_inodes() check */
+	add_dirty_inode(sb);
+
 	/* Reuse "freed_block" for redirect target */
 	tux3_start_backend(sb);
 	struct btree *itree = itree_btree(sb);
@@ -895,6 +909,9 @@ static void test09(struct sb *sb)
 
 	test_assert(make_tux3(sb) == 0);
 	test_assert(force_unify(sb) == 0);
+
+	/* Make dirty inode to workaround tux3_has_dirty_inodes() check */
+	add_dirty_inode(sb);
 
 	tux3_start_backend(sb);
 	/* Allocate cross boundary blocks */
