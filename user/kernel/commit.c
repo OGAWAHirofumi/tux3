@@ -431,6 +431,19 @@ static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 	/* further changes of frontend belong to the next delta */
 	tux3_start_backend(sb);
 
+	/*
+	 * While umount, do_commit can race with umount. So, this
+	 * checks if need to commit or not. Otherwise, e.g. sb->logmap
+	 * can be freed already by ->put_super().
+	 *
+	 * And when sync/fsync() is called, we may not have dirty inodes.
+	 *
+	 * FIXME: there is no need to commit if normal inodes are not
+	 * dirty? better way?
+	 */
+	if (!tux3_has_dirty_inodes(sb, delta))
+		goto out;
+
 	/* Prepare to wait I/O */
 	tux3_iowait_init(&iowait);
 	sb->iowait = &iowait;
@@ -452,13 +465,13 @@ static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 	 */
 	err = stage_delta(sb, delta);
 	if (err)
-		goto error; /* FIXME: error handling */
+		goto out; /* FIXME: error handling */
 
 	if ((unify_flag == ALLOW_UNIFY && need_unify(sb)) ||
 	    unify_flag == FORCE_UNIFY) {
 		err = unify_log(sb);
 		if (err)
-			goto error; /* FIXME: error handling */
+			goto out; /* FIXME: error handling */
 
 		/* Add delta log for debugging. */
 		log_delta(sb);
@@ -479,7 +492,7 @@ static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 	 * commit block.)
 	 */
 	commit_delta(sb);
-error:
+out:
 	/* FIXME: what to do if error? */
 	tux3_end_backend();
 	trace("<<<<<<<<< commit done %u: err %d", delta, err);

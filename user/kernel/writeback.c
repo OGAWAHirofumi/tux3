@@ -633,6 +633,19 @@ error:
 	return err;
 }
 
+int tux3_has_dirty_inodes(struct sb *sb, unsigned delta)
+{
+	struct sb_delta_dirty *s_ddc = tux3_sb_ddc(sb, delta);
+	/* If no dirty inodes, internal inodes should clean too. */
+	assert(!list_empty(&s_ddc->dirty_inodes) ||
+	       (list_empty(&s_ddc->dirty_inodes) &&
+		!(sb->atable->i_state & I_DIRTY)));
+#if 0
+		&& !(sb->vtable->i_state & I_DIRTY)));
+#endif
+	return !list_empty(&s_ddc->dirty_inodes);
+}
+
 /*
  * Clear inode dirty flags after flush.
  */
