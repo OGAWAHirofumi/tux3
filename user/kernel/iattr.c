@@ -40,32 +40,37 @@ unsigned atsize[MAX_ATTRS] = {
  * On-disk format is changed to use 32.32.
  */
 #define TIME_ATTR_SHIFT 0
+#define SEC_BITS	32
+#define NSEC_BITS	(64 - SEC_BITS)
+#define NSEC_MASK	((1ULL << NSEC_BITS) - 1)
+#define NSEC		1000000000LL
 
-typedef u64 fixed32;		/* Tux3 time values */
-
-static inline u32 high32(fixed32 val)
+static inline long fixed_to_sec(s64 val)
 {
-	return val >> 32;
+	return val >> NSEC_BITS;
 }
 
-static inline unsigned billionths(fixed32 val)
+static inline long fixed_to_nsec(s64 val)
 {
-	return (((val & 0xffffffff) * 1000000000) + 0x80000000) >> 32;
+	const s64 roundup = 1LL << (NSEC_BITS - 1);
+	return ((val & NSEC_MASK) * NSEC + roundup) >> NSEC_BITS;
 }
 
-static inline struct timespec spectime(const fixed32 time)
+static inline struct timespec spectime(const s64 time)
 {
 	struct timespec ts = {
-		.tv_sec		= high32(time),
-		.tv_nsec	= billionths(time),
+		.tv_sec		= fixed_to_sec(time),
+		.tv_nsec	= fixed_to_nsec(time),
 	};
 	return ts;
 }
 
-static inline fixed32 tuxtime(const struct timespec ts)
+static inline s64 tuxtime(const struct timespec ts)
 {
-	const u64 mult = ((1ULL << 63) / 1000000000ULL);
-	return ((u64)ts.tv_sec << 32) + ((ts.tv_nsec * mult + (3 << 29)) >> 31);
+	const s64 mult = (1ULL << 63) / NSEC;
+	const s64 roundup = 3LL << ((32 - 1) - 2);
+	return ((s64)ts.tv_sec << NSEC_BITS) +
+		(((s64)ts.tv_nsec * mult + roundup) >> (SEC_BITS - 1));
 }
 
 static unsigned encode_asize(unsigned bits)
