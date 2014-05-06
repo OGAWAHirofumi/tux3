@@ -33,44 +33,18 @@ unsigned atsize[MAX_ATTRS] = {
 };
 
 /*
- * Tux3 times are 32.32 fixed point while time attributes are stored in 32.16
- * format, trading away some precision to compress time fields by two bytes
- * each.  It is not clear whether the saved space is worth the lower precision.
- *
- * On-disk format is changed to use 32.32.
+ * Tux3 times are nanosecond from base FS time (for now, same with unix epoch).
+ * It is not clear whether the saved space is worth the lower precision.
  */
-#define TIME_ATTR_SHIFT 0
-#define SEC_BITS	32
-#define NSEC_BITS	(64 - SEC_BITS)
-#define NSEC_MASK	((1ULL << NSEC_BITS) - 1)
-#define NSEC		1000000000LL
-
-static inline long fixed_to_sec(s64 val)
-{
-	return val >> NSEC_BITS;
-}
-
-static inline long fixed_to_nsec(s64 val)
-{
-	const s64 roundup = 1LL << (NSEC_BITS - 1);
-	return ((val & NSEC_MASK) * NSEC + roundup) >> NSEC_BITS;
-}
 
 static inline struct timespec spectime(const s64 time)
 {
-	struct timespec ts = {
-		.tv_sec		= fixed_to_sec(time),
-		.tv_nsec	= fixed_to_nsec(time),
-	};
-	return ts;
+	return ns_to_timespec(time);
 }
 
 static inline s64 tuxtime(const struct timespec ts)
 {
-	const s64 mult = (1ULL << 63) / NSEC;
-	const s64 roundup = 3LL << ((32 - 1) - 2);
-	return ((s64)ts.tv_sec << NSEC_BITS) +
-		(((s64)ts.tv_nsec * mult + roundup) >> (SEC_BITS - 1));
+	return timespec_to_ns(&ts);
 }
 
 static unsigned encode_asize(unsigned bits)
@@ -171,7 +145,7 @@ static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 			attrs = encode32(attrs, idata->i_gid);
 			break;
 		case CTIME_SIZE_ATTR:
-			attrs = encode64(attrs, tuxtime(idata->i_ctime) >> TIME_ATTR_SHIFT);
+			attrs = encode64(attrs, tuxtime(idata->i_ctime));
 			attrs = encode64(attrs, idata->i_size);
 			break;
 		case DATA_BTREE_ATTR:
@@ -181,7 +155,7 @@ static void *encode_attrs(struct btree *btree, void *data, void *attrs,
 			attrs = encode32(attrs, idata->i_nlink);
 			break;
 		case MTIME_ATTR:
-			attrs = encode64(attrs, tuxtime(idata->i_mtime) >> TIME_ATTR_SHIFT);
+			attrs = encode64(attrs, tuxtime(idata->i_mtime));
 			break;
 		}
 	}
@@ -230,7 +204,7 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 			break;
 		case CTIME_SIZE_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->i_ctime = spectime(v64 << TIME_ATTR_SHIFT);
+			inode->i_ctime = spectime(v64);
 			attrs = decode64(attrs, &v64);
 			inode->i_size = v64;
 			break;
@@ -247,7 +221,7 @@ static void *decode_attrs(struct inode *inode, void *attrs, unsigned size)
 		}
 		case MTIME_ATTR:
 			attrs = decode64(attrs, &v64);
-			inode->i_mtime = spectime(v64 << TIME_ATTR_SHIFT);
+			inode->i_mtime = spectime(v64);
 			break;
 		case XATTR_ATTR:
 			attrs = decode_xattr(inode, attrs);

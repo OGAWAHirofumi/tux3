@@ -98,8 +98,9 @@ static inline void *decode48(void *at, u64 *val)
  * 2012-07-02: Use timestamp 32.32 fixed point. Increase log_balloc size.
  * 2012-12-20: Add ->usedinodes
  * 2014-03-27: Change internal inum numbers. Change btree->root.depth.
+ * 2014-05-06: Change timestamp format to nanosecond.
  */
-#define TUX3_MAGIC		{ 't', 'u', 'x', '3', 0x20, 0x14, 0x03, 0x27 }
+#define TUX3_MAGIC		{ 't', 'u', 'x', '3', 0x20, 0x14, 0x05, 0x06 }
 #define TUX3_MAGIC_STR					\
 	((typeof(((struct disksuper *)0)->magic))TUX3_MAGIC)
 

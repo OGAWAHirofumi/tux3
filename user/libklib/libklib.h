@@ -9,6 +9,7 @@
 #include <sys/types.h>
 
 #include <libklib/typecheck.h>
+#include <libklib/math64.h>
 #include <libklib/init.h>
 #include <libklib/list.h>
 #include <libklib/err.h>
@@ -23,6 +24,7 @@
 #include <libklib/log2.h>
 #include <libklib/rcupdate.h>
 #include <libklib/wait.h>
+#include <libklib/time.h>
 
 #ifdef __CHECKER__
 #define BUILD_BUG_ON(condition)
