@@ -5,3 +5,10 @@ config TUX3
 	  be called tux3.
 
 	  If unsure, see you again in six months.
+
+config TUX3_MMAP
+	bool "Tux3 mmap support"
+	depends on TUX3
+	help
+	  Adds EXPORT_SYMBOL_GPL(), etc. to provide functionality for mmap.
+	  This needs build tux3 as module with support mmap.

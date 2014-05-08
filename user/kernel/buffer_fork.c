@@ -195,6 +195,8 @@ void free_forked_buffers(struct sb *sb, struct inode *inode, int force)
  * Block fork core
  */
 
+#include "mmap_builtin_hack.h"
+
 /*
  * This replaces the oldpage on radix-tree with newpage atomically.
  *
@@ -460,7 +462,8 @@ struct buffer_head *blockdirty(struct buffer_head *buffer, unsigned newdelta)
 	lock_page(oldpage);
 
 	/* This happens on partially dirty page. */
-//	assert(PageUptodate(page));
+//	assert(PageUptodate(oldpage));
+	assert(!page_mapped(oldpage));
 
 	switch ((ret_needfork = need_fork(oldpage, buffer, newdelta))) {
 	case RET_FORKED:
@@ -635,6 +638,10 @@ struct page *pagefork_for_blockdirty(struct page *oldpage, unsigned newdelta)
 	 * newpage is available on radix-tree here.
 	 */
 	SetPageForked(oldpage);
+	/*
+	 * Update PTEs for forked page.
+	 */
+	page_cow_file(oldpage, newpage);
 	unlock_page(oldpage);
 
 	/* Register forked buffer to free forked page later */
@@ -660,6 +667,7 @@ int bufferfork_to_invalidate(struct address_space *mapping, struct page *page)
 	unsigned delta = tux3_inode_delta(mapping->host);
 
 	assert(PageLocked(page));
+	assert(!page_mapped(page));
 
 	switch (need_fork(page, NULL, delta)) {
 	case RET_NEED_FORK:

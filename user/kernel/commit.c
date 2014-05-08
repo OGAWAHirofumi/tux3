@@ -695,7 +695,7 @@ void change_end_atomic(struct sb *sb)
  * This is used for nested change_begin/end. We should not use this
  * usually (nesting change_begin/end is wrong for normal operations).
  *
- * For now, this is only used for ->evict_inode() debugging.
+ * For now, this is only used for ->evict_inode() debugging, and page fault.
  */
 void change_begin_atomic_nested(struct sb *sb, void **ptr)
 {

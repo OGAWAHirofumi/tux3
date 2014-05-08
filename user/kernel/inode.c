@@ -858,7 +858,7 @@ static const struct file_operations tux_file_fops = {
 #ifdef CONFIG_COMPAT
 //	.compat_ioctl	= fat_compat_dir_ioctl,
 #endif
-	.mmap		= generic_file_mmap,
+	.mmap		= tux3_file_mmap,
 	.open		= generic_file_open,
 	.fsync		= tux3_sync_file,
 	.splice_read	= generic_file_splice_read,

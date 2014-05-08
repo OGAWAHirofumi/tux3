@@ -674,6 +674,9 @@ int tux3_get_block(struct inode *inode, sector_t iblock,
 		   struct buffer_head *bh_result, int create);
 struct buffer_head *__get_buffer(struct page *page, int offset);
 void tux3_try_cancel_dirty_page(struct page *page);
+void __tux3_set_page_dirty_account(struct page *page,
+				   struct address_space *mapping, int warn);
+int tux3_file_mmap(struct file *file, struct vm_area_struct *vma);
 extern const struct address_space_operations tux_file_aops;
 extern const struct address_space_operations tux_symlink_aops;
 extern const struct address_space_operations tux_blk_aops;

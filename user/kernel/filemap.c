@@ -960,6 +960,8 @@ static sector_t tux3_bmap(struct address_space *mapping, sector_t iblock)
 	return blocknr;
 }
 
+#include "filemap_mmap.c"
+
 const struct address_space_operations tux_file_aops = {
 	.readpage		= tux3_readpage,
 	.readpages		= tux3_readpages,
@@ -970,6 +972,7 @@ const struct address_space_operations tux_file_aops = {
 	.write_begin		= tux3_file_write_begin,
 	.write_end		= tux3_file_write_end,
 	.bmap			= tux3_bmap,
+	.set_page_dirty		= tux3_set_page_dirty_assert,
 	.invalidatepage		= tux3_invalidatepage,
 //	.releasepage		= ext4_releasepage,
 #ifdef TUX3_DIRECT_IO
@@ -1000,6 +1003,7 @@ const struct address_space_operations tux_symlink_aops = {
 	.write_begin		= tux3_symlink_write_begin,
 	.write_end		= __tux3_file_write_end,
 	.bmap			= tux3_bmap,
+	.set_page_dirty		= tux3_set_page_dirty_bug,
 	.invalidatepage		= tux3_invalidatepage,
 //	.releasepage		= ext4_releasepage,
 #ifdef TUX3_DIRECT_IO
@@ -1042,6 +1046,7 @@ const struct address_space_operations tux_blk_aops = {
 	.writepages		= tux3_disable_writepages,
 	.write_begin		= tux3_blk_write_begin,
 	.bmap			= tux3_bmap,
+	.set_page_dirty		= tux3_set_page_dirty_bug,
 	.invalidatepage		= tux3_invalidatepage,
 //	.migratepage		= buffer_migrate_page,		/* FIXME */
 //	.is_partially_uptodate	= block_is_partially_uptodate,
@@ -1087,6 +1092,7 @@ const struct address_space_operations tux_vol_aops = {
 	.writepage		= tux3_disable_writepage,
 	.writepages		= tux3_disable_writepages,
 	.write_begin		= tux3_vol_write_begin,
+	.set_page_dirty		= tux3_set_page_dirty_bug,
 	.invalidatepage		= tux3_invalidatepage,
 //	.is_partially_uptodate  = block_is_partially_uptodate,
 //	.is_dirty_writeback	= buffer_check_dirty_writeback,

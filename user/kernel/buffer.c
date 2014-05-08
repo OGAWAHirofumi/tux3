@@ -87,25 +87,6 @@ int buffer_can_modify(struct buffer_head *buffer, unsigned delta)
 		tux3_bufsta_get_delta(state) == tux3_delta(delta);
 }
 
-/*
- * Copy of __set_page_dirty() without __mark_inode_dirty(). Caller
- * decides whether mark inode dirty or not.
- */
-static void __tux3_set_page_dirty(struct page *page,
-				  struct address_space *mapping, int warn)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&mapping->tree_lock, flags);
-	if (page->mapping) {	/* Race with truncate? */
-		WARN_ON_ONCE(warn && !PageUptodate(page));
-		account_page_dirtied(page, mapping);
-		radix_tree_tag_set(&mapping->page_tree,
-				page_index(page), PAGECACHE_TAG_DIRTY);
-	}
-	spin_unlock_irqrestore(&mapping->tree_lock, flags);
-}
-
 /* Set our delta dirty bits, then add to our dirty buffers list */
 static inline void __tux3_set_buffer_dirty_list(struct address_space *mapping,
 			     struct buffer_head *buffer, int delta,
@@ -147,7 +128,7 @@ int tux3_set_buffer_dirty_list(struct address_space *mapping,
 		if (!TestSetPageDirty(page)) {
 			struct address_space *mapping = page->mapping;
 			if (mapping)
-				__tux3_set_page_dirty(page, mapping, 0);
+				__tux3_set_page_dirty_account(page, mapping, 0);
 			return 1;
 		}
 	}
