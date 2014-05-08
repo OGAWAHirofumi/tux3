@@ -826,7 +826,8 @@ int btree_chop(struct btree *btree, tuxkey_t start, u64 len)
 		 * FIXME: If leaf was merged and freed later, we don't
 		 * need to redirect leaf and leaf_chop()
 		 */
-		if ((ret = cursor_redirect(cursor)))
+		ret = cursor_redirect(cursor);
+		if (ret)
 			goto out;
 		leafbuf = cursor_pop(cursor);
 

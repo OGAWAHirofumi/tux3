@@ -776,10 +776,10 @@ int change_end(struct sb *sb)
  *
  * change_begin()
  * while (stop) {
- * 	change_begin_if_need()
- * 	if (do_something() < 0)
- * 		break;
- * 	change_end_if_need()
+ *	change_begin_if_need()
+ *	if (do_something() < 0)
+ *		break;
+ *	change_end_if_need()
  * }
  * change_end_if_need()
  */

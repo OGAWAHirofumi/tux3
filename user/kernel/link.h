@@ -39,9 +39,9 @@ static inline void link_del_next(struct link *node)
 	node->next = node->next->next;
 }
 
-#define link_for_each_safe(pos, prev, n, head)			\
-        for (pos = (head)->next, prev = (head), n = pos->next;  \
-	     pos != (head);					\
+#define link_for_each_safe(pos, prev, n, head)				\
+	for (pos = (head)->next, prev = (head), n = pos->next;		\
+	     pos != (head);						\
 	     prev = ((prev->next == n) ? prev : pos), pos = n, n = pos->next)
 
 /* Single linked list (FIFO order) */
@@ -53,7 +53,7 @@ struct flink_head { struct link *tail; };
 	link_entry(flink_next(head), type, member)
 /* take care: this doesn't check member is `struct link *' or not */
 #define __flink_next_entry(head, type, member) ({			\
-	struct link *next = flink_next(head);	       			\
+	struct link *next = flink_next(head);				\
 	link_entry((typeof(((type *)0)->member) *)next, type, member);	\
 })
 

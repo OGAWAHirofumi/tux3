@@ -35,7 +35,7 @@
 #endif
 
 #define TUX_DIR_ALIGN		sizeof(inum_t)
-#define TUX_DIR_HEAD		(offsetof(tux_dirent, name))
+#define TUX_DIR_HEAD		(offsetof(struct tux3_dirent, name))
 #define TUX_REC_LEN(name_len)	ALIGN((name_len) + TUX_DIR_HEAD, TUX_DIR_ALIGN)
 #define TUX_MAX_REC_LEN		((1 << 16) - 1)
 
@@ -56,12 +56,12 @@ static inline __be16 tux_rec_len_to_disk(unsigned len)
 	return cpu_to_be16(len);
 }
 
-static inline int is_deleted(tux_dirent *entry)
+static inline int is_deleted(struct tux3_dirent *entry)
 {
 	return !entry->name_len; /* ext2 uses !inum for this */
 }
 
-static inline int tux_match(tux_dirent *entry, const char *const name,
+static inline int tux_match(struct tux3_dirent *entry, const char *const name,
 			    unsigned len)
 {
 	if (len != entry->name_len)
@@ -71,7 +71,7 @@ static inline int tux_match(tux_dirent *entry, const char *const name,
 	return !memcmp(name, entry->name, len);
 }
 
-static inline tux_dirent *next_entry(tux_dirent *entry)
+static inline struct tux3_dirent *next_entry(struct tux3_dirent *entry)
 {
 	return (void *)entry + tux_rec_len_from_disk(entry->rec_len);
 }
@@ -105,7 +105,7 @@ static unsigned char tux_type_by_mode[S_IFMT >> STAT_SHIFT] = {
 		      "zero length entry at inum %Lu, block %Lu",	\
 		      tux_inode(dir)->inum, block)
 
-void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
+void tux_set_entry(struct buffer_head *buffer, struct tux3_dirent *entry,
 		   inum_t inum, umode_t mode)
 {
 	entry->inum = cpu_to_be64(inum);
@@ -119,7 +119,7 @@ void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
  * "..". rename() shouldn't update ->mtime for ".." usually.
  */
 void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
-		       tux_dirent *entry, struct inode *inode)
+		       struct tux3_dirent *entry, struct inode *inode)
 {
 	tux_set_entry(buffer, entry, tux_inode(inode)->inum, inode->i_mode);
 
@@ -133,7 +133,7 @@ loff_t tux_alloc_entry(struct inode *dir, const char *name, unsigned len,
 {
 	unsigned delta = tux3_get_current_delta();
 	struct sb *sb = tux_sb(dir->i_sb);
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 	struct buffer_head *buffer, *clone;
 	unsigned reclen = TUX_REC_LEN(len), rec_len, offset;
 	unsigned uninitialized_var(name_len);
@@ -146,7 +146,7 @@ loff_t tux_alloc_entry(struct inode *dir, const char *name, unsigned len,
 		if (!buffer)
 			return -EIO;
 		entry = bufdata(buffer);
-		tux_dirent *limit = bufdata(buffer) + blocksize - reclen;
+		struct tux3_dirent *limit = bufdata(buffer) + blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				blockput(buffer);
@@ -191,7 +191,7 @@ create:
 		entry = ptr_redirect(entry, olddata, bufdata(clone));
 
 		if (!is_deleted(entry)) {
-			tux_dirent *newent = (void *)entry + name_len;
+			struct tux3_dirent *newent = (void *)entry + name_len;
 			unsigned rest_rec_len = rec_len - name_len;
 			newent->rec_len = tux_rec_len_to_disk(rest_rec_len);
 			entry->rec_len = tux_rec_len_to_disk(name_len);
@@ -215,7 +215,7 @@ int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 	const char *name = (const char *)qstr->name;
 	unsigned len = qstr->len;
 	struct buffer_head *buffer;
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 	loff_t i_size, where;
 	int err, err2;
 
@@ -256,8 +256,9 @@ error:
 	return err;
 }
 
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
-			   struct buffer_head **result, loff_t size)
+struct tux3_dirent *tux_find_entry(struct inode *dir, const char *name,
+				   unsigned len, struct buffer_head **result,
+				   loff_t size)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
 	unsigned reclen = TUX_REC_LEN(len);
@@ -270,8 +271,8 @@ tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
 			err = -EIO; // need ERR_PTR for blockread!!!
 			goto error;
 		}
-		tux_dirent *entry = bufdata(buffer);
-		tux_dirent *limit = (void *)entry + sb->blocksize - reclen;
+		struct tux3_dirent *entry = bufdata(buffer);
+		struct tux3_dirent *limit = (void *)entry + sb->blocksize - reclen;
 		while (entry <= limit) {
 			if (entry->rec_len == 0) {
 				blockput(buffer);
@@ -292,8 +293,8 @@ error:
 	return ERR_PTR(err);
 }
 
-tux_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,
-			    struct buffer_head **result)
+struct tux3_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,
+				    struct buffer_head **result)
 {
 	/* Holding dir->i_mutex, so no i_size_read() */
 	return tux_find_entry(dir, (const char *)qstr->name, qstr->len,
@@ -315,7 +316,8 @@ static unsigned char filetype[TUX_TYPES] = {
  * Return 0 if the directory entry is OK, and 1 if there is a problem
  */
 static int __check_dir_entry(const char *func, int line, struct inode *dir,
-			     struct buffer_head *buffer, tux_dirent *entry)
+			     struct buffer_head *buffer,
+			     struct tux3_dirent *entry)
 {
 	struct sb *sb = tux_sb(dir->i_sb);
 	const char *error_msg = NULL;
@@ -366,8 +368,8 @@ int tux_readdir(struct file *file, struct dir_context *ctx)
 		void *base = bufdata(buffer);
 		if (revalidate) {
 			if (offset) {
-				tux_dirent *entry = base + offset;
-				tux_dirent *p = base + (offset & sb->blockmask);
+				struct tux3_dirent *entry = base + offset;
+				struct tux3_dirent *p = base + (offset & sb->blockmask);
 				while (p < entry && p->rec_len)
 					p = next_entry(p);
 				offset = (void *)p - base;
@@ -376,8 +378,8 @@ int tux_readdir(struct file *file, struct dir_context *ctx)
 			file->f_version = dir->i_version;
 			revalidate = 0;
 		}
-		tux_dirent *limit = base + sb->blocksize - TUX_REC_LEN(1);
-		for (tux_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
+		struct tux3_dirent *limit = base + sb->blocksize - TUX_REC_LEN(1);
+		for (struct tux3_dirent *entry = base + offset; entry <= limit; entry = next_entry(entry)) {
 			if (check_dir_entry(dir, buffer, entry)) {
 				/* On error, skip to next block */
 				ctx->pos = (ctx->pos | (sb->blocksize - 1)) + 1;
@@ -405,10 +407,10 @@ int tux_readdir(struct file *file, struct dir_context *ctx)
 }
 
 int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
-		     tux_dirent *entry)
+		     struct tux3_dirent *entry)
 {
 	unsigned delta = tux3_get_current_delta();
-	tux_dirent *prev = NULL, *this = bufdata(buffer);
+	struct tux3_dirent *prev = NULL, *this = bufdata(buffer);
 	struct buffer_head *clone;
 	void *olddata;
 
@@ -449,7 +451,7 @@ int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
 }
 
 int tux_delete_dirent(struct inode *dir, struct buffer_head *buffer,
-		      tux_dirent *entry)
+		      struct tux3_dirent *entry)
 {
 	int err;
 
@@ -475,8 +477,8 @@ int tux_dir_is_empty(struct inode *dir)
 		if (!buffer)
 			return -EIO;
 
-		tux_dirent *entry = bufdata(buffer);
-		tux_dirent *limit = bufdata(buffer) + sb->blocksize - TUX_REC_LEN(1);
+		struct tux3_dirent *entry = bufdata(buffer);
+		struct tux3_dirent *limit = bufdata(buffer) + sb->blocksize - TUX_REC_LEN(1);
 		for (; entry <= limit; entry = next_entry(entry)) {
 			if (!entry->rec_len) {
 				blockput(buffer);

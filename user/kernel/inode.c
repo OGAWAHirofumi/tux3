@@ -374,9 +374,8 @@ static int check_present(struct inode *inode)
 	case 0: /* internal inode */
 		if (tux_inode(inode)->inum == TUX_VOLMAP_INO)
 			assert(tuxnode->present == 0);
-		else {
+		else
 			assert(!(tuxnode->present & RDEV_BIT));
-		}
 		break;
 	default:
 		tux3_fs_error(tux_sb(inode->i_sb),
@@ -401,7 +400,8 @@ static int open_inode(struct inode *inode)
 		goto out;
 	}
 
-	if ((err = btree_probe(cursor, tux_inode(inode)->inum)))
+	err = btree_probe(cursor, tux_inode(inode)->inum);
+	if (err)
 		goto out;
 
 	/* Read inode attribute from inode btree */
@@ -482,7 +482,8 @@ static int save_inode(struct inode *inode, struct tux3_iattr_data *idata,
 		return -ENOMEM;
 
 	down_write(&cursor->btree->lock);
-	if ((err = btree_probe(cursor, inum)))
+	err = btree_probe(cursor, inum);
+	if (err)
 		goto out;
 	/* paranoia check */
 	if (!is_defer_alloc_inum(inode)) {

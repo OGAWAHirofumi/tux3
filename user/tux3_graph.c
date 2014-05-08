@@ -380,8 +380,8 @@ static void __draw_dir_data(struct graph_info *gi, struct btree *btree,
 			    int atable)
 {
 	struct sb *sb = btree->sb;
-	tux_dirent *entry = bufdata(buffer);
-	tux_dirent *limit = (void *)entry + sb->blocksize;
+	struct tux3_dirent *entry = bufdata(buffer);
+	struct tux3_dirent *limit = (void *)entry + sb->blocksize;
 
 	while (entry < limit) {
 		fprintf(gi->fp,

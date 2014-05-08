@@ -215,7 +215,7 @@ static void walk_dtree(struct btree *btree, struct buffer_head *ileafbuf,
 	walk_btree(btree, cb, data);
 }
 
-static const char *log_name[] = {
+static const char *const log_name[] = {
 #define X(x)	[x] = #x
 	X(LOG_BALLOC),
 	X(LOG_BFREE),

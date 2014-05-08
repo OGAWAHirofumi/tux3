@@ -404,7 +404,7 @@ static void dump_bnode(struct btree *btree, struct buffer_head *buffer,
 }
 
 static void dump_data_dir(struct btree *btree, struct buffer_head *dleafbuf,
-			  block_t block, tux_dirent *entry, void *data)
+			  block_t block, struct tux3_dirent *entry, void *data)
 {
 	if (opt_stats) {
 		struct sb *sb = btree->sb;

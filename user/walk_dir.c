@@ -1,5 +1,5 @@
 typedef void (*walk_data_dir_cb)(struct btree *, struct buffer_head *,
-				 block_t, tux_dirent *, void *);
+				 block_t, struct tux3_dirent *, void *);
 
 static void walk_data_dir(struct btree *btree, struct buffer_head *dleafbuf,
 			  struct buffer_head *buffer, block_t block,
@@ -7,8 +7,8 @@ static void walk_data_dir(struct btree *btree, struct buffer_head *dleafbuf,
 {
 	struct sb *sb = btree->sb;
 	walk_data_dir_cb callback = callback_ptr;
-	tux_dirent *entry = bufdata(buffer);
-	tux_dirent *limit = (void *)entry + sb->blocksize;
+	struct tux3_dirent *entry = bufdata(buffer);
+	struct tux3_dirent *limit = (void *)entry + sb->blocksize;
 
 	while (entry < limit) {
 		callback(btree, buffer, block, entry, data);

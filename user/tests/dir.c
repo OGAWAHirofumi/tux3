@@ -19,7 +19,7 @@ static void clean_main(struct sb *sb, struct inode *dir)
 static void test01(struct sb *sb, struct inode *dir)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 	int err;
 
 	struct qstr name1 = { .name = (unsigned char *)"hello", .len = 5, };

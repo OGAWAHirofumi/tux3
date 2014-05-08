@@ -13,7 +13,7 @@ static struct dentry *tux3_lookup(struct inode *dir, struct dentry *dentry,
 	struct sb *sb = tux_sb(dir->i_sb);
 	struct buffer_head *buffer;
 	struct inode *inode;
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 	inum_t inum;
 
 	entry = tux_find_dirent(dir, &dentry->d_name, &buffer);
@@ -122,7 +122,7 @@ static int tux3_link(struct dentry *old_dentry, struct inode *dir,
 static int tux_del_dirent(struct inode *dir, struct dentry *dentry)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 
 	entry = tux_find_dirent(dir, &dentry->d_name, &buffer);
 	if (IS_ERR(entry))
@@ -235,7 +235,7 @@ static int tux3_rename(struct inode *old_dir, struct dentry *old_dentry,
 	struct inode *new_inode = new_dentry->d_inode;
 	struct sb *sb = tux_sb(old_inode->i_sb);
 	struct buffer_head *old_buffer, *new_buffer, *clone;
-	tux_dirent *old_entry, *new_entry;
+	struct tux3_dirent *old_entry, *new_entry;
 	void *olddata;
 	int err, new_subdir = 0;
 	unsigned delta;

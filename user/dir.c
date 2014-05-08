@@ -50,8 +50,8 @@ void tux_dump_entries(struct buffer_head *buffer)
 {
 	struct inode *dir = buffer->map->inode;
 	unsigned blocksize = bufsize(buffer);
-	tux_dirent *entry = (tux_dirent *)bufdata(buffer);
-	tux_dirent *limit = bufdata(buffer) + blocksize;
+	struct tux3_dirent *entry = bufdata(buffer);
+	struct tux3_dirent *limit = bufdata(buffer) + blocksize;
 
 	__tux3_dbg("entries <%Lx:%Lx>: ",
 		   tux_inode(dir)->inum, bufindex(buffer));

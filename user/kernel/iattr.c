@@ -60,8 +60,7 @@ int attr_check(void *attrs, unsigned size)
 	void *limit = attrs + size;
 	unsigned head;
 
-	while (attrs < limit - 1)
-	{
+	while (attrs < limit - 1) {
 		attrs = decode16(attrs, &head);
 		unsigned kind = head >> 12;
 		if (kind >= MAX_ATTRS)

@@ -112,7 +112,8 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 	if (at < icount(leaf)) {
 		__be16 *dict = ileaf_dict(btree, leaf);
 		unsigned offset = atdict(dict, at);
-		if ((size = __atdict(dict, at + 1) - offset))
+		size = __atdict(dict, at + 1) - offset;
+		if (size)
 			attrs = leaf->table + offset;
 	}
 	*result = size;
@@ -122,10 +123,14 @@ void *ileaf_lookup(struct btree *btree, inum_t inum, struct ileaf *leaf, unsigne
 static int isinorder(struct btree *btree, struct ileaf *leaf)
 {
 	__be16 *dict = ileaf_dict(btree, leaf);
+	unsigned offset = 0;
 
-	for (int i = 0, offset = 0, limit; i < icount(leaf); i++, offset = limit)
-		if ((limit = __atdict(dict, i + 1)) < offset)
+	for (int i = 0; i < icount(leaf); i++) {
+		unsigned limit = __atdict(dict, i + 1);
+		if (limit < offset)
 			return 0;
+		offset = limit;
+	}
 	return 1;
 }
 

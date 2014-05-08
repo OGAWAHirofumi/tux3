@@ -482,7 +482,7 @@ static int dleaf_pre_write(struct btree *btree, tuxkey_t key_bottom,
 		unsigned len;
 		int last, hole_len;
 
-		len = __dleaf_read(btree, key_bottom, key_limit, dleaf, key,1);
+		len = __dleaf_read(btree, key_bottom, key_limit, dleaf, key, 1);
 		last = rq->seg_cnt;
 
 		/* Remove hole from seg[] */

@@ -10,7 +10,7 @@
 #define trace trace_on
 #endif
 
-static const char *log_name[] = {
+static const char *const log_name[] = {
 #define X(x)	[x] = #x
 	X(LOG_BALLOC),
 	X(LOG_BFREE),

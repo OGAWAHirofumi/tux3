@@ -41,7 +41,7 @@ typedef u32 atom_t;
 
 /* see dir.c */
 #define HEAD_ALIGN		sizeof(inum_t)
-#define HEAD_SIZE		offsetof(tux_dirent, name)
+#define HEAD_SIZE		offsetof(struct tux3_dirent, name)
 /* FIXME: probably, we should limit maximum name length */
 #define MAX_ATOM_NAME_LEN	(256 - HEAD_SIZE)
 
@@ -70,7 +70,7 @@ void atable_init_base(struct sb *sb)
 		sb->atomref_base + (1U << (ATOMREF_TABLE_BITS - sb->blockbits));
 }
 
-static inline atom_t entry_atom(tux_dirent *entry)
+static inline atom_t entry_atom(struct tux3_dirent *entry)
 {
 	return be64_to_cpu(entry->inum);
 }
@@ -156,7 +156,7 @@ static int unatom(struct inode *atable, atom_t atom, char *name, unsigned size)
 		err = -EIO;
 		goto error;
 	}
-	tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
+	struct tux3_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 	if (entry_atom(entry) != atom) {
 		tux3_fs_error(sb, "atom %x reverse entry broken", atom);
 		err = -EIO;
@@ -211,7 +211,7 @@ static int find_atom(struct inode *atable, const char *name, unsigned len,
 {
 	struct sb *sb = tux_sb(atable->i_sb);
 	struct buffer_head *buffer;
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 
 	entry = tux_find_entry(atable, name, len, &buffer, sb->atomdictsize);
 	if (IS_ERR(entry)) {
@@ -362,7 +362,7 @@ static int atomref(struct inode *atable, atom_t atom, int use)
 			return -EIO;
 		}
 
-		tux_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
+		struct tux3_dirent *entry = bufdata(buffer) + (where & sb->blockmask);
 		if (entry_atom(entry) == atom) {
 			/* FIXME: better set a flag that unatom broke
 			 * or something! */
@@ -392,9 +392,11 @@ void dump_atoms(struct inode *atable)
 	for (unsigned j = 0; j < blocks; j++) {
 		unsigned block = sb->atomref_base + ATOMREF_SIZE * j;
 		struct buffer_head *lobuf, *hibuf;
-		if (!(lobuf = blockread(mapping(atable), block)))
+		lobuf = blockread(mapping(atable), block);
+		if (!lobuf)
 			goto eek;
-		if (!(hibuf = blockread(mapping(atable), block + 1))) {
+		hibuf = blockread(mapping(atable), block + 1);
+		if (!hibuf) {
 			blockput(lobuf);
 			goto eek;
 		}
@@ -546,7 +548,8 @@ int xcache_dump(struct inode *inode)
 			hexdump(xattr->body, xattr->size);
 		else
 			__tux3_dbg("<empty>\n");
-		if ((xattr = xcache_next(xattr)) > xlimit)
+		xattr = xcache_next(xattr);
+		if (xattr > xlimit)
 			goto fail;
 	}
 	assert(xattr == xlimit);
@@ -568,7 +571,8 @@ static struct xcache_entry *xcache_lookup(struct xcache *xcache, unsigned atom)
 		while (xattr < xlimit) {
 			if (xattr->atom == atom)
 				return xattr;
-			if ((xattr = xcache_next(xattr)) > xlimit)
+			xattr = xcache_next(xattr);
+			if (xattr > xlimit)
 				return ERR_PTR(-EINVAL);
 		}
 		assert(xattr == xlimit);
@@ -800,7 +804,8 @@ int list_xattr(struct inode *inode, char *text, size_t size)
 			text += len + 1;
 		}
 
-		if ((xattr = xcache_next(xattr)) > xlimit) {
+		xattr = xcache_next(xattr);
+		if (xattr > xlimit) {
 			tux3_fs_error(sb, "xcache bug");
 			err = -EIO;
 			goto error;

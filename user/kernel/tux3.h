@@ -551,18 +551,18 @@ static inline struct btree *otree_btree(struct sb *sb)
 
 #define TUX_NAME_LEN 255
 
-/* directory entry */
-typedef struct {
+/* Directory entry */
+struct tux3_dirent {
 	__be64 inum;
 	__be16 rec_len;
 	u8 name_len, type;
 	char name[];
 	/*
-	 * On 64bit arch sizeof(tux_dirent) == 16. We should use
-	 * offsetof(tux_dirent, name) instead.
+	 * On 64bit arch sizeof(struct tux3_dirent) == 16. We should use
+	 * offsetof(struct tux3_dirent, name) instead.
 	 */
 	/* u32 __pad; */
-} tux_dirent;
+};
 
 struct btree_key_range {
 	tuxkey_t start;
@@ -797,22 +797,23 @@ void change_end_if_needed(struct sb *sb);
 #include "commit_flusher.h"
 
 /* dir.c */
-void tux_set_entry(struct buffer_head *buffer, tux_dirent *entry,
+void tux_set_entry(struct buffer_head *buffer, struct tux3_dirent *entry,
 		   inum_t inum, umode_t mode);
 void tux_update_dirent(struct inode *dir, struct buffer_head *buffer,
-		       tux_dirent *entry, struct inode *new_inode);
+		       struct tux3_dirent *entry, struct inode *new_inode);
 loff_t tux_alloc_entry(struct inode *dir, const char *name, unsigned len,
 		       loff_t *size, struct buffer_head **hold);
 int tux_create_dirent(struct inode *dir, const struct qstr *qstr,
 		      struct inode *inode);
-tux_dirent *tux_find_entry(struct inode *dir, const char *name, unsigned len,
-			   struct buffer_head **result, loff_t size);
-tux_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,
-			    struct buffer_head **result);
+struct tux3_dirent *tux_find_entry(struct inode *dir, const char *name,
+				   unsigned len, struct buffer_head **result,
+				   loff_t size);
+struct tux3_dirent *tux_find_dirent(struct inode *dir, const struct qstr *qstr,
+				    struct buffer_head **result);
 int tux_delete_entry(struct inode *dir, struct buffer_head *buffer,
-		     tux_dirent *entry);
+		     struct tux3_dirent *entry);
 int tux_delete_dirent(struct inode *dir, struct buffer_head *buffer,
-		      tux_dirent *entry);
+		      struct tux3_dirent *entry);
 int tux_readdir(struct file *file, struct dir_context *ctx);
 int tux_dir_is_empty(struct inode *dir);
 

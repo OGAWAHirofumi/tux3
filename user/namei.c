@@ -46,7 +46,7 @@ struct inode *tuxopen(struct inode *dir, const char *name, unsigned len)
 static int tux_check_exist(struct inode *dir, struct qstr *qstr)
 {
 	struct buffer_head *buffer;
-	tux_dirent *entry;
+	struct tux3_dirent *entry;
 
 	entry = tux_find_dirent(dir, qstr, &buffer);
 	if (!IS_ERR(entry)) {
