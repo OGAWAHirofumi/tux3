@@ -93,7 +93,7 @@ void tux3_exit_flusher(struct sb *sb)
 
 static void schedule_flush_delta(struct sb *sb)
 {
-	/* Wake up waiters for pending marshal delta */
+	/* Wake up waiters for pending delta staging */
 	wake_up_all(&sb->delta_event_wq);
 }
 
@@ -114,8 +114,8 @@ out:
 /* Try delta transition */
 static void try_delta_transition(struct sb *sb)
 {
-	trace("marshal %u, backend_state %lx",
-	      sb->marshal_delta, sb->backend_state);
+	trace("stage %u, backend_state %lx",
+	      sb->staging_delta, sb->backend_state);
 	if (!test_and_set_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state))
 		delta_transition(sb);
 }
@@ -123,16 +123,16 @@ static void try_delta_transition(struct sb *sb)
 /* Do the delta transition until specified delta */
 static int try_delta_transition_until_delta(struct sb *sb, unsigned delta)
 {
-	trace("delta %u, marshal %u, backend_state %lx",
-	      delta, sb->marshal_delta, sb->backend_state);
+	trace("delta %u, stage %u, backend_state %lx",
+	      delta, sb->staging_delta, sb->backend_state);
 
 	/* Already delta transition was started for delta */
-	if (delta_after_eq(sb->marshal_delta, delta))
+	if (delta_after_eq(sb->staging_delta, delta))
 		return 1;
 
 	if (!test_and_set_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state)) {
 		/* Recheck after grabed TUX3_COMMIT_RUNNING_BIT */
-		if (delta_after_eq(sb->marshal_delta, delta)) {
+		if (delta_after_eq(sb->staging_delta, delta)) {
 			clear_bit(TUX3_COMMIT_RUNNING_BIT, &sb->backend_state);
 			return 1;
 		}
@@ -140,7 +140,7 @@ static int try_delta_transition_until_delta(struct sb *sb, unsigned delta)
 		delta_transition(sb);
 	}
 
-	return delta_after_eq(sb->marshal_delta, delta);
+	return delta_after_eq(sb->staging_delta, delta);
 }
 
 /* Advance delta transition until specified delta */
@@ -192,7 +192,7 @@ static int sync_current_delta(struct sb *sb, enum unify_flags unify_flag)
 	err = wait_for_transition(sb, delta);
 	if (err)
 		return err;
-	assert(delta_after_eq(sb->marshal_delta, delta));
+	assert(delta_after_eq(sb->staging_delta, delta));
 
 	/* Wait until committing the current delta */
 	err = wait_for_commit(sb, delta);

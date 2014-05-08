@@ -87,7 +87,7 @@ static void __setup_sb(struct sb *sb, struct disksuper *super)
 {
 	sb->next_delta		= TUX3_INIT_DELTA;
 	sb->unify		= TUX3_INIT_DELTA;
-	sb->marshal_delta	= TUX3_INIT_DELTA - 1;
+	sb->staging_delta	= TUX3_INIT_DELTA - 1;
 	sb->committed_delta	= TUX3_INIT_DELTA - 1;
 
 	/* Setup initial delta_ref */
@@ -425,7 +425,7 @@ int tux3_under_backend(struct sb *sb)
 
 static int do_commit(struct sb *sb, enum unify_flags unify_flag)
 {
-	unsigned delta = sb->marshal_delta;
+	unsigned delta = sb->staging_delta;
 	struct iowait iowait;
 	int err = 0;
 
@@ -511,7 +511,7 @@ out:
 
 static int flush_delta(struct sb *sb)
 {
-	unsigned delta = sb->marshal_delta;
+	unsigned delta = sb->staging_delta;
 	int err;
 #ifndef UNIFY_DEBUG
 	enum unify_flags unify_flag = ALLOW_UNIFY;
@@ -612,8 +612,8 @@ static void delta_transition(struct sb *sb)
 	/* Update the current delta. */
 	__delta_transition(sb, delta_ref);
 
-	/* Set delta for marshal */
-	sb->marshal_delta = prev->delta;
+	/* Set delta for staging */
+	sb->staging_delta = prev->delta;
 #ifdef UNIFY_DEBUG
 	sb->pending_delta = prev;
 #endif

@@ -265,7 +265,7 @@ struct sb {
 #ifdef UNIFY_DEBUG
 	struct delta_ref *pending_delta;	/* pending delta for commit */
 #endif
-	unsigned marshal_delta;			/* marshaling delta */
+	unsigned staging_delta;			/* staging delta */
 	unsigned committed_delta;		/* committed delta */
 	wait_queue_head_t delta_event_wq;	/* wait queue for delta event */
 #if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_OWN
