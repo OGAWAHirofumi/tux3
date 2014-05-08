@@ -1,4 +1,9 @@
-/* Lifted from Ext2, blush. GPLv2. Portions (c) Daniel Phillips 2008-2013 */
+/*
+ * Directory entry handling lifted from Ext2, blush.
+ *
+ * Portions (c) Daniel Phillips 2008-2013
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
+ */
 
 /*
  * from linux/include/linux/ext2_fs.h and linux/fs/ext2/dir.c

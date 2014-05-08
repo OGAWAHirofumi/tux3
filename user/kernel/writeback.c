@@ -1,10 +1,12 @@
 /*
- * Writeback for inodes
+ * Writeback for inodes.
  *
  * lock order:
  *     inode->i_lock
  *         tuxnode->lock
  *         sb->dirty_inodes_lock
+ *
+ * Copyright (c) 2012-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

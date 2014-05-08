@@ -1,3 +1,9 @@
+/*
+ * A daemon to flush dirty data to disk taking consistency into account.
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
+ */
+
 #if TUX3_FLUSHER != TUX3_FLUSHER_ASYNC_HACK
 #include "tux3.h"
 

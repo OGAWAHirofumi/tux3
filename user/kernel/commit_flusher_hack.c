@@ -1,13 +1,13 @@
-#if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_HACK
-#include "tux3.h"
-#include <linux/kthread.h>
-#include <linux/freezer.h>
-
 /*
  * FIXME: this is hack to override writeback without patch kernel.
  * We should add proper interfaces to do this, instead. Then, remove
  * this stuff.
  */
+
+#if TUX3_FLUSHER == TUX3_FLUSHER_ASYNC_HACK
+#include "tux3.h"
+#include <linux/kthread.h>
+#include <linux/freezer.h>
 
 void tux3_set_mapping_bdi(struct inode *inode)
 {

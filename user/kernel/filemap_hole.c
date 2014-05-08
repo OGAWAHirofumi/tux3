@@ -13,6 +13,8 @@
  *
  * And backend will apply the hole extents to dtree later, and do
  * actual truncation and freeing blocks.
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

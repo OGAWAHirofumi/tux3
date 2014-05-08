@@ -1,9 +1,11 @@
 /*
- * Deferred inum allocation management.
+ * Deferred inode number allocation management.
  *
  * This uses bitmap to find current in-flight deferred inum
  * allocation.  For each the node represent BITMAP_SIZE bits, and the
  * node is hashed on struct tux3_idefer_map.
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 /* Bitmap node hash size */

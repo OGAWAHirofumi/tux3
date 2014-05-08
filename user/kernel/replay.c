@@ -1,5 +1,7 @@
 /*
- * Copyright (c) 2008, Daniel Phillips
+ * Replay log blocks to recreate dirty cache on restart.
+ *
+ * Copyright (c) 2009-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

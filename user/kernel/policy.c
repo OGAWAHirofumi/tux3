@@ -1,5 +1,8 @@
 /*
- * Allocation policy of inum and block
+ * Allocation policy of inum and block.
+ *
+ * Copyright (c) 2014 Daniel Phillips
+ * Copyright (c) 2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

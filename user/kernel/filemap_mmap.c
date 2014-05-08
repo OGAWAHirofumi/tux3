@@ -1,5 +1,7 @@
 /*
  * mmap(2) handlers to support page fork.
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 /*

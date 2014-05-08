@@ -1,6 +1,8 @@
 /*
- * Copyright (c) 2008, Daniel Phillips
- * Copyright (c) 2008, OGAWA Hirofumi
+ * Commit a filesystem delta atomically to media.
+ *
+ * Copyright (c) 2008-2014 Daniel Phillips
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

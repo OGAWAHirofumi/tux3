@@ -1,5 +1,7 @@
 /*
- * Block Fork (Copy-On-Write of logically addressed block)
+ * Block Fork (Copy-On-Write of logically addressed block).
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include <linux/hugetlb.h>	/* for PageHuge() */

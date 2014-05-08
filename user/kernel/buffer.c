@@ -1,5 +1,7 @@
 /*
- * Buffer management
+ * Tux3 uses buffers as cache handles for blocks and not for IO.
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

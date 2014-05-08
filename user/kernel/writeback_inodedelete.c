@@ -9,6 +9,8 @@
  * to wait I/O to delete inode.
  *
  * To do it, this provides the deletion mark infrastructure.
+ *
+ * Copyright (c) 2012-2014 OGAWA Hirofumi
  */
 
 #include "tux3_fork.h"

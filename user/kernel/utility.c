@@ -1,4 +1,9 @@
-/* Copyright (c) 2008 Daniel Phillips <phillips@phunq.net>, GPL v2 */
+/*
+ * Utility functions.
+ *
+ * Copyright (c) 2009-2014 Daniel Phillips
+ * Copyright (c) 2009-2014 OGAWA Hirofumi
+ */
 
 #ifdef __KERNEL__
 #include "tux3.h"

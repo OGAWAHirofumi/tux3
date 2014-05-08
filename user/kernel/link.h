@@ -1,7 +1,14 @@
+/*
+ * Single linked list support (LIFO/FIFO order).
+ *
+ * Copyright (c) 2008-2014 Daniel Phillips
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
+ */
+
 #ifndef TUX3_LINK_H
 #define TUX3_LINK_H
 
-/* Single linked list support (LIFO order) */
+/* Single linked list (LIFO order) */
 
 struct link { struct link *next; };
 
@@ -37,7 +44,7 @@ static inline void link_del_next(struct link *node)
 	     pos != (head);					\
 	     prev = ((prev->next == n) ? prev : pos), pos = n, n = pos->next)
 
-/* Single linked list support (FIFO order) */
+/* Single linked list (FIFO order) */
 
 struct flink_head { struct link *tail; };
 

@@ -1,11 +1,8 @@
 /*
- * Tux3 versioning filesystem inode operations
+ * Inode operations.
  *
- * Original copyright (c) 2008 Daniel Phillips <phillips@phunq.net>
- * Licensed under the GPL version 2
- *
- * By contributing changes to this file you grant the original copyright holder
- * the right to distribute those changes under any license.
+ * Copyright (c) 2008-2014 Daniel Phillips
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

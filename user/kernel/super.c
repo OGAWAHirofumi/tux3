@@ -1,7 +1,8 @@
 /*
- * Copyright (c) 2008, Daniel Phillips
- * Copyright (c) 2008, OGAWA Hirofumi
- * Licensed under the GPL version 2
+ * Superblock handling.
+ *
+ * Copyright (c) 2008-2014 Daniel Phillips
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"
@@ -566,6 +567,8 @@ static void __exit exit_tux3(void)
 
 module_init(init_tux3);
 module_exit(exit_tux3);
+MODULE_DESCRIPTION("Tux3 Filesystem");
+MODULE_AUTHOR("Daniel Phillips, OGAWA Hirofumi");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS_FS("tux3");
 #endif /* !__KERNEL__ */

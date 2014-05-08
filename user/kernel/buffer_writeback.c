@@ -1,5 +1,7 @@
 /*
- * Write back buffers
+ * Write back block buffers.
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "buffer_writebacklib.c"

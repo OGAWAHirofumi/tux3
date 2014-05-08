@@ -1,7 +1,8 @@
 /*
- * Copyright (c) 2008, Daniel Phillips
- * Copyright (c) 2008, OGAWA Hirofumi
- * Licensed under the GPL version 2
+ * Namespace operations.
+ *
+ * Copyright (c) 2008-2014 Daniel Phillips
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

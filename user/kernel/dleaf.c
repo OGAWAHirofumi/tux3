@@ -1,5 +1,8 @@
 /*
- * File index btree leaf operations
+ * File index btree leaf operations.
+ *
+ * Copyright (c) 2012-2014 Daniel Phillips
+ * Copyright (c) 2012-2014 OGAWA Hirofumi
  */
 
 /*

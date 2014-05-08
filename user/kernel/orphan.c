@@ -1,5 +1,5 @@
 /*
- * Orphan inode management
+ * Orphan inode management.
  *
  * LOG_ORPHAN_ADD and LOG_ORPHAN_DEL are log records of frontend
  * operation for orphan state. With it, we don't need any write to FS
@@ -13,6 +13,8 @@
  * On replay, we can know the inum of orphan inodes yet not destroyed by
  * checking sb->otree, LOG_ORPHAN_ADD, and LOG_ORPHAN_DEL. (Note, orphan
  * inum of LOG_ORPHAN_ADD can be destroyed by same inum of LOG_ORPHAN_DEL).
+ *
+ * Copyright (c) 2008-2014 OGAWA Hirofumi
  */
 
 #include "tux3.h"

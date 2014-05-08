@@ -1,5 +1,5 @@
 /*
- * Iattr  Fork (Copy-On-Write of inode attributes)
+ * Iattr Fork (Copy-On-Write of inode attributes).
  *
  * Iattr fork is to reduce copy, it copies inode attributes once at most
  * per delta.
@@ -16,6 +16,8 @@
  *
  * Otherwise, frontend forked the iatts to backend slot, so backend
  * uses the backend slot.
+ *
+ * Copyright (c) 2012-2014 OGAWA Hirofumi
  */
 
 #include "tux3_fork.h"
