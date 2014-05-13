@@ -351,7 +351,6 @@ int tuxtruncate(struct inode *inode, loff_t size)
 	int err;
 
 	change_begin(sb);
-	tux3_iattrdirty(inode);
 	err = __tuxtruncate(inode, size);
 	change_end(sb);
 

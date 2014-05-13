@@ -25,8 +25,7 @@ static ssize_t tux3_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 	mutex_lock(&inode->i_mutex);
 	/* For each ->write_end() calls change_end(). */
 	change_begin(sb);
-	/* For timestamp. FIXME: convert this to ->update_time handler? */
-	tux3_iattrdirty(inode);
+	/* FIXME: file_update_time() in this can be race with mmap */
 	ret = __generic_file_aio_write(iocb, iov, nr_segs, &iocb->ki_pos);
 	change_end_if_needed(sb);
 	mutex_unlock(&inode->i_mutex);
@@ -71,11 +70,9 @@ static ssize_t tux3_file_splice_write(struct pipe_inode_info *pipe,
 		mutex_lock_nested(&inode->i_mutex, I_MUTEX_CHILD);
 		/* For each ->write_end() calls change_end(). */
 		change_begin(sb);
-		/* For timestamp. FIXME: convert this to ->update_time
-		 * handler? */
-		tux3_iattrdirty(inode);
 		ret = file_remove_suid(out);
 		if (!ret) {
+			/* FIXME: file_update_time() can be race with mmap */
 			ret = file_update_time(out);
 			if (!ret)
 				ret = splice_from_pipe_feed(pipe, &sd,

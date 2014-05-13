@@ -45,6 +45,15 @@ static void idata_copy(struct inode *inode, struct tux3_iattr_data *idata)
 	idata->i_version	= inode->i_version;
 }
 
+/*
+ * Inode attributes fork. (See comment on top of this source)
+ *
+ * NOTE: caller must call tux3_mark_inode_dirty() after
+ * this. Otherwise, inode state will be remaining after flush, and
+ * will confuses flusher in future.
+ *
+ * FIXME: this is better to call tux3_mark_inode_dirty() too?
+ */
 void tux3_iattrdirty(struct inode *inode)
 {
 	struct tux3_inode *tuxnode = tux_inode(inode);

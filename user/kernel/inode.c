@@ -572,17 +572,15 @@ static int tux3_truncate(struct inode *inode, loff_t newsize)
 	}
 
 	/* Change i_size, then clean buffers */
+	tux3_iattrdirty(inode);
 	i_size_write(inode, newsize);
 	/* Roundup. Partial page is handled by tux3_truncate_partial_block() */
 	holebegin = round_up(newsize, boundary);
 	if (newsize <= holebegin)	/* Check overflow */
 		tux3_truncate_pagecache(inode, holebegin);
 
-	if (!is_expand) {
+	if (!is_expand)
 		err = tux3_add_truncate_hole(inode, newsize);
-		if (err)
-			goto error;
-	}
 
 	inode->i_mtime = inode->i_ctime = gettime();
 	tux3_mark_inode_dirty(inode);
@@ -833,19 +831,39 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 		down_write(&tux_inode(inode)->truncate_lock);
 	change_begin(sb);
 
-	tux3_iattrdirty(inode);
-
 	if (need_truncate)
 		err = tux3_truncate(inode, iattr->ia_size);
-	if (!err)
+	if (!err) {
+		tux3_iattrdirty(inode);
 		setattr_copy(inode, iattr);
-	tux3_mark_inode_dirty(inode);
+		tux3_mark_inode_dirty(inode);
+	}
 
 	change_end(sb);
 	if (need_lock)
 		up_write(&tux_inode(inode)->truncate_lock);
 
 	return err;
+}
+
+static int tux3_file_update_time(struct inode *inode, struct timespec *time,
+				 int flags)
+{
+	/* FIXME: atime is not supported yet */
+	if (flags & S_ATIME)
+		inode->i_atime = *time;
+	if (!(flags & ~S_ATIME))
+		return 0;
+
+	tux3_iattrdirty(inode);
+	if (flags & S_VERSION)
+		inode_inc_iversion(inode);
+	if (flags & S_CTIME)
+		inode->i_ctime = *time;
+	if (flags & S_MTIME)
+		inode->i_mtime = *time;
+	mark_inode_dirty_sync(inode);
+	return 0;
 }
 
 #include "inode_vfslib.c"
@@ -870,7 +888,7 @@ static const struct file_operations tux_file_fops = {
 static const struct inode_operations tux_file_iops = {
 //	.permission	= ext4_permission,
 	.setattr	= tux3_setattr,
-	.getattr	= tux3_getattr
+	.getattr	= tux3_getattr,
 #ifdef CONFIG_EXT4DEV_FS_XATTR
 //	.setxattr	= generic_setxattr,
 //	.getxattr	= generic_getxattr,
@@ -879,6 +897,7 @@ static const struct inode_operations tux_file_iops = {
 #endif
 //	.fallocate	= ext4_fallocate,
 //	.fiemap		= ext4_fiemap,
+	.update_time	= tux3_file_update_time,
 };
 
 static const struct inode_operations tux_special_iops = {
