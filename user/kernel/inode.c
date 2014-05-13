@@ -846,6 +846,9 @@ int tux3_setattr(struct dentry *dentry, struct iattr *iattr)
 	return err;
 }
 
+/*
+ * Timestamp handler for regular file.
+ */
 static int tux3_file_update_time(struct inode *inode, struct timespec *time,
 				 int flags)
 {
@@ -863,6 +866,55 @@ static int tux3_file_update_time(struct inode *inode, struct timespec *time,
 	if (flags & S_MTIME)
 		inode->i_mtime = *time;
 	mark_inode_dirty_sync(inode);
+	return 0;
+}
+
+/*
+ * Timestamp handler for directory/symlink. Timestamp is updated by
+ * directly, so this should not be called except atime.
+ */
+int tux3_no_update_time(struct inode *inode, struct timespec *time, int flags)
+{
+	/* FIXME: atime is not supported yet */
+	if (flags & S_ATIME)
+		inode->i_atime = *time;
+	if (!(flags & ~S_ATIME))
+		return 0;
+
+	WARN(1, "update_time is called for inum %Lu, i_mode %x\n",
+	     tux_inode(inode)->inum, inode->i_mode);
+
+	return 0;
+}
+
+/*
+ * Timestamp handler for special file.  This is not called under
+ * change_{begin,end}() or ->i_mutex.
+ *
+ * FIXME: special file should also handle timestamp as transaction?
+ */
+static int tux3_special_update_time(struct inode *inode, struct timespec *time,
+				    int flags)
+{
+	struct sb *sb = tux_sb(inode->i_sb);
+
+	/* FIXME: atime is not supported yet */
+	if (flags & S_ATIME)
+		inode->i_atime = *time;
+	if (!(flags & ~S_ATIME))
+		return 0;
+
+	/* FIXME: no i_mutex, so this is racy */
+	change_begin(sb);
+	if (flags & S_VERSION)
+		inode_inc_iversion(inode);
+	if (flags & S_CTIME)
+		inode->i_ctime = *time;
+	if (flags & S_MTIME)
+		inode->i_mtime = *time;
+	mark_inode_dirty_sync(inode);
+	change_end(sb);
+
 	return 0;
 }
 
@@ -903,13 +955,14 @@ static const struct inode_operations tux_file_iops = {
 static const struct inode_operations tux_special_iops = {
 //	.permission	= ext4_permission,
 	.setattr	= tux3_setattr,
-	.getattr	= tux3_getattr
+	.getattr	= tux3_getattr,
 #ifdef CONFIG_EXT4DEV_FS_XATTR
 //	.setxattr	= generic_setxattr,
 //	.getxattr	= generic_getxattr,
 //	.listxattr	= ext4_listxattr,
 //	.removexattr	= generic_removexattr,
 #endif
+	.update_time	= tux3_special_update_time,
 };
 
 const struct inode_operations tux_symlink_iops = {
@@ -924,6 +977,7 @@ const struct inode_operations tux_symlink_iops = {
 //	.listxattr	= ext4_listxattr,
 //	.removexattr	= generic_removexattr,
 #endif
+	.update_time	= tux3_no_update_time,
 };
 
 static void tux_setup_inode(struct inode *inode)

@@ -687,6 +687,7 @@ extern const struct address_space_operations tux_vol_aops;
 int tux3_sync_file(struct file *file, loff_t start, loff_t end, int datasync);
 int tux3_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat);
 int tux3_setattr(struct dentry *dentry, struct iattr *iattr);
+int tux3_no_update_time(struct inode *inode, struct timespec *time, int flags);
 
 /* symlink.c */
 extern const struct inode_operations tux_symlink_iops;
